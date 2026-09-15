@@ -17,6 +17,10 @@ export const {
     verificationTokensTable: verificationTokens,
   }),
   session: { strategy: "database" },
+  // Render (like Railway/Fly, unlike Vercel) isn't auto-detected as a
+  // trusted host by Auth.js, so without this every request is rejected
+  // with "UntrustedHost" even though AUTH_URL is set correctly.
+  trustHost: true,
   providers: [
     Resend({
       apiKey: process.env.RESEND_API_KEY,
