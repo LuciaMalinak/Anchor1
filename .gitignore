@@ -1,0 +1,6 @@
+node_modules
+.next
+storage
+screenshots
+*.log
+.env.local

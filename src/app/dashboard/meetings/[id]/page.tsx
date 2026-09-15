@@ -1,0 +1,157 @@
+import { notFound } from "next/navigation";
+import { auth } from "@/auth";
+import { db } from "@/db";
+import { meetings, transcripts, summaries, meetingParticipants, contacts } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
+import { MeetingStatusPoller } from "./MeetingStatusPoller";
+
+export default async function MeetingDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.id) notFound();
+
+  const [meeting] = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.id, id), eq(meetings.userId, session.user.id)));
+
+  if (!meeting) notFound();
+
+  if (meeting.status !== "ready") {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+        <p className="text-sm font-medium text-slate-900">{meeting.title}</p>
+        <p className="mt-2 text-sm text-slate-500">
+          {meeting.status === "failed"
+            ? meeting.errorMessage || "Something went wrong processing this meeting."
+            : "Still processing — this page will update automatically."}
+        </p>
+        {meeting.status !== "failed" && <MeetingStatusPoller meetingId={id} />}
+      </div>
+    );
+  }
+
+  const [transcript] = await db
+    .select()
+    .from(transcripts)
+    .where(eq(transcripts.meetingId, id));
+
+  const [summary] = await db
+    .select()
+    .from(summaries)
+    .where(eq(summaries.meetingId, id));
+
+  const participants = await db
+    .select({
+      id: meetingParticipants.id,
+      speakerLabel: meetingParticipants.speakerLabel,
+      displayName: meetingParticipants.displayName,
+      relationshipSummary: contacts.relationshipSummary,
+      meetingCount: contacts.meetingCount,
+    })
+    .from(meetingParticipants)
+    .leftJoin(contacts, eq(meetingParticipants.contactId, contacts.id))
+    .where(eq(meetingParticipants.meetingId, id));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">{meeting.title}</h1>
+        <p className="text-sm text-slate-500">
+          {meeting.occurredAt.toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}
+        </p>
+      </div>
+
+      {summary && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="text-sm font-medium text-slate-900">Overview</h2>
+          <p className="mt-2 text-sm text-slate-700">{summary.overview}</p>
+
+          {summary.continuityNote && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                Continuity
+              </p>
+              <p className="mt-1 text-sm text-amber-900">{summary.continuityNote}</p>
+            </div>
+          )}
+
+          <h3 className="mt-5 text-xs font-medium uppercase tracking-wide text-slate-500">
+            Key points
+          </h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+            {summary.keyPoints.map((point, i) => (
+              <li key={i}>{point}</li>
+            ))}
+          </ul>
+
+          {summary.actionItems.length > 0 && (
+            <>
+              <h3 className="mt-5 text-xs font-medium uppercase tracking-wide text-slate-500">
+                Action items
+              </h3>
+              <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                {summary.actionItems.map((item, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span>•</span>
+                    <span>
+                      {item.text}
+                      {item.owner && (
+                        <span className="ml-1 text-slate-400">— {item.owner}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
+
+      {participants.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="text-sm font-medium text-slate-900">People in this meeting</h2>
+          <div className="mt-3 flex flex-col gap-3">
+            {participants.map((p) => (
+              <div key={p.id} className="rounded-lg bg-slate-50 px-4 py-3">
+                <p className="text-sm font-medium text-slate-900">
+                  {p.displayName || p.speakerLabel}
+                  {p.meetingCount && p.meetingCount > 1 && (
+                    <span className="ml-2 text-xs font-normal text-slate-400">
+                      {p.meetingCount} meetings
+                    </span>
+                  )}
+                </p>
+                {p.relationshipSummary && (
+                  <p className="mt-1 text-sm text-slate-600">{p.relationshipSummary}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {transcript && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="text-sm font-medium text-slate-900">Full transcript</h2>
+          <div className="mt-3 flex flex-col gap-3">
+            {transcript.utterances?.map((u, i) => (
+              <div key={i} className="text-sm">
+                <span className="font-medium text-slate-900">{u.speakerLabel}: </span>
+                <span className="text-slate-600">{u.text}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
