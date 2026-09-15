@@ -73,6 +73,13 @@ export const meetingStatusEnum = pgEnum("meeting_status", [
   "summarizing",
   "ready",
   "failed",
+  // Added for the Recall.ai auto-join bot flow (src/lib/recall.ts): a
+  // meeting starts as "joining" while the bot dials into the call, moves
+  // to "recording" once it's in and capturing audio, then joins the same
+  // "uploaded" -> "transcribing" -> ... pipeline as a manual upload once
+  // the recording webhook delivers the audio file.
+  "joining",
+  "recording",
 ]);
 
 export const meetings = pgTable("meeting", {
@@ -87,6 +94,10 @@ export const meetings = pgTable("meeting", {
   durationSeconds: integer("durationSeconds"),
   status: meetingStatusEnum("status").default("uploaded").notNull(),
   errorMessage: text("errorMessage"),
+  // Set when this meeting came from the "send Anchor to a live meeting"
+  // flow rather than a file upload — lets the webhook find its way back
+  // to the right meeting row when Recall.ai says the recording is ready.
+  recallBotId: text("recallBotId"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
