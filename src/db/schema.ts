@@ -1,0 +1,160 @@
+import {
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  integer,
+  jsonb,
+  primaryKey,
+  pgEnum,
+} from "drizzle-orm/pg-core";
+import type { AdapterAccountType } from "next-auth/adapters";
+
+// ---------------------------------------------------------------------------
+// Auth.js tables (shape required by @auth/drizzle-adapter)
+// ---------------------------------------------------------------------------
+
+export const users = pgTable("user", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name"),
+  email: text("email").unique().notNull(),
+  emailVerified: timestamp("emailVerified", { mode: "date" }),
+  image: text("image"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const accounts = pgTable(
+  "account",
+  {
+    userId: uuid("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").$type<AdapterAccountType>().notNull(),
+    provider: text("provider").notNull(),
+    providerAccountId: text("providerAccountId").notNull(),
+    refresh_token: text("refresh_token"),
+    access_token: text("access_token"),
+    expires_at: integer("expires_at"),
+    token_type: text("token_type"),
+    scope: text("scope"),
+    id_token: text("id_token"),
+    session_state: text("session_state"),
+  },
+  (account) => [
+    primaryKey({ columns: [account.provider, account.providerAccountId] }),
+  ]
+);
+
+export const sessions = pgTable("session", {
+  sessionToken: text("sessionToken").primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expires: timestamp("expires", { mode: "date" }).notNull(),
+});
+
+export const verificationTokens = pgTable(
+  "verificationToken",
+  {
+    identifier: text("identifier").notNull(),
+    token: text("token").notNull(),
+    expires: timestamp("expires", { mode: "date" }).notNull(),
+  },
+  (vt) => [primaryKey({ columns: [vt.identifier, vt.token] })]
+);
+
+// ---------------------------------------------------------------------------
+// Anchor domain tables
+// ---------------------------------------------------------------------------
+
+export const meetingStatusEnum = pgEnum("meeting_status", [
+  "uploaded",
+  "transcribing",
+  "summarizing",
+  "ready",
+  "failed",
+]);
+
+export const meetings = pgTable("meeting", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  occurredAt: timestamp("occurredAt", { mode: "date" }).defaultNow().notNull(),
+  audioFileName: text("audioFileName"),
+  audioStoragePath: text("audioStoragePath"),
+  durationSeconds: integer("durationSeconds"),
+  status: meetingStatusEnum("status").default("uploaded").notNull(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// A person Anchor has learned about, scoped to the account that owns the
+// relationship. This is what carries context between meetings.
+export const contacts = pgTable("contact", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  email: text("email"),
+  company: text("company"),
+  role: text("role"),
+  // Rolling, AI-maintained summary of who this person is and what matters
+  // to them, updated after every meeting they appear in.
+  relationshipSummary: text("relationshipSummary"),
+  firstMetAt: timestamp("firstMetAt", { mode: "date" }).defaultNow().notNull(),
+  lastMeetingAt: timestamp("lastMeetingAt", { mode: "date" }),
+  meetingCount: integer("meetingCount").default(0).notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// One row per speaker Anchor detected in a given meeting. May or may not
+// be resolved to a known contact yet.
+export const meetingParticipants = pgTable("meeting_participant", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  meetingId: uuid("meetingId")
+    .notNull()
+    .references(() => meetings.id, { onDelete: "cascade" }),
+  contactId: uuid("contactId").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  speakerLabel: text("speakerLabel").notNull(), // e.g. "Speaker A"
+  displayName: text("displayName"), // resolved or guessed name
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const transcripts = pgTable("transcript", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  meetingId: uuid("meetingId")
+    .notNull()
+    .references(() => meetings.id, { onDelete: "cascade" })
+    .unique(),
+  provider: text("provider").notNull(), // e.g. "assemblyai"
+  fullText: text("fullText").notNull(),
+  // Array of { speakerLabel, text, startMs, endMs }
+  utterances: jsonb("utterances").$type<
+    { speakerLabel: string; text: string; startMs: number; endMs: number }[]
+  >(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const summaries = pgTable("summary", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  meetingId: uuid("meetingId")
+    .notNull()
+    .references(() => meetings.id, { onDelete: "cascade" })
+    .unique(),
+  overview: text("overview").notNull(),
+  keyPoints: jsonb("keyPoints").$type<string[]>().notNull(),
+  actionItems: jsonb("actionItems")
+    .$type<{ text: string; owner: string | null }[]>()
+    .notNull(),
+  // How this meeting connects to prior history with these same people,
+  // when Anchor has seen them before. Null on someone's first meeting.
+  continuityNote: text("continuityNote"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});

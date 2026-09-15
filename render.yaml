@@ -1,0 +1,37 @@
+# Render "Blueprint" — lets Render create the web service and the
+# database together from one click instead of configuring each by hand.
+# In the Render dashboard: New -> Blueprint -> pick this repo.
+services:
+  - type: web
+    name: anchor
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: anchor-db
+          property: connectionString
+      - key: AUTH_URL
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: ASSEMBLYAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+# Note: no persistent disk here — Render's free tier doesn't support one.
+# This means uploaded recordings won't survive a restart or redeploy on
+# the free plan (flagged in ENGINEER_BRIEF.md as something to fix with
+# S3/R2 storage before relying on this for real). Fine for clicking
+# through and testing the flow; worth fixing before design partners
+# depend on it.
+
+databases:
+  - name: anchor-db
+    plan: free
