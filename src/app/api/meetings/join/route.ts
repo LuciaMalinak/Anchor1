@@ -1,0 +1,75 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { db } from "@/db";
+import { meetings } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { createBot } from "@/lib/recall";
+
+// "Send Anchor to a live meeting": the user pastes a Zoom/Meet/Teams
+// link instead of uploading a file. We create the meeting row up front
+// (status "joining") so it shows up in the dashboard right away, then
+// ask Recall.ai to send a bot into the call. The bot's own webhook
+// (/api/webhooks/recall) is what moves this meeting forward once the
+// call ends and the recording is ready.
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  if (!process.env.RECALL_API_KEY) {
+    return NextResponse.json(
+      {
+        error:
+          "Live meeting recording isn't set up yet (missing RECALL_API_KEY).",
+      },
+      { status: 500 }
+    );
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const meetingUrl = typeof body.meetingUrl === "string" ? body.meetingUrl.trim() : "";
+  const titleField = typeof body.title === "string" ? body.title.trim() : "";
+
+  if (!meetingUrl) {
+    return NextResponse.json({ error: "Paste a meeting link first" }, { status: 400 });
+  }
+  try {
+    // eslint-disable-next-line no-new
+    new URL(meetingUrl);
+  } catch {
+    return NextResponse.json({ error: "That doesn't look like a valid link" }, { status: 400 });
+  }
+
+  const [meeting] = await db
+    .insert(meetings)
+    .values({
+      userId: session.user.id,
+      title: titleField || "Live meeting",
+      status: "joining",
+    })
+    .returning();
+
+  try {
+    const bot = await createBot(meetingUrl);
+    await db
+      .update(meetings)
+      .set({ recallBotId: bot.id, status: "recording", updatedAt: new Date() })
+      .where(eq(meetings.id, meeting.id));
+  } catch (err) {
+    await db
+      .update(meetings)
+      .set({
+        status: "failed",
+        errorMessage: err instanceof Error ? err.message : "Failed to send bot to meeting",
+        updatedAt: new Date(),
+      })
+      .where(eq(meetings.id, meeting.id));
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to send bot to meeting" },
+      { status: 502 }
+    );
+  }
+
+  return NextResponse.json({ meeting }, { status: 201 });
+}
