@@ -22,15 +22,37 @@ export default async function MeetingDetailPage({
   if (!meeting) notFound();
 
   if (meeting.status !== "ready") {
+    const PROCESSING_MESSAGE: Record<string, string> = {
+      joining: "Waiting for Anchor to join the call…",
+      recording: "Recording the call — this will move on automatically once it ends.",
+      uploaded: "Queued for transcription…",
+      transcribing: "Transcribing the recording…",
+      summarizing: "Summarizing and updating what Anchor knows about the people in it…",
+    };
+
+    const minutesOld = (Date.now() - meeting.createdAt.getTime()) / 60000;
+    const stuckJoining =
+      (meeting.status === "joining" || meeting.status === "recording") && minutesOld > 10;
+
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
         <p className="text-sm font-medium text-slate-900">{meeting.title}</p>
         <p className="mt-2 text-sm text-slate-500">
           {meeting.status === "failed"
             ? meeting.errorMessage || "Something went wrong processing this meeting."
-            : "Still processing — this page will update automatically."}
+            : PROCESSING_MESSAGE[meeting.status] ||
+              "Still processing — this page will update automatically."}
         </p>
-        {meeting.status !== "failed" && <MeetingStatusPoller meetingId={id} />}
+        {stuckJoining && (
+          <p className="mt-3 text-xs text-amber-600">
+            This is taking longer than usual. Double-check the meeting link was correct
+            and the call is still active — if the bot couldn't join, this meeting won't
+            update on its own.
+          </p>
+        )}
+        {meeting.status !== "failed" && (
+          <MeetingStatusPoller meetingId={id} initialStatus={meeting.status} />
+        )}
       </div>
     );
   }
