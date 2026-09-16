@@ -60,7 +60,7 @@ export function TeamClient({
         <p className="text-sm text-slate-500">Everyone here shares deals, files, and recaps.</p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Invite a teammate</h2>
         <form onSubmit={handleInvite} className="mt-3 flex flex-col gap-3 sm:flex-row">
           <input
@@ -84,13 +84,13 @@ export function TeamClient({
 
       <section>
         <h2 className="mb-3 text-sm font-medium text-slate-900">Members ({members.length})</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {members.map((m) => {
             const isYou = m.id === currentUserId;
             return (
               <div
                 key={m.id}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md"
               >
                 {isYou ? (
                   <Link href="/dashboard/profile" className="group relative shrink-0" title="Edit your photo">

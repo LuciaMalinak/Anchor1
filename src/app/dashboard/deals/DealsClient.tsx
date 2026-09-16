@@ -43,7 +43,7 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
         </p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
+      <section className="max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">New deal</h2>
         <form onSubmit={handleCreate} className="mt-3 flex flex-col gap-3 sm:flex-row">
           <input
@@ -69,21 +69,20 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
         {initialDeals.length === 0 ? (
           <p className="text-sm text-slate-500">No deals yet — create one above.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {initialDeals.map((d) => (
-              <li key={d.id}>
-                <Link
-                  href={`/dashboard/deals/${d.id}`}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 hover:border-slate-300"
-                >
-                  <span className="text-sm font-medium text-slate-900">{d.name}</span>
-                  <span className="text-xs text-slate-500">
-                    {d.meetingCount} meeting{d.meetingCount === 1 ? "" : "s"}
-                  </span>
-                </Link>
-              </li>
+              <Link
+                key={d.id}
+                href={`/dashboard/deals/${d.id}`}
+                className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+              >
+                <span className="text-sm font-medium text-slate-900">{d.name}</span>
+                <span className="text-xs text-slate-500">
+                  {d.meetingCount} meeting{d.meetingCount === 1 ? "" : "s"}
+                </span>
+              </Link>
             ))}
-          </ul>
+          </div>
         )}
       </section>
     </div>

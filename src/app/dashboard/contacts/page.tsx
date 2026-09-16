@@ -39,12 +39,12 @@ export default async function ContactsPage() {
           No one yet — Anchor builds this automatically as it recognizes speakers in your meetings.
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((c) => (
             <Link
               key={c.id}
               href={`/dashboard/contacts/${c.id}`}
-              className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300"
+              className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
             >
               <InitialsAvatar label={c.name} />
               <div className="min-w-0 flex-1">
