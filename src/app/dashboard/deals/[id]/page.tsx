@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { deals, meetings, summaries, dealFiles, users, meetingParticipants, contacts } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
+import { researchCompany, isResearchStale } from "@/lib/companyResearch";
 import { DealTabs } from "./DealTabs";
 
 export default async function DealDetailPage({
@@ -16,11 +17,43 @@ export default async function DealDetailPage({
   if (!session?.user?.id) notFound();
 
   const teamId = await getOrCreateTeamId(session.user.id);
-  const [deal] = await db
+  let [deal] = await db
     .select()
     .from(deals)
     .where(and(eq(deals.id, id), eq(deals.teamId, teamId)));
   if (!deal) notFound();
+
+  // Best-effort, throttled auto-refresh: if this deal has a company
+  // website and its research is missing or more than a day old, quietly
+  // look it up now so the News callout and research box are current
+  // without anyone having to click "Research company" first. Never
+  // blocks the page on failure — same pattern as the deal-memory update
+  // in processMeeting.ts.
+  if (deal.companyWebsite && isResearchStale(deal.companyResearchUpdatedAt)) {
+    try {
+      const result = await researchCompany({
+        companyName: deal.name,
+        companyWebsite: deal.companyWebsite,
+      });
+      const companyResearchUpdatedAt = new Date();
+      await db
+        .update(deals)
+        .set({
+          companyResearch: result.briefing,
+          newsHeadline: result.newsHeadline,
+          companyResearchUpdatedAt,
+        })
+        .where(eq(deals.id, id));
+      deal = {
+        ...deal,
+        companyResearch: result.briefing,
+        newsHeadline: result.newsHeadline,
+        companyResearchUpdatedAt,
+      };
+    } catch (err) {
+      console.error("Background company research failed:", err);
+    }
+  }
 
   const dealMeetings = await db
     .select()
@@ -79,6 +112,7 @@ export default async function DealDetailPage({
         companyResearchUpdatedAt: deal.companyResearchUpdatedAt
           ? deal.companyResearchUpdatedAt.toISOString()
           : null,
+        newsHeadline: deal.newsHeadline,
       }}
       people={dealContactRows}
       team={teammates.map((t) => ({ id: t.id, name: t.name, email: t.email, title: t.title, image: t.image }))}

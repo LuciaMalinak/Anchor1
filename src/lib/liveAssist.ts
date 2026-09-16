@@ -75,10 +75,11 @@ export async function askAnchor(params: {
 
   const message = await client().messages.create({
     model: MODEL,
-    max_tokens: 400,
+    max_tokens: 500,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
     system: `You are Anchor, a live meeting assistant. Someone is in the middle of a real meeting right now and typed you a quick question — they need a short, useful, immediately usable answer, not a lecture.
 
-Ground every answer in the deal context you're given below (past meeting summaries, action items, continuity notes, file names). If the answer isn't in that context, say plainly that Anchor doesn't have that information yet — never invent facts, numbers, names, or commitments that weren't given to you.
+Ground every answer in the deal context you're given below (past meeting summaries, action items, continuity notes, file names) first. You also have a live web search tool — reach for it when the question needs something current that wouldn't be in the deal context: recent company news, funding, industry trends, competitor moves, market conditions. Only search about the company/industry, never to look up a named individual. If neither the deal context nor a search turns up an answer, say plainly that Anchor doesn't have that information yet — never invent facts, numbers, names, or commitments.
 
 Keep answers to 2-4 sentences unless the question clearly calls for a short list. Write like you're quietly feeding them a talking point mid-meeting, not writing a report.
 
@@ -90,9 +91,18 @@ ${contextBlock}`,
     ],
   });
 
-  const textBlock = message.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
+  // With web search in play, the reply can be split across several text
+  // blocks interleaved with citations — join them into one flowing answer
+  // rather than only reading the first block (see companyResearch.ts).
+  const text = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!text) {
     throw new Error("Anchor didn't return an answer.");
   }
-  return textBlock.text;
+  return text;
 }

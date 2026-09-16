@@ -246,6 +246,7 @@ type DealProfile = {
   notes: string | null;
   companyResearch: string | null;
   companyResearchUpdatedAt: string | null;
+  newsHeadline: string | null;
 };
 
 // A company's own public logo — from their domain, never a photo of a
@@ -296,6 +297,8 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
   const [researchError, setResearchError] = useState<string | null>(null);
   const [companyResearch, setCompanyResearch] = useState(deal.companyResearch);
   const [researchUpdatedAt, setResearchUpdatedAt] = useState(deal.companyResearchUpdatedAt);
+  const [newsHeadline, setNewsHeadline] = useState(deal.newsHeadline);
+  const [newsDismissed, setNewsDismissed] = useState(false);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -336,6 +339,8 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
       if (!res.ok) throw new Error(body.error || "Couldn't research this company");
       setCompanyResearch(body.companyResearch);
       setResearchUpdatedAt(body.companyResearchUpdatedAt);
+      setNewsHeadline(body.newsHeadline);
+      setNewsDismissed(false);
     } catch (err) {
       setResearchError(err instanceof Error ? err.message : "Couldn't research this company");
     } finally {
@@ -478,6 +483,24 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
           Edit
         </button>
       </div>
+
+      {newsHeadline && !newsDismissed && (
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-5 py-3">
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.15em] text-amber-700">NEWS</p>
+            <p className="mt-1 text-sm text-amber-900">{newsHeadline}</p>
+            <p className="mt-1 text-[11px] text-amber-700/70">See the full briefing in Company research below.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNewsDismissed(true)}
+            aria-label="Dismiss"
+            className="shrink-0 text-xs font-medium text-amber-700/70 hover:text-amber-900"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {deal.notes && (
         <div className="rounded-lg border border-slate-200 bg-white px-5 py-3">
