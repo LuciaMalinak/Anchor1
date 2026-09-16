@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings, summaries, dealFiles, users } from "@/db/schema";
+import { deals, meetings, summaries, dealFiles, users, meetingParticipants, contacts } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { DealTabs } from "./DealTabs";
@@ -46,6 +46,23 @@ export default async function DealDetailPage({
 
   const teammates = await db.select().from(users).where(eq(users.teamId, teamId));
 
+  // The people Anchor has resolved as speakers across this deal's
+  // meetings — a lightweight "who's involved on their side" view. Scoped
+  // to this account's own contacts (contacts aren't team-shared yet).
+  const dealContactRows = await db
+    .selectDistinctOn([contacts.id], {
+      id: contacts.id,
+      name: contacts.name,
+      company: contacts.company,
+      role: contacts.role,
+      relationshipSummary: contacts.relationshipSummary,
+      meetingCount: contacts.meetingCount,
+    })
+    .from(meetingParticipants)
+    .innerJoin(meetings, eq(meetingParticipants.meetingId, meetings.id))
+    .innerJoin(contacts, eq(meetingParticipants.contactId, contacts.id))
+    .where(eq(meetings.dealId, id));
+
   return (
     <DealTabs
       deal={{
@@ -55,8 +72,11 @@ export default async function DealDetailPage({
         primaryContactName: deal.primaryContactName,
         primaryContactRole: deal.primaryContactRole,
         primaryContactEmail: deal.primaryContactEmail,
+        companyWebsite: deal.companyWebsite,
         memory: deal.memory,
       }}
+      people={dealContactRows}
+      team={teammates.map((t) => ({ id: t.id, name: t.name, email: t.email, title: t.title, image: t.image }))}
       meetings={dealMeetings.map((m) => ({
         id: m.id,
         title: m.title,

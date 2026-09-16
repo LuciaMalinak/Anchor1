@@ -57,7 +57,7 @@ export function TeamClient({
         <p className="text-sm text-slate-500">Everyone here shares deals, files, and recaps.</p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Invite a teammate</h2>
         <form onSubmit={handleInvite} className="mt-3 flex flex-col gap-3 sm:flex-row">
           <input
@@ -81,36 +81,34 @@ export function TeamClient({
 
       <section>
         <h2 className="mb-3 text-sm font-medium text-slate-900">Members ({members.length})</h2>
-        <ul className="flex flex-col gap-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           {members.map((m) => (
-            <li
+            <div
               key={m.id}
-              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
             >
-              <div className="flex items-center gap-3">
-                {m.image ? (
-                  <Image
-                    src={m.image}
-                    alt=""
-                    width={32}
-                    height={32}
-                    unoptimized
-                    className="h-8 w-8 rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white">
-                    {(m.name || m.email)[0]?.toUpperCase()}
-                  </span>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{m.name || m.email}</p>
-                  {m.title && <p className="text-xs text-slate-500">{m.title}</p>}
-                </div>
+              {m.image ? (
+                <Image
+                  src={m.image}
+                  alt=""
+                  width={44}
+                  height={44}
+                  unoptimized
+                  className="h-11 w-11 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand text-base font-semibold text-white">
+                  {(m.name || m.email)[0]?.toUpperCase()}
+                </span>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-900">{m.name || m.email}</p>
+                {m.title && <p className="truncate text-xs text-slate-500">{m.title}</p>}
+                <p className="truncate text-xs text-slate-400">{m.email}</p>
               </div>
-              <span className="text-xs text-slate-500">{m.email}</span>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       </section>
 
       {invites.length > 0 && (

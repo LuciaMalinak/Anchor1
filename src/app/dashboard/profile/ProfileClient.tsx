@@ -64,27 +64,28 @@ export function ProfileClient({ profile }: { profile: Profile }) {
         </p>
       </div>
 
-      <form onSubmit={handleSave} className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-6">
-        <div className="flex items-center gap-4">
-          {preview ? (
-            <Image
-              src={preview}
-              alt=""
-              width={64}
-              height={64}
-              unoptimized
-              className="h-16 w-16 rounded-full object-cover"
-            />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-lg font-semibold text-white">
-              {initial}
-            </div>
-          )}
-          <div>
+      <form onSubmit={handleSave} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="h-24 bg-gradient-to-r from-brand to-brand-dark" />
+        <div className="flex flex-col gap-5 px-6 pb-6">
+          <div className="-mt-10 flex items-end gap-4">
+            {preview ? (
+              <Image
+                src={preview}
+                alt=""
+                width={80}
+                height={80}
+                unoptimized
+                className="h-20 w-20 rounded-full border-4 border-white object-cover shadow-sm"
+              />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-brand text-2xl font-semibold text-white shadow-sm">
+                {initial}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400"
+              className="mb-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400"
             >
               Change photo
             </button>
@@ -96,7 +97,6 @@ export function ProfileClient({ profile }: { profile: Profile }) {
               className="hidden"
             />
           </div>
-        </div>
 
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">Name</label>
@@ -125,17 +125,18 @@ export function ProfileClient({ profile }: { profile: Profile }) {
           <p className="text-sm text-slate-500">{profile.email}</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-          {saved && <span className="text-xs text-emerald-600">Saved ✓</span>}
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            {saved && <span className="text-xs text-emerald-600">Saved ✓</span>}
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
-        {error && <p className="text-xs text-red-600">{error}</p>}
       </form>
     </div>
   );

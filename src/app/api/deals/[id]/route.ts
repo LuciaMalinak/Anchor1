@@ -42,6 +42,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (typeof body.primaryContactEmail === "string") {
     updates.primaryContactEmail = body.primaryContactEmail.trim() || null;
   }
+  if (typeof body.companyWebsite === "string") {
+    updates.companyWebsite = body.companyWebsite.trim() || null;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

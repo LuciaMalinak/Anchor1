@@ -227,6 +227,9 @@ export const deals = pgTable("deal", {
   primaryContactName: text("primaryContactName"),
   primaryContactRole: text("primaryContactRole"),
   primaryContactEmail: text("primaryContactEmail"),
+  // Used to derive a company logo (via a public logo lookup, with a
+  // graceful fallback if it 404s) and shown as a link on the deal page.
+  companyWebsite: text("companyWebsite"),
   // Rolling, AI-maintained summary of this deal as a whole — the
   // deal-level equivalent of a contact's relationshipSummary. Updated
   // after every meeting attached to this deal finishes processing, so

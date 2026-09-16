@@ -3,8 +3,10 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { MicRecorder } from "@/components/MicRecorder";
 import { DEAL_STAGES } from "@/lib/dealStages";
+import { getCompanyLogoUrl } from "@/lib/companyLogo";
 
 type MeetingStatus =
   | "joining"
@@ -240,9 +242,42 @@ type DealProfile = {
   primaryContactName: string | null;
   primaryContactRole: string | null;
   primaryContactEmail: string | null;
+  companyWebsite: string | null;
 };
 
-function DealProfileCard({ deal }: { deal: DealProfile }) {
+// A company's own public logo — from their domain, never a photo of a
+// person. Falls back to an initial in a colored circle when there's no
+// domain to guess from, or the logo lookup 404s.
+function CompanyMark({ deal, size = 48 }: { deal: DealProfile; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const logoUrl = getCompanyLogoUrl(deal.companyWebsite, deal.primaryContactEmail);
+
+  if (logoUrl && !failed) {
+    return (
+      <Image
+        src={logoUrl}
+        alt=""
+        width={size}
+        height={size}
+        unoptimized
+        onError={() => setFailed(true)}
+        className="rounded-lg border border-slate-200 bg-white object-contain p-1.5"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center rounded-lg bg-brand text-white font-semibold"
+      style={{ width: size, height: size, fontSize: size * 0.4 }}
+    >
+      {deal.name[0]?.toUpperCase() || "?"}
+    </div>
+  );
+}
+
+function DealHeaderCard({ deal }: { deal: DealProfile }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -251,6 +286,7 @@ function DealProfileCard({ deal }: { deal: DealProfile }) {
   const [contactName, setContactName] = useState(deal.primaryContactName || "");
   const [contactRole, setContactRole] = useState(deal.primaryContactRole || "");
   const [contactEmail, setContactEmail] = useState(deal.primaryContactEmail || "");
+  const [website, setWebsite] = useState(deal.companyWebsite || "");
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -265,6 +301,7 @@ function DealProfileCard({ deal }: { deal: DealProfile }) {
           primaryContactName: contactName,
           primaryContactRole: contactRole,
           primaryContactEmail: contactEmail,
+          companyWebsite: website,
         }),
       });
       if (!res.ok) {
@@ -284,7 +321,7 @@ function DealProfileCard({ deal }: { deal: DealProfile }) {
     return (
       <form
         onSubmit={handleSave}
-        className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 sm:flex-row sm:flex-wrap sm:items-end"
+        className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:flex-wrap sm:items-end"
       >
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">Stage</label>
@@ -299,6 +336,16 @@ function DealProfileCard({ deal }: { deal: DealProfile }) {
               </option>
             ))}
           </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-slate-500">Company website</label>
+          <input
+            type="text"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            placeholder="acme.com"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">Primary contact</label>
@@ -354,22 +401,37 @@ function DealProfileCard({ deal }: { deal: DealProfile }) {
   const hasContact = deal.primaryContactName || deal.primaryContactRole || deal.primaryContactEmail;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-5 py-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
-          {deal.stage}
-        </span>
-        {hasContact ? (
-          <span className="text-sm text-slate-600">
-            {deal.primaryContactName}
-            {deal.primaryContactRole ? ` — ${deal.primaryContactRole}` : ""}
-            {deal.primaryContactEmail ? (
-              <span className="text-slate-400"> · {deal.primaryContactEmail}</span>
-            ) : null}
-          </span>
-        ) : (
-          <span className="text-sm text-slate-400">No primary contact set</span>
-        )}
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <div className="flex flex-wrap items-center gap-4">
+        <CompanyMark deal={deal} />
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
+              {deal.stage}
+            </span>
+            {deal.companyWebsite && (
+              <a
+                href={deal.companyWebsite.startsWith("http") ? deal.companyWebsite : `https://${deal.companyWebsite}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-medium text-slate-400 hover:text-brand hover:underline"
+              >
+                {deal.companyWebsite.replace(/^https?:\/\//, "")}
+              </a>
+            )}
+          </div>
+          {hasContact ? (
+            <span className="text-sm text-slate-600">
+              {deal.primaryContactName}
+              {deal.primaryContactRole ? ` — ${deal.primaryContactRole}` : ""}
+              {deal.primaryContactEmail ? (
+                <span className="text-slate-400"> · {deal.primaryContactEmail}</span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-sm text-slate-400">No primary contact set</span>
+          )}
+        </div>
       </div>
       <button
         type="button"
@@ -378,6 +440,95 @@ function DealProfileCard({ deal }: { deal: DealProfile }) {
       >
         Edit
       </button>
+    </div>
+  );
+}
+
+type DealContact = {
+  id: string;
+  name: string;
+  company: string | null;
+  role: string | null;
+  relationshipSummary: string | null;
+  meetingCount: number;
+};
+
+type TeamMember = {
+  id: string;
+  name: string | null;
+  email: string;
+  title: string | null;
+  image: string | null;
+};
+
+function InitialsAvatar({ label, size = 36 }: { label: string; size?: number }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-full bg-brand font-semibold text-white"
+      style={{ width: size, height: size, fontSize: size * 0.4 }}
+    >
+      {label[0]?.toUpperCase() || "?"}
+    </span>
+  );
+}
+
+function PeopleAndTeam({ people, team }: { people: DealContact[]; team: TeamMember[] }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm font-medium text-slate-900">People involved</p>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Who Anchor has recognized speaking in this deal&apos;s meetings.
+        </p>
+        <div className="mt-3 flex flex-col gap-3">
+          {people.length === 0 ? (
+            <p className="text-sm text-slate-400">No one resolved yet — this fills in after a meeting.</p>
+          ) : (
+            people.map((p) => (
+              <Link
+                key={p.id}
+                href={`/dashboard/contacts/${p.id}`}
+                className="flex items-start gap-3 rounded-lg px-1 py-1 hover:bg-slate-50"
+              >
+                <InitialsAvatar label={p.name} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-900">{p.name}</p>
+                  <p className="truncate text-xs text-slate-500">
+                    {[p.role, p.company].filter(Boolean).join(" · ") || "No details yet"}
+                  </p>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm font-medium text-slate-900">Your team</p>
+        <p className="mt-0.5 text-xs text-slate-500">Everyone with access to this deal.</p>
+        <div className="mt-3 flex flex-col gap-3">
+          {team.map((t) => (
+            <div key={t.id} className="flex items-center gap-3">
+              {t.image ? (
+                <Image
+                  src={t.image}
+                  alt=""
+                  width={36}
+                  height={36}
+                  unoptimized
+                  className="h-9 w-9 rounded-full object-cover"
+                />
+              ) : (
+                <InitialsAvatar label={t.name || t.email} />
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">{t.name || t.email}</p>
+                {t.title && <p className="truncate text-xs text-slate-500">{t.title}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -652,11 +803,15 @@ export function DealTabs({
   meetings,
   files,
   teamSize,
+  people,
+  team,
 }: {
   deal: DealProfile & { memory: string | null };
   meetings: DealMeeting[];
   files: DealFile[];
   teamSize: number;
+  people: DealContact[];
+  team: TeamMember[];
 }) {
   const inProgress = meetings.filter((m) => m.status !== "ready" && m.status !== "failed");
   const readyMeetings = meetings.filter((m) => m.status === "ready");
@@ -668,7 +823,8 @@ export function DealTabs({
         <h1 className="text-xl font-semibold text-slate-900">{deal.name}</h1>
         <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
       </div>
-      <DealProfileCard deal={deal} />
+      <DealHeaderCard deal={deal} />
+      <PeopleAndTeam people={people} team={team} />
       {tab === "before" && (
         <BeforePanel dealId={deal.id} memory={deal.memory} latestReady={readyMeetings[0]} />
       )}
