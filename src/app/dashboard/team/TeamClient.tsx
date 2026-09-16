@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 
 type Member = { id: string; name: string | null; email: string; title: string | null; image: string | null };
@@ -11,10 +12,12 @@ export function TeamClient({
   teamName,
   members,
   invites,
+  currentUserId,
 }: {
   teamName: string;
   members: Member[];
   invites: Invite[];
+  currentUserId: string;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -82,32 +85,69 @@ export function TeamClient({
       <section>
         <h2 className="mb-3 text-sm font-medium text-slate-900">Members ({members.length})</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          {members.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-            >
-              {m.image ? (
-                <Image
-                  src={m.image}
-                  alt=""
-                  width={44}
-                  height={44}
-                  unoptimized
-                  className="h-11 w-11 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand text-base font-semibold text-white">
-                  {(m.name || m.email)[0]?.toUpperCase()}
-                </span>
-              )}
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-900">{m.name || m.email}</p>
-                {m.title && <p className="truncate text-xs text-slate-500">{m.title}</p>}
-                <p className="truncate text-xs text-slate-400">{m.email}</p>
+          {members.map((m) => {
+            const isYou = m.id === currentUserId;
+            return (
+              <div
+                key={m.id}
+                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                {isYou ? (
+                  <Link href="/dashboard/profile" className="group relative shrink-0" title="Edit your photo">
+                    {m.image ? (
+                      <Image
+                        src={m.image}
+                        alt=""
+                        width={44}
+                        height={44}
+                        unoptimized
+                        className="h-11 w-11 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand text-base font-semibold text-white">
+                        {(m.name || m.email)[0]?.toUpperCase()}
+                      </span>
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition group-hover:opacity-100">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                    </span>
+                  </Link>
+                ) : m.image ? (
+                  <Image
+                    src={m.image}
+                    alt=""
+                    width={44}
+                    height={44}
+                    unoptimized
+                    className="h-11 w-11 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand text-base font-semibold text-white">
+                    {(m.name || m.email)[0]?.toUpperCase()}
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-900">
+                    {m.name || m.email}
+                    {isYou && <span className="ml-1.5 text-xs font-normal text-slate-400">(you)</span>}
+                  </p>
+                  {m.title && <p className="truncate text-xs text-slate-500">{m.title}</p>}
+                  <p className="truncate text-xs text-slate-400">{m.email}</p>
+                </div>
+                {isYou && (
+                  <Link
+                    href="/dashboard/profile"
+                    className="shrink-0 text-xs font-medium text-brand hover:underline"
+                  >
+                    Edit
+                  </Link>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

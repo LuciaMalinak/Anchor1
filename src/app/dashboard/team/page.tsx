@@ -19,6 +19,7 @@ export default async function TeamPage() {
       teamName={team?.name || "My Team"}
       members={members.map((m) => ({ id: m.id, name: m.name, email: m.email, title: m.title, image: m.image }))}
       invites={invites.map((i) => ({ id: i.id, email: i.email }))}
+      currentUserId={session.user.id}
     />
   );
 }
