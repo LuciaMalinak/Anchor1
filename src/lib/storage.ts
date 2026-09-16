@@ -19,3 +19,21 @@ export async function saveMeetingAudio(
   await fs.writeFile(filePath, data);
   return filePath;
 }
+
+const DEAL_STORAGE_ROOT = path.join(process.cwd(), "storage", "deals");
+
+// Arbitrary documents attached to a deal by hand (notes, contracts, etc),
+// as opposed to a meeting recording. Same local-disk caveat as above.
+export async function saveDealFile(
+  dealId: string,
+  fileName: string,
+  data: Buffer
+): Promise<string> {
+  const dir = path.join(DEAL_STORAGE_ROOT, dealId);
+  await fs.mkdir(dir, { recursive: true });
+  // Timestamp-prefixed so two uploads with the same filename don't clobber
+  // each other; the original name is still what's shown and downloaded as.
+  const filePath = path.join(dir, `${Date.now()}-${fileName}`);
+  await fs.writeFile(filePath, data);
+  return filePath;
+}

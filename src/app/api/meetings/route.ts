@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
   const file = formData.get("file");
   const titleField = formData.get("title");
   const title = typeof titleField === "string" ? titleField.trim() : "";
+  const dealIdField = formData.get("dealId");
+  const dealId = typeof dealIdField === "string" && dealIdField ? dealIdField : null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
@@ -54,6 +56,7 @@ export async function POST(req: NextRequest) {
       title: title || file.name.replace(/\.[^/.]+$/, ""),
       audioFileName: file.name,
       status: "uploaded",
+      dealId,
     })
     .returning();
 

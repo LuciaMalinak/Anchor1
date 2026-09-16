@@ -16,6 +16,14 @@ export default async function DashboardLayout({
           <Link href="/dashboard">
             <Logo size="sm" />
           </Link>
+          <nav className="flex items-center gap-5 text-sm font-medium text-slate-600">
+            <Link href="/dashboard/deals" className="hover:text-brand">
+              Deals
+            </Link>
+            <Link href="/dashboard/team" className="hover:text-brand">
+              Team
+            </Link>
+          </nav>
           <div className="flex items-center gap-4 text-sm text-slate-500">
             <span>{session?.user?.email}</span>
             <form

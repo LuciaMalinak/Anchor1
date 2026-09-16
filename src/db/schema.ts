@@ -20,6 +20,12 @@ export const users = pgTable("user", {
   email: text("email").unique().notNull(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
+  // Every user belongs to exactly one team, auto-created for them on
+  // first sign-in (or joined automatically if their email had a pending
+  // invite) — see the `createUser` event in src/auth.ts. Nullable only
+  // because it's added after the users table already existed in
+  // production; in practice every user has one.
+  teamId: uuid("teamId").references(() => teams.id, { onDelete: "set null" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -98,6 +104,10 @@ export const meetings = pgTable("meeting", {
   // flow rather than a file upload — lets the webhook find its way back
   // to the right meeting row when Recall.ai says the recording is ready.
   recallBotId: text("recallBotId"),
+  // Optional — meetings can stand alone (the original flow) or be grouped
+  // under a deal so a team can see prep/live/recap for one client in one
+  // place. Null means "not attached to a deal".
+  dealId: uuid("dealId").references(() => deals.id, { onDelete: "set null" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
@@ -167,5 +177,64 @@ export const summaries = pgTable("summary", {
   // How this meeting connects to prior history with these same people,
   // when Anchor has seen them before. Null on someone's first meeting.
   continuityNote: text("continuityNote"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// Teams and deals — lets more than one person share meetings, files, and
+// recap emails for the same client instead of everything being scoped to
+// a single user.
+// ---------------------------------------------------------------------------
+
+export const teams = pgTable("team", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// A pending invite: someone on the team entered this email address, but
+// they haven't signed in yet. The createUser event in src/auth.ts checks
+// this table when a brand-new user is created and joins them to the
+// inviting team instead of creating a fresh one for them.
+export const teamInvites = pgTable("team_invite", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  teamId: uuid("teamId")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  invitedByUserId: uuid("invitedByUserId")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// A client/account that meetings and files get grouped under, shared by
+// everyone on the team (not scoped to one user the way a bare meeting is).
+export const deals = pgTable("deal", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  teamId: uuid("teamId")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdByUserId: uuid("createdByUserId")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// A document attached to a deal directly (as opposed to a meeting
+// recording) — notes, contracts, anything the team uploads by hand.
+export const dealFiles = pgTable("deal_file", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  dealId: uuid("dealId")
+    .notNull()
+    .references(() => deals.id, { onDelete: "cascade" }),
+  fileName: text("fileName").notNull(),
+  storagePath: text("storagePath").notNull(),
+  fileSize: integer("fileSize"),
+  uploadedByUserId: uuid("uploadedByUserId")
+    .notNull()
+    .references(() => users.id),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
