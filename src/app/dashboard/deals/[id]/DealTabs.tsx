@@ -726,10 +726,12 @@ function LiveDot() {
   );
 }
 
-// Persistent right-hand sidebar — always visible (Before/After/Chat) so
-// news reads like a ticker you glance at rather than a tab you dig into.
-// Hidden only during an actual live meeting (see DealTabs) so it doesn't
-// compete for attention then.
+// Persistent right-hand sidebar — always visible on every tab, including
+// During, so whoever's in the room (and Ask Anchor) has this deal's news
+// in view throughout the meeting, not just before/after it. Deal-specific
+// only — the general, team-wide briefing lives in the main dashboard
+// layout's sidebar (GeneralNewsSidebar) instead, so this one tab doesn't
+// mix "what's happening at Acme" with "what's happening in the world."
 function NewsSidebar({
   dealName,
   companyResearch,
@@ -738,11 +740,6 @@ function NewsSidebar({
   researching,
   researchError,
   onResearch,
-  dailyBriefing,
-  briefingUpdatedAt,
-  briefingLoading,
-  briefingError,
-  onRefreshBriefing,
 }: {
   dealName: string;
   companyResearch: string | null;
@@ -751,11 +748,6 @@ function NewsSidebar({
   researching: boolean;
   researchError: string | null;
   onResearch: () => void;
-  dailyBriefing: string | null;
-  briefingUpdatedAt: string | null;
-  briefingLoading: boolean;
-  briefingError: string | null;
-  onRefreshBriefing: () => void;
 }) {
   return (
     <aside className="flex w-full flex-col gap-4 lg:w-80 lg:shrink-0">
@@ -804,40 +796,9 @@ function NewsSidebar({
         {researchError && <p className="mt-1 text-xs text-red-600">{researchError}</p>}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">
-            TODAY&apos;S BRIEFING
-          </p>
-          <button
-            type="button"
-            onClick={onRefreshBriefing}
-            disabled={briefingLoading}
-            className="shrink-0 text-xs font-medium text-brand hover:underline disabled:opacity-50"
-          >
-            {briefingLoading ? "…" : "Refresh"}
-          </button>
-        </div>
-        {dailyBriefing ? (
-          <>
-            <p className="mt-1 text-sm text-slate-700">{dailyBriefing}</p>
-            {briefingUpdatedAt && (
-              <p className="mt-1 text-[11px] text-slate-400">
-                {new Date(briefingUpdatedAt).toLocaleDateString()}
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="mt-1 text-sm text-slate-400">
-            A roundup of today&apos;s business news, shared across your team.
-          </p>
-        )}
-        {briefingError && <p className="mt-1 text-xs text-red-600">{briefingError}</p>}
-      </div>
-
       <p className="px-1 text-[11px] text-slate-400">
-        Updates automatically once a day, or hit Refresh any time — off during a live meeting so it
-        doesn&apos;t compete for attention.
+        Updates automatically once a day, or hit Refresh any time. Ask Anchor also uses this during
+        the meeting so its answers can factor in recent news.
       </p>
     </aside>
   );
@@ -1150,9 +1111,25 @@ function AskAnchorPanel({ dealId }: { dealId: string }) {
   );
 }
 
-function DuringPanel({ dealId, inProgress }: { dealId: string; inProgress: DealMeeting[] }) {
+function DuringPanel({
+  dealId,
+  inProgress,
+  newsHeadline,
+}: {
+  dealId: string;
+  inProgress: DealMeeting[];
+  newsHeadline: string | null;
+}) {
   return (
     <div className="flex flex-col gap-6">
+      {newsHeadline && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <LiveDot />
+          <p className="text-sm text-amber-900">
+            <span className="font-semibold">In the news right now:</span> {newsHeadline}
+          </p>
+        </div>
+      )}
       {inProgress.length === 0 ? (
         <p className="text-sm text-slate-500">Nothing live right now.</p>
       ) : (
@@ -1333,8 +1310,6 @@ export function DealTabs({
   teamSize,
   people,
   team,
-  dailyBriefing: initialDailyBriefing,
-  dailyBriefingUpdatedAt: initialDailyBriefingUpdatedAt,
   messages,
   currentUserId,
 }: {
@@ -1344,8 +1319,6 @@ export function DealTabs({
   teamSize: number;
   people: DealContact[];
   team: TeamMember[];
-  dailyBriefing: string | null;
-  dailyBriefingUpdatedAt: string | null;
   messages: ChatMessage[];
   currentUserId: string;
 }) {
@@ -1378,32 +1351,6 @@ export function DealTabs({
     }
   }
 
-  const [briefingLoading, setBriefingLoading] = useState(false);
-  const [briefingError, setBriefingError] = useState<string | null>(null);
-  const [dailyBriefing, setDailyBriefing] = useState(initialDailyBriefing);
-  const [briefingUpdatedAt, setBriefingUpdatedAt] = useState(initialDailyBriefingUpdatedAt);
-
-  async function handleRefreshBriefing() {
-    setBriefingLoading(true);
-    setBriefingError(null);
-    try {
-      const res = await fetch(`/api/team/briefing`, { method: "POST" });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Couldn't refresh today's briefing");
-      setDailyBriefing(body.dailyBriefing);
-      setBriefingUpdatedAt(body.dailyBriefingUpdatedAt);
-    } catch (err) {
-      setBriefingError(err instanceof Error ? err.message : "Couldn't refresh today's briefing");
-    } finally {
-      setBriefingLoading(false);
-    }
-  }
-
-  // The news sidebar stays up "nonstop" everywhere except while a meeting
-  // is actually live (During tab) — that's the one moment it would just
-  // compete for attention, per the user's rule.
-  const showNewsSidebar = tab !== "during";
-
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-6">
@@ -1422,7 +1369,9 @@ export function DealTabs({
             decisionBoundaries={deal.decisionBoundaries}
           />
         )}
-        {tab === "during" && <DuringPanel dealId={deal.id} inProgress={inProgress} />}
+        {tab === "during" && (
+          <DuringPanel dealId={deal.id} inProgress={inProgress} newsHeadline={newsHeadline} />
+        )}
         {tab === "after" && (
           <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
         )}
@@ -1430,22 +1379,18 @@ export function DealTabs({
           <ChatPanel dealId={deal.id} currentUserId={currentUserId} initialMessages={messages} />
         )}
       </div>
-      {showNewsSidebar && (
-        <NewsSidebar
-          dealName={deal.name}
-          companyResearch={companyResearch}
-          researchUpdatedAt={researchUpdatedAt}
-          newsHeadline={newsHeadline}
-          researching={researching}
-          researchError={researchError}
-          onResearch={handleResearch}
-          dailyBriefing={dailyBriefing}
-          briefingUpdatedAt={briefingUpdatedAt}
-          briefingLoading={briefingLoading}
-          briefingError={briefingError}
-          onRefreshBriefing={handleRefreshBriefing}
-        />
-      )}
+      {/* Always visible — including during a live meeting — so whoever's
+          in the room can glance at recent news, and so it stays consistent
+          with what Ask Anchor is grounded in. */}
+      <NewsSidebar
+        dealName={deal.name}
+        companyResearch={companyResearch}
+        researchUpdatedAt={researchUpdatedAt}
+        newsHeadline={newsHeadline}
+        researching={researching}
+        researchError={researchError}
+        onResearch={handleResearch}
+      />
     </div>
   );
 }

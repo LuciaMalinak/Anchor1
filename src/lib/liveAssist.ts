@@ -27,6 +27,8 @@ export type DealContext = {
     actionItems: { text: string; owner: string | null }[];
   }[];
   fileNames: string[];
+  companyResearch: string | null;
+  newsHeadline: string | null;
 };
 
 function buildContextBlock(ctx: DealContext): string {
@@ -61,6 +63,12 @@ function buildContextBlock(ctx: DealContext): string {
 
   if (ctx.fileNames.length > 0) {
     parts.push(`\nFiles attached to this deal (names only — contents not available): ${ctx.fileNames.join(", ")}`);
+  }
+
+  if (ctx.newsHeadline || ctx.companyResearch) {
+    parts.push("\nRecent news and public info Anchor already gathered on this company (also shown live in the room right now, so treat it as something the person you're helping can already see):");
+    if (ctx.newsHeadline) parts.push(ctx.newsHeadline);
+    if (ctx.companyResearch) parts.push(ctx.companyResearch);
   }
 
   return parts.join("\n");

@@ -63,6 +63,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       actionItems: r.summary.actionItems,
     })),
     fileNames: files.map((f) => f.fileName),
+    companyResearch: deal.companyResearch,
+    newsHeadline: deal.newsHeadline,
   };
 
   try {
