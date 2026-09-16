@@ -118,42 +118,46 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Paste a Zoom, Google Meet, or Teams link and Anchor will join automatically,
-          record it, and process it the same way as an upload — no need to record it
-          yourself.
-        </p>
-        <form
-          ref={joinFormRef}
-          onSubmit={handleJoinSubmit}
-          className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
-        >
-          <input
-            type="text"
-            name="title"
-            placeholder="Title (optional)"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-          />
-          <input
-            type="text"
-            name="meetingUrl"
-            placeholder="https://zoom.us/j/..."
-            className="flex-[2] rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-          />
-          <button
-            type="submit"
-            disabled={joining}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+      <div className="grid gap-4 lg:grid-cols-3">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+          <h2 className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Paste a Zoom, Google Meet, or Teams link and Anchor will join automatically,
+            record it, and process it the same way as an upload — no need to record it
+            yourself.
+          </p>
+          <form
+            ref={joinFormRef}
+            onSubmit={handleJoinSubmit}
+            className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
           >
-            {joining ? "Sending…" : "Join meeting"}
-          </button>
-        </form>
-        {joinError && <p className="mt-2 text-sm text-red-600">{joinError}</p>}
-      </section>
+            <input
+              type="text"
+              name="title"
+              placeholder="Title (optional)"
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            />
+            <input
+              type="text"
+              name="meetingUrl"
+              placeholder="https://zoom.us/j/..."
+              className="flex-[2] rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            />
+            <button
+              type="submit"
+              disabled={joining}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+            >
+              {joining ? "Sending…" : "Join meeting"}
+            </button>
+          </form>
+          {joinError && <p className="mt-2 text-sm text-red-600">{joinError}</p>}
+        </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
+        <MicRecorder onUploaded={refresh} />
+      </div>
+
+      <section className="max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Upload a meeting recording</h2>
         <p className="mt-1 text-sm text-slate-500">
           Audio or video, up to 500MB. Anchor will transcribe it, summarize it, and
@@ -188,23 +192,21 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </section>
 
-      <MicRecorder onUploaded={refresh} />
-
       <section>
         <h2 className="mb-3 text-sm font-medium text-slate-900">Your meetings</h2>
         {meetings.length === 0 ? (
           <p className="text-sm text-slate-500">Nothing uploaded yet.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {meetings.map((m) => (
-              <li key={m.id}>
+              <div key={m.id}>
                 <Link
                   href={`/dashboard/meetings/${m.id}`}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 hover:border-slate-300"
+                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 hover:shadow-md"
                 >
-                  <span className="text-sm font-medium text-slate-900">{m.title}</span>
+                  <span className="truncate text-sm font-medium text-slate-900">{m.title}</span>
                   <span
-                    className={`text-xs font-medium ${
+                    className={`ml-2 shrink-0 text-xs font-medium ${
                       m.status === "ready"
                         ? "text-green-600"
                         : m.status === "failed"
@@ -218,9 +220,9 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
                 {m.status === "failed" && m.errorMessage && (
                   <p className="mt-1 px-1 text-xs text-red-600">{m.errorMessage}</p>
                 )}
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
     </div>

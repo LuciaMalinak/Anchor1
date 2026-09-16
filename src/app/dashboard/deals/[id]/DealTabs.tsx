@@ -166,7 +166,7 @@ function NewMeetingForms({ dealId }: { dealId: string }) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <form onSubmit={handleJoin} className="rounded-lg border border-slate-200 p-4">
+      <form onSubmit={handleJoin} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
         <div className="mt-3 flex flex-col gap-2">
           <input
@@ -192,7 +192,7 @@ function NewMeetingForms({ dealId }: { dealId: string }) {
         {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
       </form>
 
-      <form onSubmit={handleUpload} className="rounded-lg border border-slate-200 p-4">
+      <form onSubmit={handleUpload} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-sm font-medium text-slate-900">Upload a recording</p>
         <div className="mt-3 flex flex-col gap-2">
           <input
