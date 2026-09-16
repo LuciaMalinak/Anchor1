@@ -1,8 +1,8 @@
 import { eq, and, ilike } from "drizzle-orm";
 import { db } from "@/db";
-import { meetings, transcripts, summaries, contacts, meetingParticipants } from "@/db/schema";
+import { meetings, transcripts, summaries, contacts, meetingParticipants, deals } from "@/db/schema";
 import { transcribeAudioFile } from "./transcribe";
-import { summarizeMeeting, mergeContactMemory } from "./summarize";
+import { summarizeMeeting, mergeContactMemory, mergeDealMemory } from "./summarize";
 
 // Orchestrates the full pipeline for one meeting: transcribe -> summarize
 // -> resolve speakers against known contacts -> update rolling memory.
@@ -129,6 +129,32 @@ export async function processMeeting(meetingId: string): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(meetings.id, meetingId));
+
+    // Deal-level memory — the same rolling-summary idea as contact
+    // memory above, but for the deal as a whole. Best-effort: a failure
+    // here shouldn't flip an otherwise-successful meeting to "failed".
+    if (meeting.dealId) {
+      try {
+        const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
+        if (deal) {
+          const updatedMemory = await mergeDealMemory({
+            dealName: deal.name,
+            priorMemory: deal.memory,
+            newSummary: {
+              overview: result.overview,
+              keyPoints: result.keyPoints,
+              actionItems: result.actionItems,
+            },
+          });
+          await db
+            .update(deals)
+            .set({ memory: updatedMemory, updatedAt: new Date() })
+            .where(eq(deals.id, deal.id));
+        }
+      } catch (err) {
+        console.error(`[processMeeting] deal memory update failed for ${meetingId}:`, err);
+      }
+    }
   } catch (err) {
     console.error(`[processMeeting] ${meetingId} failed:`, err);
     await db

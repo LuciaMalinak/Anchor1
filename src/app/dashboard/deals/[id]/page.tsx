@@ -48,7 +48,15 @@ export default async function DealDetailPage({
 
   return (
     <DealTabs
-      deal={{ id: deal.id, name: deal.name }}
+      deal={{
+        id: deal.id,
+        name: deal.name,
+        stage: deal.stage,
+        primaryContactName: deal.primaryContactName,
+        primaryContactRole: deal.primaryContactRole,
+        primaryContactEmail: deal.primaryContactEmail,
+        memory: deal.memory,
+      }}
       meetings={dealMeetings.map((m) => ({
         id: m.id,
         title: m.title,

@@ -26,6 +26,10 @@ export const users = pgTable("user", {
   // because it's added after the users table already existed in
   // production; in practice every user has one.
   teamId: uuid("teamId").references(() => teams.id, { onDelete: "set null" }),
+  // Role/title shown on a teammate's profile (e.g. "Account Executive").
+  // Separate from `image`, which doubles as an OAuth-provided avatar URL
+  // or a path to a photo the person uploaded themselves.
+  title: text("title"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -216,6 +220,19 @@ export const deals = pgTable("deal", {
     .notNull()
     .references(() => teams.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  // Free-text stage, not an enum — a small fixed list of options is
+  // offered in the UI, but keeping the column plain text avoids a
+  // migration every time the list of stages changes.
+  stage: text("stage").default("Prospecting").notNull(),
+  primaryContactName: text("primaryContactName"),
+  primaryContactRole: text("primaryContactRole"),
+  primaryContactEmail: text("primaryContactEmail"),
+  // Rolling, AI-maintained summary of this deal as a whole — the
+  // deal-level equivalent of a contact's relationshipSummary. Updated
+  // after every meeting attached to this deal finishes processing, so
+  // it's the running "what Anchor has learned about this account" memory
+  // referenced on the Before tab and grounding Ask Anchor.
+  memory: text("memory"),
   createdByUserId: uuid("createdByUserId")
     .notNull()
     .references(() => users.id),
