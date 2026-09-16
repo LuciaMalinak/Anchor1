@@ -293,3 +293,18 @@ export const dealFiles = pgTable("deal_file", {
     .references(() => users.id),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
+
+// Team chat scoped to a single deal — the Chat tab. Deliberately simple:
+// no editing, deleting, or read receipts, just a running thread the whole
+// team (anyone on the deal's team) can post to and read.
+export const dealMessages = pgTable("deal_message", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  dealId: uuid("dealId")
+    .notNull()
+    .references(() => deals.id, { onDelete: "cascade" }),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});

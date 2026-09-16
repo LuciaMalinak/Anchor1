@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings, summaries, dealFiles, users, meetingParticipants, contacts, teams } from "@/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts, teams } from "@/db/schema";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { researchCompany, isResearchStale } from "@/lib/companyResearch";
 import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
@@ -112,6 +112,13 @@ export default async function DealDetailPage({
     .innerJoin(contacts, eq(meetingParticipants.contactId, contacts.id))
     .where(eq(meetings.dealId, id));
 
+  const messageRows = await db
+    .select({ message: dealMessages, author: users })
+    .from(dealMessages)
+    .innerJoin(users, eq(dealMessages.userId, users.id))
+    .where(eq(dealMessages.dealId, id))
+    .orderBy(asc(dealMessages.createdAt));
+
   return (
     <DealTabs
       deal={{
@@ -157,6 +164,13 @@ export default async function DealDetailPage({
       teamSize={teammates.length}
       dailyBriefing={team?.dailyBriefing ?? null}
       dailyBriefingUpdatedAt={team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null}
+      messages={messageRows.map((r) => ({
+        id: r.message.id,
+        content: r.message.content,
+        createdAt: r.message.createdAt.toISOString(),
+        author: { id: r.author.id, name: r.author.name, email: r.author.email, image: r.author.image },
+      }))}
+      currentUserId={session.user.id}
     />
   );
 }

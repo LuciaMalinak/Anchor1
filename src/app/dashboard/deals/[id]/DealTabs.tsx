@@ -48,33 +48,31 @@ const STATUS_LABEL: Record<MeetingStatus, string> = {
   failed: "Failed",
 };
 
-type Tab = "before" | "during" | "after" | "news";
+type Tab = "before" | "during" | "after" | "chat";
 
-// Each tab gets its own active-state color so Before/During/After/News
+// Each tab gets its own active-state color so Before/During/After/Chat
 // read as distinct stages/areas at a glance.
 const TAB_ACTIVE_CLASSES: Record<Tab, string> = {
   before: "bg-brand text-white",
   during: "bg-emerald-600 text-white",
   after: "bg-accent text-white",
-  news: "bg-indigo-600 text-white",
+  chat: "bg-indigo-600 text-white",
 };
 
 function TabBar({
   active,
   onChange,
   duringCount,
-  hasNews,
 }: {
   active: Tab;
   onChange: (t: Tab) => void;
   duringCount: number;
-  hasNews: boolean;
 }) {
-  const tabs: { key: Tab; label: string; badge?: number; dot?: boolean }[] = [
+  const tabs: { key: Tab; label: string; badge?: number }[] = [
     { key: "before", label: "Before" },
     { key: "during", label: "During", badge: duringCount || undefined },
     { key: "after", label: "After" },
-    { key: "news", label: "News", dot: hasNews },
+    { key: "chat", label: "Chat" },
   ];
   return (
     <div className="flex gap-2">
@@ -94,9 +92,6 @@ function TabBar({
             <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
               {t.badge}
             </span>
-          ) : null}
-          {t.dot && !t.badge ? (
-            <span className="absolute -right-1 -top-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-rose-500" />
           ) : null}
         </button>
       ))}
@@ -720,7 +715,22 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
   );
 }
 
-function NewsPanel({
+// A small pulsing dot to give the sidebar a "this is live" feel, next to
+// each section's refresh control.
+function LiveDot() {
+  return (
+    <span className="relative flex h-2 w-2">
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+    </span>
+  );
+}
+
+// Persistent right-hand sidebar — always visible (Before/After/Chat) so
+// news reads like a ticker you glance at rather than a tab you dig into.
+// Hidden only during an actual live meeting (see DealTabs) so it doesn't
+// compete for attention then.
+function NewsSidebar({
   dealName,
   companyResearch,
   researchUpdatedAt,
@@ -748,20 +758,25 @@ function NewsPanel({
   onRefreshBriefing: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-4">
+    <aside className="flex w-full flex-col gap-4 lg:w-80 lg:shrink-0">
+      <div className="flex items-center gap-2 px-1">
+        <LiveDot />
+        <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">NEWS</p>
+      </div>
+
       {newsHeadline && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-3">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-amber-700">
-            NEWS ABOUT {dealName.toUpperCase()}
+            {dealName.toUpperCase()}
           </p>
           <p className="mt-1 text-sm text-amber-900">{newsHeadline}</p>
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white px-5 py-4">
+      <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">
-            COMPANY RESEARCH — {dealName.toUpperCase()}
+            {dealName.toUpperCase()}
           </p>
           <button
             type="button"
@@ -769,7 +784,7 @@ function NewsPanel({
             disabled={researching}
             className="shrink-0 text-xs font-medium text-brand hover:underline disabled:opacity-50"
           >
-            {researching ? "Researching…" : companyResearch ? "Refresh" : "Research company"}
+            {researching ? "…" : companyResearch ? "Refresh" : "Research"}
           </button>
         </div>
         {companyResearch ? (
@@ -777,20 +792,19 @@ function NewsPanel({
             <p className="mt-1 text-sm text-slate-700">{companyResearch}</p>
             {researchUpdatedAt && (
               <p className="mt-1 text-[11px] text-slate-400">
-                From a web search, {new Date(researchUpdatedAt).toLocaleDateString()}
+                {new Date(researchUpdatedAt).toLocaleDateString()}
               </p>
             )}
           </>
         ) : (
           <p className="mt-1 text-sm text-slate-400">
-            Have Anchor search the web for public info about this company — industry, size, recent
-            news.
+            Have Anchor search the web for public info about this company.
           </p>
         )}
         {researchError && <p className="mt-1 text-xs text-red-600">{researchError}</p>}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white px-5 py-4">
+      <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">
             TODAY&apos;S BRIEFING
@@ -801,7 +815,7 @@ function NewsPanel({
             disabled={briefingLoading}
             className="shrink-0 text-xs font-medium text-brand hover:underline disabled:opacity-50"
           >
-            {briefingLoading ? "Refreshing…" : "Refresh"}
+            {briefingLoading ? "…" : "Refresh"}
           </button>
         </div>
         {dailyBriefing ? (
@@ -809,18 +823,151 @@ function NewsPanel({
             <p className="mt-1 text-sm text-slate-700">{dailyBriefing}</p>
             {briefingUpdatedAt && (
               <p className="mt-1 text-[11px] text-slate-400">
-                From a web search, {new Date(briefingUpdatedAt).toLocaleDateString()}
+                {new Date(briefingUpdatedAt).toLocaleDateString()}
               </p>
             )}
           </>
         ) : (
           <p className="mt-1 text-sm text-slate-400">
-            A quick roundup of today&apos;s business and market news, worth knowing before your
-            meetings — shared across your team.
+            A roundup of today&apos;s business news, shared across your team.
           </p>
         )}
         {briefingError && <p className="mt-1 text-xs text-red-600">{briefingError}</p>}
       </div>
+
+      <p className="px-1 text-[11px] text-slate-400">
+        Updates automatically once a day, or hit Refresh any time — off during a live meeting so it
+        doesn&apos;t compete for attention.
+      </p>
+    </aside>
+  );
+}
+
+type ChatMessage = {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: { id: string; name: string | null; email: string; image: string | null };
+};
+
+function ChatPanel({
+  dealId,
+  currentUserId,
+  initialMessages,
+}: {
+  dealId: string;
+  currentUserId: string;
+  initialMessages: ChatMessage[];
+}) {
+  const [messages, setMessages] = useState(initialMessages);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    const content = draft.trim();
+    if (!content) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't send that");
+      setMessages((prev) => [...prev, body.message]);
+      setDraft("");
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't send that");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div>
+        <p className="text-sm font-medium text-slate-900">Team chat</p>
+        <p className="text-xs text-slate-500">Just for this deal — anyone on your team with access can read and post here.</p>
+      </div>
+
+      <div className="flex max-h-[28rem] min-h-[10rem] flex-col gap-3 overflow-y-auto rounded-lg bg-slate-50 p-4">
+        {messages.length === 0 ? (
+          <p className="text-sm text-slate-400">No messages yet — say something about this deal.</p>
+        ) : (
+          messages.map((m) => {
+            const isYou = m.author.id === currentUserId;
+            const label = m.author.name || m.author.email;
+            return (
+              <div key={m.id} className={`flex flex-col ${isYou ? "items-end" : "items-start"}`}>
+                <div className="flex items-center gap-2">
+                  {!isYou &&
+                    (m.author.image ? (
+                      <Image
+                        src={m.author.image}
+                        alt=""
+                        width={20}
+                        height={20}
+                        unoptimized
+                        className="h-5 w-5 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand text-[9px] font-semibold text-white">
+                        {label[0]?.toUpperCase()}
+                      </span>
+                    ))}
+                  <span className="text-xs font-medium text-slate-500">{isYou ? "You" : label}</span>
+                  <span className="text-[11px] text-slate-400">
+                    {new Date(m.createdAt).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+                <div
+                  className={`mt-1 max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
+                    isYou ? "bg-brand text-white" : "border border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  {m.content}
+                </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <form onSubmit={handleSend} className="flex items-end gap-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend(e);
+            }
+          }}
+          placeholder="Message your team about this deal…"
+          rows={2}
+          className="flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+        />
+        <button
+          type="submit"
+          disabled={sending || !draft.trim()}
+          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+        >
+          {sending ? "…" : "Send"}
+        </button>
+      </form>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -1188,6 +1335,8 @@ export function DealTabs({
   team,
   dailyBriefing: initialDailyBriefing,
   dailyBriefingUpdatedAt: initialDailyBriefingUpdatedAt,
+  messages,
+  currentUserId,
 }: {
   deal: DealProfile & { memory: string | null };
   meetings: DealMeeting[];
@@ -1197,6 +1346,8 @@ export function DealTabs({
   team: TeamMember[];
   dailyBriefing: string | null;
   dailyBriefingUpdatedAt: string | null;
+  messages: ChatMessage[];
+  currentUserId: string;
 }) {
   const inProgress = meetings.filter((m) => m.status !== "ready" && m.status !== "failed");
   const readyMeetings = meetings.filter((m) => m.status === "ready");
@@ -1248,34 +1399,39 @@ export function DealTabs({
     }
   }
 
+  // The news sidebar stays up "nonstop" everywhere except while a meeting
+  // is actually live (During tab) — that's the one moment it would just
+  // compete for attention, per the user's rule.
+  const showNewsSidebar = tab !== "during";
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">{deal.name}</h1>
-        <TabBar
-          active={tab}
-          onChange={setTab}
-          duringCount={inProgress.length}
-          hasNews={Boolean(newsHeadline)}
-        />
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-xl font-semibold text-slate-900">{deal.name}</h1>
+          <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
+        </div>
+        <DealHeaderCard deal={deal} />
+        <PeopleAndTeam people={people} team={team} />
+        {tab === "before" && (
+          <BeforePanel
+            dealId={deal.id}
+            dealName={deal.name}
+            memory={deal.memory}
+            latestReady={readyMeetings[0]}
+            decisionBoundaries={deal.decisionBoundaries}
+          />
+        )}
+        {tab === "during" && <DuringPanel dealId={deal.id} inProgress={inProgress} />}
+        {tab === "after" && (
+          <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
+        )}
+        {tab === "chat" && (
+          <ChatPanel dealId={deal.id} currentUserId={currentUserId} initialMessages={messages} />
+        )}
       </div>
-      <DealHeaderCard deal={deal} />
-      <PeopleAndTeam people={people} team={team} />
-      {tab === "before" && (
-        <BeforePanel
-          dealId={deal.id}
-          dealName={deal.name}
-          memory={deal.memory}
-          latestReady={readyMeetings[0]}
-          decisionBoundaries={deal.decisionBoundaries}
-        />
-      )}
-      {tab === "during" && <DuringPanel dealId={deal.id} inProgress={inProgress} />}
-      {tab === "after" && (
-        <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
-      )}
-      {tab === "news" && (
-        <NewsPanel
+      {showNewsSidebar && (
+        <NewsSidebar
           dealName={deal.name}
           companyResearch={companyResearch}
           researchUpdatedAt={researchUpdatedAt}
