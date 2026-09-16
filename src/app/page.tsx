@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { AnchorMark, Logo } from "@/components/Logo";
+import { ProductShowcase } from "@/components/ProductShowcase";
 
 const STEPS = [
   {
@@ -112,11 +113,18 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Product — tabbed Before/During/After mockup, matching the deck's product slides */}
+      <section className="px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <ProductShowcase />
+        </div>
+      </section>
+
       {/* What Anchor remembers — mirrors the deck's four-column accumulation slide */}
       <section className="bg-slate-50 px-6 py-20">
         <div className="mx-auto max-w-5xl">
           <p className="text-xs font-semibold tracking-[0.2em] text-accent">
-            II.&nbsp;&nbsp;WHAT ANCHOR BUILDS
+            III.&nbsp;&nbsp;WHAT ANCHOR BUILDS
           </p>
           <h2 className="mt-2 border-b border-slate-200 pb-6 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
             Every meeting deposits into it. Every brief withdraws from it.
