@@ -53,6 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const context: DealContext = {
     dealName: deal.name,
+    memory: deal.memory,
     continuityNote: recentReady[0]?.summary.continuityNote ?? null,
     recentMeetings: recentReady.map((r) => ({
       title: r.meeting.title,

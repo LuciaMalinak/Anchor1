@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { Logo } from "@/components/Logo";
 
@@ -20,12 +21,31 @@ export default async function DashboardLayout({
             <Link href="/dashboard/deals" className="hover:text-brand">
               Deals
             </Link>
+            <Link href="/dashboard/insights" className="hover:text-brand">
+              Insights
+            </Link>
             <Link href="/dashboard/team" className="hover:text-brand">
               Team
             </Link>
           </nav>
-          <div className="flex items-center gap-4 text-sm text-slate-500">
-            <span>{session?.user?.email}</span>
+          <div className="flex items-center gap-3 text-sm text-slate-500">
+            <Link href="/dashboard/profile" className="flex items-center gap-2 hover:text-brand">
+              {session?.user?.image ? (
+                <Image
+                  src={session.user.image}
+                  alt=""
+                  width={24}
+                  height={24}
+                  unoptimized
+                  className="h-6 w-6 rounded-full object-cover"
+                />
+              ) : (
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-[10px] font-semibold text-white">
+                  {(session?.user?.name || session?.user?.email || "?")[0]?.toUpperCase()}
+                </span>
+              )}
+              <span>{session?.user?.name || session?.user?.email}</span>
+            </Link>
             <form
               action={async () => {
                 "use server";

@@ -20,6 +20,36 @@ export async function saveMeetingAudio(
   return filePath;
 }
 
+const AVATAR_STORAGE_ROOT = path.join(process.cwd(), "storage", "avatars");
+
+// One photo per user — clears out anything already there before writing
+// the new one, so there's never more than one file per user to serve.
+export async function saveUserAvatar(
+  userId: string,
+  fileName: string,
+  data: Buffer
+): Promise<string> {
+  const dir = path.join(AVATAR_STORAGE_ROOT, userId);
+  await fs.mkdir(dir, { recursive: true });
+  const existing = await fs.readdir(dir).catch(() => []);
+  await Promise.all(existing.map((f) => fs.unlink(path.join(dir, f))));
+  const ext = path.extname(fileName) || ".jpg";
+  const filePath = path.join(dir, `avatar${ext}`);
+  await fs.writeFile(filePath, data);
+  return filePath;
+}
+
+export async function readUserAvatar(
+  userId: string
+): Promise<{ data: Buffer; fileName: string } | null> {
+  const dir = path.join(AVATAR_STORAGE_ROOT, userId);
+  const existing = await fs.readdir(dir).catch(() => []);
+  if (existing.length === 0) return null;
+  const fileName = existing[0];
+  const data = await fs.readFile(path.join(dir, fileName));
+  return { data, fileName };
+}
+
 const DEAL_STORAGE_ROOT = path.join(process.cwd(), "storage", "deals");
 
 // Arbitrary documents attached to a deal by hand (notes, contracts, etc),

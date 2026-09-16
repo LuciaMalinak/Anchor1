@@ -173,3 +173,56 @@ export async function mergeContactMemory(params: {
     continuityLine: string;
   };
 }
+
+const DEAL_MEMORY_TOOL = {
+  name: "record_deal_memory_update",
+  description:
+    "Record an updated rolling summary of everything known about a deal/account so far, across all its meetings.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      updatedMemory: {
+        type: "string",
+        description:
+          "A 3-6 sentence rolling summary of this deal — where it stands, what matters to the people on the other side, what's blocking or driving it forward — merging the prior memory with what was learned in this meeting. Keep it factual and current; drop details this meeting has superseded rather than piling everything on.",
+      },
+    },
+    required: ["updatedMemory"],
+  },
+};
+
+export async function mergeDealMemory(params: {
+  dealName: string;
+  priorMemory: string | null;
+  newSummary: {
+    overview: string;
+    keyPoints: string[];
+    actionItems: { text: string; owner: string | null }[];
+  };
+}): Promise<string> {
+  const actionItemsText = params.newSummary.actionItems
+    .map((a) => a.text + (a.owner ? ` (${a.owner})` : ""))
+    .join("; ");
+
+  const message = await client().messages.create({
+    model: MODEL,
+    max_tokens: 512,
+    system:
+      "You maintain a concise, accurate rolling summary of a business deal/account across multiple meetings. Never invent details that weren't given to you.",
+    tools: [DEAL_MEMORY_TOOL],
+    tool_choice: { type: "tool", name: DEAL_MEMORY_TOOL.name },
+    messages: [
+      {
+        role: "user",
+        content: `Deal: ${params.dealName}\n\nExisting deal memory:\n${params.priorMemory || "No prior notes — this is the first meeting."}\n\nWhat happened in today's meeting on this deal:\nOverview: ${params.newSummary.overview}\nKey points: ${params.newSummary.keyPoints.join("; ")}\nAction items: ${actionItemsText || "None"}\n\nProduce an updated rolling memory for this deal.`,
+      },
+    ],
+  });
+
+  const toolUse = message.content.find((b) => b.type === "tool_use");
+  if (!toolUse || toolUse.type !== "tool_use") {
+    throw new Error("Model did not return a structured deal memory update.");
+  }
+
+  return (toolUse.input as { updatedMemory: string }).updatedMemory;
+}

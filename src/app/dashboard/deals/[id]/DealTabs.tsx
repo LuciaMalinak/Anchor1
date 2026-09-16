@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { MicRecorder } from "@/components/MicRecorder";
+import { DEAL_STAGES } from "@/lib/dealStages";
 
 type MeetingStatus =
   | "joining"
@@ -203,15 +204,24 @@ function NewMeetingForms({ dealId }: { dealId: string }) {
   );
 }
 
-function BeforePanel({ dealId, latestReady }: { dealId: string; latestReady: DealMeeting | undefined }) {
+function BeforePanel({
+  dealId,
+  memory,
+  latestReady,
+}: {
+  dealId: string;
+  memory: string | null;
+  latestReady: DealMeeting | undefined;
+}) {
+  const goingIn = memory || latestReady?.summary?.continuityNote || null;
   return (
     <div className="flex flex-col gap-6">
-      {latestReady?.summary?.continuityNote ? (
+      {goingIn ? (
         <div className="rounded-lg border border-accent/40 bg-accent/5 px-5 py-4">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">
             GOING IN, REMEMBER
           </p>
-          <p className="mt-1 text-sm text-slate-700">{latestReady.summary.continuityNote}</p>
+          <p className="mt-1 text-sm text-slate-700">{goingIn}</p>
         </div>
       ) : (
         <p className="text-sm text-slate-500">
@@ -219,6 +229,155 @@ function BeforePanel({ dealId, latestReady }: { dealId: string; latestReady: Dea
         </p>
       )}
       <NewMeetingForms dealId={dealId} />
+    </div>
+  );
+}
+
+type DealProfile = {
+  id: string;
+  name: string;
+  stage: string;
+  primaryContactName: string | null;
+  primaryContactRole: string | null;
+  primaryContactEmail: string | null;
+};
+
+function DealProfileCard({ deal }: { deal: DealProfile }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [stage, setStage] = useState(deal.stage);
+  const [contactName, setContactName] = useState(deal.primaryContactName || "");
+  const [contactRole, setContactRole] = useState(deal.primaryContactRole || "");
+  const [contactEmail, setContactEmail] = useState(deal.primaryContactEmail || "");
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage,
+          primaryContactName: contactName,
+          primaryContactRole: contactRole,
+          primaryContactEmail: contactEmail,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't save");
+      }
+      setEditing(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={handleSave}
+        className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 sm:flex-row sm:flex-wrap sm:items-end"
+      >
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-slate-500">Stage</label>
+          <select
+            value={stage}
+            onChange={(e) => setStage(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          >
+            {DEAL_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-slate-500">Primary contact</label>
+          <input
+            type="text"
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            placeholder="Name"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-slate-500">Their role</label>
+          <input
+            type="text"
+            value={contactRole}
+            onChange={(e) => setContactRole(e.target.value)}
+            placeholder="e.g. VP Ops"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-slate-500">Their email</label>
+          <input
+            type="email"
+            value={contactEmail}
+            onChange={(e) => setContactEmail(e.target.value)}
+            placeholder="name@company.com"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-400"
+          >
+            Cancel
+          </button>
+        </div>
+        {error && <p className="w-full text-xs text-red-600">{error}</p>}
+      </form>
+    );
+  }
+
+  const hasContact = deal.primaryContactName || deal.primaryContactRole || deal.primaryContactEmail;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-5 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
+          {deal.stage}
+        </span>
+        {hasContact ? (
+          <span className="text-sm text-slate-600">
+            {deal.primaryContactName}
+            {deal.primaryContactRole ? ` — ${deal.primaryContactRole}` : ""}
+            {deal.primaryContactEmail ? (
+              <span className="text-slate-400"> · {deal.primaryContactEmail}</span>
+            ) : null}
+          </span>
+        ) : (
+          <span className="text-sm text-slate-400">No primary contact set</span>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="text-xs font-medium text-brand hover:underline"
+      >
+        Edit
+      </button>
     </div>
   );
 }
@@ -494,7 +653,7 @@ export function DealTabs({
   files,
   teamSize,
 }: {
-  deal: { id: string; name: string };
+  deal: DealProfile & { memory: string | null };
   meetings: DealMeeting[];
   files: DealFile[];
   teamSize: number;
@@ -509,7 +668,10 @@ export function DealTabs({
         <h1 className="text-xl font-semibold text-slate-900">{deal.name}</h1>
         <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
       </div>
-      {tab === "before" && <BeforePanel dealId={deal.id} latestReady={readyMeetings[0]} />}
+      <DealProfileCard deal={deal} />
+      {tab === "before" && (
+        <BeforePanel dealId={deal.id} memory={deal.memory} latestReady={readyMeetings[0]} />
+      )}
       {tab === "during" && <DuringPanel dealId={deal.id} inProgress={inProgress} />}
       {tab === "after" && (
         <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />

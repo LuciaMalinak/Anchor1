@@ -17,6 +17,7 @@ function client() {
 
 export type DealContext = {
   dealName: string;
+  memory: string | null;
   continuityNote: string | null;
   recentMeetings: {
     title: string;
@@ -30,6 +31,10 @@ export type DealContext = {
 
 function buildContextBlock(ctx: DealContext): string {
   const parts: string[] = [`Deal: ${ctx.dealName}`];
+
+  if (ctx.memory) {
+    parts.push(`\nWhat Anchor has learned about this deal so far: ${ctx.memory}`);
+  }
 
   if (ctx.continuityNote) {
     parts.push(`\nGoing in, remember: ${ctx.continuityNote}`);

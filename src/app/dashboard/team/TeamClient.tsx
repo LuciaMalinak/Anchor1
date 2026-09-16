@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
-type Member = { id: string; name: string | null; email: string };
+type Member = { id: string; name: string | null; email: string; title: string | null; image: string | null };
 type Invite = { id: string; email: string };
 
 export function TeamClient({
@@ -86,7 +87,26 @@ export function TeamClient({
               key={m.id}
               className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3"
             >
-              <span className="text-sm font-medium text-slate-900">{m.name || m.email}</span>
+              <div className="flex items-center gap-3">
+                {m.image ? (
+                  <Image
+                    src={m.image}
+                    alt=""
+                    width={32}
+                    height={32}
+                    unoptimized
+                    className="h-8 w-8 rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white">
+                    {(m.name || m.email)[0]?.toUpperCase()}
+                  </span>
+                )}
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{m.name || m.email}</p>
+                  {m.title && <p className="text-xs text-slate-500">{m.title}</p>}
+                </div>
+              </div>
               <span className="text-xs text-slate-500">{m.email}</span>
             </li>
           ))}

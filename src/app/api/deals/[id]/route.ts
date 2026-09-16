@@ -1,0 +1,57 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { db } from "@/db";
+import { deals, users } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { DEAL_STAGES } from "@/lib/dealStages";
+
+async function authorizeDeal(userId: string, dealId: string) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+  if (!deal || !user?.teamId || deal.teamId !== user.teamId) return null;
+  return deal;
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  const { id: dealId } = await params;
+  const deal = await authorizeDeal(session.user.id, dealId);
+  if (!deal) {
+    return NextResponse.json({ error: "Deal not found" }, { status: 404 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const updates: Partial<typeof deals.$inferInsert> = {};
+
+  if (typeof body.stage === "string") {
+    if (!(DEAL_STAGES as readonly string[]).includes(body.stage)) {
+      return NextResponse.json({ error: "Not a valid stage" }, { status: 400 });
+    }
+    updates.stage = body.stage;
+  }
+  if (typeof body.primaryContactName === "string") {
+    updates.primaryContactName = body.primaryContactName.trim() || null;
+  }
+  if (typeof body.primaryContactRole === "string") {
+    updates.primaryContactRole = body.primaryContactRole.trim() || null;
+  }
+  if (typeof body.primaryContactEmail === "string") {
+    updates.primaryContactEmail = body.primaryContactEmail.trim() || null;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  const [updated] = await db
+    .update(deals)
+    .set({ ...updates, updatedAt: new Date() })
+    .where(eq(deals.id, dealId))
+    .returning();
+
+  return NextResponse.json({ deal: updated });
+}

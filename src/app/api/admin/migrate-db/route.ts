@@ -55,6 +55,14 @@ CREATE TABLE IF NOT EXISTS "deal_file" (
   "uploadedByUserId" uuid NOT NULL REFERENCES "user"("id"),
   "createdAt" timestamp NOT NULL DEFAULT now()
 );
+
+-- Profiles (personal + deal) and deal-level rolling memory.
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "title" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "stage" text NOT NULL DEFAULT 'Prospecting';
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "primaryContactName" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "primaryContactRole" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "primaryContactEmail" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "memory" text;
 `;
 
 export async function GET(req: NextRequest) {
@@ -85,11 +93,15 @@ export async function GET(req: NextRequest) {
   const userCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'user'
   `;
+  const dealCols = await rawClient`
+    select column_name from information_schema.columns where table_name = 'deal'
+  `;
 
   return NextResponse.json({
     migrated: true,
     newTables: newTables.map((r) => r.table_name),
     userColumns: userCols.map((r) => r.column_name),
+    dealColumns: dealCols.map((r) => r.column_name),
     meetingColumns: cols.map((r) => r.column_name),
     meetingStatusValues: enumVals.map((r) => r.v),
   });
