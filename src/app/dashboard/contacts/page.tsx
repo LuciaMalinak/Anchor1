@@ -39,7 +39,7 @@ export default async function ContactsPage() {
           No one yet — Anchor builds this automatically as it recognizes speakers in your meetings.
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {rows.map((c) => (
             <Link
               key={c.id}

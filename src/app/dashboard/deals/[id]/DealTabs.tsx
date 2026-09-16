@@ -75,13 +75,13 @@ function TabBar({
     { key: "chat", label: "Chat" },
   ];
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-4">
       {tabs.map((t) => (
         <button
           key={t.key}
           type="button"
           onClick={() => onChange(t.key)}
-          className={`relative rounded-md px-4 py-1.5 text-xs font-semibold tracking-[0.15em] transition ${
+          className={`relative rounded-lg px-6 py-2.5 text-sm font-semibold tracking-[0.1em] transition ${
             active === t.key
               ? TAB_ACTIVE_CLASSES[t.key]
               : "border border-slate-300 text-slate-500 hover:border-slate-400"
@@ -89,7 +89,7 @@ function TabBar({
         >
           {t.label.toUpperCase()}
           {t.badge ? (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
+            <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold text-white">
               {t.badge}
             </span>
           ) : null}
@@ -1354,8 +1354,8 @@ export function DealTabs({
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-xl font-semibold text-slate-900">{deal.name}</h1>
+        <div className="flex flex-col gap-4">
+          <h1 className="text-2xl font-semibold text-slate-900">{deal.name}</h1>
           <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
         </div>
         <DealHeaderCard deal={deal} />

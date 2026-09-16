@@ -69,7 +69,7 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
         {initialDeals.length === 0 ? (
           <p className="text-sm text-slate-500">No deals yet — create one above.</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {initialDeals.map((d) => (
               <Link
                 key={d.id}

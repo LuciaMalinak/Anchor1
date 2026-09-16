@@ -197,7 +197,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
         {meetings.length === 0 ? (
           <p className="text-sm text-slate-500">Nothing uploaded yet.</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {meetings.map((m) => (
               <div key={m.id}>
                 <Link
