@@ -86,6 +86,15 @@ ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "dailyBriefingUpdatedAt" timestamp;
 
 -- Meeting handoff briefings: reusable decision boundaries per deal.
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "decisionBoundaries" text;
+
+-- Deal-scoped team chat (the Chat tab).
+CREATE TABLE IF NOT EXISTS "deal_message" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "dealId" uuid NOT NULL REFERENCES "deal"("id") ON DELETE CASCADE,
+  "userId" uuid NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+  "content" text NOT NULL,
+  "createdAt" timestamp NOT NULL DEFAULT now()
+);
 `;
 
 export async function GET(req: NextRequest) {
@@ -111,7 +120,7 @@ export async function GET(req: NextRequest) {
   `;
   const newTables = await rawClient`
     select table_name from information_schema.tables
-    where table_name in ('team', 'team_invite', 'deal', 'deal_file')
+    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message')
   `;
   const userCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'user'
