@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { MicRecorder } from "@/components/MicRecorder";
 
 type Meeting = {
   id: string;
@@ -186,6 +187,8 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
         </form>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </section>
+
+      <MicRecorder onUploaded={refresh} />
 
       <section>
         <h2 className="mb-3 text-sm font-medium text-slate-900">Your meetings</h2>
