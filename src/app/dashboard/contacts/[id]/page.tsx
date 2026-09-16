@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { contacts, meetingParticipants, meetings, deals } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
+import { ContactNotes } from "./ContactNotes";
 
 function InitialsAvatar({ label, size = 64 }: { label: string; size?: number }) {
   return (
@@ -64,6 +65,8 @@ export default async function ContactDetailPage({
           <p className="mt-1 text-sm text-slate-700">{contact.relationshipSummary}</p>
         </section>
       )}
+
+      <ContactNotes contactId={contact.id} initialNotes={contact.notes} />
 
       {dealsInvolved.length > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

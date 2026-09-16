@@ -136,6 +136,10 @@ export const contacts = pgTable("contact", {
   // Rolling, AI-maintained summary of who this person is and what matters
   // to them, updated after every meeting they appear in.
   relationshipSummary: text("relationshipSummary"),
+  // What you've typed in directly about this person — kept separate from
+  // relationshipSummary so a manual note is never overwritten by the
+  // next auto-generated one.
+  notes: text("notes"),
   firstMetAt: timestamp("firstMetAt", { mode: "date" }).defaultNow().notNull(),
   lastMeetingAt: timestamp("lastMeetingAt", { mode: "date" }),
   meetingCount: integer("meetingCount").default(0).notNull(),
@@ -242,6 +246,15 @@ export const deals = pgTable("deal", {
   // it's the running "what Anchor has learned about this account" memory
   // referenced on the Before tab and grounding Ask Anchor.
   memory: text("memory"),
+  // What you've told Anchor directly — separate from `memory`, which
+  // Anchor writes itself after each meeting. Shown together, but never
+  // silently overwritten by the auto-learned side.
+  notes: text("notes"),
+  // Short public-company briefing Anchor fetches on request via web
+  // search (industry, size, recent news) — never information about a
+  // named individual, only the company itself.
+  companyResearch: text("companyResearch"),
+  companyResearchUpdatedAt: timestamp("companyResearchUpdatedAt", { mode: "date" }),
   createdByUserId: uuid("createdByUserId")
     .notNull()
     .references(() => users.id),

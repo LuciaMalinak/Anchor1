@@ -74,6 +74,11 @@ export default async function DealDetailPage({
         primaryContactEmail: deal.primaryContactEmail,
         companyWebsite: deal.companyWebsite,
         memory: deal.memory,
+        notes: deal.notes,
+        companyResearch: deal.companyResearch,
+        companyResearchUpdatedAt: deal.companyResearchUpdatedAt
+          ? deal.companyResearchUpdatedAt.toISOString()
+          : null,
       }}
       people={dealContactRows}
       team={teammates.map((t) => ({ id: t.id, name: t.name, email: t.email, title: t.title, image: t.image }))}
