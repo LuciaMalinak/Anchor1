@@ -3,18 +3,22 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  /* Brand: deep navy (trust, "anchor") + amber accent, used specifically
-     for the memory/continuity feature so that color reliably means "this
-     is Anchor remembering something" everywhere it appears. */
-  --brand: #0f172a;
-  --accent: #f59e0b;
+  /* Brand: matches the investor deck exactly — deep navy + a copper accent.
+     Sampled directly from the deck so the product and the pitch look like
+     the same company. */
+  --brand: #12294a;
+  --brand-dark: #0b1930;
+  --accent: #b4531f;
+  --accent-dark: #904218;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
   --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
