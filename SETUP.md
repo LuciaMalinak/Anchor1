@@ -43,6 +43,10 @@ an email):
 - **Resend** (sign-in emails) — resend.com, free tier, no card. Not
   strictly required to click around it yourself, but needed before
   other people can sign in with their own email.
+- **Recall.ai** (optional — lets Anchor auto-join and record a live
+  call instead of only accepting uploads) — recall.ai, pay-as-you-go,
+  first 5 hours free.
+- **LinkedIn** (optional — "Sign in with LinkedIn" button) — see below.
 
 Steps once those exist:
 
@@ -60,13 +64,20 @@ Steps once those exist:
    or two people are using it, verify a sending domain in Resend rather
    than using their shared testing address.
 
-One thing to double-check at deploy time, not before: `render.yaml`
-mounts a persistent disk at a path I could not verify from this
-environment (Render isn't reachable from here either) — confirm in
-Render's dashboard/logs what directory your service actually runs from,
-and adjust `disk.mountPath` in `render.yaml` if it doesn't match, so
-uploaded files land on the persistent disk rather than a location that
-gets wiped on redeploy.
+## Setting up "Sign in with LinkedIn"
+
+1. Create an app at linkedin.com/developers/apps (you'll need a LinkedIn
+   Page associated with it — a personal profile alone isn't enough;
+   create a minimal company page if you don't already have one).
+2. On the app's **Products** tab, request **"Sign In with LinkedIn using
+   OpenID Connect"** — this is instant/self-serve, no approval wait.
+3. On the **Auth** tab, add this exact redirect URL:
+   `https://<your-app>.onrender.com/api/auth/callback/linkedin`
+4. Copy the **Client ID** and **Client Secret** from that same tab into
+   `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` (locally in
+   `.env.local`, in production as Render environment variables). The
+   button only appears on the sign-in page once both are set — no code
+   changes needed either way.
 
 **Still true regardless of host:** local-disk file storage (flagged in
 `ENGINEER_BRIEF.md`) is fine for one Render instance serving a handful
