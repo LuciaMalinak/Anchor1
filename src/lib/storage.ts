@@ -20,6 +20,15 @@ export async function saveMeetingAudio(
   return filePath;
 }
 
+// Best-effort cleanup when a meeting is deleted — never throws, since the
+// database row is the source of truth and a leftover file on disk (or one
+// that was never written, e.g. a "joining" meeting with no audio yet) is
+// harmless either way.
+export async function deleteMeetingAudio(meetingId: string): Promise<void> {
+  const dir = path.join(STORAGE_ROOT, meetingId);
+  await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+}
+
 const AVATAR_STORAGE_ROOT = path.join(process.cwd(), "storage", "avatars");
 
 // One photo per user — clears out anything already there before writing

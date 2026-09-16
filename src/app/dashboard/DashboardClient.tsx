@@ -29,10 +29,25 @@ const STATUS_LABEL: Record<Meeting["status"], string> = {
   failed: "Failed",
 };
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+      <path
+        d="M4 6h12M8 6V4.5A1.5 1.5 0 0 1 9.5 3h1A1.5 1.5 0 0 1 12 4.5V6m-6.5 0 .6 9.4A1.5 1.5 0 0 0 7.6 17h4.8a1.5 1.5 0 0 0 1.5-1.6L14.5 6"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[] }) {
   const [meetings, setMeetings] = useState<Meeting[]>(initialMeetings);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   const [joining, setJoining] = useState(false);
@@ -116,8 +131,40 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
     }
   }
 
+  async function handleDelete(id: string, title: string) {
+    if (
+      !window.confirm(
+        `Delete "${title}"? This removes the recording, transcript, and summary for good.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/meetings/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't delete this recording");
+      }
+      setMeetings((prev) => prev.filter((m) => m.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't delete this recording");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-8">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Home</h1>
+        <p className="text-sm text-slate-500">
+          Send Anchor to a live meeting, record one yourself, or upload a recording — everything
+          shows up below once it&apos;s processed.
+        </p>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
           <h2 className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</h2>
@@ -157,7 +204,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
         <MicRecorder onUploaded={refresh} />
       </div>
 
-      <section className="max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Upload a meeting recording</h2>
         <p className="mt-1 text-sm text-slate-500">
           Audio or video, up to 500MB. Anchor will transcribe it, summarize it, and
@@ -184,7 +231,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
           <button
             type="submit"
             disabled={uploading}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
           >
             {uploading ? "Uploading…" : "Upload"}
           </button>
@@ -199,10 +246,10 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {meetings.map((m) => (
-              <div key={m.id}>
+              <div key={m.id} className="group relative">
                 <Link
                   href={`/dashboard/meetings/${m.id}`}
-                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 shadow-sm transition hover:border-slate-300 hover:shadow-md"
                 >
                   <span className="truncate text-sm font-medium text-slate-900">{m.title}</span>
                   <span
@@ -217,6 +264,16 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
                     {STATUS_LABEL[m.status]}
                   </span>
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(m.id, m.title)}
+                  disabled={deletingId === m.id}
+                  aria-label={`Delete ${m.title}`}
+                  title="Delete recording"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50 group-hover:opacity-100"
+                >
+                  <TrashIcon />
+                </button>
                 {m.status === "failed" && m.errorMessage && (
                   <p className="mt-1 px-1 text-xs text-red-600">{m.errorMessage}</p>
                 )}
