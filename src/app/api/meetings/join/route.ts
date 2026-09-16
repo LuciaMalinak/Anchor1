@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const meetingUrl = typeof body.meetingUrl === "string" ? body.meetingUrl.trim() : "";
   const titleField = typeof body.title === "string" ? body.title.trim() : "";
+  const dealId = typeof body.dealId === "string" && body.dealId ? body.dealId : null;
 
   if (!meetingUrl) {
     return NextResponse.json({ error: "Paste a meeting link first" }, { status: 400 });
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
       userId: session.user.id,
       title: titleField || "Live meeting",
       status: "joining",
+      dealId,
     })
     .returning();
 

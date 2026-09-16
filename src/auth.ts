@@ -3,7 +3,15 @@ import Resend from "next-auth/providers/resend";
 import LinkedIn from "next-auth/providers/linkedin";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
-import { users, accounts, sessions, verificationTokens } from "@/db/schema";
+import {
+  users,
+  accounts,
+  sessions,
+  verificationTokens,
+  teams,
+  teamInvites,
+} from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 
 // Only registered when the LinkedIn app's credentials are actually set —
 // so the app still runs fine (email sign-in only) before that's set up,
@@ -60,6 +68,35 @@ export const {
         session.user.id = user.id;
       }
       return session;
+    },
+  },
+  events: {
+    // Runs once, right after the Drizzle adapter inserts a brand-new user
+    // row. Every user needs a team: if someone already on a team invited
+    // this email address, join that team (and clear the invite); otherwise
+    // this is a new account on its own, so give it a fresh team of one.
+    async createUser({ user }) {
+      if (!user.id || !user.email) return;
+
+      const [invite] = await db
+        .select()
+        .from(teamInvites)
+        .where(sql`lower(${teamInvites.email}) = lower(${user.email})`)
+        .limit(1);
+
+      if (invite) {
+        await db.update(users).set({ teamId: invite.teamId }).where(eq(users.id, user.id));
+        await db
+          .delete(teamInvites)
+          .where(sql`lower(${teamInvites.email}) = lower(${user.email})`);
+        return;
+      }
+
+      const [team] = await db
+        .insert(teams)
+        .values({ name: user.name ? `${user.name}'s Team` : "My Team" })
+        .returning();
+      await db.update(users).set({ teamId: team.id }).where(eq(users.id, user.id));
     },
   },
 });

@@ -1,8 +1,16 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, transcripts, summaries, meetingParticipants, contacts } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import {
+  meetings,
+  transcripts,
+  summaries,
+  meetingParticipants,
+  contacts,
+  deals,
+  users,
+} from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { MeetingStatusPoller } from "./MeetingStatusPoller";
 
 export default async function MeetingDetailPage({
@@ -14,12 +22,19 @@ export default async function MeetingDetailPage({
   const session = await auth();
   if (!session?.user?.id) notFound();
 
-  const [meeting] = await db
-    .select()
-    .from(meetings)
-    .where(and(eq(meetings.id, id), eq(meetings.userId, session.user.id)));
-
+  const [meeting] = await db.select().from(meetings).where(eq(meetings.id, id));
   if (!meeting) notFound();
+
+  // Visible to whoever created it, or — if it's attached to a deal —
+  // anyone on the same team, since deals are shared.
+  const isOwner = meeting.userId === session.user.id;
+  let sharedViaTeam = false;
+  if (!isOwner && meeting.dealId) {
+    const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
+    const [viewer] = await db.select().from(users).where(eq(users.id, session.user.id));
+    sharedViaTeam = Boolean(deal && viewer?.teamId && deal.teamId === viewer.teamId);
+  }
+  if (!isOwner && !sharedViaTeam) notFound();
 
   if (meeting.status !== "ready") {
     const PROCESSING_MESSAGE: Record<string, string> = {

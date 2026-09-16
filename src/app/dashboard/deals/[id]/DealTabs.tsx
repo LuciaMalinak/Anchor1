@@ -1,0 +1,423 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+type MeetingStatus =
+  | "joining"
+  | "recording"
+  | "uploaded"
+  | "transcribing"
+  | "summarizing"
+  | "ready"
+  | "failed";
+
+type DealMeeting = {
+  id: string;
+  title: string;
+  status: MeetingStatus;
+  occurredAt: string;
+  errorMessage: string | null;
+  summary: {
+    overview: string;
+    keyPoints: string[];
+    actionItems: { text: string; owner: string | null }[];
+    continuityNote: string | null;
+  } | null;
+};
+
+type DealFile = {
+  id: string;
+  fileName: string;
+  fileSize: number | null;
+  createdAt: string;
+};
+
+const STATUS_LABEL: Record<MeetingStatus, string> = {
+  joining: "Joining meeting…",
+  recording: "Recording…",
+  uploaded: "Queued",
+  transcribing: "Transcribing…",
+  summarizing: "Summarizing…",
+  ready: "Ready",
+  failed: "Failed",
+};
+
+type Tab = "before" | "during" | "after";
+
+function TabBar({ active, onChange, duringCount }: { active: Tab; onChange: (t: Tab) => void; duringCount: number }) {
+  const tabs: { key: Tab; label: string; badge?: number }[] = [
+    { key: "before", label: "Before" },
+    { key: "during", label: "During", badge: duringCount || undefined },
+    { key: "after", label: "After" },
+  ];
+  return (
+    <div className="flex gap-2">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          onClick={() => onChange(t.key)}
+          className={`relative rounded-md px-4 py-1.5 text-xs font-semibold tracking-[0.15em] transition ${
+            active === t.key
+              ? "bg-brand text-white"
+              : "border border-slate-300 text-slate-500 hover:border-slate-400"
+          }`}
+        >
+          {t.label.toUpperCase()}
+          {t.badge ? (
+            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
+              {t.badge}
+            </span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NewMeetingForms({ dealId }: { dealId: string }) {
+  const router = useRouter();
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
+  async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setUploadError(null);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      setUploadError("Choose a recording first.");
+      return;
+    }
+    formData.set("dealId", dealId);
+    setUploading(true);
+    try {
+      const res = await fetch("/api/meetings", { method: "POST", body: formData });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Upload failed");
+      }
+      form.reset();
+      router.refresh();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleJoin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setJoinError(null);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const meetingUrl = String(formData.get("meetingUrl") || "").trim();
+    const title = String(formData.get("title") || "").trim();
+    if (!meetingUrl) {
+      setJoinError("Paste a meeting link first.");
+      return;
+    }
+    setJoining(true);
+    try {
+      const res = await fetch("/api/meetings/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meetingUrl, title, dealId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't send Anchor to that meeting");
+      }
+      form.reset();
+      router.refresh();
+    } catch (err) {
+      setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <form onSubmit={handleJoin} className="rounded-lg border border-slate-200 p-4">
+        <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
+        <div className="mt-3 flex flex-col gap-2">
+          <input
+            type="text"
+            name="title"
+            placeholder="Title (optional)"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+          <input
+            type="text"
+            name="meetingUrl"
+            placeholder="https://zoom.us/j/..."
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+          <button
+            type="submit"
+            disabled={joining}
+            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {joining ? "Sending…" : "Join meeting"}
+          </button>
+        </div>
+        {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
+      </form>
+
+      <form onSubmit={handleUpload} className="rounded-lg border border-slate-200 p-4">
+        <p className="text-sm font-medium text-slate-900">Upload a recording</p>
+        <div className="mt-3 flex flex-col gap-2">
+          <input
+            type="text"
+            name="title"
+            placeholder="Title (optional)"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+          <input
+            type="file"
+            name="file"
+            accept="audio/*,video/*"
+            required
+            className="text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+          />
+          <button
+            type="submit"
+            disabled={uploading}
+            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {uploading ? "Uploading…" : "Upload"}
+          </button>
+        </div>
+        {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
+      </form>
+    </div>
+  );
+}
+
+function BeforePanel({ dealId, latestReady }: { dealId: string; latestReady: DealMeeting | undefined }) {
+  return (
+    <div className="flex flex-col gap-6">
+      {latestReady?.summary?.continuityNote ? (
+        <div className="rounded-lg border border-accent/40 bg-accent/5 px-5 py-4">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">
+            GOING IN, REMEMBER
+          </p>
+          <p className="mt-1 text-sm text-slate-700">{latestReady.summary.continuityNote}</p>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">
+          No prior meetings on this deal yet — the first one starts the record.
+        </p>
+      )}
+      <NewMeetingForms dealId={dealId} />
+    </div>
+  );
+}
+
+function DuringPanel({ inProgress }: { inProgress: DealMeeting[] }) {
+  if (inProgress.length === 0) {
+    return <p className="text-sm text-slate-500">Nothing live right now.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {inProgress.map((m) => (
+        <Link
+          key={m.id}
+          href={`/dashboard/meetings/${m.id}`}
+          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
+        >
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+            <span className="text-sm font-medium text-slate-900">{m.title}</span>
+          </div>
+          <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function AfterPanel({
+  dealId,
+  readyMeetings,
+  files,
+  teamSize,
+}: {
+  dealId: string;
+  readyMeetings: DealMeeting[];
+  files: DealFile[];
+  teamSize: number;
+}) {
+  const router = useRouter();
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+
+  async function handleSend() {
+    setSending(true);
+    setSendResult(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/send-summary`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't send");
+      setSendResult(`Sent to ${body.sentTo.length} team member${body.sentTo.length === 1 ? "" : "s"} ✓`);
+    } catch (err) {
+      setSendResult(err instanceof Error ? err.message : "Couldn't send");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleFileUpload(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFileError(null);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      setFileError("Choose a file first.");
+      return;
+    }
+    setUploadingFile(true);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/files`, { method: "POST", body: formData });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Upload failed");
+      }
+      form.reset();
+      router.refresh();
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingFile(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="flex flex-col gap-4">
+        {readyMeetings.length === 0 ? (
+          <p className="text-sm text-slate-500">No finished meetings on this deal yet.</p>
+        ) : (
+          readyMeetings.map((m) => (
+            <div key={m.id} className="rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between rounded-t-lg bg-brand px-5 py-3 text-white">
+                <span className="text-sm font-semibold">{m.title}</span>
+                <Link href={`/dashboard/meetings/${m.id}`} className="text-xs text-slate-300 hover:text-white">
+                  Full transcript →
+                </Link>
+              </div>
+              {m.summary && (
+                <div className="space-y-3 px-5 py-4">
+                  <p className="text-sm text-slate-700">{m.summary.overview}</p>
+                  {m.summary.actionItems.length > 0 && (
+                    <div className="divide-y divide-slate-100 text-sm">
+                      {m.summary.actionItems.map((a, i) => (
+                        <div key={i} className="flex items-center justify-between py-1.5">
+                          <span className="text-slate-700">{a.text}</span>
+                          {a.owner && <span className="text-slate-500">{a.owner}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <div className="rounded-lg border border-slate-200 px-5 py-5">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">SHARE THIS RECAP</p>
+          <p className="mt-2 text-sm text-slate-600">
+            Send the latest recap to all {teamSize} team member{teamSize === 1 ? "" : "s"}.
+          </p>
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={sending || readyMeetings.length === 0}
+            className="mt-4 w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-50"
+          >
+            {sending ? "Sending…" : "Send summary to team"}
+          </button>
+          {sendResult && <p className="mt-2 text-xs text-slate-600">{sendResult}</p>}
+        </div>
+
+        <div className="rounded-lg border border-slate-200 px-5 py-5">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">FILES</p>
+          <ul className="mt-3 flex flex-col gap-2">
+            {files.map((f) => (
+              <li key={f.id}>
+                <a
+                  href={`/api/deals/${dealId}/files/${f.id}`}
+                  className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                >
+                  <span className="truncate">{f.fileName}</span>
+                  <span className="ml-2 shrink-0 text-xs text-slate-400">
+                    {f.fileSize ? `${Math.round(f.fileSize / 1024)}KB` : ""}
+                  </span>
+                </a>
+              </li>
+            ))}
+            {files.length === 0 && <p className="text-sm text-slate-500">No files yet.</p>}
+          </ul>
+          <form onSubmit={handleFileUpload} className="mt-3 flex flex-col gap-2">
+            <input
+              type="file"
+              name="file"
+              required
+              className="text-xs text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            />
+            <button
+              type="submit"
+              disabled={uploadingFile}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
+            >
+              {uploadingFile ? "Uploading…" : "Attach a file"}
+            </button>
+            {fileError && <p className="text-xs text-red-600">{fileError}</p>}
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DealTabs({
+  deal,
+  meetings,
+  files,
+  teamSize,
+}: {
+  deal: { id: string; name: string };
+  meetings: DealMeeting[];
+  files: DealFile[];
+  teamSize: number;
+}) {
+  const inProgress = meetings.filter((m) => m.status !== "ready" && m.status !== "failed");
+  const readyMeetings = meetings.filter((m) => m.status === "ready");
+  const [tab, setTab] = useState<Tab>(inProgress.length > 0 ? "during" : "before");
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold text-slate-900">{deal.name}</h1>
+        <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
+      </div>
+      {tab === "before" && <BeforePanel dealId={deal.id} latestReady={readyMeetings[0]} />}
+      {tab === "during" && <DuringPanel inProgress={inProgress} />}
+      {tab === "after" && (
+        <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
+      )}
+    </div>
+  );
+}
