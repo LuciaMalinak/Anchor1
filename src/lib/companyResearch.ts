@@ -14,6 +14,23 @@ function client() {
   return new Anthropic({ apiKey });
 }
 
+const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // refresh at most once a day
+
+// Kept in a plain lib module (rather than inline in a page component) so
+// the Date.now() read doesn't run inside a component's render path.
+export function isResearchStale(updatedAt: Date | null): boolean {
+  if (!updatedAt) return true;
+  return Date.now() - updatedAt.getTime() > STALE_AFTER_MS;
+}
+
+export type CompanyResearchResult = {
+  briefing: string;
+  // A one-line headline for the single most notable thing that happened
+  // in roughly the last 30 days, if there is one — drives the small
+  // "News" callout on the deal page. Null when nothing that fresh turned up.
+  newsHeadline: string | null;
+};
+
 /**
  * Looks up public information about a COMPANY — never a named individual.
  * Uses Claude's native web search tool to ground the answer in real,
@@ -27,7 +44,7 @@ function client() {
 export async function researchCompany(params: {
   companyName: string;
   companyWebsite?: string | null;
-}): Promise<string> {
+}): Promise<CompanyResearchResult> {
   const query = params.companyWebsite
     ? `${params.companyName} (${params.companyWebsite})`
     : params.companyName;
@@ -41,7 +58,12 @@ export async function researchCompany(params: {
     messages: [
       {
         role: "user",
-        content: `Research the company "${query}". Write a short factual briefing (4-6 sentences, plain prose, no headers or bullet points, no meta preamble like "Based on the search results") covering: what they do, their industry/sector, approximate size or stage if it's publicly known, and any notable recent public news (funding rounds, product launches, leadership changes) from roughly the last year. Start directly with the company name. Only state things you found via search.`,
+        content: `Research the company "${query}" using web search, then reply in exactly this format (plain text, no markdown):
+
+HEADLINE: <a single-sentence headline for the single most notable public news about this company from roughly the last 30 days — a launch, funding round, leadership change, major press. Write NONE if nothing that recent and notable turned up.>
+BRIEFING: <a factual briefing, 4-6 sentences, plain prose, no headers or bullet points, no meta preamble like "Based on the search results" — start directly with the company name — covering what they do, their industry/sector, approximate size or stage if publicly known, and notable public news from roughly the last year.>
+
+Only state things you found via search.`,
       },
     ],
   });
@@ -49,12 +71,30 @@ export async function researchCompany(params: {
   // Citations get returned as separate text blocks interleaved with the
   // surrounding sentence, so joining with "" (not a newline) and
   // collapsing whitespace keeps the result reading as one paragraph.
-  const text = message.content
+  const raw = message.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("")
-    .replace(/\s+/g, " ")
+    .replace(/[ \t]+/g, " ")
     .trim();
 
-  return text || "Anchor couldn't find much public information about this company.";
+  // Defensive parsing — a model reply isn't guaranteed to hit the exact
+  // format even when asked for it, so fall back gracefully rather than
+  // throwing (same lesson learned building Insights: never trust
+  // "structured" model output blindly).
+  const headlineMatch = raw.match(/HEADLINE:\s*(.*?)(?:\n|$)/i);
+  const briefingMatch = raw.match(/BRIEFING:\s*([\s\S]*)/i);
+
+  const headlineRaw = headlineMatch?.[1]?.trim() || null;
+  const newsHeadline = !headlineRaw || /^none\.?$/i.test(headlineRaw) ? null : headlineRaw;
+
+  const briefing = (briefingMatch?.[1]?.trim() || raw.replace(/^HEADLINE:.*$/im, "").trim()).replace(
+    /\s+/g,
+    " "
+  );
+
+  return {
+    briefing: briefing || "Anchor couldn't find much public information about this company.",
+    newsHeadline,
+  };
 }

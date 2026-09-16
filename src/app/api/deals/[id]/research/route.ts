@@ -26,9 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
 
-  let companyResearch: string;
+  let result: Awaited<ReturnType<typeof researchCompany>>;
   try {
-    companyResearch = await researchCompany({
+    result = await researchCompany({
       companyName: deal.name,
       companyWebsite: deal.companyWebsite,
     });
@@ -42,8 +42,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const companyResearchUpdatedAt = new Date();
   await db
     .update(deals)
-    .set({ companyResearch, companyResearchUpdatedAt })
+    .set({
+      companyResearch: result.briefing,
+      newsHeadline: result.newsHeadline,
+      companyResearchUpdatedAt,
+    })
     .where(eq(deals.id, dealId));
 
-  return NextResponse.json({ companyResearch, companyResearchUpdatedAt });
+  return NextResponse.json({
+    companyResearch: result.briefing,
+    newsHeadline: result.newsHeadline,
+    companyResearchUpdatedAt,
+  });
 }

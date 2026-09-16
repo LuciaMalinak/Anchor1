@@ -76,6 +76,9 @@ ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "notes" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "companyResearch" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "companyResearchUpdatedAt" timestamp;
 ALTER TABLE "contact" ADD COLUMN IF NOT EXISTS "notes" text;
+
+-- Recent-news headline, split out of the same company research call.
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "newsHeadline" text;
 `;
 
 export async function GET(req: NextRequest) {

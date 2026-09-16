@@ -255,6 +255,10 @@ export const deals = pgTable("deal", {
   // named individual, only the company itself.
   companyResearch: text("companyResearch"),
   companyResearchUpdatedAt: timestamp("companyResearchUpdatedAt", { mode: "date" }),
+  // One-line headline for the most notable recent (~30 day) public news
+  // about the company, pulled from the same search — null when nothing
+  // that fresh turned up. Drives the "News" callout on the deal page.
+  newsHeadline: text("newsHeadline"),
   createdByUserId: uuid("createdByUserId")
     .notNull()
     .references(() => users.id),
