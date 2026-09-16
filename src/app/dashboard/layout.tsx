@@ -46,7 +46,7 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1800px] items-center justify-between px-6 py-4 lg:px-10">
+        <div className="flex w-full items-center justify-between px-6 py-4 lg:px-10 2xl:px-16">
           <Link href="/dashboard">
             <Logo size="md" />
           </Link>
@@ -95,7 +95,7 @@ export default async function DashboardLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto flex max-w-[1800px] flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:px-10">
+      <main className="flex w-full flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
         <div className="min-w-0 flex-1">{children}</div>
         <GeneralNewsSidebar
           initialDailyBriefing={dailyBriefing}

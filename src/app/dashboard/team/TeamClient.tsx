@@ -84,7 +84,7 @@ export function TeamClient({
 
       <section>
         <h2 className="mb-3 text-sm font-medium text-slate-900">Members ({members.length})</h2>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {members.map((m) => {
             const isYou = m.id === currentUserId;
             return (
