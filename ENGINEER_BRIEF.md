@@ -48,11 +48,14 @@ with no retry. The fix is a proper job queue (Inngest, Trigger.dev, or a
 simple Postgres-backed queue) — a well-understood, contained piece of
 work.
 
-**Audio files are stored on local disk.** Fine for local development,
-but this will not survive a redeployment on most hosting platforms and
-won't work at all across multiple server instances. Needs to move to S3,
-Cloudflare R2, or Supabase Storage before this goes to more than a
-handful of users — a few hours of work, well-trodden.
+**File storage now supports Cloudflare R2, but falls back to local disk
+if it isn't configured.** `src/lib/storage.ts` writes to R2 (via
+`src/lib/r2.ts`, plain S3-compatible calls) whenever the four `R2_*` env
+vars are set, and otherwise silently falls back to local disk — which,
+same caveat as before, does not survive a redeploy or restart, and won't
+work across multiple instances either. Set the `R2_*` vars (see
+`.env.example`) before relying on uploads sticking around; there's no
+further code work needed, just the Cloudflare account/bucket/token.
 
 **Speaker-to-contact matching is name-string matching, nothing smarter.**
 Claude infers a speaker's name from what's said in the transcript, and
@@ -105,8 +108,9 @@ day; the concepts map closely.
 
 ## First 30/60/90 for an engineer, roughly in priority order
 
-1. Get the app deployed somewhere real (see `SETUP.md`) and move file
-   storage to S3/R2/Supabase Storage so uploads survive a redeploy.
+1. Get the app deployed somewhere real (see `SETUP.md`) and set the
+   `R2_*` env vars (storage already supports R2 — see `src/lib/storage.ts`)
+   so uploads survive a redeploy.
 2. Add error tracking (Sentry) and basic uptime monitoring.
 3. Move processing to a real job queue so long recordings don't time out
    and failed jobs can retry.

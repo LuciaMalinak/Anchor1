@@ -35,12 +35,32 @@ services:
         sync: false
       - key: LINKEDIN_CLIENT_SECRET
         sync: false
+      - key: GOOGLE_INTEGRATION_CLIENT_ID
+        sync: false
+      - key: GOOGLE_INTEGRATION_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_INTEGRATION_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_INTEGRATION_CLIENT_SECRET
+        sync: false
+      - key: SLACK_INTEGRATION_CLIENT_ID
+        sync: false
+      - key: SLACK_INTEGRATION_CLIENT_SECRET
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
 # Note: no persistent disk here — Render's free tier doesn't support one.
-# This means uploaded recordings won't survive a restart or redeploy on
-# the free plan (flagged in ENGINEER_BRIEF.md as something to fix with
-# S3/R2 storage before relying on this for real). Fine for clicking
-# through and testing the flow; worth fixing before design partners
-# depend on it.
+# Uploaded files (profile photos, meeting recordings, deal files) go to
+# local disk and do NOT survive a restart or redeploy UNLESS the four R2_*
+# vars above are set, in which case src/lib/storage.ts writes to Cloudflare
+# R2 instead (see .env.example for how to get those values). Set them
+# before relying on uploads sticking around.
 
 databases:
   - name: anchor-db

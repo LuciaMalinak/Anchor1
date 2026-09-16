@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { deals, dealFiles, users } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
+import { readStoredFile } from "@/lib/storage";
 
 export async function GET(
   _req: Request,
@@ -29,7 +29,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const data = await fs.readFile(file.storagePath).catch(() => null);
+  const data = await readStoredFile(file.storagePath);
   if (!data) {
     return NextResponse.json({ error: "File is missing from storage" }, { status: 410 });
   }
