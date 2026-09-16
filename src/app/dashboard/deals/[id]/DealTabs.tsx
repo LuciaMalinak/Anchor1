@@ -166,7 +166,7 @@ function NewMeetingForms({ dealId }: { dealId: string }) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <form onSubmit={handleJoin} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <form onSubmit={handleJoin} className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm">
         <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
         <div className="mt-3 flex flex-col gap-2">
           <input
@@ -192,7 +192,7 @@ function NewMeetingForms({ dealId }: { dealId: string }) {
         {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
       </form>
 
-      <form onSubmit={handleUpload} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <form onSubmit={handleUpload} className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
         <p className="text-sm font-medium text-slate-900">Upload a recording</p>
         <div className="mt-3 flex flex-col gap-2">
           <input
@@ -765,7 +765,9 @@ function NewsSidebar({
     <aside className="flex w-full flex-col gap-4 lg:w-80 lg:shrink-0">
       <div className="flex items-center gap-2 px-1">
         <LiveDot />
-        <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">NEWS</p>
+        <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold tracking-[0.15em] text-accent">
+          NEWS
+        </span>
       </div>
 
       {newsHeadline && (
@@ -777,9 +779,9 @@ function NewsSidebar({
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
+      <div className="rounded-lg border border-slate-200 border-l-4 border-l-brand bg-white px-4 py-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-brand">
             {dealName.toUpperCase()}
           </p>
           <button
@@ -1458,7 +1460,7 @@ export function DealTabs({
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h1 className="text-2xl font-semibold text-slate-900">{deal.name}</h1>
+          <h1 className="text-2xl font-semibold text-brand">{deal.name}</h1>
           <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
         </div>
         <DealHeaderCard deal={deal} />

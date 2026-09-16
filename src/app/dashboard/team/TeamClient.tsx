@@ -56,13 +56,13 @@ export function TeamClient({
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">{teamName}</h1>
+        <h1 className="text-xl font-semibold text-brand">{teamName}</h1>
         <p className="text-sm text-slate-500">Everyone here shares deals, files, and recaps.</p>
       </div>
 
-      <section className="max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Invite a teammate</h2>
-        <form onSubmit={handleInvite} className="mt-3 flex flex-col gap-3 sm:flex-row">
+        <form onSubmit={handleInvite} className="mt-3 flex flex-col gap-3 sm:flex-row sm:max-w-xl">
           <input
             type="email"
             value={email}
