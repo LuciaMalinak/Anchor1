@@ -50,6 +50,14 @@ const STATUS_LABEL: Record<MeetingStatus, string> = {
 
 type Tab = "before" | "during" | "after";
 
+// Each tab gets its own active-state color so Before/During/After read as
+// distinct stages of the meeting lifecycle at a glance.
+const TAB_ACTIVE_CLASSES: Record<Tab, string> = {
+  before: "bg-brand text-white",
+  during: "bg-emerald-600 text-white",
+  after: "bg-accent text-white",
+};
+
 function TabBar({ active, onChange, duringCount }: { active: Tab; onChange: (t: Tab) => void; duringCount: number }) {
   const tabs: { key: Tab; label: string; badge?: number }[] = [
     { key: "before", label: "Before" },
@@ -65,13 +73,13 @@ function TabBar({ active, onChange, duringCount }: { active: Tab; onChange: (t: 
           onClick={() => onChange(t.key)}
           className={`relative rounded-md px-4 py-1.5 text-xs font-semibold tracking-[0.15em] transition ${
             active === t.key
-              ? "bg-brand text-white"
+              ? TAB_ACTIVE_CLASSES[t.key]
               : "border border-slate-300 text-slate-500 hover:border-slate-400"
           }`}
         >
           {t.label.toUpperCase()}
           {t.badge ? (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
+            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
               {t.badge}
             </span>
           ) : null}
