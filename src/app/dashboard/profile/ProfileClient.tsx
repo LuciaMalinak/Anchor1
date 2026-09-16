@@ -10,12 +10,32 @@ type Profile = {
   title: string | null;
   email: string;
   image: string | null;
+  phone: string | null;
+  linkedin: string | null;
+  department: string | null;
+  otherInfo: string | null;
 };
+
+const DEPARTMENTS = [
+  "Sales",
+  "Marketing",
+  "Customer Success",
+  "Product",
+  "Engineering",
+  "Finance",
+  "Operations",
+  "Executive / Leadership",
+  "Other",
+];
 
 export function ProfileClient({ profile }: { profile: Profile }) {
   const router = useRouter();
   const [name, setName] = useState(profile.name || "");
   const [title, setTitle] = useState(profile.title || "");
+  const [phone, setPhone] = useState(profile.phone || "");
+  const [linkedin, setLinkedin] = useState(profile.linkedin || "");
+  const [department, setDepartment] = useState(profile.department || "");
+  const [otherInfo, setOtherInfo] = useState(profile.otherInfo || "");
   const [preview, setPreview] = useState<string | null>(profile.image);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +56,10 @@ export function ProfileClient({ profile }: { profile: Profile }) {
       const formData = new FormData();
       formData.set("name", name);
       formData.set("title", title);
+      formData.set("phone", phone);
+      formData.set("linkedin", linkedin);
+      formData.set("department", department);
+      formData.set("otherInfo", otherInfo);
       const file = fileInputRef.current?.files?.[0];
       if (file) formData.set("photo", file);
 
@@ -117,6 +141,57 @@ export function ProfileClient({ profile }: { profile: Profile }) {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Account Executive"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Department</label>
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand"
+            >
+              <option value="">Select…</option>
+              {DEPARTMENTS.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Phone number</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+1 (555) 123-4567"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-slate-500">LinkedIn</label>
+          <input
+            type="url"
+            value={linkedin}
+            onChange={(e) => setLinkedin(e.target.value)}
+            placeholder="https://linkedin.com/in/yourname"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-slate-500">Other info</label>
+          <textarea
+            value={otherInfo}
+            onChange={(e) => setOtherInfo(e.target.value)}
+            placeholder="Anything else your team should know — timezone, focus areas, etc."
+            rows={3}
+            className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
           />
         </div>
 

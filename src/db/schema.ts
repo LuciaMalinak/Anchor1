@@ -30,6 +30,12 @@ export const users = pgTable("user", {
   // Separate from `image`, which doubles as an OAuth-provided avatar URL
   // or a path to a photo the person uploaded themselves.
   title: text("title"),
+  phone: text("phone"),
+  linkedin: text("linkedin"),
+  department: text("department"),
+  // Free-text catch-all shown on the profile ("Other info") — timezone,
+  // focus areas, whatever doesn't fit a dedicated field.
+  otherInfo: text("otherInfo"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
