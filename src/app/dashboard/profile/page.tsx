@@ -13,7 +13,17 @@ export default async function ProfilePage() {
 
   return (
     <ProfileClient
-      profile={{ id: user.id, name: user.name, title: user.title, email: user.email, image: user.image }}
+      profile={{
+        id: user.id,
+        name: user.name,
+        title: user.title,
+        email: user.email,
+        image: user.image,
+        phone: user.phone,
+        linkedin: user.linkedin,
+        department: user.department,
+        otherInfo: user.otherInfo,
+      }}
     />
   );
 }

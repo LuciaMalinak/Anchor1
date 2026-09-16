@@ -64,6 +64,12 @@ ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "primaryContactRole" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "primaryContactEmail" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "memory" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "companyWebsite" text;
+
+-- Fuller personal profile: contact details and a free-text info box.
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "phone" text;
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "linkedin" text;
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "department" text;
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "otherInfo" text;
 `;
 
 export async function GET(req: NextRequest) {

@@ -25,6 +25,22 @@ export async function PATCH(req: NextRequest) {
   if (typeof title === "string") {
     updates.title = title.trim() || null;
   }
+  const phone = formData.get("phone");
+  if (typeof phone === "string") {
+    updates.phone = phone.trim() || null;
+  }
+  const linkedin = formData.get("linkedin");
+  if (typeof linkedin === "string") {
+    updates.linkedin = linkedin.trim() || null;
+  }
+  const department = formData.get("department");
+  if (typeof department === "string") {
+    updates.department = department.trim() || null;
+  }
+  const otherInfo = formData.get("otherInfo");
+  if (typeof otherInfo === "string") {
+    updates.otherInfo = otherInfo.trim() || null;
+  }
 
   const photo = formData.get("photo");
   if (photo instanceof File && photo.size > 0) {
@@ -52,6 +68,16 @@ export async function PATCH(req: NextRequest) {
     .returning();
 
   return NextResponse.json({
-    user: { id: updated.id, name: updated.name, title: updated.title, image: updated.image, email: updated.email },
+    user: {
+      id: updated.id,
+      name: updated.name,
+      title: updated.title,
+      image: updated.image,
+      email: updated.email,
+      phone: updated.phone,
+      linkedin: updated.linkedin,
+      department: updated.department,
+      otherInfo: updated.otherInfo,
+    },
   });
 }
