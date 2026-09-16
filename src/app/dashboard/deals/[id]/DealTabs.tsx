@@ -7,6 +7,7 @@ import Image from "next/image";
 import { MicRecorder } from "@/components/MicRecorder";
 import { DEAL_STAGES } from "@/lib/dealStages";
 import { getCompanyLogoUrl } from "@/lib/companyLogo";
+import { HEALTH_LABEL, HEALTH_BADGE_CLASSES, HEALTH_DOT_CLASSES, type DealHealth } from "@/lib/dealHealth";
 
 type MeetingStatus =
   | "joining"
@@ -487,6 +488,7 @@ type DealProfile = {
   id: string;
   name: string;
   stage: string;
+  health: DealHealth;
   primaryContactName: string | null;
   primaryContactRole: string | null;
   primaryContactEmail: string | null;
@@ -683,6 +685,12 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
                 {deal.stage}
+              </span>
+              <span
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${HEALTH_BADGE_CLASSES[deal.health]}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${HEALTH_DOT_CLASSES[deal.health]}`} aria-hidden="true" />
+                {HEALTH_LABEL[deal.health]}
               </span>
               {deal.companyWebsite && (
                 <a

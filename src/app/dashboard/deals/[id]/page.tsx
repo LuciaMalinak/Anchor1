@@ -5,6 +5,7 @@ import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingPart
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { researchCompany, isResearchStale } from "@/lib/companyResearch";
+import { computeDealHealth } from "@/lib/dealHealth";
 import { DealTabs } from "./DealTabs";
 
 export default async function DealDetailPage({
@@ -107,12 +108,20 @@ export default async function DealDetailPage({
     .where(eq(dealMessages.dealId, id))
     .orderBy(asc(dealMessages.createdAt));
 
+  const lastActivityAt = dealMeetings[0]?.occurredAt ?? null;
+  const health = computeDealHealth({
+    stage: deal.stage,
+    lastActivityAt,
+    createdAt: deal.createdAt,
+  });
+
   return (
     <DealTabs
       deal={{
         id: deal.id,
         name: deal.name,
         stage: deal.stage,
+        health,
         primaryContactName: deal.primaryContactName,
         primaryContactRole: deal.primaryContactRole,
         primaryContactEmail: deal.primaryContactEmail,

@@ -13,6 +13,7 @@ import {
 import { eq } from "drizzle-orm";
 import { MeetingStatusPoller } from "./MeetingStatusPoller";
 import { MeetingDeleteButton } from "./MeetingDeleteButton";
+import { FollowUpEmailDraft } from "./FollowUpEmailDraft";
 
 export default async function MeetingDetailPage({
   params,
@@ -162,6 +163,8 @@ export default async function MeetingDetailPage({
         </section>
       )}
 
+      {summary && <FollowUpEmailDraft meetingId={id} />}
+
       {participants.length > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="text-sm font-medium text-slate-900">People in this meeting</h2>
@@ -170,7 +173,7 @@ export default async function MeetingDetailPage({
               <div key={p.id} className="rounded-lg bg-slate-50 px-4 py-3">
                 <p className="text-sm font-medium text-slate-900">
                   {p.displayName || p.speakerLabel}
-                  {p.meetingCount && p.meetingCount > 1 && (
+                  {Boolean(p.meetingCount && p.meetingCount > 1) && (
                     <span className="ml-2 text-xs font-normal text-slate-400">
                       {p.meetingCount} meetings
                     </span>
