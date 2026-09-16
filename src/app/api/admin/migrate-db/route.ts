@@ -63,6 +63,7 @@ ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "primaryContactName" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "primaryContactRole" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "primaryContactEmail" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "memory" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "companyWebsite" text;
 `;
 
 export async function GET(req: NextRequest) {
