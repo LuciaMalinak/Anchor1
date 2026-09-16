@@ -14,6 +14,7 @@ export default async function DealsPage() {
     .select({
       id: deals.id,
       name: deals.name,
+      stage: deals.stage,
       meetingCount: count(meetings.id),
     })
     .from(deals)

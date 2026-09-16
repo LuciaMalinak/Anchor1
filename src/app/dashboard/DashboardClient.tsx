@@ -158,7 +158,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Home</h1>
+        <h1 className="text-xl font-semibold text-brand">Home</h1>
         <p className="text-sm text-slate-500">
           Send Anchor to a live meeting, record one yourself, or upload a recording — everything
           shows up below once it&apos;s processed.
@@ -166,7 +166,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+        <section className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm lg:col-span-2">
           <h2 className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</h2>
           <p className="mt-1 text-sm text-slate-500">
             Paste a Zoom, Google Meet, or Teams link and Anchor will join automatically,
@@ -204,7 +204,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
         <MicRecorder onUploaded={refresh} />
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Upload a meeting recording</h2>
         <p className="mt-1 text-sm text-slate-500">
           Audio or video, up to 500MB. Anchor will transcribe it, summarize it, and

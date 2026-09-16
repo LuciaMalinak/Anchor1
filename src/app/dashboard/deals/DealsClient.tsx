@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { STAGE_BADGE_CLASSES, DEFAULT_STAGE_BADGE_CLASSES } from "@/lib/dealStages";
 
-type Deal = { id: string; name: string; meetingCount: number };
+type Deal = { id: string; name: string; stage: string; meetingCount: number };
 
 export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
   const router = useRouter();
@@ -37,15 +38,15 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Deals</h1>
+        <h1 className="text-xl font-semibold text-brand">Deals</h1>
         <p className="text-sm text-slate-500">
           Group meetings by client or account — prep, live status, and recaps in one place.
         </p>
       </div>
 
-      <section className="max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">New deal</h2>
-        <form onSubmit={handleCreate} className="mt-3 flex flex-col gap-3 sm:flex-row">
+        <form onSubmit={handleCreate} className="mt-3 flex flex-col gap-3 sm:flex-row sm:max-w-xl">
           <input
             type="text"
             value={name}
@@ -56,7 +57,7 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
           <button
             type="submit"
             disabled={creating}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-dark disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-dark disabled:opacity-50"
           >
             {creating ? "Creating…" : "Create deal"}
           </button>
@@ -74,12 +75,21 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
               <Link
                 key={d.id}
                 href={`/dashboard/deals/${d.id}`}
-                className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
               >
                 <span className="text-sm font-medium text-slate-900">{d.name}</span>
-                <span className="text-xs text-slate-500">
-                  {d.meetingCount} meeting{d.meetingCount === 1 ? "" : "s"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      STAGE_BADGE_CLASSES[d.stage] || DEFAULT_STAGE_BADGE_CLASSES
+                    }`}
+                  >
+                    {d.stage}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {d.meetingCount} meeting{d.meetingCount === 1 ? "" : "s"}
+                  </span>
+                </div>
               </Link>
             ))}
           </div>

@@ -48,7 +48,7 @@ export default async function DashboardLayout({
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="flex w-full items-center justify-between px-6 py-4 lg:px-10 2xl:px-16">
           <Link href="/dashboard">
-            <Logo size="md" />
+            <Logo size="lg" />
           </Link>
           <nav className="flex items-center gap-5 text-sm font-medium text-slate-600">
             <Link href="/dashboard/deals" className="hover:text-brand">

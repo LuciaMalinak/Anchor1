@@ -56,12 +56,14 @@ export function GeneralNewsSidebar({
     <aside className="flex w-full flex-col gap-4 lg:w-80 lg:shrink-0">
       <div className="flex items-center gap-2 px-1">
         <LiveDot />
-        <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">NEWS</p>
+        <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold tracking-[0.15em] text-accent">
+          NEWS
+        </span>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
+      <div className="rounded-lg border border-slate-200 border-l-4 border-l-brand bg-white px-4 py-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-brand">
             TODAY&apos;S BRIEFING
           </p>
           <button

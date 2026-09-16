@@ -71,7 +71,7 @@ export function ContactsClient({ initialContacts }: { initialContacts: Contact[]
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Contacts</h1>
+        <h1 className="text-xl font-semibold text-brand">Contacts</h1>
         <p className="text-sm text-slate-500">
           Everyone Anchor has recognized across your meetings, with what it&apos;s learned about each.
         </p>
