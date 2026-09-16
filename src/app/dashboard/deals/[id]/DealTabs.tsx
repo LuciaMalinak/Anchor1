@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { MicRecorder } from "@/components/MicRecorder";
 
 type MeetingStatus =
   | "joining"
@@ -143,7 +144,7 @@ function NewMeetingForms({ dealId }: { dealId: string }) {
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <form onSubmit={handleJoin} className="rounded-lg border border-slate-200 p-4">
         <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
         <div className="mt-3 flex flex-col gap-2">
@@ -196,6 +197,8 @@ function NewMeetingForms({ dealId }: { dealId: string }) {
         </div>
         {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
       </form>
+
+      <MicRecorder dealId={dealId} onUploaded={() => router.refresh()} />
     </div>
   );
 }
@@ -220,25 +223,118 @@ function BeforePanel({ dealId, latestReady }: { dealId: string; latestReady: Dea
   );
 }
 
-function DuringPanel({ inProgress }: { inProgress: DealMeeting[] }) {
-  if (inProgress.length === 0) {
-    return <p className="text-sm text-slate-500">Nothing live right now.</p>;
+type ChatTurn = { role: "user" | "assistant"; content: string };
+
+function AskAnchorPanel({ dealId }: { dealId: string }) {
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  async function handleAsk(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const q = question.trim();
+    if (!q || asking) return;
+    setError(null);
+    setQuestion("");
+    const nextTurns: ChatTurn[] = [...turns, { role: "user", content: q }];
+    setTurns(nextTurns);
+    setAsking(true);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/assist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q, history: turns }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Anchor couldn't answer that.");
+      setTurns([...nextTurns, { role: "assistant", content: body.answer }]);
+      requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Anchor couldn't answer that.");
+    } finally {
+      setAsking(false);
+    }
   }
+
   return (
-    <div className="flex flex-col gap-3">
-      {inProgress.map((m) => (
-        <Link
-          key={m.id}
-          href={`/dashboard/meetings/${m.id}`}
-          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
+    <div className="flex flex-col rounded-lg border border-slate-200 bg-white">
+      <div className="border-b border-slate-200 px-5 py-3">
+        <p className="text-sm font-medium text-slate-900">Ask Anchor</p>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Grounded in this deal&apos;s past meetings, action items, and files — ask for a
+          quick answer or talking point mid-meeting.
+        </p>
+      </div>
+
+      {turns.length > 0 && (
+        <div className="flex max-h-80 flex-col gap-3 overflow-y-auto px-5 py-4">
+          {turns.map((t, i) => (
+            <div
+              key={i}
+              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                t.role === "user"
+                  ? "self-end bg-brand text-white"
+                  : "self-start bg-slate-100 text-slate-800"
+              }`}
+            >
+              {t.content}
+            </div>
+          ))}
+          {asking && (
+            <div className="self-start rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400">
+              Thinking…
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      )}
+
+      <form onSubmit={handleAsk} className="flex items-center gap-2 border-t border-slate-200 p-3">
+        <input
+          type="text"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="e.g. What did they push back on last time?"
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+        />
+        <button
+          type="submit"
+          disabled={asking || !question.trim()}
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-50"
         >
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-            <span className="text-sm font-medium text-slate-900">{m.title}</span>
-          </div>
-          <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
-        </Link>
-      ))}
+          Ask
+        </button>
+      </form>
+      {error && <p className="px-3 pb-3 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function DuringPanel({ dealId, inProgress }: { dealId: string; inProgress: DealMeeting[] }) {
+  return (
+    <div className="flex flex-col gap-6">
+      {inProgress.length === 0 ? (
+        <p className="text-sm text-slate-500">Nothing live right now.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {inProgress.map((m) => (
+            <Link
+              key={m.id}
+              href={`/dashboard/meetings/${m.id}`}
+              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
+            >
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                <span className="text-sm font-medium text-slate-900">{m.title}</span>
+              </div>
+              <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+      <AskAnchorPanel dealId={dealId} />
     </div>
   );
 }
@@ -414,7 +510,7 @@ export function DealTabs({
         <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
       </div>
       {tab === "before" && <BeforePanel dealId={deal.id} latestReady={readyMeetings[0]} />}
-      {tab === "during" && <DuringPanel inProgress={inProgress} />}
+      {tab === "during" && <DuringPanel dealId={deal.id} inProgress={inProgress} />}
       {tab === "after" && (
         <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
       )}
