@@ -29,3 +29,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   return NextResponse.json({ contact: updated });
 }
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  const { id: contactId } = await params;
+  const [contact] = await db.select().from(contacts).where(eq(contacts.id, contactId));
+  if (!contact || contact.userId !== session.user.id) {
+    return NextResponse.json({ error: "Contact not found" }, { status: 404 });
+  }
+
+  // meeting_participant rows referencing this contact just lose the link
+  // (onDelete: set null, see schema.ts) — past meeting summaries and
+  // transcripts are untouched, Anchor just stops tracking history for them.
+  await db.delete(contacts).where(eq(contacts.id, contactId));
+
+  return NextResponse.json({ ok: true });
+}

@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { MeetingStatusPoller } from "./MeetingStatusPoller";
+import { MeetingDeleteButton } from "./MeetingDeleteButton";
 
 export default async function MeetingDetailPage({
   params,
@@ -68,6 +69,11 @@ export default async function MeetingDetailPage({
         {meeting.status !== "failed" && (
           <MeetingStatusPoller meetingId={id} initialStatus={meeting.status} />
         )}
+        {isOwner && (meeting.status === "failed" || stuckJoining) && (
+          <div className="mt-5 flex justify-center">
+            <MeetingDeleteButton meetingId={id} title={meeting.title} />
+          </div>
+        )}
       </div>
     );
   }
@@ -96,15 +102,18 @@ export default async function MeetingDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">{meeting.title}</h1>
-        <p className="text-sm text-slate-500">
-          {meeting.occurredAt.toLocaleDateString(undefined, {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">{meeting.title}</h1>
+          <p className="text-sm text-slate-500">
+            {meeting.occurredAt.toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+        </div>
+        {isOwner && <MeetingDeleteButton meetingId={id} title={meeting.title} />}
       </div>
 
       {summary && (
