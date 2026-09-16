@@ -231,12 +231,16 @@ function NewMeetingForms({ dealId }: { dealId: string }) {
 
 function BeforePanel({
   dealId,
+  dealName,
   memory,
   latestReady,
+  decisionBoundaries,
 }: {
   dealId: string;
+  dealName: string;
   memory: string | null;
   latestReady: DealMeeting | undefined;
+  decisionBoundaries: string | null;
 }) {
   const goingIn = memory || latestReady?.summary?.continuityNote || null;
   return (
@@ -253,7 +257,224 @@ function BeforePanel({
           No prior meetings on this deal yet — the first one starts the record.
         </p>
       )}
+      <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} />
       <NewMeetingForms dealId={dealId} />
+    </div>
+  );
+}
+
+function HandoffPanel({
+  dealId,
+  dealName,
+  initialDecisionBoundaries,
+}: {
+  dealId: string;
+  dealName: string;
+  initialDecisionBoundaries: string | null;
+}) {
+  const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
+  const [boundaries, setBoundaries] = useState(initialDecisionBoundaries || "");
+  const [editingBoundaries, setEditingBoundaries] = useState(false);
+  const [savingBoundaries, setSavingBoundaries] = useState(false);
+  const [boundariesError, setBoundariesError] = useState<string | null>(null);
+
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [briefing, setBriefing] = useState<HandoffBriefing | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleSaveBoundaries() {
+    setSavingBoundaries(true);
+    setBoundariesError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decisionBoundaries: boundaries }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't save");
+      }
+      setEditingBoundaries(false);
+      router.refresh();
+    } catch (err) {
+      setBoundariesError(err instanceof Error ? err.message : "Couldn't save");
+    } finally {
+      setSavingBoundaries(false);
+    }
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setGenError(null);
+    setCopied(false);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/handoff`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't generate a briefing");
+      setBriefing(body.briefing);
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : "Couldn't generate a briefing");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleCopy() {
+    if (!briefing) return;
+    const text = `Handoff briefing — ${dealName}
+
+WHAT'S BEEN DECIDED
+${briefing.whatWasDecided}
+
+WHAT TO PUSH ON
+${briefing.whatToPushOn}
+
+WHAT TO FOCUS ON
+${briefing.focusAreas}
+
+WHAT THEY CAN DECIDE ON THEIR OWN
+${boundaries || "Nothing set yet — check with the deal owner before committing to anything specific."}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can fail depending on context — non-fatal, the
+      // text is still fully visible on screen to select and copy by hand.
+    }
+  }
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="self-start rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-400"
+      >
+        Prepping someone else to run this meeting?
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-slate-900">Handoff briefing</p>
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="text-xs text-slate-400 hover:text-slate-600"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-slate-500">
+            What they&apos;re allowed to decide on their own
+          </label>
+          {!editingBoundaries && (
+            <button
+              type="button"
+              onClick={() => setEditingBoundaries(true)}
+              className="text-xs font-medium text-brand hover:underline"
+            >
+              {boundaries ? "Edit" : "Set boundaries"}
+            </button>
+          )}
+        </div>
+        {editingBoundaries ? (
+          <>
+            <textarea
+              value={boundaries}
+              onChange={(e) => setBoundaries(e.target.value)}
+              placeholder="e.g. Can offer up to 10% discount, can confirm the standard timeline. Can't commit to custom features or sign anything — bring that back to me."
+              rows={3}
+              autoFocus
+              className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+            <div className="mt-1 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSaveBoundaries}
+                disabled={savingBoundaries}
+                className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+              >
+                {savingBoundaries ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingBoundaries(false);
+                  setBoundaries(initialDecisionBoundaries || "");
+                }}
+                className="text-xs text-slate-500 hover:text-slate-700"
+              >
+                Cancel
+              </button>
+            </div>
+            {boundariesError && <p className="text-xs text-red-600">{boundariesError}</p>}
+          </>
+        ) : (
+          <p className="text-sm text-slate-700">
+            {boundaries || (
+              <span className="text-slate-400">
+                Not set — this is reused every time you generate a briefing for this deal.
+              </span>
+            )}
+          </p>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={handleGenerate}
+        disabled={generating}
+        className="self-start rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+      >
+        {generating ? "Generating…" : briefing ? "Regenerate briefing" : "Generate handoff briefing"}
+      </button>
+      {genError && <p className="text-xs text-red-600">{genError}</p>}
+
+      {briefing && (
+        <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-500">
+              WHAT&apos;S BEEN DECIDED
+            </p>
+            <p className="mt-1 text-sm text-slate-700">{briefing.whatWasDecided}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-500">WHAT TO PUSH ON</p>
+            <p className="mt-1 text-sm text-slate-700">{briefing.whatToPushOn}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-500">
+              WHAT TO FOCUS ON
+            </p>
+            <p className="mt-1 text-sm text-slate-700">{briefing.focusAreas}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.15em] text-brand">
+              WHAT THEY CAN DECIDE ON THEIR OWN
+            </p>
+            <p className="mt-1 text-sm text-slate-700">
+              {boundaries || "Nothing set yet — check with the deal owner before committing to anything specific."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400"
+          >
+            {copied ? "Copied ✓" : "Copy to share"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -270,6 +491,13 @@ type DealProfile = {
   companyResearch: string | null;
   companyResearchUpdatedAt: string | null;
   newsHeadline: string | null;
+  decisionBoundaries: string | null;
+};
+
+type HandoffBriefing = {
+  whatWasDecided: string;
+  whatToPushOn: string;
+  focusAreas: string;
 };
 
 // A company's own public logo — from their domain, never a photo of a
@@ -1034,7 +1262,13 @@ export function DealTabs({
       <DealHeaderCard deal={deal} />
       <PeopleAndTeam people={people} team={team} />
       {tab === "before" && (
-        <BeforePanel dealId={deal.id} memory={deal.memory} latestReady={readyMeetings[0]} />
+        <BeforePanel
+          dealId={deal.id}
+          dealName={deal.name}
+          memory={deal.memory}
+          latestReady={readyMeetings[0]}
+          decisionBoundaries={deal.decisionBoundaries}
+        />
       )}
       {tab === "during" && <DuringPanel dealId={deal.id} inProgress={inProgress} />}
       {tab === "after" && (

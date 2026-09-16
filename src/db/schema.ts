@@ -265,6 +265,12 @@ export const deals = pgTable("deal", {
   // about the company, pulled from the same search — null when nothing
   // that fresh turned up. Drives the "News" callout on the deal page.
   newsHeadline: text("newsHeadline"),
+  // What a teammate covering this deal's meeting is allowed to decide on
+  // their own (e.g. "can offer up to 10% discount, can't commit to custom
+  // features") — set by the deal owner, reused every time a handoff
+  // briefing is generated. Anchor never infers this; it only ever
+  // reflects what you typed here.
+  decisionBoundaries: text("decisionBoundaries"),
   createdByUserId: uuid("createdByUserId")
     .notNull()
     .references(() => users.id),

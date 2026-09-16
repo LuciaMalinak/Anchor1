@@ -83,6 +83,9 @@ ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "newsHeadline" text;
 -- Team-wide daily news briefing (News tab).
 ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "dailyBriefing" text;
 ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "dailyBriefingUpdatedAt" timestamp;
+
+-- Meeting handoff briefings: reusable decision boundaries per deal.
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "decisionBoundaries" text;
 `;
 
 export async function GET(req: NextRequest) {
