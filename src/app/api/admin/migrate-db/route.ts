@@ -70,6 +70,12 @@ ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "phone" text;
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "linkedin" text;
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "department" text;
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "otherInfo" text;
+
+-- Manual notes (deal + contact) and on-demand company web research.
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "notes" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "companyResearch" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "companyResearchUpdatedAt" timestamp;
+ALTER TABLE "contact" ADD COLUMN IF NOT EXISTS "notes" text;
 `;
 
 export async function GET(req: NextRequest) {
@@ -103,12 +109,16 @@ export async function GET(req: NextRequest) {
   const dealCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'deal'
   `;
+  const contactCols = await rawClient`
+    select column_name from information_schema.columns where table_name = 'contact'
+  `;
 
   return NextResponse.json({
     migrated: true,
     newTables: newTables.map((r) => r.table_name),
     userColumns: userCols.map((r) => r.column_name),
     dealColumns: dealCols.map((r) => r.column_name),
+    contactColumns: contactCols.map((r) => r.column_name),
     meetingColumns: cols.map((r) => r.column_name),
     meetingStatusValues: enumVals.map((r) => r.v),
   });
