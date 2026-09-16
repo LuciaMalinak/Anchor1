@@ -125,6 +125,8 @@ export default async function DealDetailPage({
           : null,
         newsHeadline: deal.newsHeadline,
         decisionBoundaries: deal.decisionBoundaries,
+        leadUserId: deal.leadUserId,
+        backupUserId: deal.backupUserId,
       }}
       people={dealContactRows}
       team={teammates.map((t) => ({ id: t.id, name: t.name, email: t.email, title: t.title, image: t.image }))}

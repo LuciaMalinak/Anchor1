@@ -271,6 +271,12 @@ export const deals = pgTable("deal", {
   // briefing is generated. Anchor never infers this; it only ever
   // reflects what you typed here.
   decisionBoundaries: text("decisionBoundaries"),
+  // Standing ownership on the deal, separate from the point-in-time
+  // handoff briefing above: who's driving it day to day, and who's
+  // designated to step in if the lead is out. Both nullable and both any
+  // teammate — set from the deal page, never inferred.
+  leadUserId: uuid("leadUserId").references(() => users.id, { onDelete: "set null" }),
+  backupUserId: uuid("backupUserId").references(() => users.id, { onDelete: "set null" }),
   createdByUserId: uuid("createdByUserId")
     .notNull()
     .references(() => users.id),

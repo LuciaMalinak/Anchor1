@@ -81,7 +81,7 @@ const SUMMARY_TOOL = {
             },
             note: {
               type: "string",
-              description: "1-2 sentence factual note on what this specific person said, asked for, or cared about in this meeting. Used to build a running relationship history, so be concrete, not generic.",
+              description: "1-2 sentence factual note on what this specific person said, asked for, or cared about in this meeting. Used to build a running relationship history, so be concrete, not generic. If they mentioned anything personal in passing — family, a hobby, travel, an upcoming event, how they take their coffee, small talk before getting down to business — include that too in a few extra words; those small human details matter for building rapport, especially for someone else stepping in later.",
             },
           },
           required: ["speakerLabel", "inferredName", "note"],
@@ -130,7 +130,7 @@ const MEMORY_TOOL = {
       updatedRelationshipSummary: {
         type: "string",
         description:
-          "A 2-4 sentence rolling summary of who this person is and what matters to them, merging the prior summary with what was learned in this meeting. Keep it factual and current — drop stale details this meeting has superseded.",
+          "A 2-4 sentence rolling summary of who this person is and what matters to them, merging the prior summary with what was learned in this meeting. Keep it factual and current — drop stale details this meeting has superseded. Include small personal/human details when known (family, hobbies, personal milestones, how they like to communicate) alongside the business facts — not as the whole summary, but don't drop them either; they're what makes someone else stepping in sound like they actually know this person.",
       },
       continuityLine: {
         type: "string",
