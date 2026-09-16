@@ -174,6 +174,70 @@ export async function mergeContactMemory(params: {
   };
 }
 
+const FOLLOW_UP_EMAIL_TOOL = {
+  name: "record_follow_up_email",
+  description: "Record a draft follow-up email to send to the external people from a meeting.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      subject: {
+        type: "string",
+        description: "A short, specific email subject line (not generic like 'Follow up').",
+      },
+      body: {
+        type: "string",
+        description:
+          "The full email body, plain text (no HTML), starting with a greeting and ending with a sign-off using the sender's name. Warm and professional, not stiff. Reference only what's in the meeting summary provided — never invent commitments, numbers, or dates that weren't given. Keep it to a few short paragraphs plus a bulleted list of next steps if there are action items.",
+      },
+    },
+    required: ["subject", "body"],
+  },
+};
+
+export type FollowUpEmailDraft = { subject: string; body: string };
+
+// A client-facing draft, distinct from the internal team recap email
+// (see /api/deals/[id]/send-summary) — this one is meant to go out to
+// the people who were actually in the meeting. We hand back a draft for
+// the user to review and send themselves (via their own email client),
+// rather than sending anything externally on their behalf.
+export async function draftFollowUpEmail(params: {
+  meetingTitle: string;
+  overview: string;
+  keyPoints: string[];
+  actionItems: { text: string; owner: string | null }[];
+  senderName: string;
+  recipientNames: string[];
+}): Promise<FollowUpEmailDraft> {
+  const actionItemsText = params.actionItems
+    .map((a) => `- ${a.text}${a.owner ? ` (${a.owner})` : ""}`)
+    .join("\n");
+
+  const message = await client().messages.create({
+    model: MODEL,
+    max_tokens: 768,
+    system:
+      "You draft warm, professional, concise follow-up emails written in the sender's own voice after a real business meeting. Never invent commitments, numbers, dates, or facts that weren't given to you in the meeting summary.",
+    tools: [FOLLOW_UP_EMAIL_TOOL],
+    tool_choice: { type: "tool", name: FOLLOW_UP_EMAIL_TOOL.name },
+    messages: [
+      {
+        role: "user",
+        content: `Draft a follow-up email from ${params.senderName} to ${
+          params.recipientNames.length ? params.recipientNames.join(", ") : "the people they met with"
+        }, following up on this meeting.\n\nMeeting: ${params.meetingTitle}\n\nOverview: ${params.overview}\n\nKey points:\n${params.keyPoints.map((k) => `- ${k}`).join("\n")}\n\nAction items:\n${actionItemsText || "None"}`,
+      },
+    ],
+  });
+
+  const toolUse = message.content.find((b) => b.type === "tool_use");
+  if (!toolUse || toolUse.type !== "tool_use") {
+    throw new Error("Model did not return a structured email draft.");
+  }
+
+  return toolUse.input as FollowUpEmailDraft;
+}
+
 const DEAL_MEMORY_TOOL = {
   name: "record_deal_memory_update",
   description:

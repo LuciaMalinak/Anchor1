@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { STAGE_BADGE_CLASSES, DEFAULT_STAGE_BADGE_CLASSES } from "@/lib/dealStages";
+import { HEALTH_LABEL, HEALTH_DOT_CLASSES, type DealHealth } from "@/lib/dealHealth";
 
-type Deal = { id: string; name: string; stage: string; meetingCount: number };
+type Deal = { id: string; name: string; stage: string; meetingCount: number; health: DealHealth };
 
 export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
   const router = useRouter();
@@ -77,8 +78,15 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
                 href={`/dashboard/deals/${d.id}`}
                 className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
               >
-                <span className="text-sm font-medium text-slate-900">{d.name}</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${HEALTH_DOT_CLASSES[d.health]}`}
+                    title={HEALTH_LABEL[d.health]}
+                    aria-hidden="true"
+                  />
+                  <span className="text-sm font-medium text-slate-900">{d.name}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                       STAGE_BADGE_CLASSES[d.stage] || DEFAULT_STAGE_BADGE_CLASSES
@@ -86,6 +94,17 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
                   >
                     {d.stage}
                   </span>
+                  {(d.health === "needs-attention" || d.health === "stalled") && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        d.health === "stalled"
+                          ? "bg-rose-50 text-rose-700"
+                          : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {HEALTH_LABEL[d.health]}
+                    </span>
+                  )}
                   <span className="text-xs text-slate-500">
                     {d.meetingCount} meeting{d.meetingCount === 1 ? "" : "s"}
                   </span>
