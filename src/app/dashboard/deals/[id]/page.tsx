@@ -129,6 +129,7 @@ export default async function DealDetailPage({
           ? deal.companyResearchUpdatedAt.toISOString()
           : null,
         newsHeadline: deal.newsHeadline,
+        decisionBoundaries: deal.decisionBoundaries,
       }}
       people={dealContactRows}
       team={teammates.map((t) => ({ id: t.id, name: t.name, email: t.email, title: t.title, image: t.image }))}

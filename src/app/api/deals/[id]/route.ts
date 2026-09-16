@@ -48,6 +48,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (typeof body.notes === "string") {
     updates.notes = body.notes.trim() || null;
   }
+  if (typeof body.decisionBoundaries === "string") {
+    updates.decisionBoundaries = body.decisionBoundaries.trim() || null;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
