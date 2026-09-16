@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts, teams } from "@/db/schema";
+import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts } from "@/db/schema";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { researchCompany, isResearchStale } from "@/lib/companyResearch";
-import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
 import { DealTabs } from "./DealTabs";
 
 export default async function DealDetailPage({
@@ -56,20 +55,9 @@ export default async function DealDetailPage({
     }
   }
 
-  // Same throttled, best-effort pattern for the team-wide (not
-  // deal-specific) "Today's briefing" — shared across every deal so it's
-  // only fetched once a day per team, not once per deal view.
-  let [team] = await db.select().from(teams).where(eq(teams.id, teamId));
-  if (team && isBriefingStale(team.dailyBriefingUpdatedAt)) {
-    try {
-      const dailyBriefing = await getDailyBriefing();
-      const dailyBriefingUpdatedAt = new Date();
-      await db.update(teams).set({ dailyBriefing, dailyBriefingUpdatedAt }).where(eq(teams.id, teamId));
-      team = { ...team, dailyBriefing, dailyBriefingUpdatedAt };
-    } catch (err) {
-      console.error("Background daily briefing refresh failed:", err);
-    }
-  }
+  // The team-wide "Today's briefing" now lives in the shared dashboard
+  // layout (GeneralNewsSidebar), not here — this page's sidebar is
+  // deal-specific news only.
 
   const dealMeetings = await db
     .select()
@@ -162,8 +150,6 @@ export default async function DealDetailPage({
         createdAt: f.createdAt.toISOString(),
       }))}
       teamSize={teammates.length}
-      dailyBriefing={team?.dailyBriefing ?? null}
-      dailyBriefingUpdatedAt={team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null}
       messages={messageRows.map((r) => ({
         id: r.message.id,
         content: r.message.content,

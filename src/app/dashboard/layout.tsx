@@ -2,6 +2,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { Logo } from "@/components/Logo";
+import { db } from "@/db";
+import { teams } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { getOrCreateTeamId } from "@/lib/team";
+import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
+import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
 
 export default async function DashboardLayout({
   children,
@@ -10,10 +16,37 @@ export default async function DashboardLayout({
 }) {
   const session = await auth();
 
+  // Team-wide "what's worth knowing today" news — lives in this shared
+  // layout (not the deal page) so it can run persistently across the main
+  // site, Bloomberg-ticker style. Same throttled, best-effort pattern used
+  // elsewhere: refreshed at most once a day per team, never blocks the page.
+  let dailyBriefing: string | null = null;
+  let dailyBriefingUpdatedAt: string | null = null;
+  if (session?.user?.id) {
+    try {
+      const teamId = await getOrCreateTeamId(session.user.id);
+      let [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+      if (team && isBriefingStale(team.dailyBriefingUpdatedAt)) {
+        try {
+          const briefing = await getDailyBriefing();
+          const updatedAt = new Date();
+          await db.update(teams).set({ dailyBriefing: briefing, dailyBriefingUpdatedAt: updatedAt }).where(eq(teams.id, teamId));
+          team = { ...team, dailyBriefing: briefing, dailyBriefingUpdatedAt: updatedAt };
+        } catch (err) {
+          console.error("Background daily briefing refresh failed:", err);
+        }
+      }
+      dailyBriefing = team?.dailyBriefing ?? null;
+      dailyBriefingUpdatedAt = team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null;
+    } catch (err) {
+      console.error("Couldn't load team daily briefing:", err);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link href="/dashboard">
             <Logo size="md" />
           </Link>
@@ -62,7 +95,13 @@ export default async function DashboardLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl px-6 py-8">{children}</main>
+      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1">{children}</div>
+        <GeneralNewsSidebar
+          initialDailyBriefing={dailyBriefing}
+          initialBriefingUpdatedAt={dailyBriefingUpdatedAt}
+        />
+      </main>
     </div>
   );
 }
