@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings, summaries, dealFiles, users, meetingParticipants, contacts } from "@/db/schema";
+import { deals, meetings, summaries, dealFiles, users, meetingParticipants, contacts, teams } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { researchCompany, isResearchStale } from "@/lib/companyResearch";
+import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
 import { DealTabs } from "./DealTabs";
 
 export default async function DealDetailPage({
@@ -52,6 +53,21 @@ export default async function DealDetailPage({
       };
     } catch (err) {
       console.error("Background company research failed:", err);
+    }
+  }
+
+  // Same throttled, best-effort pattern for the team-wide (not
+  // deal-specific) "Today's briefing" — shared across every deal so it's
+  // only fetched once a day per team, not once per deal view.
+  let [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  if (team && isBriefingStale(team.dailyBriefingUpdatedAt)) {
+    try {
+      const dailyBriefing = await getDailyBriefing();
+      const dailyBriefingUpdatedAt = new Date();
+      await db.update(teams).set({ dailyBriefing, dailyBriefingUpdatedAt }).where(eq(teams.id, teamId));
+      team = { ...team, dailyBriefing, dailyBriefingUpdatedAt };
+    } catch (err) {
+      console.error("Background daily briefing refresh failed:", err);
     }
   }
 
@@ -138,6 +154,8 @@ export default async function DealDetailPage({
         createdAt: f.createdAt.toISOString(),
       }))}
       teamSize={teammates.length}
+      dailyBriefing={team?.dailyBriefing ?? null}
+      dailyBriefingUpdatedAt={team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null}
     />
   );
 }

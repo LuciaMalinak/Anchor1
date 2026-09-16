@@ -48,21 +48,33 @@ const STATUS_LABEL: Record<MeetingStatus, string> = {
   failed: "Failed",
 };
 
-type Tab = "before" | "during" | "after";
+type Tab = "before" | "during" | "after" | "news";
 
-// Each tab gets its own active-state color so Before/During/After read as
-// distinct stages of the meeting lifecycle at a glance.
+// Each tab gets its own active-state color so Before/During/After/News
+// read as distinct stages/areas at a glance.
 const TAB_ACTIVE_CLASSES: Record<Tab, string> = {
   before: "bg-brand text-white",
   during: "bg-emerald-600 text-white",
   after: "bg-accent text-white",
+  news: "bg-indigo-600 text-white",
 };
 
-function TabBar({ active, onChange, duringCount }: { active: Tab; onChange: (t: Tab) => void; duringCount: number }) {
-  const tabs: { key: Tab; label: string; badge?: number }[] = [
+function TabBar({
+  active,
+  onChange,
+  duringCount,
+  hasNews,
+}: {
+  active: Tab;
+  onChange: (t: Tab) => void;
+  duringCount: number;
+  hasNews: boolean;
+}) {
+  const tabs: { key: Tab; label: string; badge?: number; dot?: boolean }[] = [
     { key: "before", label: "Before" },
     { key: "during", label: "During", badge: duringCount || undefined },
     { key: "after", label: "After" },
+    { key: "news", label: "News", dot: hasNews },
   ];
   return (
     <div className="flex gap-2">
@@ -82,6 +94,9 @@ function TabBar({ active, onChange, duringCount }: { active: Tab; onChange: (t: 
             <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
               {t.badge}
             </span>
+          ) : null}
+          {t.dot && !t.badge ? (
+            <span className="absolute -right-1 -top-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-rose-500" />
           ) : null}
         </button>
       ))}
@@ -301,13 +316,6 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
   const [website, setWebsite] = useState(deal.companyWebsite || "");
   const [notes, setNotes] = useState(deal.notes || "");
 
-  const [researching, setResearching] = useState(false);
-  const [researchError, setResearchError] = useState<string | null>(null);
-  const [companyResearch, setCompanyResearch] = useState(deal.companyResearch);
-  const [researchUpdatedAt, setResearchUpdatedAt] = useState(deal.companyResearchUpdatedAt);
-  const [newsHeadline, setNewsHeadline] = useState(deal.newsHeadline);
-  const [newsDismissed, setNewsDismissed] = useState(false);
-
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -335,24 +343,6 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
       setError(err instanceof Error ? err.message : "Couldn't save");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleResearch() {
-    setResearching(true);
-    setResearchError(null);
-    try {
-      const res = await fetch(`/api/deals/${deal.id}/research`, { method: "POST" });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Couldn't research this company");
-      setCompanyResearch(body.companyResearch);
-      setResearchUpdatedAt(body.companyResearchUpdatedAt);
-      setNewsHeadline(body.newsHeadline);
-      setNewsDismissed(false);
-    } catch (err) {
-      setResearchError(err instanceof Error ? err.message : "Couldn't research this company");
-    } finally {
-      setResearching(false);
     }
   }
 
@@ -492,39 +482,62 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
         </button>
       </div>
 
-      {newsHeadline && !newsDismissed && (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-5 py-3">
-          <div>
-            <p className="text-[11px] font-semibold tracking-[0.15em] text-amber-700">NEWS</p>
-            <p className="mt-1 text-sm text-amber-900">{newsHeadline}</p>
-            <p className="mt-1 text-[11px] text-amber-700/70">See the full briefing in Company research below.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setNewsDismissed(true)}
-            aria-label="Dismiss"
-            className="shrink-0 text-xs font-medium text-amber-700/70 hover:text-amber-900"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
       {deal.notes && (
         <div className="rounded-lg border border-slate-200 bg-white px-5 py-3">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">YOUR NOTES</p>
           <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{deal.notes}</p>
         </div>
       )}
+    </div>
+  );
+}
 
-      <div className="rounded-lg border border-slate-200 bg-white px-5 py-3">
+function NewsPanel({
+  dealName,
+  companyResearch,
+  researchUpdatedAt,
+  newsHeadline,
+  researching,
+  researchError,
+  onResearch,
+  dailyBriefing,
+  briefingUpdatedAt,
+  briefingLoading,
+  briefingError,
+  onRefreshBriefing,
+}: {
+  dealName: string;
+  companyResearch: string | null;
+  researchUpdatedAt: string | null;
+  newsHeadline: string | null;
+  researching: boolean;
+  researchError: string | null;
+  onResearch: () => void;
+  dailyBriefing: string | null;
+  briefingUpdatedAt: string | null;
+  briefingLoading: boolean;
+  briefingError: string | null;
+  onRefreshBriefing: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {newsHeadline && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-3">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-amber-700">
+            NEWS ABOUT {dealName.toUpperCase()}
+          </p>
+          <p className="mt-1 text-sm text-amber-900">{newsHeadline}</p>
+        </div>
+      )}
+
+      <div className="rounded-lg border border-slate-200 bg-white px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">
-            COMPANY RESEARCH
+            COMPANY RESEARCH — {dealName.toUpperCase()}
           </p>
           <button
             type="button"
-            onClick={handleResearch}
+            onClick={onResearch}
             disabled={researching}
             className="shrink-0 text-xs font-medium text-brand hover:underline disabled:opacity-50"
           >
@@ -547,6 +560,38 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
           </p>
         )}
         {researchError && <p className="mt-1 text-xs text-red-600">{researchError}</p>}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">
+            TODAY&apos;S BRIEFING
+          </p>
+          <button
+            type="button"
+            onClick={onRefreshBriefing}
+            disabled={briefingLoading}
+            className="shrink-0 text-xs font-medium text-brand hover:underline disabled:opacity-50"
+          >
+            {briefingLoading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+        {dailyBriefing ? (
+          <>
+            <p className="mt-1 text-sm text-slate-700">{dailyBriefing}</p>
+            {briefingUpdatedAt && (
+              <p className="mt-1 text-[11px] text-slate-400">
+                From a web search, {new Date(briefingUpdatedAt).toLocaleDateString()}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mt-1 text-sm text-slate-400">
+            A quick roundup of today&apos;s business and market news, worth knowing before your
+            meetings — shared across your team.
+          </p>
+        )}
+        {briefingError && <p className="mt-1 text-xs text-red-600">{briefingError}</p>}
       </div>
     </div>
   );
@@ -913,6 +958,8 @@ export function DealTabs({
   teamSize,
   people,
   team,
+  dailyBriefing: initialDailyBriefing,
+  dailyBriefingUpdatedAt: initialDailyBriefingUpdatedAt,
 }: {
   deal: DealProfile & { memory: string | null };
   meetings: DealMeeting[];
@@ -920,16 +967,69 @@ export function DealTabs({
   teamSize: number;
   people: DealContact[];
   team: TeamMember[];
+  dailyBriefing: string | null;
+  dailyBriefingUpdatedAt: string | null;
 }) {
   const inProgress = meetings.filter((m) => m.status !== "ready" && m.status !== "failed");
   const readyMeetings = meetings.filter((m) => m.status === "ready");
   const [tab, setTab] = useState<Tab>(inProgress.length > 0 ? "during" : "before");
 
+  // Company research + news lives here (not inside DealHeaderCard) so both
+  // the News tab's badge and its content can share it.
+  const [researching, setResearching] = useState(false);
+  const [researchError, setResearchError] = useState<string | null>(null);
+  const [companyResearch, setCompanyResearch] = useState(deal.companyResearch);
+  const [researchUpdatedAt, setResearchUpdatedAt] = useState(deal.companyResearchUpdatedAt);
+  const [newsHeadline, setNewsHeadline] = useState(deal.newsHeadline);
+
+  async function handleResearch() {
+    setResearching(true);
+    setResearchError(null);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}/research`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't research this company");
+      setCompanyResearch(body.companyResearch);
+      setResearchUpdatedAt(body.companyResearchUpdatedAt);
+      setNewsHeadline(body.newsHeadline);
+    } catch (err) {
+      setResearchError(err instanceof Error ? err.message : "Couldn't research this company");
+    } finally {
+      setResearching(false);
+    }
+  }
+
+  const [briefingLoading, setBriefingLoading] = useState(false);
+  const [briefingError, setBriefingError] = useState<string | null>(null);
+  const [dailyBriefing, setDailyBriefing] = useState(initialDailyBriefing);
+  const [briefingUpdatedAt, setBriefingUpdatedAt] = useState(initialDailyBriefingUpdatedAt);
+
+  async function handleRefreshBriefing() {
+    setBriefingLoading(true);
+    setBriefingError(null);
+    try {
+      const res = await fetch(`/api/team/briefing`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't refresh today's briefing");
+      setDailyBriefing(body.dailyBriefing);
+      setBriefingUpdatedAt(body.dailyBriefingUpdatedAt);
+    } catch (err) {
+      setBriefingError(err instanceof Error ? err.message : "Couldn't refresh today's briefing");
+    } finally {
+      setBriefingLoading(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold text-slate-900">{deal.name}</h1>
-        <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
+        <TabBar
+          active={tab}
+          onChange={setTab}
+          duringCount={inProgress.length}
+          hasNews={Boolean(newsHeadline)}
+        />
       </div>
       <DealHeaderCard deal={deal} />
       <PeopleAndTeam people={people} team={team} />
@@ -939,6 +1039,22 @@ export function DealTabs({
       {tab === "during" && <DuringPanel dealId={deal.id} inProgress={inProgress} />}
       {tab === "after" && (
         <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
+      )}
+      {tab === "news" && (
+        <NewsPanel
+          dealName={deal.name}
+          companyResearch={companyResearch}
+          researchUpdatedAt={researchUpdatedAt}
+          newsHeadline={newsHeadline}
+          researching={researching}
+          researchError={researchError}
+          onResearch={handleResearch}
+          dailyBriefing={dailyBriefing}
+          briefingUpdatedAt={briefingUpdatedAt}
+          briefingLoading={briefingLoading}
+          briefingError={briefingError}
+          onRefreshBriefing={handleRefreshBriefing}
+        />
       )}
     </div>
   );

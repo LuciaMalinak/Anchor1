@@ -203,6 +203,12 @@ export const summaries = pgTable("summary", {
 export const teams = pgTable("team", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
+  // General, non-deal-specific "worth knowing today" news roundup, shared
+  // by the whole team and refreshed at most once a day — see
+  // src/lib/dailyBriefing.ts. Deal-specific news lives on the deal itself
+  // (companyResearch / newsHeadline).
+  dailyBriefing: text("dailyBriefing"),
+  dailyBriefingUpdatedAt: timestamp("dailyBriefingUpdatedAt", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
