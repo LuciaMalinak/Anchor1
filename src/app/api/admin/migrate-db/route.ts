@@ -79,6 +79,10 @@ ALTER TABLE "contact" ADD COLUMN IF NOT EXISTS "notes" text;
 
 -- Recent-news headline, split out of the same company research call.
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "newsHeadline" text;
+
+-- Team-wide daily news briefing (News tab).
+ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "dailyBriefing" text;
+ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "dailyBriefingUpdatedAt" timestamp;
 `;
 
 export async function GET(req: NextRequest) {
@@ -115,6 +119,9 @@ export async function GET(req: NextRequest) {
   const contactCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'contact'
   `;
+  const teamCols = await rawClient`
+    select column_name from information_schema.columns where table_name = 'team'
+  `;
 
   return NextResponse.json({
     migrated: true,
@@ -122,6 +129,7 @@ export async function GET(req: NextRequest) {
     userColumns: userCols.map((r) => r.column_name),
     dealColumns: dealCols.map((r) => r.column_name),
     contactColumns: contactCols.map((r) => r.column_name),
+    teamColumns: teamCols.map((r) => r.column_name),
     meetingColumns: cols.map((r) => r.column_name),
     meetingStatusValues: enumVals.map((r) => r.v),
   });
