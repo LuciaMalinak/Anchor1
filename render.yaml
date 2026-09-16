@@ -31,6 +31,10 @@ services:
         sync: false
       - key: RECALL_WEBHOOK_SECRET
         sync: false
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false
 # Note: no persistent disk here — Render's free tier doesn't support one.
 # This means uploaded recordings won't survive a restart or redeploy on
 # the free plan (flagged in ENGINEER_BRIEF.md as something to fix with
