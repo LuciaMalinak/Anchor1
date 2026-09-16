@@ -12,8 +12,13 @@ export type TranscriptResult = {
   utterances: Utterance[];
 };
 
+// Accepts either the raw audio bytes (what processMeeting.ts passes,
+// having already fetched them via storage.ts's readStoredFile — works the
+// same way regardless of whether they came from local disk or R2) or a
+// public URL string (used by scripts/test-real-transcription.ts to hit a
+// sample file directly). The AssemblyAI SDK accepts both.
 export async function transcribeAudioFile(
-  filePath: string
+  audio: Buffer | string
 ): Promise<TranscriptResult> {
   const apiKey = process.env.ASSEMBLYAI_API_KEY;
   if (!apiKey) {
@@ -25,7 +30,7 @@ export async function transcribeAudioFile(
   const client = new AssemblyAI({ apiKey });
 
   const transcript = await client.transcripts.transcribe({
-    audio: filePath,
+    audio,
     speaker_labels: true,
   });
 

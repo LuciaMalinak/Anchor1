@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { meetings, transcripts, summaries, contacts, meetingParticipants, deals } from "@/db/schema";
 import { transcribeAudioFile } from "./transcribe";
 import { summarizeMeeting, mergeContactMemory, mergeDealMemory } from "./summarize";
+import { readStoredFile } from "./storage";
 
 // Orchestrates the full pipeline for one meeting: transcribe -> summarize
 // -> resolve speakers against known contacts -> update rolling memory.
@@ -27,9 +28,12 @@ export async function processMeeting(meetingId: string): Promise<void> {
     if (!meeting) throw new Error("Meeting not found");
     if (!meeting.audioStoragePath) throw new Error("No audio file on this meeting");
 
-    const { fullText, utterances } = await transcribeAudioFile(
-      meeting.audioStoragePath
-    );
+    const audioBuffer = await readStoredFile(meeting.audioStoragePath);
+    if (!audioBuffer) {
+      throw new Error("The audio file for this meeting is missing from storage.");
+    }
+
+    const { fullText, utterances } = await transcribeAudioFile(audioBuffer);
 
     if (utterances.length === 0) {
       throw new Error(
