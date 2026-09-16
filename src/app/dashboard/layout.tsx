@@ -63,6 +63,9 @@ export default async function DashboardLayout({
             <Link href="/dashboard/team" className="hover:text-brand">
               Team
             </Link>
+            <Link href="/dashboard/integrations" className="hover:text-brand">
+              Integrations
+            </Link>
           </nav>
           <div className="flex items-center gap-3 text-sm text-slate-500">
             <Link href="/dashboard/profile" className="flex items-center gap-2 hover:text-brand">

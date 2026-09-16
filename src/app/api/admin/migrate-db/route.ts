@@ -99,6 +99,26 @@ CREATE TABLE IF NOT EXISTS "deal_message" (
 -- Standing deal lead / backup assignment.
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "leadUserId" uuid REFERENCES "user"("id") ON DELETE SET NULL;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "backupUserId" uuid REFERENCES "user"("id") ON DELETE SET NULL;
+
+-- Third-party integration connections (Google / Microsoft / Slack OAuth).
+DO $$ BEGIN
+  CREATE TYPE integration_provider AS ENUM ('google', 'microsoft', 'slack');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "integration_connection" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId" uuid NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+  "provider" integration_provider NOT NULL,
+  "externalAccountEmail" text,
+  "accessToken" text NOT NULL,
+  "refreshToken" text,
+  "tokenExpiresAt" timestamp,
+  "scope" text,
+  "connectedAt" timestamp NOT NULL DEFAULT now(),
+  "updatedAt" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS integration_connection_user_provider_idx
+  ON "integration_connection" ("userId", "provider");
 `;
 
 export async function GET(req: NextRequest) {
@@ -124,7 +144,7 @@ export async function GET(req: NextRequest) {
   `;
   const newTables = await rawClient`
     select table_name from information_schema.tables
-    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message')
+    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection')
   `;
   const userCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'user'

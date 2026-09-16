@@ -7,6 +7,7 @@ import {
   jsonb,
   primaryKey,
   pgEnum,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 
@@ -314,3 +315,42 @@ export const dealMessages = pgTable("deal_message", {
   content: text("content").notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Third-party integrations — one row per (teammate, provider) OAuth
+// connection. This is the connection layer only: it stores the tokens
+// needed to call each provider's API. Pulling that data into deal context
+// (so it actually grounds Ask Anchor / handoffs) is a separate, later
+// phase — see src/lib/integrations/config.ts for the current provider list.
+// ---------------------------------------------------------------------------
+
+export const integrationProviderEnum = pgEnum("integration_provider", [
+  "google",
+  "microsoft",
+  "slack",
+]);
+
+export const integrationConnections = pgTable(
+  "integration_connection",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: integrationProviderEnum("provider").notNull(),
+    // Best-effort label for what's shown as connected — an email address
+    // for Google/Microsoft, a workspace name for Slack. Purely cosmetic.
+    externalAccountEmail: text("externalAccountEmail"),
+    // MVP-only: stored as plain text, same tradeoff as the API keys
+    // already sitting in .env for this project. Before this goes beyond a
+    // design-partner demo, these should move to an encrypted column (or a
+    // secrets manager) — see ENGINEER_BRIEF.md.
+    accessToken: text("accessToken").notNull(),
+    refreshToken: text("refreshToken"),
+    tokenExpiresAt: timestamp("tokenExpiresAt", { mode: "date" }),
+    scope: text("scope"),
+    connectedAt: timestamp("connectedAt", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("integration_connection_user_provider_idx").on(t.userId, t.provider)]
+);
