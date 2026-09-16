@@ -9,7 +9,14 @@ async function authorizeDeal(userId: string, dealId: string) {
   const [user] = await db.select().from(users).where(eq(users.id, userId));
   const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
   if (!deal || !user?.teamId || deal.teamId !== user.teamId) return null;
-  return deal;
+  return { deal, teamId: user.teamId };
+}
+
+// Lead/backup must be null (unassigned) or an actual member of this
+// deal's team — never trust a client-supplied id without checking.
+async function isOnTeam(teamId: string, userId: string): Promise<boolean> {
+  const [row] = await db.select().from(users).where(eq(users.id, userId));
+  return Boolean(row && row.teamId === teamId);
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -19,10 +26,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id: dealId } = await params;
-  const deal = await authorizeDeal(session.user.id, dealId);
-  if (!deal) {
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
+  const { teamId } = authorized;
 
   const body = await req.json().catch(() => ({}));
   const updates: Partial<typeof deals.$inferInsert> = {};
@@ -50,6 +58,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   if (typeof body.decisionBoundaries === "string") {
     updates.decisionBoundaries = body.decisionBoundaries.trim() || null;
+  }
+  if ("leadUserId" in body) {
+    if (body.leadUserId === null) {
+      updates.leadUserId = null;
+    } else if (typeof body.leadUserId === "string" && (await isOnTeam(teamId, body.leadUserId))) {
+      updates.leadUserId = body.leadUserId;
+    } else {
+      return NextResponse.json({ error: "Not a valid team member" }, { status: 400 });
+    }
+  }
+  if ("backupUserId" in body) {
+    if (body.backupUserId === null) {
+      updates.backupUserId = null;
+    } else if (typeof body.backupUserId === "string" && (await isOnTeam(teamId, body.backupUserId))) {
+      updates.backupUserId = body.backupUserId;
+    } else {
+      return NextResponse.json({ error: "Not a valid team member" }, { status: 400 });
+    }
   }
 
   if (Object.keys(updates).length === 0) {

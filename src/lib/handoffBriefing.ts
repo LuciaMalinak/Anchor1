@@ -34,8 +34,13 @@ const HANDOFF_TOOL = {
         description:
           "2-3 sentences of tactical guidance for walking into this specific meeting: the stakeholder's known concerns or objections to be ready for, and anything to avoid getting derailed by.",
       },
+      personalTouches: {
+        type: "string",
+        description:
+          "1-3 sentences of small, human details about the people on the other side worth remembering when stepping in — personal interests, family mentioned in passing, how they like to communicate, anything that helps someone new build rapport instead of walking in cold. Draw only from what's given (contact relationship notes, meeting notes) — never invent a personal detail. If nothing like that is known yet, say so plainly rather than making something up.",
+      },
     },
-    required: ["whatWasDecided", "whatToPushOn", "focusAreas"],
+    required: ["whatWasDecided", "whatToPushOn", "focusAreas", "personalTouches"],
   },
 };
 
@@ -43,12 +48,14 @@ export type HandoffBriefingResult = {
   whatWasDecided: string;
   whatToPushOn: string;
   focusAreas: string;
+  personalTouches: string;
 };
 
 export async function generateHandoffBriefing(params: {
   dealName: string;
   memory: string | null;
   notes: string | null;
+  people: { name: string; role: string | null; relationshipSummary: string | null; notes: string | null }[];
   recentMeetings: {
     title: string;
     occurredAt: string;
@@ -67,11 +74,23 @@ export async function generateHandoffBriefing(params: {
           .join("\n\n")
       : "No finished meetings yet.";
 
+  const peopleBlock =
+    params.people.length > 0
+      ? params.people
+          .map((p) => {
+            const lines = [`— ${p.name}${p.role ? ` (${p.role})` : ""}`];
+            if (p.relationshipSummary) lines.push(`What Anchor knows: ${p.relationshipSummary}`);
+            if (p.notes) lines.push(`Manual notes: ${p.notes}`);
+            return lines.join("\n");
+          })
+          .join("\n\n")
+      : "No one resolved yet on the other side.";
+
   const message = await client().messages.create({
     model: MODEL,
-    max_tokens: 600,
+    max_tokens: 700,
     system:
-      "You brief a colleague who is stepping in to run someone else's sales meeting. Be specific and grounded only in what you're given — never invent commitments, numbers, or facts that weren't provided.",
+      "You brief a colleague who is stepping in to run someone else's sales meeting. Be specific and grounded only in what you're given — never invent commitments, numbers, facts, or personal details that weren't provided.",
     tools: [HANDOFF_TOOL],
     tool_choice: { type: "tool", name: HANDOFF_TOOL.name },
     messages: [
@@ -84,6 +103,9 @@ ${params.memory || "Nothing recorded yet."}
 
 Owner's own notes:
 ${params.notes || "None."}
+
+People on the other side:
+${peopleBlock}
 
 Recent meetings:
 ${meetingsBlock}
@@ -106,5 +128,6 @@ Produce a handoff briefing for someone else running the next meeting on this dea
     whatWasDecided: typeof raw.whatWasDecided === "string" ? raw.whatWasDecided : "",
     whatToPushOn: typeof raw.whatToPushOn === "string" ? raw.whatToPushOn : "",
     focusAreas: typeof raw.focusAreas === "string" ? raw.focusAreas : "",
+    personalTouches: typeof raw.personalTouches === "string" ? raw.personalTouches : "",
   };
 }

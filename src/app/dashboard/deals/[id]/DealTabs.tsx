@@ -330,6 +330,9 @@ ${briefing.whatToPushOn}
 WHAT TO FOCUS ON
 ${briefing.focusAreas}
 
+PERSONAL TOUCHES
+${briefing.personalTouches}
+
 WHAT THEY CAN DECIDE ON THEIR OWN
 ${boundaries || "Nothing set yet — check with the deal owner before committing to anything specific."}`;
     try {
@@ -454,6 +457,12 @@ ${boundaries || "Nothing set yet — check with the deal owner before committing
             <p className="mt-1 text-sm text-slate-700">{briefing.focusAreas}</p>
           </div>
           <div>
+            <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-500">
+              PERSONAL TOUCHES
+            </p>
+            <p className="mt-1 text-sm text-slate-700">{briefing.personalTouches}</p>
+          </div>
+          <div>
             <p className="text-[11px] font-semibold tracking-[0.15em] text-brand">
               WHAT THEY CAN DECIDE ON THEIR OWN
             </p>
@@ -487,12 +496,15 @@ type DealProfile = {
   companyResearchUpdatedAt: string | null;
   newsHeadline: string | null;
   decisionBoundaries: string | null;
+  leadUserId: string | null;
+  backupUserId: string | null;
 };
 
 type HandoffBriefing = {
   whatWasDecided: string;
   whatToPushOn: string;
   focusAreas: string;
+  personalTouches: string;
 };
 
 // A company's own public logo — from their domain, never a photo of a
@@ -961,7 +973,49 @@ function InitialsAvatar({ label, size = 36 }: { label: string; size?: number }) 
   );
 }
 
-function PeopleAndTeam({ people, team }: { people: DealContact[]; team: TeamMember[] }) {
+function PeopleAndTeam({
+  dealId,
+  people,
+  team,
+  leadUserId: initialLeadUserId,
+  backupUserId: initialBackupUserId,
+}: {
+  dealId: string;
+  people: DealContact[];
+  team: TeamMember[];
+  leadUserId: string | null;
+  backupUserId: string | null;
+}) {
+  const router = useRouter();
+  const [leadUserId, setLeadUserId] = useState(initialLeadUserId);
+  const [backupUserId, setBackupUserId] = useState(initialBackupUserId);
+  const [saving, setSaving] = useState<"lead" | "backup" | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
+
+  async function handleRoleChange(field: "leadUserId" | "backupUserId", value: string) {
+    const newValue = value || null;
+    if (field === "leadUserId") setLeadUserId(newValue);
+    else setBackupUserId(newValue);
+    setSaving(field === "leadUserId" ? "lead" : "backup");
+    setRoleError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: newValue }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't save");
+      }
+      router.refresh();
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : "Couldn't save");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -995,6 +1049,43 @@ function PeopleAndTeam({ people, team }: { people: DealContact[]; team: TeamMemb
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm font-medium text-slate-900">Your team</p>
         <p className="mt-0.5 text-xs text-slate-500">Everyone with access to this deal.</p>
+
+        <div className="mt-3 flex flex-col gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <label className="w-28 shrink-0 text-xs font-medium text-slate-500">Deal lead</label>
+            <select
+              value={leadUserId ?? ""}
+              onChange={(e) => handleRoleChange("leadUserId", e.target.value)}
+              disabled={saving === "lead"}
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-brand disabled:opacity-50"
+            >
+              <option value="">Not set</option>
+              {team.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name || t.email}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="w-28 shrink-0 text-xs font-medium text-slate-500">Backup / stepping in</label>
+            <select
+              value={backupUserId ?? ""}
+              onChange={(e) => handleRoleChange("backupUserId", e.target.value)}
+              disabled={saving === "backup"}
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-brand disabled:opacity-50"
+            >
+              <option value="">Not set</option>
+              {team.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name || t.email}
+                </option>
+              ))}
+            </select>
+          </div>
+          {roleError && <p className="text-xs text-red-600">{roleError}</p>}
+        </div>
+
         <div className="mt-3 flex flex-col gap-3">
           {team.map((t) => (
             <div key={t.id} className="flex items-center gap-3">
@@ -1010,8 +1101,20 @@ function PeopleAndTeam({ people, team }: { people: DealContact[]; team: TeamMemb
               ) : (
                 <InitialsAvatar label={t.name || t.email} />
               )}
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-900">{t.name || t.email}</p>
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5 text-sm font-medium text-slate-900">
+                  <span className="truncate">{t.name || t.email}</span>
+                  {t.id === leadUserId && (
+                    <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand">
+                      Lead
+                    </span>
+                  )}
+                  {t.id === backupUserId && (
+                    <span className="shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
+                      Backup
+                    </span>
+                  )}
+                </p>
                 {t.title && <p className="truncate text-xs text-slate-500">{t.title}</p>}
               </div>
             </div>
@@ -1359,7 +1462,13 @@ export function DealTabs({
           <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
         </div>
         <DealHeaderCard deal={deal} />
-        <PeopleAndTeam people={people} team={team} />
+        <PeopleAndTeam
+          dealId={deal.id}
+          people={people}
+          team={team}
+          leadUserId={deal.leadUserId}
+          backupUserId={deal.backupUserId}
+        />
         {tab === "before" && (
           <BeforePanel
             dealId={deal.id}

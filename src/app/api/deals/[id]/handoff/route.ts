@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings, summaries, users } from "@/db/schema";
+import { deals, meetings, summaries, users, meetingParticipants, contacts } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { generateHandoffBriefing } from "@/lib/handoffBriefing";
 
@@ -35,11 +35,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .orderBy(desc(meetings.occurredAt))
     .limit(5);
 
+  // The people Anchor has resolved on this deal, with whatever it's
+  // learned (or been told directly) about each — the source for the
+  // briefing's "personal touches" section, so it's grounded in real notes
+  // rather than invented rapport.
+  const dealContactRows = await db
+    .selectDistinctOn([contacts.id], {
+      name: contacts.name,
+      role: contacts.role,
+      relationshipSummary: contacts.relationshipSummary,
+      notes: contacts.notes,
+    })
+    .from(meetingParticipants)
+    .innerJoin(meetings, eq(meetingParticipants.meetingId, meetings.id))
+    .innerJoin(contacts, eq(meetingParticipants.contactId, contacts.id))
+    .where(eq(meetings.dealId, dealId));
+
   try {
     const briefing = await generateHandoffBriefing({
       dealName: deal.name,
       memory: deal.memory,
       notes: deal.notes,
+      people: dealContactRows,
       recentMeetings: recentReady.map((r) => ({
         title: r.meeting.title,
         occurredAt: r.meeting.occurredAt.toLocaleDateString(),

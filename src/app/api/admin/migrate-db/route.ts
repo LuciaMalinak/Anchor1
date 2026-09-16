@@ -95,6 +95,10 @@ CREATE TABLE IF NOT EXISTS "deal_message" (
   "content" text NOT NULL,
   "createdAt" timestamp NOT NULL DEFAULT now()
 );
+
+-- Standing deal lead / backup assignment.
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "leadUserId" uuid REFERENCES "user"("id") ON DELETE SET NULL;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "backupUserId" uuid REFERENCES "user"("id") ON DELETE SET NULL;
 `;
 
 export async function GET(req: NextRequest) {
