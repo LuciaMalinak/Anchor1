@@ -1,9 +1,10 @@
 import { eq, and, ilike } from "drizzle-orm";
 import { db } from "@/db";
-import { meetings, transcripts, summaries, contacts, meetingParticipants, deals } from "@/db/schema";
+import { meetings, transcripts, summaries, contacts, meetingParticipants, deals, tasks } from "@/db/schema";
 import { transcribeAudioFile } from "./transcribe";
 import { summarizeMeeting, mergeContactMemory, mergeDealMemory } from "./summarize";
 import { readStoredFile } from "./storage";
+import { getOrCreateTeamId } from "./team";
 
 // Orchestrates the full pipeline for one meeting: transcribe -> summarize
 // -> resolve speakers against known contacts -> update rolling memory.
@@ -124,6 +125,29 @@ export async function processMeeting(meetingId: string): Promise<void> {
       actionItems: result.actionItems,
       continuityNote: continuityLines.length > 0 ? continuityLines.join(" ") : null,
     });
+
+    // Materialize each action item as its own task row — feeds the home
+    // page's cross-deal to-do list. Done here (once, right after the
+    // summary that produced them) rather than synthesized from the jsonb
+    // array on every read, since a checkbox and comments need a stable id.
+    // Best-effort: never let this block the meeting from finishing.
+    if (result.actionItems.length > 0) {
+      try {
+        const teamId = await getOrCreateTeamId(meeting.userId);
+        await db.insert(tasks).values(
+          result.actionItems.map((item) => ({
+            teamId,
+            dealId: meeting.dealId,
+            text: item.text,
+            ownerLabel: item.owner,
+            source: "meeting" as const,
+            sourceMeetingId: meetingId,
+          }))
+        );
+      } catch (err) {
+        console.error(`[processMeeting] task materialization failed for ${meetingId}:`, err);
+      }
+    }
 
     await db
       .update(meetings)

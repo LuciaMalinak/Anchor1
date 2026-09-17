@@ -5,6 +5,7 @@ import {
   uuid,
   integer,
   jsonb,
+  boolean,
   primaryKey,
   pgEnum,
   uniqueIndex,
@@ -37,6 +38,13 @@ export const users = pgTable("user", {
   // Free-text catch-all shown on the profile ("Other info") — timezone,
   // focus areas, whatever doesn't fit a dedicated field.
   otherInfo: text("otherInfo"),
+  // Whether this person has been shown the one-time welcome splash on
+  // their first visit to the dashboard (see WelcomeSplash.tsx) — flipped
+  // to true right after it plays, so it never shows again. Existing users
+  // are backfilled to true at migration time so only genuinely new
+  // sign-ups (an invited teammate's first login, or a fresh signup) see
+  // it, not everyone retroactively.
+  welcomeSeen: boolean("welcomeSeen").notNull().default(false),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -393,3 +401,48 @@ export const integrationConnections = pgTable(
   },
   (t) => [uniqueIndex("integration_connection_user_provider_idx").on(t.userId, t.provider)]
 );
+
+// ---------------------------------------------------------------------------
+// Home page: a cross-deal to-do list. Two sources feed the same table —
+// "meeting" rows are materialized automatically from a summary's
+// actionItems right after it's generated (see processMeeting.ts), and
+// "manual" rows are typed in directly on the home page. Keeping both in
+// one table (rather than synthesizing meeting action items on the fly
+// each time) is what makes a checkbox and comments possible — jsonb
+// array entries have no stable id to hang state off of.
+// ---------------------------------------------------------------------------
+
+export const tasks = pgTable("task", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  teamId: uuid("teamId")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  // Optional — a manual task doesn't have to be tied to a deal, and it's
+  // what lets the home page rank tasks by that deal's health.
+  dealId: uuid("dealId").references(() => deals.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  // Cosmetic-only "who this is for" — the AI's best guess at a name for a
+  // meeting-sourced task, or whatever a teammate typed for a manual one.
+  // Not a resolved user id, so it never blocks on matching a real person.
+  ownerLabel: text("ownerLabel"),
+  source: text("source").notNull(), // "meeting" | "manual"
+  sourceMeetingId: uuid("sourceMeetingId").references(() => meetings.id, { onDelete: "set null" }),
+  completed: boolean("completed").notNull().default(false),
+  completedAt: timestamp("completedAt", { mode: "date" }),
+  completedByUserId: uuid("completedByUserId").references(() => users.id, { onDelete: "set null" }),
+  // Null for a meeting-sourced task (the AI created it, not a person).
+  createdByUserId: uuid("createdByUserId").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const taskComments = pgTable("task_comment", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  taskId: uuid("taskId")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});

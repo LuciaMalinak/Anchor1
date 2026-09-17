@@ -141,6 +141,53 @@ ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "liveSuggestionsUpdatedAt" timest
 -- Scheduling a "send Anchor to a live meeting" bot for a future time
 -- instead of joining immediately.
 ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "scheduledAt" timestamp;
+
+-- One-time welcome splash, shown once on a person's first dashboard
+-- visit (see WelcomeGate.tsx). Defaults false for everyone, including
+-- existing accounts — harmless for them to see it once too, and much
+-- safer than a one-off backfill UPDATE that could misfire if this
+-- migration is ever re-run after new users have signed up.
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "welcomeSeen" boolean NOT NULL DEFAULT false;
+
+-- Home page to-do list: one row per task, whether auto-materialized from
+-- a meeting's action items or typed in manually, so a checkbox and
+-- comments have something with a stable id to attach to.
+CREATE TABLE IF NOT EXISTS "task" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "teamId" uuid NOT NULL REFERENCES "team"("id") ON DELETE CASCADE,
+  "dealId" uuid REFERENCES "deal"("id") ON DELETE CASCADE,
+  "text" text NOT NULL,
+  "ownerLabel" text,
+  "source" text NOT NULL,
+  "sourceMeetingId" uuid REFERENCES "meeting"("id") ON DELETE SET NULL,
+  "completed" boolean NOT NULL DEFAULT false,
+  "completedAt" timestamp,
+  "completedByUserId" uuid REFERENCES "user"("id") ON DELETE SET NULL,
+  "createdByUserId" uuid REFERENCES "user"("id") ON DELETE SET NULL,
+  "createdAt" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "task_comment" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "taskId" uuid NOT NULL REFERENCES "task"("id") ON DELETE CASCADE,
+  "userId" uuid NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+  "content" text NOT NULL,
+  "createdAt" timestamp NOT NULL DEFAULT now()
+);
+
+-- One-time backfill: materialize a task row for every action item on
+-- every meeting summary that predates the task table, so the home page's
+-- to-do list isn't empty just because it shipped after those meetings
+-- happened. Guarded per-meeting (not per-item) so re-running this
+-- migration never double-inserts.
+INSERT INTO "task" ("teamId", "dealId", "text", "ownerLabel", "source", "sourceMeetingId")
+SELECT u."teamId", m."dealId", (item->>'text'), (item->>'owner'), 'meeting', m.id
+FROM "summary" s
+JOIN "meeting" m ON m.id = s."meetingId"
+JOIN "user" u ON u.id = m."userId"
+CROSS JOIN LATERAL jsonb_array_elements(s."actionItems") AS item
+WHERE u."teamId" IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM "task" t WHERE t."sourceMeetingId" = m.id);
 `;
 
 export async function GET(req: NextRequest) {
@@ -166,7 +213,7 @@ export async function GET(req: NextRequest) {
   `;
   const newTables = await rawClient`
     select table_name from information_schema.tables
-    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection', 'meeting_live_segment')
+    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection', 'meeting_live_segment', 'task', 'task_comment')
   `;
   const userCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'user'
@@ -183,6 +230,7 @@ export async function GET(req: NextRequest) {
   const teamCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'team'
   `;
+  const taskCount = await rawClient`select count(*)::int as n from "task"`;
 
   return NextResponse.json({
     migrated: true,
@@ -194,5 +242,6 @@ export async function GET(req: NextRequest) {
     teamColumns: teamCols.map((r) => r.column_name),
     meetingColumns: cols.map((r) => r.column_name),
     meetingStatusValues: enumVals.map((r) => r.v),
+    taskCount: taskCount[0]?.n ?? null,
   });
 }
