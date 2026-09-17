@@ -145,7 +145,7 @@ export default async function Home() {
       <section className="relative overflow-hidden bg-brand px-6 py-32 sm:py-40">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
+          className="drift-bg pointer-events-none absolute inset-0"
           style={{
             backgroundImage:
               "radial-gradient(ellipse 65% 55% at 50% 0%, rgba(180,83,31,0.22), transparent 70%), radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)",
@@ -154,30 +154,54 @@ export default async function Home() {
         />
         <div
           aria-hidden="true"
+          className="float-orb pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-accent/20 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="float-orb pointer-events-none absolute -right-16 bottom-10 h-64 w-64 rounded-full bg-white/10 blur-3xl"
+          style={{ animationDelay: "2.5s" }}
+        />
+        <div
+          aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 bottom-0 h-40"
           style={{ background: "linear-gradient(to bottom, transparent, rgba(11,25,48,0.6))" }}
         />
         <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-7 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] font-semibold tracking-[0.18em] text-slate-200">
+          <span className="enter-fade enter-1 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] font-semibold tracking-[0.18em] text-slate-200">
+            <span className="live-dot h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
             MEETING INTELLIGENCE FOR SALES TEAMS
           </span>
-          <AnchorMark size={72} tone="light" />
-          <h1 className="text-5xl font-bold tracking-[0.06em] text-white sm:text-6xl md:text-7xl">
+          <div className="enter-fade enter-2 relative">
+            <div
+              aria-hidden="true"
+              className="float-orb pointer-events-none absolute inset-0 -z-10 m-auto h-24 w-24 rounded-full bg-accent/30 blur-2xl"
+            />
+            <AnchorMark size={72} tone="light" />
+          </div>
+          <h1 className="enter-fade enter-3 text-5xl font-bold tracking-[0.06em] text-white sm:text-6xl md:text-7xl">
             ANCHOR
           </h1>
-          <p className="max-w-xl text-xl font-medium leading-snug text-slate-200 sm:text-2xl">
+          <p className="enter-fade enter-4 max-w-xl text-xl font-medium leading-snug text-slate-200 sm:text-2xl">
             Your knowledge in the room. Without you in the room.
           </p>
-          <p className="max-w-lg text-base leading-relaxed text-slate-400">
+          <p className="enter-fade enter-5 max-w-lg text-base leading-relaxed text-slate-400">
             Meeting intelligence for teams that sell — Anchor joins the call, remembers what
             matters, and keeps every deal covered.
           </p>
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
+          <div className="enter-fade enter-6 mt-4 flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/sign-in"
-              className="rounded-lg bg-accent px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition hover:bg-accent-dark"
+              className="group relative overflow-hidden rounded-lg bg-accent px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition hover:bg-accent-dark"
             >
-              Sign in
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 -translate-x-full transition-transform duration-700 ease-out group-hover:translate-x-full"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)",
+                }}
+              />
+              <span className="relative">Sign in</span>
             </Link>
             <a
               href="#how-it-works"
@@ -202,9 +226,18 @@ export default async function Home() {
             <div
               aria-hidden="true"
               className="absolute top-6 right-0 left-0 hidden h-px bg-slate-200 sm:block"
-            />
-            {STEPS.map((step) => (
-              <div key={step.n} className="relative flex flex-col items-center gap-3 text-center sm:items-start sm:text-left">
+            >
+              <span
+                className="travel-dot absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-accent"
+                style={{ boxShadow: "0 0 8px 2px rgba(180,83,31,0.6)" }}
+              />
+            </div>
+            {STEPS.map((step, i) => (
+              <div
+                key={step.n}
+                className="reveal relative flex flex-col items-center gap-3 text-center sm:items-start sm:text-left"
+                style={{ animationDelay: `${i * 100}ms` }}
+              >
                 <span className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-accent bg-white text-sm font-bold text-accent">
                   {step.n}
                 </span>
@@ -221,6 +254,93 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* AI in action — a looping mock of Anchor listening to a call and
+          pulling out the parts that matter, so "meeting intelligence"
+          isn't just a phrase in the eyebrow copy above. */}
+      <section className="relative overflow-hidden border-b border-slate-100 bg-brand-dark px-6 py-24">
+        <div
+          aria-hidden="true"
+          className="drift-bg pointer-events-none absolute inset-0 opacity-70"
+          style={{
+            backgroundImage:
+              "radial-gradient(ellipse 60% 50% at 15% 0%, rgba(180,83,31,0.18), transparent 70%), radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)",
+            backgroundSize: "auto, 26px 26px",
+          }}
+        />
+        <div className="relative mx-auto max-w-5xl">
+          <p className="text-center text-xs font-semibold tracking-[0.2em] text-accent">
+            WHILE YOU TALK, ANCHOR LISTENS
+          </p>
+          <h2 className="mx-auto mt-3 max-w-xl text-center text-3xl font-semibold tracking-tight text-white">
+            Every call, understood in real time
+          </h2>
+          <div className="reveal mt-14 grid gap-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl sm:grid-cols-2">
+            {/* Transcript feed */}
+            <div className="flex flex-col gap-5 border-b border-white/10 p-7 sm:border-r sm:border-b-0">
+              <div className="flex items-center gap-2">
+                <span className="live-dot h-2 w-2 rounded-full bg-red-500" aria-hidden="true" />
+                <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">
+                  LIVE · ACME CO. RENEWAL CALL
+                </p>
+              </div>
+              <div className="flex min-h-[168px] flex-col gap-4 font-mono text-[13px] leading-relaxed">
+                <p className="live-line live-delay-0">
+                  <span className="font-semibold text-accent">Sam · Acme Co. </span>
+                  <span className="text-slate-300">
+                    Budget&apos;s tighter this quarter — we&apos;d need to see ROI within 60
+                    days.
+                  </span>
+                </p>
+                <p className="live-line live-delay-1">
+                  <span className="font-semibold text-slate-400">You: </span>
+                  <span className="text-slate-300">
+                    We can structure a phased rollout so you see value fast.
+                  </span>
+                </p>
+                <p className="live-line live-delay-2">
+                  <span className="font-semibold text-accent">Sam · Acme Co. </span>
+                  <span className="text-slate-300">
+                    That works — can you send the updated proposal by Friday?
+                  </span>
+                </p>
+              </div>
+            </div>
+            {/* Extracted insights */}
+            <div className="flex flex-col gap-4 p-7">
+              <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">
+                ANCHOR CAUGHT THIS
+              </p>
+              <div className="flex min-h-[168px] flex-col justify-center gap-2.5">
+                <div className="live-chip live-delay-3 flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/5 px-3.5 py-2.5">
+                  <span className="mt-0.5 text-amber-400" aria-hidden="true">⚑</span>
+                  <p className="text-sm text-slate-200">
+                    <span className="font-semibold text-white">Risk flagged — </span>
+                    budget concerns, 60-day ROI window
+                  </p>
+                </div>
+                <div className="live-chip live-delay-4 flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/5 px-3.5 py-2.5">
+                  <span className="mt-0.5 text-emerald-400" aria-hidden="true">✓</span>
+                  <p className="text-sm text-slate-200">
+                    <span className="font-semibold text-white">Action item — </span>
+                    send updated proposal by Friday
+                  </p>
+                </div>
+                <div className="live-chip live-delay-5 flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/5 px-3.5 py-2.5">
+                  <span className="mt-0.5 text-sky-400" aria-hidden="true">→</span>
+                  <p className="text-sm text-slate-200">
+                    <span className="font-semibold text-white">Next step — </span>
+                    phased rollout proposal drafted
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="relative mt-4 text-center text-xs text-slate-500">
+            Illustrative example — not a real call or customer.
+          </p>
+        </div>
+      </section>
+
       {/* Feature grid */}
       <section className="bg-slate-50 px-6 py-24">
         <div className="mx-auto max-w-5xl">
@@ -231,12 +351,13 @@ export default async function Home() {
             Everything that used to live in one person&apos;s head
           </h2>
           <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f) => (
+            {FEATURES.map((f, i) => (
               <div
                 key={f.title}
-                className="group rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                className="reveal group rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                style={{ animationDelay: `${(i % 3) * 100}ms` }}
               >
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand/[0.06] text-brand transition group-hover:bg-accent/10 group-hover:text-accent">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand/[0.06] text-brand transition duration-300 group-hover:-rotate-3 group-hover:scale-110 group-hover:bg-accent/10 group-hover:text-accent">
                   <f.icon className="h-5 w-5" />
                 </div>
                 <p className="mt-4 text-base font-semibold text-slate-900">{f.title}</p>
@@ -249,10 +370,10 @@ export default async function Home() {
 
       {/* CTA */}
       <section className="px-6 py-24">
-        <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-5 overflow-hidden rounded-2xl border border-slate-200 bg-brand px-8 py-14 text-center shadow-lg">
+        <div className="reveal relative mx-auto flex max-w-2xl flex-col items-center gap-5 overflow-hidden rounded-2xl border border-slate-200 bg-brand px-8 py-14 text-center shadow-lg">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0"
+            className="float-orb pointer-events-none absolute inset-0"
             style={{
               background:
                 "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(180,83,31,0.2), transparent 70%)",
@@ -268,9 +389,17 @@ export default async function Home() {
           </p>
           <Link
             href="/sign-in"
-            className="relative rounded-lg bg-accent px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition hover:bg-accent-dark"
+            className="group relative overflow-hidden rounded-lg bg-accent px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition hover:bg-accent-dark"
           >
-            Sign in
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 -translate-x-full transition-transform duration-700 ease-out group-hover:translate-x-full"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)",
+              }}
+            />
+            <span className="relative">Sign in</span>
           </Link>
         </div>
       </section>

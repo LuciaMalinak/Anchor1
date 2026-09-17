@@ -29,3 +29,200 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
 }
+
+/* =========================================================================
+   Motion — used on the marketing page (src/app/page.tsx) for a "live
+   product" feel: a slow-drifting hero background, floating glow orbs, a
+   looping mock "Anchor is listening" transcript/insights demo, and a
+   scroll-linked reveal on section content.
+
+   Everything here is pure CSS (no client JS / hydration risk) and is fully
+   disabled under prefers-reduced-motion, with real content (the transcript
+   lines and extracted-insight chips) forced back to opaque/visible rather
+   than left mid-fade. ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .enter-fade,
+  .live-line,
+  .live-chip {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  .live-dot,
+  .drift-bg,
+  .float-orb,
+  .travel-dot,
+  .reveal {
+    animation: none !important;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes drift {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 0 0, 28px 28px;
+  }
+}
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-16px) scale(1.04);
+  }
+}
+@keyframes blinkDot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes typeLine {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  78% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes popChip {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+@keyframes travel {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+/* One-time entrance (hero load-in), staggered via .enter-N */
+.enter-fade {
+  opacity: 0;
+  animation: fadeUp 0.8s ease-out both;
+}
+.enter-1 {
+  animation-delay: 0s;
+}
+.enter-2 {
+  animation-delay: 0.1s;
+}
+.enter-3 {
+  animation-delay: 0.2s;
+}
+.enter-4 {
+  animation-delay: 0.3s;
+}
+.enter-5 {
+  animation-delay: 0.4s;
+}
+.enter-6 {
+  animation-delay: 0.5s;
+}
+
+/* Looping "Anchor is listening" transcript / insight-chip demo */
+.live-line,
+.live-chip {
+  opacity: 0;
+}
+.live-line {
+  animation: typeLine 9s ease-in-out infinite;
+}
+.live-chip {
+  animation: popChip 9s ease-in-out infinite;
+}
+.live-delay-0 {
+  animation-delay: 0s;
+}
+.live-delay-1 {
+  animation-delay: 2s;
+}
+.live-delay-2 {
+  animation-delay: 3s;
+}
+.live-delay-3 {
+  animation-delay: 4s;
+}
+.live-delay-4 {
+  animation-delay: 5s;
+}
+.live-delay-5 {
+  animation-delay: 7s;
+}
+
+.live-dot {
+  animation: blinkDot 1.6s ease-in-out infinite;
+}
+.drift-bg {
+  animation: drift 45s linear infinite;
+}
+.float-orb {
+  animation: floatY 7s ease-in-out infinite;
+}
+.travel-dot {
+  animation: travel 3.5s ease-in-out infinite;
+}
+
+/* Scroll-triggered reveal — progressive enhancement only. Browsers without
+   scroll-driven animation support (or with reduced motion) simply never
+   match this rule, so content stays at its default full opacity. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: fadeUp 0.6s ease-out both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 25%;
+    }
+  }
+}
