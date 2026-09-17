@@ -159,6 +159,7 @@ export default async function DealDetailPage({
         fileName: f.fileName,
         fileSize: f.fileSize,
         createdAt: f.createdAt.toISOString(),
+        readableByAI: Boolean(f.extractedText),
       }))}
       teamSize={teammates.length}
       messages={messageRows.map((r) => ({

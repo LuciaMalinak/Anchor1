@@ -119,6 +119,10 @@ CREATE TABLE IF NOT EXISTS "integration_connection" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS integration_connection_user_provider_idx
   ON "integration_connection" ("userId", "provider");
+
+-- Extracted plain text for deal files, so Ask Anchor can use file
+-- contents instead of just filenames.
+ALTER TABLE "deal_file" ADD COLUMN IF NOT EXISTS "extractedText" text;
 `;
 
 export async function GET(req: NextRequest) {
@@ -155,6 +159,9 @@ export async function GET(req: NextRequest) {
   const contactCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'contact'
   `;
+  const dealFileCols = await rawClient`
+    select column_name from information_schema.columns where table_name = 'deal_file'
+  `;
   const teamCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'team'
   `;
@@ -165,6 +172,7 @@ export async function GET(req: NextRequest) {
     userColumns: userCols.map((r) => r.column_name),
     dealColumns: dealCols.map((r) => r.column_name),
     contactColumns: contactCols.map((r) => r.column_name),
+    dealFileColumns: dealFileCols.map((r) => r.column_name),
     teamColumns: teamCols.map((r) => r.column_name),
     meetingColumns: cols.map((r) => r.column_name),
     meetingStatusValues: enumVals.map((r) => r.v),

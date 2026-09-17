@@ -295,6 +295,11 @@ export const dealFiles = pgTable("deal_file", {
   fileName: text("fileName").notNull(),
   storagePath: text("storagePath").notNull(),
   fileSize: integer("fileSize"),
+  // Plain text pulled out at upload time (txt/md/csv/pdf/docx) so Ask
+  // Anchor can actually use what's in the file, not just its name. Null
+  // means either an unsupported file type or extraction failed — the
+  // file itself is still uploaded and downloadable either way.
+  extractedText: text("extractedText"),
   uploadedByUserId: uuid("uploadedByUserId")
     .notNull()
     .references(() => users.id),

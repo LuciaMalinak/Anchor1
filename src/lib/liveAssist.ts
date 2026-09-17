@@ -26,7 +26,7 @@ export type DealContext = {
     keyPoints: string[];
     actionItems: { text: string; owner: string | null }[];
   }[];
-  fileNames: string[];
+  files: { fileName: string; excerpt: string | null }[];
   companyResearch: string | null;
   newsHeadline: string | null;
 };
@@ -61,8 +61,19 @@ function buildContextBlock(ctx: DealContext): string {
     parts.push("\nNo finished meetings on this deal yet.");
   }
 
-  if (ctx.fileNames.length > 0) {
-    parts.push(`\nFiles attached to this deal (names only — contents not available): ${ctx.fileNames.join(", ")}`);
+  if (ctx.files.length > 0) {
+    parts.push("\nFiles attached to this deal:");
+    for (const f of ctx.files) {
+      if (f.excerpt) {
+        // Keep each file's slice of the prompt bounded — this is a quick
+        // mid-meeting answer, not a document Q&A tool, so a representative
+        // excerpt is enough; the full file is still one click away.
+        const excerpt = f.excerpt.length > 2000 ? f.excerpt.slice(0, 2000) + "…" : f.excerpt;
+        parts.push(`\n— ${f.fileName}:\n${excerpt}`);
+      } else {
+        parts.push(`\n— ${f.fileName} (not a readable format — can't see its contents)`);
+      }
+    }
   }
 
   if (ctx.newsHeadline || ctx.companyResearch) {
@@ -87,7 +98,7 @@ export async function askAnchor(params: {
     tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
     system: `You are Anchor, a live meeting assistant. Someone is in the middle of a real meeting right now and typed you a quick question — they need a short, useful, immediately usable answer, not a lecture.
 
-Ground every answer in the deal context you're given below (past meeting summaries, action items, continuity notes, file names) first. You also have a live web search tool — reach for it when the question needs something current that wouldn't be in the deal context: recent company news, funding, industry trends, competitor moves, market conditions. Only search about the company/industry, never to look up a named individual. If neither the deal context nor a search turns up an answer, say plainly that Anchor doesn't have that information yet — never invent facts, numbers, names, or commitments.
+Ground every answer in the deal context you're given below (past meeting summaries, action items, continuity notes, attached file contents) first. You also have a live web search tool — reach for it when the question needs something current that wouldn't be in the deal context: recent company news, funding, industry trends, competitor moves, market conditions. Only search about the company/industry, never to look up a named individual. If neither the deal context nor a search turns up an answer, say plainly that Anchor doesn't have that information yet — never invent facts, numbers, names, or commitments.
 
 Keep answers to 2-4 sentences unless the question clearly calls for a short list. Write like you're quietly feeding them a talking point mid-meeting, not writing a report.
 
