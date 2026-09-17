@@ -145,6 +145,7 @@ export default async function DealDetailPage({
         status: m.status,
         occurredAt: m.occurredAt.toISOString(),
         errorMessage: m.errorMessage,
+        scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
         summary: summaryByMeetingId.get(m.id)
           ? {
               overview: summaryByMeetingId.get(m.id)!.overview,

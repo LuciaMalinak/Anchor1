@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -25,6 +25,7 @@ type DealMeeting = {
   status: MeetingStatus;
   occurredAt: string;
   errorMessage: string | null;
+  scheduledAt: string | null;
   summary: {
     overview: string;
     keyPoints: string[];
@@ -102,7 +103,15 @@ function TabBar({
   );
 }
 
-function NewMeetingForms({ dealId, mic }: { dealId: string; mic: MicRecorderState }) {
+function NewMeetingForms({
+  dealId,
+  mic,
+  onJoinedNow,
+}: {
+  dealId: string;
+  mic: MicRecorderState;
+  onJoinedNow: () => void;
+}) {
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -143,16 +152,20 @@ function NewMeetingForms({ dealId, mic }: { dealId: string; mic: MicRecorderStat
     const formData = new FormData(form);
     const meetingUrl = String(formData.get("meetingUrl") || "").trim();
     const title = String(formData.get("title") || "").trim();
+    const scheduledAtLocal = String(formData.get("scheduledAt") || "").trim();
     if (!meetingUrl) {
       setJoinError("Paste a meeting link first.");
       return;
     }
+    // The <input type="datetime-local"> value has no timezone — treat it
+    // as the browser's own local time, same as any calendar app would.
+    const scheduledAt = scheduledAtLocal ? new Date(scheduledAtLocal).toISOString() : undefined;
     setJoining(true);
     try {
       const res = await fetch("/api/meetings/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meetingUrl, title, dealId }),
+        body: JSON.stringify({ meetingUrl, title, dealId, scheduledAt }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -160,6 +173,10 @@ function NewMeetingForms({ dealId, mic }: { dealId: string; mic: MicRecorderStat
       }
       form.reset();
       router.refresh();
+      // Only jump straight to During for an immediate join — a
+      // scheduled-for-later one shows up as "upcoming" on Before instead,
+      // and the tab switches on its own once that time arrives.
+      if (!scheduledAt) onJoinedNow();
     } catch (err) {
       setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
     } finally {
@@ -184,6 +201,16 @@ function NewMeetingForms({ dealId, mic }: { dealId: string; mic: MicRecorderStat
             placeholder="https://zoom.us/j/..."
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
           />
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-500">
+              Join at (optional — leave blank to join right now)
+            </span>
+            <input
+              type="datetime-local"
+              name="scheduledAt"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+          </label>
           <button
             type="submit"
             disabled={joining}
@@ -234,6 +261,8 @@ function BeforePanel({
   latestReady,
   decisionBoundaries,
   mic,
+  upcoming,
+  onJoinedNow,
 }: {
   dealId: string;
   dealName: string;
@@ -241,6 +270,8 @@ function BeforePanel({
   latestReady: DealMeeting | undefined;
   decisionBoundaries: string | null;
   mic: MicRecorderState;
+  upcoming: DealMeeting[];
+  onJoinedNow: () => void;
 }) {
   const goingIn = memory || latestReady?.summary?.continuityNote || null;
   return (
@@ -257,8 +288,27 @@ function BeforePanel({
           No prior meetings on this deal yet — the first one starts the record.
         </p>
       )}
+      {upcoming.map((m) => (
+        <div
+          key={m.id}
+          className="flex items-center gap-2 rounded-lg border border-brand/30 bg-brand/5 px-4 py-3"
+        >
+          <span className="h-2 w-2 rounded-full bg-brand" />
+          <p className="text-sm text-slate-700">
+            <span className="font-medium text-slate-900">{m.title}</span> — Anchor will join
+            automatically at{" "}
+            {new Date(m.scheduledAt!).toLocaleString(undefined, {
+              weekday: "short",
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+            . This tab will switch to During on its own once it starts — nothing to come back and
+            click.
+          </p>
+        </div>
+      ))}
       <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} />
-      <NewMeetingForms dealId={dealId} mic={mic} />
+      <NewMeetingForms dealId={dealId} mic={mic} onJoinedNow={onJoinedNow} />
     </div>
   );
 }
@@ -1474,8 +1524,37 @@ export function DealTabs({
   messages: ChatMessage[];
   currentUserId: string;
 }) {
-  const inProgress = meetings.filter((m) => m.status !== "ready" && m.status !== "failed");
+  // "Now", as state rather than a bare Date.now() call during render —
+  // starts null (so the initial/SSR render and first client render
+  // agree there's nothing "upcoming" yet) and gets set client-side by
+  // the effect below, which also re-ticks it periodically.
+  const [nowMs, setNowMs] = useState<number | null>(null);
+
+  // A meeting scheduled for a future time (see NewMeetingForms' "Join
+  // at" field) sits in "upcoming" — shown on the Before tab as
+  // something queued up — until that time arrives, rather than
+  // cluttering the During tab/badge with something that isn't live yet.
+  // Before nowMs is known (the very first render, pre-mount), treat any
+  // joining+scheduled meeting as upcoming rather than as already live —
+  // otherwise the very first render (which is also what the initial tab
+  // below is picked from) would briefly count a meeting scheduled hours
+  // out as "in progress" and jump straight to During before the mount
+  // effect below gets a chance to compute the real answer.
+  const upcoming = meetings.filter(
+    (m) =>
+      m.status === "joining" &&
+      m.scheduledAt &&
+      (nowMs === null || new Date(m.scheduledAt).getTime() > nowMs)
+  );
+  const upcomingIds = new Set(upcoming.map((m) => m.id));
+  const inProgress = meetings.filter(
+    (m) => m.status !== "ready" && m.status !== "failed" && !upcomingIds.has(m.id)
+  );
   const readyMeetings = meetings.filter((m) => m.status === "ready");
+  // A bot Anchor actually confirmed is in the call (as opposed to still
+  // "joining") — used to show the live panel alongside whichever tab is
+  // active, for when you're running late and still want prep visible.
+  const liveMeetings = meetings.filter((m) => m.status === "recording");
   const [tab, setTab] = useState<Tab>(inProgress.length > 0 ? "during" : "before");
   const router = useRouter();
   // Owned here, at the top of the tab switcher, so starting an in-person
@@ -1483,6 +1562,36 @@ export function DealTabs({
   // kill the recording — only BeforePanel/DuringPanel below get unmounted
   // when the tab changes, this component does not.
   const mic = useMicRecorder({ dealId: deal.id, onUploaded: () => router.refresh() });
+
+  // Ticks nowMs (so a scheduled meeting's card and inProgress status
+  // stay current), and — once per meeting, tracked in firedRef so a
+  // stalled bot that never flips out of "joining" doesn't yank the tab
+  // back to During forever — refreshes and jumps to During right when a
+  // scheduled meeting's time arrives, so there's nothing to come back
+  // and click.
+  const firedRef = useRef(new Set<string>());
+  useEffect(() => {
+    function tick() {
+      const now = Date.now();
+      setNowMs(now);
+      const justDue = meetings.find(
+        (m) =>
+          m.status === "joining" &&
+          m.scheduledAt &&
+          new Date(m.scheduledAt).getTime() <= now &&
+          !firedRef.current.has(m.id)
+      );
+      if (justDue) {
+        firedRef.current.add(justDue.id);
+        router.refresh();
+        setTab("during");
+      }
+    }
+    tick();
+    const interval = setInterval(tick, 20_000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetings.map((m) => `${m.id}:${m.status}:${m.scheduledAt}`).join(",")]);
 
   // Company research + news lives here (not inside DealHeaderCard) so both
   // the News tab's badge and its content can share it.
@@ -1525,6 +1634,11 @@ export function DealTabs({
           leadUserId={deal.leadUserId}
           backupUserId={deal.backupUserId}
         />
+        {/* Running late and still on Before (or After/Chat)? Don't make
+            switching tabs the only way to see a call that's already
+            live — show it right here too. */}
+        {tab !== "during" &&
+          liveMeetings.map((m) => <LiveMeetingPanel key={m.id} meetingId={m.id} title={m.title} />)}
         {tab === "before" && (
           <BeforePanel
             dealId={deal.id}
@@ -1533,6 +1647,11 @@ export function DealTabs({
             latestReady={readyMeetings[0]}
             decisionBoundaries={deal.decisionBoundaries}
             mic={mic}
+            upcoming={upcoming}
+            onJoinedNow={() => {
+              router.refresh();
+              setTab("during");
+            }}
           />
         )}
         {tab === "during" && (

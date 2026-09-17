@@ -25,7 +25,8 @@ function authHeaders() {
 
 export async function createBot(
   meetingUrl: string,
-  liveTranscriptWebhookUrl?: string
+  liveTranscriptWebhookUrl?: string,
+  joinAt?: string
 ): Promise<{ id: string }> {
   const recordingConfig: Record<string, unknown> = {
     // Only request mixed audio for the final recording — we run our own
@@ -57,6 +58,16 @@ export async function createBot(
     bot_name: "Anchor",
     recording_config: recordingConfig,
   };
+
+  // Scheduling ahead of time (rather than the default "join now") hands
+  // the actual join timing to Recall's own infra via join_at — bots
+  // scheduled more than 10 minutes ahead are guaranteed on-time even if
+  // this app happens to be asleep (Render free-tier cold start) right
+  // when the meeting starts. See docs.recall.ai's "Creating and
+  // scheduling bots" page.
+  if (joinAt) {
+    body.join_at = joinAt;
+  }
 
   if (liveTranscriptWebhookUrl) {
     body.realtime_endpoints = [

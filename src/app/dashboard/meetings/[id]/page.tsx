@@ -40,19 +40,38 @@ export default async function MeetingDetailPage({
   if (!isOwner && !sharedViaTeam) notFound();
 
   if (meeting.status !== "ready") {
+    const now = Date.now();
+    const scheduledInFuture = meeting.scheduledAt && meeting.scheduledAt.getTime() > now;
+
     const PROCESSING_MESSAGE: Record<string, string> = {
-      joining: "Waiting for Anchor to join the call…",
+      joining: scheduledInFuture
+        ? `Scheduled to join automatically at ${meeting.scheduledAt!.toLocaleString(undefined, {
+            weekday: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          })} — nothing to do until then.`
+        : "Waiting for Anchor to join the call…",
       recording: "Recording the call — this will move on automatically once it ends.",
       uploaded: "Queued for transcription…",
       transcribing: "Transcribing the recording…",
       summarizing: "Summarizing and updating what Anchor knows about the people in it…",
     };
 
-    const minutesOld = (Date.now() - meeting.createdAt.getTime()) / 60000;
+    // A meeting scheduled for later can legitimately sit in "joining"
+    // for hours before its time arrives — only measure staleness from
+    // when it was actually supposed to start, not from when it was
+    // created.
+    const sinceRelevantTime = meeting.scheduledAt && meeting.scheduledAt.getTime() > meeting.createdAt.getTime()
+      ? meeting.scheduledAt.getTime()
+      : meeting.createdAt.getTime();
+    const minutesOld = (now - sinceRelevantTime) / 60000;
     const stuckJoining =
-      (meeting.status === "joining" || meeting.status === "recording") && minutesOld > 10;
+      (meeting.status === "joining" || meeting.status === "recording") &&
+      !scheduledInFuture &&
+      minutesOld > 10;
 
-    const isLiveBotCall = meeting.status === "joining" || meeting.status === "recording";
+    const isLiveBotCall =
+      (meeting.status === "joining" || meeting.status === "recording") && !scheduledInFuture;
 
     return (
       <div className="flex flex-col gap-6">

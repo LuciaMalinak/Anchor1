@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
   const meetingUrl = typeof body.meetingUrl === "string" ? body.meetingUrl.trim() : "";
   const titleField = typeof body.title === "string" ? body.title.trim() : "";
   const dealId = typeof body.dealId === "string" && body.dealId ? body.dealId : null;
+  const scheduledAtField = typeof body.scheduledAt === "string" ? body.scheduledAt.trim() : "";
 
   if (!meetingUrl) {
     return NextResponse.json({ error: "Paste a meeting link first" }, { status: 400 });
@@ -50,6 +51,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "That doesn't look like a valid link" }, { status: 400 });
   }
 
+  // A blank/omitted scheduledAt means "join right now" (the original
+  // behavior, unchanged). A past or unparseable value is treated the
+  // same way rather than erroring — joining now is always a safe
+  // fallback for a live-meeting bot.
+  let scheduledAt: Date | null = null;
+  if (scheduledAtField) {
+    const parsed = new Date(scheduledAtField);
+    if (!Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now()) {
+      scheduledAt = parsed;
+    }
+  }
+
   const [meeting] = await db
     .insert(meetings)
     .values({
@@ -57,15 +70,30 @@ export async function POST(req: NextRequest) {
       title: titleField || "Live meeting",
       status: "joining",
       dealId,
+      scheduledAt,
     })
     .returning();
 
   try {
     const liveTranscriptWebhookUrl = `${baseUrl(req)}/api/webhooks/recall/transcript?secret=${RECALL_WEBHOOK_SECRET}`;
-    const bot = await createBot(meetingUrl, liveTranscriptWebhookUrl);
+    const bot = await createBot(
+      meetingUrl,
+      liveTranscriptWebhookUrl,
+      scheduledAt ? scheduledAt.toISOString() : undefined
+    );
+    // A meeting scheduled for later stays "joining" (with scheduledAt
+    // set) until the live-transcript webhook sees the bot's first real
+    // utterance and flips it to "recording" — see
+    // /api/webhooks/recall/transcript. One joining right now still
+    // flips immediately, same as before, since there's nothing else
+    // reliable to wait on for an ad-hoc join.
     await db
       .update(meetings)
-      .set({ recallBotId: bot.id, status: "recording", updatedAt: new Date() })
+      .set({
+        recallBotId: bot.id,
+        status: scheduledAt ? "joining" : "recording",
+        updatedAt: new Date(),
+      })
       .where(eq(meetings.id, meeting.id));
   } catch (err) {
     await db
