@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { MicRecorder } from "@/components/MicRecorder";
+import { useMicRecorder, MicRecorderView } from "@/components/MicRecorder";
 
 type Meeting = {
   id: string;
@@ -65,6 +65,8 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
       setMeetings(data.meetings);
     }
   }, []);
+
+  const mic = useMicRecorder({ onUploaded: refresh });
 
   useEffect(() => {
     if (!hasInFlight) return;
@@ -201,7 +203,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
           {joinError && <p className="mt-2 text-sm text-red-600">{joinError}</p>}
         </section>
 
-        <MicRecorder onUploaded={refresh} />
+        <MicRecorderView {...mic} />
       </div>
 
       <section className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">

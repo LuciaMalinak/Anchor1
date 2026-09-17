@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { MicRecorder } from "@/components/MicRecorder";
+import { useMicRecorder, MicRecorderView, RecordingBanner, type MicRecorderState } from "@/components/MicRecorder";
 import { DEAL_STAGES } from "@/lib/dealStages";
 import { getCompanyLogoUrl } from "@/lib/companyLogo";
 import { HEALTH_LABEL, HEALTH_BADGE_CLASSES, HEALTH_DOT_CLASSES, type DealHealth } from "@/lib/dealHealth";
@@ -101,7 +101,7 @@ function TabBar({
   );
 }
 
-function NewMeetingForms({ dealId }: { dealId: string }) {
+function NewMeetingForms({ dealId, mic }: { dealId: string; mic: MicRecorderState }) {
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -221,7 +221,7 @@ function NewMeetingForms({ dealId }: { dealId: string }) {
         {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
       </form>
 
-      <MicRecorder dealId={dealId} onUploaded={() => router.refresh()} />
+      <MicRecorderView {...mic} />
     </div>
   );
 }
@@ -232,12 +232,14 @@ function BeforePanel({
   memory,
   latestReady,
   decisionBoundaries,
+  mic,
 }: {
   dealId: string;
   dealName: string;
   memory: string | null;
   latestReady: DealMeeting | undefined;
   decisionBoundaries: string | null;
+  mic: MicRecorderState;
 }) {
   const goingIn = memory || latestReady?.summary?.continuityNote || null;
   return (
@@ -255,7 +257,7 @@ function BeforePanel({
         </p>
       )}
       <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} />
-      <NewMeetingForms dealId={dealId} />
+      <NewMeetingForms dealId={dealId} mic={mic} />
     </div>
   );
 }
@@ -1229,76 +1231,56 @@ function DuringPanel({
   dealId,
   inProgress,
   newsHeadline,
+  files,
 }: {
   dealId: string;
   inProgress: DealMeeting[];
   newsHeadline: string | null;
+  files: DealFile[];
 }) {
   return (
-    <div className="flex flex-col gap-6">
-      {newsHeadline && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-          <LiveDot />
-          <p className="text-sm text-amber-900">
-            <span className="font-semibold">In the news right now:</span> {newsHeadline}
-          </p>
-        </div>
-      )}
-      {inProgress.length === 0 ? (
-        <p className="text-sm text-slate-500">Nothing live right now.</p>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {inProgress.map((m) => (
-            <Link
-              key={m.id}
-              href={`/dashboard/meetings/${m.id}`}
-              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
-            >
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                <span className="text-sm font-medium text-slate-900">{m.title}</span>
-              </div>
-              <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
-            </Link>
-          ))}
-        </div>
-      )}
-      <AskAnchorPanel dealId={dealId} />
+    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="flex flex-col gap-6">
+        {newsHeadline && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+            <LiveDot />
+            <p className="text-sm text-amber-900">
+              <span className="font-semibold">In the news right now:</span> {newsHeadline}
+            </p>
+          </div>
+        )}
+        {inProgress.length === 0 ? (
+          <p className="text-sm text-slate-500">Nothing live right now.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {inProgress.map((m) => (
+              <Link
+                key={m.id}
+                href={`/dashboard/meetings/${m.id}`}
+                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                  <span className="text-sm font-medium text-slate-900">{m.title}</span>
+                </div>
+                <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+        <AskAnchorPanel dealId={dealId} />
+      </div>
+      <div className="flex flex-col gap-4">
+        <FilesSection dealId={dealId} files={files} />
+      </div>
     </div>
   );
 }
 
-function AfterPanel({
-  dealId,
-  readyMeetings,
-  files,
-  teamSize,
-}: {
-  dealId: string;
-  readyMeetings: DealMeeting[];
-  files: DealFile[];
-  teamSize: number;
-}) {
+function FilesSection({ dealId, files }: { dealId: string; files: DealFile[] }) {
   const router = useRouter();
-  const [sending, setSending] = useState(false);
-  const [sendResult, setSendResult] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-
-  async function handleSend() {
-    setSending(true);
-    setSendResult(null);
-    try {
-      const res = await fetch(`/api/deals/${dealId}/send-summary`, { method: "POST" });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Couldn't send");
-      setSendResult(`Sent to ${body.sentTo.length} team member${body.sentTo.length === 1 ? "" : "s"} ✓`);
-    } catch (err) {
-      setSendResult(err instanceof Error ? err.message : "Couldn't send");
-    } finally {
-      setSending(false);
-    }
-  }
 
   async function handleFileUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1323,6 +1305,88 @@ function AfterPanel({
       setFileError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploadingFile(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 px-5 py-5">
+      <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">FILES</p>
+      <p className="mt-1 text-xs text-slate-500">
+        Text files, PDFs, and Word docs are readable by Ask Anchor — attach contracts, notes,
+        or specs and Anchor can answer questions using what&apos;s in them.
+      </p>
+      <ul className="mt-3 flex flex-col gap-2">
+        {files.map((f) => (
+          <li key={f.id}>
+            <a
+              href={`/api/deals/${dealId}/files/${f.id}`}
+              className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate">{f.fileName}</span>
+                {f.readableByAI && (
+                  <span
+                    className="shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent"
+                    title="Anchor can read this file's contents"
+                  >
+                    AI-readable
+                  </span>
+                )}
+              </span>
+              <span className="ml-2 shrink-0 text-xs text-slate-400">
+                {f.fileSize ? `${Math.round(f.fileSize / 1024)}KB` : ""}
+              </span>
+            </a>
+          </li>
+        ))}
+        {files.length === 0 && <p className="text-sm text-slate-500">No files yet.</p>}
+      </ul>
+      <form onSubmit={handleFileUpload} className="mt-3 flex flex-col gap-2">
+        <input
+          type="file"
+          name="file"
+          required
+          className="text-xs text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+        />
+        <button
+          type="submit"
+          disabled={uploadingFile}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
+        >
+          {uploadingFile ? "Uploading…" : "Attach a file"}
+        </button>
+        {fileError && <p className="text-xs text-red-600">{fileError}</p>}
+      </form>
+    </div>
+  );
+}
+
+function AfterPanel({
+  dealId,
+  readyMeetings,
+  files,
+  teamSize,
+}: {
+  dealId: string;
+  readyMeetings: DealMeeting[];
+  files: DealFile[];
+  teamSize: number;
+}) {
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<string | null>(null);
+
+  async function handleSend() {
+    setSending(true);
+    setSendResult(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/send-summary`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't send");
+      setSendResult(`Sent to ${body.sentTo.length} team member${body.sentTo.length === 1 ? "" : "s"} ✓`);
+    } catch (err) {
+      setSendResult(err instanceof Error ? err.message : "Couldn't send");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -1377,55 +1441,7 @@ function AfterPanel({
           {sendResult && <p className="mt-2 text-xs text-slate-600">{sendResult}</p>}
         </div>
 
-        <div className="rounded-lg border border-slate-200 px-5 py-5">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">FILES</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Text files, PDFs, and Word docs are readable by Ask Anchor — attach contracts, notes,
-            or specs and Anchor can answer questions using what&apos;s in them.
-          </p>
-          <ul className="mt-3 flex flex-col gap-2">
-            {files.map((f) => (
-              <li key={f.id}>
-                <a
-                  href={`/api/deals/${dealId}/files/${f.id}`}
-                  className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate">{f.fileName}</span>
-                    {f.readableByAI && (
-                      <span
-                        className="shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent"
-                        title="Anchor can read this file's contents"
-                      >
-                        AI-readable
-                      </span>
-                    )}
-                  </span>
-                  <span className="ml-2 shrink-0 text-xs text-slate-400">
-                    {f.fileSize ? `${Math.round(f.fileSize / 1024)}KB` : ""}
-                  </span>
-                </a>
-              </li>
-            ))}
-            {files.length === 0 && <p className="text-sm text-slate-500">No files yet.</p>}
-          </ul>
-          <form onSubmit={handleFileUpload} className="mt-3 flex flex-col gap-2">
-            <input
-              type="file"
-              name="file"
-              required
-              className="text-xs text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
-            />
-            <button
-              type="submit"
-              disabled={uploadingFile}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
-            >
-              {uploadingFile ? "Uploading…" : "Attach a file"}
-            </button>
-            {fileError && <p className="text-xs text-red-600">{fileError}</p>}
-          </form>
-        </div>
+        <FilesSection dealId={dealId} files={files} />
       </div>
     </div>
   );
@@ -1453,6 +1469,12 @@ export function DealTabs({
   const inProgress = meetings.filter((m) => m.status !== "ready" && m.status !== "failed");
   const readyMeetings = meetings.filter((m) => m.status === "ready");
   const [tab, setTab] = useState<Tab>(inProgress.length > 0 ? "during" : "before");
+  const router = useRouter();
+  // Owned here, at the top of the tab switcher, so starting an in-person
+  // recording and then clicking to a different tab doesn't unmount it and
+  // kill the recording — only BeforePanel/DuringPanel below get unmounted
+  // when the tab changes, this component does not.
+  const mic = useMicRecorder({ dealId: deal.id, onUploaded: () => router.refresh() });
 
   // Company research + news lives here (not inside DealHeaderCard) so both
   // the News tab's badge and its content can share it.
@@ -1486,6 +1508,7 @@ export function DealTabs({
           <h1 className="text-2xl font-semibold text-brand">{deal.name}</h1>
           <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
         </div>
+        <RecordingBanner {...mic} />
         <DealHeaderCard deal={deal} />
         <PeopleAndTeam
           dealId={deal.id}
@@ -1501,10 +1524,11 @@ export function DealTabs({
             memory={deal.memory}
             latestReady={readyMeetings[0]}
             decisionBoundaries={deal.decisionBoundaries}
+            mic={mic}
           />
         )}
         {tab === "during" && (
-          <DuringPanel dealId={deal.id} inProgress={inProgress} newsHeadline={newsHeadline} />
+          <DuringPanel dealId={deal.id} inProgress={inProgress} newsHeadline={newsHeadline} files={files} />
         )}
         {tab === "after" && (
           <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
