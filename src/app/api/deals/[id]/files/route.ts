@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { dealFiles } from "@/db/schema";
 import { db } from "@/db";
-import { deals, dealFiles, users } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { saveDealFile } from "@/lib/storage";
 import { extractTextFromFile } from "@/lib/extractText";
+import { authorizeDeal } from "@/lib/dealAccess";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25MB — documents/notes, not recordings
-
-async function authorizeDeal(userId: string, dealId: string) {
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal || !user?.teamId || deal.teamId !== user.teamId) return null;
-  return deal;
-}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -22,8 +15,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id: dealId } = await params;
-  const deal = await authorizeDeal(session.user.id, dealId);
-  if (!deal) {
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
 

@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts } from "@/db/schema";
-import { and, asc, desc, eq } from "drizzle-orm";
-import { getOrCreateTeamId } from "@/lib/team";
+import { asc, desc, eq } from "drizzle-orm";
+import { authorizeDeal } from "@/lib/dealAccess";
 import { researchCompany, isResearchStale } from "@/lib/companyResearch";
 import { computeDealHealth } from "@/lib/dealHealth";
 import { DealTabs } from "./DealTabs";
@@ -17,12 +17,10 @@ export default async function DealDetailPage({
   const session = await auth();
   if (!session?.user?.id) notFound();
 
-  const teamId = await getOrCreateTeamId(session.user.id);
-  let [deal] = await db
-    .select()
-    .from(deals)
-    .where(and(eq(deals.id, id), eq(deals.teamId, teamId)));
-  if (!deal) notFound();
+  const authorized = await authorizeDeal(session.user.id, id);
+  if (!authorized) notFound();
+  const { teamId } = authorized;
+  let deal = authorized.deal;
 
   // Best-effort, throttled auto-refresh: if this deal has a company
   // website and its research is missing or more than a day old, quietly

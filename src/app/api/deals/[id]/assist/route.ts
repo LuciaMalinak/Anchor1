@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, dealFiles, meetings, summaries, users } from "@/db/schema";
+import { dealFiles, meetings, summaries } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { askAnchor, type DealContext } from "@/lib/liveAssist";
+import { authorizeDeal } from "@/lib/dealAccess";
 
 const MAX_HISTORY_TURNS = 6;
-
-async function authorizeDeal(userId: string, dealId: string) {
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal || !user?.teamId || deal.teamId !== user.teamId) return null;
-  return deal;
-}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -21,10 +15,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id: dealId } = await params;
-  const deal = await authorizeDeal(session.user.id, dealId);
-  if (!deal) {
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
+  const { deal } = authorized;
 
   const body = await req.json().catch(() => ({}));
   const question = String(body.question || "").trim();

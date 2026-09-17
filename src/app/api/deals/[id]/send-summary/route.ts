@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings, summaries, users } from "@/db/schema";
+import { meetings, summaries, users, dealMembers } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/email";
+import { authorizeDeal } from "@/lib/dealAccess";
 
 export async function POST(
   _req: Request,
@@ -15,11 +16,11 @@ export async function POST(
   }
 
   const { id: dealId } = await params;
-  const [user] = await db.select().from(users).where(eq(users.id, session.user.id));
-  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal || !user?.teamId || deal.teamId !== user.teamId) {
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
+  const { deal, teamId } = authorized;
 
   const [latest] = await db
     .select({ meeting: meetings, summary: summaries })
@@ -36,8 +37,19 @@ export async function POST(
     );
   }
 
-  const teammates = await db.select().from(users).where(eq(users.teamId, user.teamId));
-  const recipients = teammates.map((t) => t.email).filter(Boolean) as string[];
+  // Only send to teammates who can actually open this deal — a teammate
+  // restricted to a different deal shouldn't get its recap in their inbox
+  // just because they're on the same team. See src/lib/dealAccess.ts.
+  const teammates = await db.select().from(users).where(eq(users.teamId, teamId));
+  const grantedUserIds = new Set(
+    (
+      await db.select({ userId: dealMembers.userId }).from(dealMembers).where(eq(dealMembers.dealId, dealId))
+    ).map((r) => r.userId)
+  );
+  const recipients = teammates
+    .filter((t) => !t.restrictedToDeals || grantedUserIds.has(t.id))
+    .map((t) => t.email)
+    .filter(Boolean) as string[];
   if (recipients.length === 0) {
     return NextResponse.json({ error: "No team members to send to" }, { status: 400 });
   }

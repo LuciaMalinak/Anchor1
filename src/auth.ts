@@ -10,6 +10,7 @@ import {
   verificationTokens,
   teams,
   teamInvites,
+  dealMembers,
 } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 
@@ -92,7 +93,23 @@ export const {
         .limit(1);
 
       if (invite) {
-        await db.update(users).set({ teamId: invite.teamId }).where(eq(users.id, user.id));
+        await db
+          .update(users)
+          .set({
+            teamId: invite.teamId,
+            // Set only for an invite that came from an approved join
+            // request naming one deal (see
+            // /api/join-requests/[id]/approve) — an ordinary teammate
+            // invite leaves this false, same as always.
+            restrictedToDeals: Boolean(invite.restrictToDealId),
+          })
+          .where(eq(users.id, user.id));
+        if (invite.restrictToDealId) {
+          await db
+            .insert(dealMembers)
+            .values({ dealId: invite.restrictToDealId, userId: user.id })
+            .onConflictDoNothing();
+        }
         await db
           .delete(teamInvites)
           .where(sql`lower(${teamInvites.email}) = lower(${user.email})`);

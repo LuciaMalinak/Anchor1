@@ -1,22 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 
 type Member = { id: string; name: string | null; email: string; title: string | null; image: string | null };
 type Invite = { id: string; email: string };
+type Deal = { id: string; name: string };
+type JoinRequest = { id: string; name: string; email: string; dealName: string; createdAt: string };
 
 export function TeamClient({
+  teamId,
   teamName,
   members,
   invites,
+  deals,
+  pendingRequests,
   currentUserId,
 }: {
+  teamId: string;
   teamName: string;
   members: Member[];
   invites: Invite[];
+  deals: Deal[];
+  pendingRequests: JoinRequest[];
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -24,6 +32,17 @@ export function TeamClient({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const [joinUrl, setJoinUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    // window.location only exists client-side, so this has to run in an
+    // effect rather than during render (which also runs on the server) —
+    // exactly the "read an external system on mount" case the lint rule
+    // otherwise warns about.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setJoinUrl(`${window.location.origin}/join/${teamId}`);
+  }, [teamId]);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -81,6 +100,42 @@ export function TeamClient({
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         {notice && <p className="mt-2 text-sm text-slate-600">{notice}</p>}
       </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-sm font-medium text-slate-900">Let people request to join</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Share this link — anyone who fills it in shows up below as a pending request. Nothing
+          happens until you approve them, and you pick which deal they get access to.
+        </p>
+        <div className="mt-3 flex flex-col gap-2 sm:max-w-xl sm:flex-row">
+          <input
+            readOnly
+            value={joinUrl}
+            onClick={(e) => e.currentTarget.select()}
+            className="flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600 outline-none"
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(joinUrl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              } catch {
+                // Clipboard access can fail quietly (permissions, non-secure
+                // context) — the link's still selectable in the field above.
+              }
+            }}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            {copied ? "Copied!" : "Copy link"}
+          </button>
+        </div>
+      </section>
+
+      {pendingRequests.length > 0 && (
+        <PendingRequests requests={pendingRequests} deals={deals} onDecided={() => router.refresh()} />
+      )}
 
       <section>
         <h2 className="mb-3 text-sm font-medium text-slate-900">Members ({members.length})</h2>
@@ -168,5 +223,98 @@ export function TeamClient({
         </section>
       )}
     </div>
+  );
+}
+
+function PendingRequests({
+  requests,
+  deals,
+  onDecided,
+}: {
+  requests: JoinRequest[];
+  deals: Deal[];
+  onDecided: () => void;
+}) {
+  const [selectedDeal, setSelectedDeal] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  async function decide(id: string, action: "approve" | "decline") {
+    setErrors((e) => ({ ...e, [id]: "" }));
+    if (action === "approve" && !selectedDeal[id]) {
+      setErrors((e) => ({ ...e, [id]: "Pick which deal to grant them" }));
+      return;
+    }
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/join-requests/${id}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: action === "approve" ? JSON.stringify({ dealId: selectedDeal[id] }) : undefined,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Something went wrong");
+      onDecided();
+    } catch (err) {
+      setErrors((e) => ({ ...e, [id]: err instanceof Error ? err.message : "Something went wrong" }));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <section>
+      <h2 className="mb-3 text-sm font-medium text-slate-900">
+        Requests to join ({requests.length})
+      </h2>
+      <div className="flex flex-col gap-3">
+        {requests.map((r) => (
+          <div
+            key={r.id}
+            className="flex flex-col gap-3 rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-900">
+                {r.name} <span className="font-normal text-slate-400">· {r.email}</span>
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Asking to join for <span className="font-medium text-slate-700">{r.dealName}</span>
+              </p>
+              {errors[r.id] && <p className="mt-1 text-xs text-red-600">{errors[r.id]}</p>}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <select
+                value={selectedDeal[r.id] || ""}
+                onChange={(e) => setSelectedDeal((s) => ({ ...s, [r.id]: e.target.value }))}
+                className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-brand"
+              >
+                <option value="">Grant access to…</option>
+                {deals.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={busyId === r.id}
+                onClick={() => decide(r.id, "approve")}
+                className="rounded-lg bg-brand px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-brand-dark disabled:opacity-50"
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                disabled={busyId === r.id}
+                onClick={() => decide(r.id, "decline")}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

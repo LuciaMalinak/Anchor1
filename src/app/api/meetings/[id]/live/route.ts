@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, meetingLiveSegments, deals, users } from "@/db/schema";
+import { meetings, meetingLiveSegments, deals } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { generateLiveCoaching } from "@/lib/liveCoaching";
+import { canAccessDeal } from "@/lib/dealAccess";
 
 // How often live coaching (nudges + checklist) is allowed to regenerate.
 // The During tab polls this route every few seconds for a smooth-feeling
@@ -36,8 +37,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   let sharedViaTeam = false;
   if (!isOwner && deal) {
-    const [viewer] = await db.select().from(users).where(eq(users.id, session.user.id));
-    sharedViaTeam = Boolean(viewer?.teamId && deal.teamId === viewer.teamId);
+    sharedViaTeam = await canAccessDeal(session.user.id, deal.id, deal.teamId);
   }
   if (!isOwner && !sharedViaTeam) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });

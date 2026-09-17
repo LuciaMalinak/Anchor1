@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { meetings, summaries, deals, users, meetingParticipants, contacts } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { draftFollowUpEmail } from "@/lib/summarize";
+import { canAccessDeal } from "@/lib/dealAccess";
 
 // Generates a draft, client-facing follow-up email for a finished
 // meeting. Not persisted — cheap enough to regenerate, and this way
@@ -24,8 +25,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   let sharedViaTeam = false;
   if (!isOwner && meeting.dealId) {
     const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
-    const [viewer] = await db.select().from(users).where(eq(users.id, session.user.id));
-    sharedViaTeam = Boolean(deal && viewer?.teamId && deal.teamId === viewer.teamId);
+    sharedViaTeam = Boolean(
+      deal && (await canAccessDeal(session.user.id, meeting.dealId, deal.teamId))
+    );
   }
   if (!isOwner && !sharedViaTeam) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });

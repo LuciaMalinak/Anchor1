@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, dealMessages, users } from "@/db/schema";
+import { dealMessages, users } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-
-async function authorizeDeal(userId: string, dealId: string) {
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal || !user?.teamId || deal.teamId !== user.teamId) return null;
-  return deal;
-}
+import { authorizeDeal } from "@/lib/dealAccess";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -18,8 +12,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const { id: dealId } = await params;
-  const deal = await authorizeDeal(session.user.id, dealId);
-  if (!deal) {
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
 
@@ -47,8 +41,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id: dealId } = await params;
-  const deal = await authorizeDeal(session.user.id, dealId);
-  if (!deal) {
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
 

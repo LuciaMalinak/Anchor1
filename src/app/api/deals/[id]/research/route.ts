@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, users } from "@/db/schema";
+import { deals } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { researchCompany } from "@/lib/companyResearch";
-
-async function authorizeDeal(userId: string, dealId: string) {
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal || !user?.teamId || deal.teamId !== user.teamId) return null;
-  return deal;
-}
+import { authorizeDeal } from "@/lib/dealAccess";
 
 // On-demand: looks up public info about the company this deal is with,
 // via web search — never about a specific person. See src/lib/companyResearch.ts.
@@ -21,10 +15,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id: dealId } = await params;
-  const deal = await authorizeDeal(session.user.id, dealId);
-  if (!deal) {
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
+  const { deal } = authorized;
 
   let result: Awaited<ReturnType<typeof researchCompany>>;
   try {
