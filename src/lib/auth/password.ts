@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import type { NextRequest } from "next/server";
 
 // Password hashing — used both when someone sets/changes their password
 // and when they sign in with one. 10 rounds is bcrypt's common default:
@@ -34,4 +35,17 @@ export function secureCookiesEnabled(): boolean {
 
 export function sessionCookieName(): string {
   return `${secureCookiesEnabled() ? "__Secure-" : ""}authjs.session-token`;
+}
+
+// Render (like most host-your-own-app platforms) puts the app behind a
+// proxy that terminates HTTPS on the public domain and forwards to this
+// container over plain HTTP on an internal port — so `req.url` inside the
+// app can come back as something like http://localhost:10000/dashboard
+// instead of the real https://your-app.onrender.com/dashboard. Auth.js's
+// own routes dodge this by preferring AUTH_URL/NEXTAUTH_URL over the raw
+// request (see next-auth's env.js); this app's own redirects need the
+// same fix, or a signed-in visit can bounce them toward "localhost".
+export function absoluteUrl(path: string, req: NextRequest): URL {
+  const base = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
+  return new URL(path, base ?? req.url);
 }

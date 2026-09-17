@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { sessionCookieName } from "@/lib/auth/password";
+import { sessionCookieName, absoluteUrl } from "@/lib/auth/password";
 
 // Deliberately NOT using next-auth's `auth((req) => {...})` wrapper here.
 // That wrapper runs Auth.js's full session action on every request, which
@@ -16,7 +16,7 @@ export default async function proxy(req: NextRequest) {
   const isProtected = req.nextUrl.pathname.startsWith("/dashboard");
   if (!isProtected) return NextResponse.next();
 
-  const signInUrl = new URL("/sign-in", req.nextUrl.origin);
+  const signInUrl = absoluteUrl("/sign-in", req);
   const token = req.cookies.get(sessionCookieName())?.value;
   if (!token) {
     return NextResponse.redirect(signInUrl);
@@ -37,7 +37,7 @@ export default async function proxy(req: NextRequest) {
   // (whichever method got them in) — sent here instead of into the
   // dashboard until they have. See src/app/welcome/set-password/page.tsx.
   if (!row.passwordHash) {
-    return NextResponse.redirect(new URL("/welcome/set-password", req.nextUrl.origin));
+    return NextResponse.redirect(absoluteUrl("/welcome/set-password", req));
   }
 
   return NextResponse.next();
