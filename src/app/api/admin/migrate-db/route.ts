@@ -228,6 +228,19 @@ CREATE TABLE IF NOT EXISTS "join_request" (
   "decidedAt" timestamp,
   "createdAt" timestamp NOT NULL DEFAULT now()
 );
+
+ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "ownerUserId" uuid REFERENCES "user"("id") ON DELETE SET NULL;
+
+-- Backfill: every existing team gets its earliest-created member as
+-- owner, so "only the team owner can approve" doesn't lock everyone out
+-- of teams created before this column existed. New teams set this
+-- directly at creation time (see getOrCreateTeamId / the createUser
+-- event) and never hit this path.
+UPDATE "team" t
+SET "ownerUserId" = (
+  SELECT u.id FROM "user" u WHERE u."teamId" = t.id ORDER BY u."createdAt" ASC LIMIT 1
+)
+WHERE t."ownerUserId" IS NULL;
 `;
 
 export async function GET(req: NextRequest) {

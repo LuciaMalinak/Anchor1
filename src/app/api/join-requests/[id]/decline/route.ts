@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { joinRequests } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getOrCreateTeamId } from "@/lib/team";
+import { canManageJoinRequests } from "@/lib/joinRequestAccess";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -12,14 +12,22 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const teamId = await getOrCreateTeamId(session.user.id);
 
+  // The request's own team decides authorization — see approve/route.ts.
   const [request] = await db.select().from(joinRequests).where(eq(joinRequests.id, id));
-  if (!request || request.teamId !== teamId) {
+  if (!request) {
     return NextResponse.json({ error: "Request not found" }, { status: 404 });
   }
   if (request.status !== "pending") {
     return NextResponse.json({ error: "Already decided" }, { status: 400 });
+  }
+
+  const allowed = await canManageJoinRequests(session.user.id, session.user.email, request.teamId);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Only the team owner or a deal lead can decline this" },
+      { status: 403 }
+    );
   }
 
   await db
