@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { downloadBotAudio } from "@/lib/recall";
 import { saveMeetingAudio } from "@/lib/storage";
 import { processMeeting } from "@/lib/processMeeting";
+import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
 
 // Recall.ai calls this when a bot's recording is ready. Register this
 // exact URL (including the ?secret=... below) as the webhook URL in the
@@ -14,11 +15,9 @@ import { processMeeting } from "@/lib/processMeeting";
 // ENGINEER_BRIEF.md), so this uses a shared-secret query param instead —
 // fine for an MVP with one bot account, worth swapping for verified
 // signatures before this is load-bearing for anyone but us.
-const WEBHOOK_SECRET = process.env.RECALL_WEBHOOK_SECRET || "a7eddd2aa32dc530be105a56b90cdcd7";
-
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret");
-  if (secret !== WEBHOOK_SECRET) {
+  if (secret !== RECALL_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

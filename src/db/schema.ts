@@ -119,8 +119,34 @@ export const meetings = pgTable("meeting", {
   // under a deal so a team can see prep/live/recap for one client in one
   // place. Null means "not attached to a deal".
   dealId: uuid("dealId").references(() => deals.id, { onDelete: "set null" }),
+  // AI-generated coaching for a meeting that's actively in progress
+  // (status "recording") — short talking-point nudges plus a checklist
+  // derived from the deal's prep notes, regenerated periodically off the
+  // live transcript. Null until the first live-coaching pass runs; stale
+  // once the meeting finishes (only meaningful while "recording").
+  liveSuggestions: jsonb("liveSuggestions").$type<{
+    nudges: string[];
+    checklist: { label: string; covered: boolean }[];
+  }>(),
+  liveSuggestionsUpdatedAt: timestamp("liveSuggestionsUpdatedAt", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// One row per finalized utterance Recall.ai's real-time transcription
+// streams back while a "send Anchor to a live meeting" bot is on a call —
+// what powers the live transcript feed and live coaching on the During
+// tab. Unrelated to the `transcript` table above, which holds the single
+// full post-meeting transcript written once processing finishes.
+export const meetingLiveSegments = pgTable("meeting_live_segment", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  meetingId: uuid("meetingId")
+    .notNull()
+    .references(() => meetings.id, { onDelete: "cascade" }),
+  speakerName: text("speakerName"),
+  text: text("text").notNull(),
+  relativeSeconds: integer("relativeSeconds"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
 // A person Anchor has learned about, scoped to the account that owns the

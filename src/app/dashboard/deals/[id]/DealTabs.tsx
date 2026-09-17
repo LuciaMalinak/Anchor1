@@ -8,6 +8,7 @@ import { useMicRecorder, MicRecorderView, RecordingBanner, type MicRecorderState
 import { DEAL_STAGES } from "@/lib/dealStages";
 import { getCompanyLogoUrl } from "@/lib/companyLogo";
 import { HEALTH_LABEL, HEALTH_BADGE_CLASSES, HEALTH_DOT_CLASSES, type DealHealth } from "@/lib/dealHealth";
+import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 
 type MeetingStatus =
   | "joining"
@@ -1253,19 +1254,26 @@ function DuringPanel({
           <p className="text-sm text-slate-500">Nothing live right now.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {inProgress.map((m) => (
-              <Link
-                key={m.id}
-                href={`/dashboard/meetings/${m.id}`}
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                  <span className="text-sm font-medium text-slate-900">{m.title}</span>
-                </div>
-                <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
-              </Link>
-            ))}
+            {inProgress.map((m) =>
+              m.status === "joining" || m.status === "recording" ? (
+                // A bot Anchor sent into a Zoom/Meet/Teams call — show the
+                // live transcript + coaching panel instead of just a link,
+                // since there's something to actually watch while it runs.
+                <LiveMeetingPanel key={m.id} meetingId={m.id} title={m.title} />
+              ) : (
+                <Link
+                  key={m.id}
+                  href={`/dashboard/meetings/${m.id}`}
+                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                    <span className="text-sm font-medium text-slate-900">{m.title}</span>
+                  </div>
+                  <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
+                </Link>
+              )
+            )}
           </div>
         )}
         <AskAnchorPanel dealId={dealId} />
