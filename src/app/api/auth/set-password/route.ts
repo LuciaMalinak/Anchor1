@@ -3,12 +3,12 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { hashPassword } from "@/lib/auth/password";
+import { hashPassword, absoluteUrl } from "@/lib/auth/password";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL("/sign-in", req.url), { status: 303 });
+    return NextResponse.redirect(absoluteUrl("/sign-in", req), { status: 303 });
   }
 
   const form = await req.formData();
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const confirmPassword = String(form.get("confirmPassword") ?? "");
 
   const backHere = (error: string) => {
-    const url = new URL("/welcome/set-password", req.url);
+    const url = absoluteUrl("/welcome/set-password", req);
     url.searchParams.set("error", error);
     return NextResponse.redirect(url, { status: 303 });
   };
@@ -31,5 +31,5 @@ export async function POST(req: NextRequest) {
   const passwordHash = await hashPassword(password);
   await db.update(users).set({ passwordHash }).where(eq(users.id, session.user.id));
 
-  return NextResponse.redirect(new URL("/dashboard", req.url), { status: 303 });
+  return NextResponse.redirect(absoluteUrl("/dashboard", req), { status: 303 });
 }
