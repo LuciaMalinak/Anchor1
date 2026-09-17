@@ -46,7 +46,13 @@ export const {
       // Replaces Auth.js's default unbranded sign-in email with one that
       // carries the Anchor logo/colors — see src/lib/emailTemplates.ts.
       async sendVerificationRequest({ identifier: to, url, provider }) {
-        const { host } = new URL(url);
+        const { host, origin } = new URL(url);
+        // Email the real (single-use, token-carrying) callback URL only
+        // as a query param on our own confirmation page — not directly —
+        // so an email client's automatic link-prescanning can't consume
+        // it before the person actually clicks. See
+        // src/app/sign-in/verify/page.tsx for the other half of this.
+        const confirmUrl = `${origin}/sign-in/verify?url=${encodeURIComponent(url)}`;
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
@@ -57,8 +63,8 @@ export const {
             from: provider.from,
             to,
             subject: `Sign in to ${host}`,
-            html: signInEmailHtml({ url, host }),
-            text: signInEmailText({ url, host }),
+            html: signInEmailHtml({ url: confirmUrl, host }),
+            text: signInEmailText({ url: confirmUrl, host }),
           }),
         });
         if (!res.ok) {
