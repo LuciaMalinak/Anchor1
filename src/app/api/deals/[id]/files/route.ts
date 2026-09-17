@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { deals, dealFiles, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { saveDealFile } from "@/lib/storage";
+import { extractTextFromFile } from "@/lib/extractText";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25MB — documents/notes, not recordings
 
@@ -40,6 +41,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const storagePath = await saveDealFile(dealId, file.name, buffer);
+  // Best-effort — never blocks the upload if a file can't be parsed.
+  const extractedText = await extractTextFromFile(file.name, buffer);
 
   const [dealFile] = await db
     .insert(dealFiles)
@@ -48,6 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       fileName: file.name,
       storagePath,
       fileSize: file.size,
+      extractedText,
       uploadedByUserId: session.user.id,
     })
     .returning();

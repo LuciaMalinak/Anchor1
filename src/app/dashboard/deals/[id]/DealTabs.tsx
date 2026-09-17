@@ -37,6 +37,7 @@ type DealFile = {
   fileName: string;
   fileSize: number | null;
   createdAt: string;
+  readableByAI: boolean;
 };
 
 const STATUS_LABEL: Record<MeetingStatus, string> = {
@@ -1378,6 +1379,10 @@ function AfterPanel({
 
         <div className="rounded-lg border border-slate-200 px-5 py-5">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">FILES</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Text files, PDFs, and Word docs are readable by Ask Anchor — attach contracts, notes,
+            or specs and Anchor can answer questions using what&apos;s in them.
+          </p>
           <ul className="mt-3 flex flex-col gap-2">
             {files.map((f) => (
               <li key={f.id}>
@@ -1385,7 +1390,17 @@ function AfterPanel({
                   href={`/api/deals/${dealId}/files/${f.id}`}
                   className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                 >
-                  <span className="truncate">{f.fileName}</span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate">{f.fileName}</span>
+                    {f.readableByAI && (
+                      <span
+                        className="shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent"
+                        title="Anchor can read this file's contents"
+                      >
+                        AI-readable
+                      </span>
+                    )}
+                  </span>
                   <span className="ml-2 shrink-0 text-xs text-slate-400">
                     {f.fileSize ? `${Math.round(f.fileSize / 1024)}KB` : ""}
                   </span>
