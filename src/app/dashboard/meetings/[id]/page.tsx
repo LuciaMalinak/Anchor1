@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 import { MeetingStatusPoller } from "./MeetingStatusPoller";
 import { MeetingDeleteButton } from "./MeetingDeleteButton";
 import { FollowUpEmailDraft } from "./FollowUpEmailDraft";
+import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 
 export default async function MeetingDetailPage({
   params,
@@ -51,30 +52,35 @@ export default async function MeetingDetailPage({
     const stuckJoining =
       (meeting.status === "joining" || meeting.status === "recording") && minutesOld > 10;
 
+    const isLiveBotCall = meeting.status === "joining" || meeting.status === "recording";
+
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-        <p className="text-sm font-medium text-slate-900">{meeting.title}</p>
-        <p className="mt-2 text-sm text-slate-500">
-          {meeting.status === "failed"
-            ? meeting.errorMessage || "Something went wrong processing this meeting."
-            : PROCESSING_MESSAGE[meeting.status] ||
-              "Still processing — this page will update automatically."}
-        </p>
-        {stuckJoining && (
-          <p className="mt-3 text-xs text-amber-600">
-            This is taking longer than usual. Double-check the meeting link was correct
-            and the call is still active — if the bot couldn't join, this meeting won't
-            update on its own.
+      <div className="flex flex-col gap-6">
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+          <p className="text-sm font-medium text-slate-900">{meeting.title}</p>
+          <p className="mt-2 text-sm text-slate-500">
+            {meeting.status === "failed"
+              ? meeting.errorMessage || "Something went wrong processing this meeting."
+              : PROCESSING_MESSAGE[meeting.status] ||
+                "Still processing — this page will update automatically."}
           </p>
-        )}
-        {meeting.status !== "failed" && (
-          <MeetingStatusPoller meetingId={id} initialStatus={meeting.status} />
-        )}
-        {isOwner && (meeting.status === "failed" || stuckJoining) && (
-          <div className="mt-5 flex justify-center">
-            <MeetingDeleteButton meetingId={id} title={meeting.title} />
-          </div>
-        )}
+          {stuckJoining && (
+            <p className="mt-3 text-xs text-amber-600">
+              This is taking longer than usual. Double-check the meeting link was correct
+              and the call is still active — if the bot couldn't join, this meeting won't
+              update on its own.
+            </p>
+          )}
+          {meeting.status !== "failed" && (
+            <MeetingStatusPoller meetingId={id} initialStatus={meeting.status} />
+          )}
+          {isOwner && (meeting.status === "failed" || stuckJoining) && (
+            <div className="mt-5 flex justify-center">
+              <MeetingDeleteButton meetingId={id} title={meeting.title} />
+            </div>
+          )}
+        </div>
+        {isLiveBotCall && <LiveMeetingPanel meetingId={id} title={meeting.title} />}
       </div>
     );
   }

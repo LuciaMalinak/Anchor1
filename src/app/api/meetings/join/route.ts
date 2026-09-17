@@ -4,6 +4,14 @@ import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createBot } from "@/lib/recall";
+import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
+
+// Same fallback used elsewhere (OAuth callbacks, etc.) — prefer the
+// explicit URL when set (needed behind Render's proxy), otherwise derive
+// it from the incoming request.
+function baseUrl(req: NextRequest): string {
+  return process.env.AUTH_URL || req.nextUrl.origin;
+}
 
 // "Send Anchor to a live meeting": the user pastes a Zoom/Meet/Teams
 // link instead of uploading a file. We create the meeting row up front
@@ -53,7 +61,8 @@ export async function POST(req: NextRequest) {
     .returning();
 
   try {
-    const bot = await createBot(meetingUrl);
+    const liveTranscriptWebhookUrl = `${baseUrl(req)}/api/webhooks/recall/transcript?secret=${RECALL_WEBHOOK_SECRET}`;
+    const bot = await createBot(meetingUrl, liveTranscriptWebhookUrl);
     await db
       .update(meetings)
       .set({ recallBotId: bot.id, status: "recording", updatedAt: new Date() })

@@ -23,19 +23,55 @@ function authHeaders() {
   };
 }
 
-export async function createBot(meetingUrl: string): Promise<{ id: string }> {
+export async function createBot(
+  meetingUrl: string,
+  liveTranscriptWebhookUrl?: string
+): Promise<{ id: string }> {
+  const recordingConfig: Record<string, unknown> = {
+    // Only request mixed audio for the final recording — we run our own
+    // transcription (AssemblyAI) on it after the call rather than paying
+    // for Recall's built-in one for the async pass.
+    audio_mixed: {},
+  };
+
+  // Separately, ask Recall's own low-latency streaming ASR for live
+  // utterances *during* the call, delivered to our webhook as they're
+  // finalized — this is what drives the live transcript + coaching on
+  // the During tab. Independent of the async AssemblyAI pass above.
+  if (liveTranscriptWebhookUrl) {
+    recordingConfig.transcript = {
+      provider: {
+        recallai_streaming: {
+          mode: "prioritize_low_latency",
+          language_code: "en",
+        },
+      },
+      diarization: {
+        use_separate_streams_when_available: true,
+      },
+    };
+  }
+
+  const body: Record<string, unknown> = {
+    meeting_url: meetingUrl,
+    bot_name: "Anchor",
+    recording_config: recordingConfig,
+  };
+
+  if (liveTranscriptWebhookUrl) {
+    body.realtime_endpoints = [
+      {
+        type: "webhook",
+        url: liveTranscriptWebhookUrl,
+        events: ["transcript.data"],
+      },
+    ];
+  }
+
   const res = await fetch(`${BASE_URL}/bot/`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({
-      meeting_url: meetingUrl,
-      bot_name: "Anchor",
-      // Only request mixed audio — we run our own transcription
-      // (AssemblyAI) rather than paying for Recall's built-in one.
-      recording_config: {
-        audio_mixed: {},
-      },
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {

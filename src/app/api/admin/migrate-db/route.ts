@@ -123,6 +123,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS integration_connection_user_provider_idx
 -- Extracted plain text for deal files, so Ask Anchor can use file
 -- contents instead of just filenames.
 ALTER TABLE "deal_file" ADD COLUMN IF NOT EXISTS "extractedText" text;
+
+-- Live meeting coaching: real-time transcript segments streamed in from
+-- Recall.ai while a bot is on a call, plus the AI-generated live
+-- nudges/checklist stored on the meeting itself.
+CREATE TABLE IF NOT EXISTS "meeting_live_segment" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "meetingId" uuid NOT NULL REFERENCES "meeting"("id") ON DELETE CASCADE,
+  "speakerName" text,
+  "text" text NOT NULL,
+  "relativeSeconds" integer,
+  "createdAt" timestamp NOT NULL DEFAULT now()
+);
+ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "liveSuggestions" jsonb;
+ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "liveSuggestionsUpdatedAt" timestamp;
 `;
 
 export async function GET(req: NextRequest) {
@@ -148,7 +162,7 @@ export async function GET(req: NextRequest) {
   `;
   const newTables = await rawClient`
     select table_name from information_schema.tables
-    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection')
+    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection', 'meeting_live_segment')
   `;
   const userCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'user'
