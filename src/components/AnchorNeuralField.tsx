@@ -45,7 +45,11 @@ function tracePath(cx: number, cy: number, x: number, y: number, bow: number) {
 
 export function AnchorNeuralField() {
   const cx = 600;
-  const cy = 350;
+  // Kept low in the frame (rather than dead-center) so the big anchor's
+  // busiest part — the ring/crossbar near its top — sits well below the
+  // hero text instead of directly behind it; the shaft and base arc
+  // still read clearly lower down, behind the buttons.
+  const cy = 470;
 
   return (
     <svg
@@ -96,7 +100,7 @@ export function AnchorNeuralField() {
 
       {/* The big background anchor itself */}
       <g
-        transform={`translate(${cx} ${cy}) scale(13.5) translate(-16 -16)`}
+        transform={`translate(${cx} ${cy}) scale(12) translate(-16 -16)`}
         fill="none"
         stroke="#ffffff"
         strokeOpacity="0.09"
@@ -109,7 +113,7 @@ export function AnchorNeuralField() {
 
       {/* Glowing "current" traveling through the big anchor's shaft and
           base arc — the neurons "running through it" */}
-      <g transform={`translate(${cx} ${cy}) scale(13.5) translate(-16 -16)`} fill="none" strokeLinecap="round">
+      <g transform={`translate(${cx} ${cy}) scale(12) translate(-16 -16)`} fill="none" strokeLinecap="round">
         <path d="M16 9.75V24.5" className="neuro-glow neuro-glow-shaft" />
         <path
           d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5"
