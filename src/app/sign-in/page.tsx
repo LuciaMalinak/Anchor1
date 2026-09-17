@@ -5,7 +5,18 @@ const linkedInConfigured = Boolean(
   process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET
 );
 
-export default function SignInPage() {
+const SIGN_IN_ERROR_COPY: Record<string, string> = {
+  invalid: "Incorrect email or password.",
+  missing: "Enter your email and password.",
+};
+
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
       <div className="flex flex-col items-center gap-6 text-center">
@@ -15,7 +26,8 @@ export default function SignInPage() {
             Sign in
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Use LinkedIn for one click, or we&apos;ll email you a link instead.
+            Use LinkedIn for one click, sign in with your password, or we&apos;ll email
+            you a link instead — whichever&apos;s easiest.
           </p>
         </div>
       </div>
@@ -46,6 +58,45 @@ export default function SignInPage() {
         </>
       )}
 
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs text-red-600">
+          {SIGN_IN_ERROR_COPY[error] ?? "Something went wrong — try again."}
+        </p>
+      )}
+
+      <form action="/api/auth/password-sign-in" method="POST" className="flex flex-col gap-3">
+        <input
+          type="email"
+          name="email"
+          required
+          placeholder="you@company.com"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+        />
+        <input
+          type="password"
+          name="password"
+          required
+          placeholder="Password"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+        />
+        <label className="flex items-center gap-2 text-xs text-slate-500">
+          <input type="checkbox" name="rememberMe" value="1" className="h-3.5 w-3.5 rounded border-slate-300" />
+          Stay signed in
+        </label>
+        <button
+          type="submit"
+          className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800"
+        >
+          Sign in
+        </button>
+      </form>
+
+      <div className="flex items-center gap-3 text-xs text-slate-400">
+        <div className="h-px flex-1 bg-slate-200" />
+        no password yet, or forgot it?
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
+
       <form
         action={async (formData) => {
           "use server";
@@ -63,9 +114,9 @@ export default function SignInPage() {
         />
         <button
           type="submit"
-          className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400"
         >
-          Send sign-in link
+          Email me a sign-in link
         </button>
       </form>
     </main>

@@ -40,11 +40,17 @@ export const users = pgTable("user", {
   otherInfo: text("otherInfo"),
   // Whether this person has been shown the one-time welcome splash on
   // their first visit to the dashboard (see WelcomeSplash.tsx) — flipped
-  // to true right after it plays, so it never shows again. Existing users
-  // are backfilled to true at migration time so only genuinely new
-  // sign-ups (an invited teammate's first login, or a fresh signup) see
-  // it, not everyone retroactively.
+  // to true right after it plays, so it never shows again. Defaults false
+  // for everyone, including pre-existing accounts (no backfill UPDATE) —
+  // harmless for them to see it once too, and safer than a backfill that
+  // could misfire if the migration is ever re-run after new signups.
   welcomeSeen: boolean("welcomeSeen").notNull().default(false),
+  // bcrypt hash of the password the person sets right after their first
+  // sign-in (see /welcome/set-password). Null until then — a magic-link
+  // or LinkedIn sign-in doesn't require one, but every account is guided
+  // to create one so password sign-in (with "stay signed in") and email
+  // sign-in both work afterward. Never the plaintext password itself.
+  passwordHash: text("passwordHash"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
