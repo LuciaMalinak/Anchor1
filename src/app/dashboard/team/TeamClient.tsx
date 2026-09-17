@@ -8,23 +8,31 @@ import Image from "next/image";
 type Member = { id: string; name: string | null; email: string; title: string | null; image: string | null };
 type Invite = { id: string; email: string };
 type Deal = { id: string; name: string };
-type JoinRequest = { id: string; name: string; email: string; dealName: string; createdAt: string };
+type JoinRequest = {
+  id: string;
+  name: string;
+  email: string;
+  dealName: string;
+  createdAt: string;
+  deals: Deal[];
+  teamName?: string;
+};
 
 export function TeamClient({
   teamId,
   teamName,
   members,
   invites,
-  deals,
   pendingRequests,
+  otherTeamRequests,
   currentUserId,
 }: {
   teamId: string;
   teamName: string;
   members: Member[];
   invites: Invite[];
-  deals: Deal[];
   pendingRequests: JoinRequest[];
+  otherTeamRequests: JoinRequest[];
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -134,7 +142,21 @@ export function TeamClient({
       </section>
 
       {pendingRequests.length > 0 && (
-        <PendingRequests requests={pendingRequests} deals={deals} onDecided={() => router.refresh()} />
+        <PendingRequests
+          title={`Requests to join (${pendingRequests.length})`}
+          requests={pendingRequests}
+          onDecided={() => router.refresh()}
+        />
+      )}
+
+      {otherTeamRequests.length > 0 && (
+        <PendingRequests
+          title={`All requests across Anchor (${otherTeamRequests.length})`}
+          description="Pending requests for every other team, since you're set up as the app owner."
+          requests={otherTeamRequests}
+          showTeamName
+          onDecided={() => router.refresh()}
+        />
       )}
 
       <section>
@@ -227,12 +249,16 @@ export function TeamClient({
 }
 
 function PendingRequests({
+  title,
+  description,
   requests,
-  deals,
+  showTeamName,
   onDecided,
 }: {
+  title: string;
+  description?: string;
   requests: JoinRequest[];
-  deals: Deal[];
+  showTeamName?: boolean;
   onDecided: () => void;
 }) {
   const [selectedDeal, setSelectedDeal] = useState<Record<string, string>>({});
@@ -264,10 +290,9 @@ function PendingRequests({
 
   return (
     <section>
-      <h2 className="mb-3 text-sm font-medium text-slate-900">
-        Requests to join ({requests.length})
-      </h2>
-      <div className="flex flex-col gap-3">
+      <h2 className="mb-1 text-sm font-medium text-slate-900">{title}</h2>
+      {description && <p className="mb-3 text-xs text-slate-500">{description}</p>}
+      <div className={`flex flex-col gap-3 ${description ? "" : "mt-3"}`}>
         {requests.map((r) => (
           <div
             key={r.id}
@@ -279,6 +304,13 @@ function PendingRequests({
               </p>
               <p className="mt-0.5 text-xs text-slate-500">
                 Asking to join for <span className="font-medium text-slate-700">{r.dealName}</span>
+                {showTeamName && r.teamName && (
+                  <>
+                    {" "}
+                    <span className="text-slate-400">on</span>{" "}
+                    <span className="font-medium text-slate-700">{r.teamName}</span>
+                  </>
+                )}
               </p>
               {errors[r.id] && <p className="mt-1 text-xs text-red-600">{errors[r.id]}</p>}
             </div>
@@ -289,7 +321,7 @@ function PendingRequests({
                 className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-brand"
               >
                 <option value="">Grant access to…</option>
-                {deals.map((d) => (
+                {r.deals.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
                   </option>

@@ -14,7 +14,7 @@ export async function getOrCreateTeamId(userId: string): Promise<string> {
 
   const [team] = await db
     .insert(teams)
-    .values({ name: user?.name ? `${user.name}'s Team` : "My Team" })
+    .values({ name: user?.name ? `${user.name}'s Team` : "My Team", ownerUserId: userId })
     .returning();
   await db.update(users).set({ teamId: team.id }).where(eq(users.id, userId));
   return team.id;

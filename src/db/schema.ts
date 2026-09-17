@@ -9,6 +9,7 @@ import {
   primaryKey,
   pgEnum,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 
@@ -259,6 +260,12 @@ export const summaries = pgTable("summary", {
 export const teams = pgTable("team", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
+  // Whoever created the team — the "team lead" for purposes of deciding
+  // who can approve/decline requests to join (see
+  // src/lib/joinRequestAccess.ts). Nullable only so existing rows don't
+  // break before the migration's backfill runs; set on every new team
+  // going forward (see getOrCreateTeamId and the createUser event).
+  ownerUserId: uuid("ownerUserId").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
   // General, non-deal-specific "worth knowing today" news roundup, shared
   // by the whole team and refreshed at most once a day — see
   // src/lib/dailyBriefing.ts. Deal-specific news lives on the deal itself
