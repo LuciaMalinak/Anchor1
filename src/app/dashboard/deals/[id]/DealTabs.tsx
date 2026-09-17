@@ -1283,11 +1283,13 @@ function DuringPanel({
   inProgress,
   newsHeadline,
   files,
+  mic,
 }: {
   dealId: string;
   inProgress: DealMeeting[];
   newsHeadline: string | null;
   files: DealFile[];
+  mic: MicRecorderState;
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
@@ -1301,7 +1303,10 @@ function DuringPanel({
           </div>
         )}
         {inProgress.length === 0 ? (
-          <p className="text-sm text-slate-500">Nothing live right now.</p>
+          <p className="text-sm text-slate-500">
+            Nothing live right now — Anchor isn&apos;t in a call for this deal. If you&apos;re in
+            the room, record it from here instead:
+          </p>
         ) : (
           <div className="flex flex-col gap-3">
             {inProgress.map((m) =>
@@ -1326,6 +1331,15 @@ function DuringPanel({
             )}
           </div>
         )}
+        {/* The mic-recording control previously lived only on the Before
+            tab, so there was no way to start an in-person recording once
+            you'd actually moved to During — the tab meant to represent
+            "a meeting is happening now". Show it here too; MicRecorderView
+            is stateless and driven by the same lifted `mic` hook, so
+            starting it here (or on Before) and switching tabs never stops
+            it, and it already shows "Stop" here if a recording (started
+            from either tab) is in progress. */}
+        <MicRecorderView {...mic} />
         <AskAnchorPanel dealId={dealId} />
       </div>
       <div className="flex flex-col gap-4">
@@ -1655,7 +1669,13 @@ export function DealTabs({
           />
         )}
         {tab === "during" && (
-          <DuringPanel dealId={deal.id} inProgress={inProgress} newsHeadline={newsHeadline} files={files} />
+          <DuringPanel
+            dealId={deal.id}
+            inProgress={inProgress}
+            newsHeadline={newsHeadline}
+            files={files}
+            mic={mic}
+          />
         )}
         {tab === "after" && (
           <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
