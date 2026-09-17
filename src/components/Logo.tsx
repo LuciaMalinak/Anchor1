@@ -43,11 +43,11 @@ export function Logo({
   size = "md",
   tone = "dark",
 }: {
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   tone?: "dark" | "light";
 }) {
-  const dims = { sm: 22, md: 28, lg: 40 }[size];
-  const text = { sm: "text-base", md: "text-lg", lg: "text-2xl" }[size];
+  const dims = { sm: 22, md: 28, lg: 40, xl: 52 }[size];
+  const text = { sm: "text-base", md: "text-lg", lg: "text-2xl", xl: "text-3xl" }[size];
 
   return (
     <span className="inline-flex items-center gap-2">
