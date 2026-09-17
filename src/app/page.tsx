@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { AnchorMark, Logo } from "@/components/Logo";
+import { AnchorNeuralField } from "@/components/AnchorNeuralField";
 
 const STEPS = [
   {
@@ -152,6 +153,7 @@ export default async function Home() {
             backgroundSize: "auto, 28px 28px",
           }}
         />
+        <AnchorNeuralField />
         <div
           aria-hidden="true"
           className="float-orb pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-accent/20 blur-3xl"
