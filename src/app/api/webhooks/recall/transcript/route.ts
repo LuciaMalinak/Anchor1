@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [meeting] = await db
-    .select({ id: meetings.id })
+    .select({ id: meetings.id, status: meetings.status })
     .from(meetings)
     .where(eq(meetings.recallBotId, botId));
 
@@ -65,6 +65,18 @@ export async function POST(req: NextRequest) {
     relativeSeconds:
       typeof relativeSeconds === "number" ? Math.round(relativeSeconds) : null,
   });
+
+  // First real speech is the most reliable signal we have that a bot
+  // scheduled for later (see /api/meetings/join) has actually joined and
+  // is now capturing the call — flip it out of "joining" here rather
+  // than needing a separate bot-status webhook subscription. A no-op
+  // once the meeting's already "recording".
+  if (meeting.status === "joining") {
+    await db
+      .update(meetings)
+      .set({ status: "recording", updatedAt: new Date() })
+      .where(eq(meetings.id, meeting.id));
+  }
 
   return NextResponse.json({ ok: true });
 }

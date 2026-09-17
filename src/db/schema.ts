@@ -115,6 +115,14 @@ export const meetings = pgTable("meeting", {
   // flow rather than a file upload — lets the webhook find its way back
   // to the right meeting row when Recall.ai says the recording is ready.
   recallBotId: text("recallBotId"),
+  // Set when "Send Anchor to a live meeting" was scheduled for a future
+  // time rather than joined immediately — Recall.ai's own infra (via
+  // join_at on bot creation) handles the actual joining reliably even if
+  // this app isn't awake at that moment. Null means "join now" (the
+  // original, still-default behavior). Once real transcript data starts
+  // arriving the meeting's status flips to "recording" regardless of
+  // this field — see the transcript webhook.
+  scheduledAt: timestamp("scheduledAt", { mode: "date" }),
   // Optional — meetings can stand alone (the original flow) or be grouped
   // under a deal so a team can see prep/live/recap for one client in one
   // place. Null means "not attached to a deal".

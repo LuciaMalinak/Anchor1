@@ -137,6 +137,10 @@ CREATE TABLE IF NOT EXISTS "meeting_live_segment" (
 );
 ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "liveSuggestions" jsonb;
 ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "liveSuggestionsUpdatedAt" timestamp;
+
+-- Scheduling a "send Anchor to a live meeting" bot for a future time
+-- instead of joining immediately.
+ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "scheduledAt" timestamp;
 `;
 
 export async function GET(req: NextRequest) {
