@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { deals, meetings } from "@/db/schema";
 import { desc, eq, count, max } from "drizzle-orm";
-import { getOrCreateTeamId } from "@/lib/team";
+import { accessibleDealIds, dealVisibilityWhere } from "@/lib/dealAccess";
 import { computeDealHealth } from "@/lib/dealHealth";
 import { DealsClient } from "./DealsClient";
 
@@ -10,7 +10,9 @@ export default async function DealsPage() {
   const session = await auth();
   if (!session?.user?.id) return null;
 
-  const teamId = await getOrCreateTeamId(session.user.id);
+  const access = await accessibleDealIds(session.user.id);
+  if (!access) return null;
+
   const rows = await db
     .select({
       id: deals.id,
@@ -22,7 +24,7 @@ export default async function DealsPage() {
     })
     .from(deals)
     .leftJoin(meetings, eq(meetings.dealId, deals.id))
-    .where(eq(deals.teamId, teamId))
+    .where(dealVisibilityWhere(access))
     .groupBy(deals.id)
     .orderBy(desc(deals.updatedAt));
 

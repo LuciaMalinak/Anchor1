@@ -8,9 +8,9 @@ import {
   meetingParticipants,
   contacts,
   deals,
-  users,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { canAccessDeal } from "@/lib/dealAccess";
 import { MeetingStatusPoller } from "./MeetingStatusPoller";
 import { MeetingDeleteButton } from "./MeetingDeleteButton";
 import { FollowUpEmailDraft } from "./FollowUpEmailDraft";
@@ -29,13 +29,15 @@ export default async function MeetingDetailPage({
   if (!meeting) notFound();
 
   // Visible to whoever created it, or — if it's attached to a deal —
-  // anyone on the same team, since deals are shared.
+  // anyone who can see that deal (same team, and not restricted to a
+  // different one — see src/lib/dealAccess.ts).
   const isOwner = meeting.userId === session.user.id;
   let sharedViaTeam = false;
   if (!isOwner && meeting.dealId) {
     const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
-    const [viewer] = await db.select().from(users).where(eq(users.id, session.user.id));
-    sharedViaTeam = Boolean(deal && viewer?.teamId && deal.teamId === viewer.teamId);
+    sharedViaTeam = Boolean(
+      deal && (await canAccessDeal(session.user.id, meeting.dealId, deal.teamId))
+    );
   }
   if (!isOwner && !sharedViaTeam) notFound();
 

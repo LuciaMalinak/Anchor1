@@ -194,6 +194,40 @@ JOIN "user" u ON u.id = m."userId"
 CROSS JOIN LATERAL jsonb_array_elements(s."actionItems") AS item
 WHERE u."teamId" IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM "task" t WHERE t."sourceMeetingId" = m.id);
+
+-- Request-to-join: a public form (at /join/[teamId], linked from the Team
+-- page) that anyone can submit, but which grants nothing on its own —
+-- someone already on the team has to approve it. Approving picks one real
+-- deal and grants the new member access to exactly that one, instead of
+-- the whole team's deals (see src/lib/dealAccess.ts). Defaults keep every
+-- existing account exactly as it works today: not restricted, sees
+-- everything, same as before this feature existed.
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "restrictedToDeals" boolean NOT NULL DEFAULT false;
+ALTER TABLE "team_invite" ADD COLUMN IF NOT EXISTS "restrictToDealId" uuid REFERENCES "deal"("id") ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS "deal_member" (
+  "dealId" uuid NOT NULL REFERENCES "deal"("id") ON DELETE CASCADE,
+  "userId" uuid NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+  "addedAt" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("dealId", "userId")
+);
+
+DO $$ BEGIN
+  CREATE TYPE join_request_status AS ENUM ('pending', 'approved', 'declined');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "join_request" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "teamId" uuid NOT NULL REFERENCES "team"("id") ON DELETE CASCADE,
+  "name" text NOT NULL,
+  "email" text NOT NULL,
+  "dealName" text NOT NULL,
+  "status" join_request_status NOT NULL DEFAULT 'pending',
+  "matchedDealId" uuid REFERENCES "deal"("id") ON DELETE SET NULL,
+  "decidedByUserId" uuid REFERENCES "user"("id") ON DELETE SET NULL,
+  "decidedAt" timestamp,
+  "createdAt" timestamp NOT NULL DEFAULT now()
+);
 `;
 
 export async function GET(req: NextRequest) {
@@ -219,7 +253,7 @@ export async function GET(req: NextRequest) {
   `;
   const newTables = await rawClient`
     select table_name from information_schema.tables
-    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection', 'meeting_live_segment', 'task', 'task_comment')
+    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection', 'meeting_live_segment', 'task', 'task_comment', 'deal_member', 'join_request')
   `;
   const userCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'user'
@@ -237,6 +271,9 @@ export async function GET(req: NextRequest) {
     select column_name from information_schema.columns where table_name = 'team'
   `;
   const taskCount = await rawClient`select count(*)::int as n from "task"`;
+  const teamInviteCols = await rawClient`
+    select column_name from information_schema.columns where table_name = 'team_invite'
+  `;
 
   return NextResponse.json({
     migrated: true,
@@ -249,5 +286,6 @@ export async function GET(req: NextRequest) {
     meetingColumns: cols.map((r) => r.column_name),
     meetingStatusValues: enumVals.map((r) => r.v),
     taskCount: taskCount[0]?.n ?? null,
+    teamInviteColumns: teamInviteCols.map((r) => r.column_name),
   });
 }

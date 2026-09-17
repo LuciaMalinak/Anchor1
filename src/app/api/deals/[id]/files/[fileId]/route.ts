@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, dealFiles, users } from "@/db/schema";
+import { dealFiles } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { readStoredFile } from "@/lib/storage";
+import { authorizeDeal } from "@/lib/dealAccess";
 
 export async function GET(
   _req: Request,
@@ -15,9 +16,8 @@ export async function GET(
   }
 
   const { id: dealId, fileId } = await params;
-  const [user] = await db.select().from(users).where(eq(users.id, session.user.id));
-  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal || !user?.teamId || deal.teamId !== user.teamId) {
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

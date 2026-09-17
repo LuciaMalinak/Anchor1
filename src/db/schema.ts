@@ -51,6 +51,13 @@ export const users = pgTable("user", {
   // to create one so password sign-in (with "stay signed in") and email
   // sign-in both work afterward. Never the plaintext password itself.
   passwordHash: text("passwordHash"),
+  // False (the default, and true for every existing account) means this
+  // person sees every deal on their team, same as always. True is set
+  // only for someone who joined through a request-to-join link that
+  // named a specific deal (see /join/[teamId] and the approval flow on
+  // the Team page) — they can only see deals they have a `dealMembers`
+  // row for, checked via src/lib/dealAccess.ts.
+  restrictedToDeals: boolean("restrictedToDeals").notNull().default(false),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -274,6 +281,15 @@ export const teamInvites = pgTable("team_invite", {
   invitedByUserId: uuid("invitedByUserId")
     .notNull()
     .references(() => users.id),
+  // Set only when this invite came from an approved join request that
+  // named a specific deal (see /api/join-requests/[id]/approve) — the
+  // createUser event in src/auth.ts uses this to flag the new user
+  // `restrictedToDeals` and grant them exactly this one deal instead of
+  // the whole team. Null for an ordinary "invite a teammate" invite,
+  // which still grants full team access as it always has.
+  restrictToDealId: uuid("restrictToDealId").references(() => deals.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -331,6 +347,61 @@ export const deals = pgTable("deal", {
     .references(() => users.id),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// Grants one restricted user (users.restrictedToDeals = true) access to
+// one deal. Ignored entirely for everyone else — an unrestricted user
+// already sees every deal on their team, as they always have; see
+// src/lib/dealAccess.ts, which is the only place this table is read.
+export const dealMembers = pgTable(
+  "deal_member",
+  {
+    dealId: uuid("dealId")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    addedAt: timestamp("addedAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.dealId, t.userId] })]
+);
+
+// A public, unauthenticated request to join a team — submitted from the
+// /join/[teamId] page (linked from the Team page's "share this link" box)
+// rather than sent by an existing teammate the way `teamInvites` is.
+// Stays "pending" until someone already on the team approves or declines
+// it from the Team page; approving turns it into an ordinary teamInvite
+// (see /api/join-requests/[id]/approve) so the rest of sign-in works
+// exactly as it does for a normal invite.
+export const joinRequestStatusEnum = pgEnum("join_request_status", [
+  "pending",
+  "approved",
+  "declined",
+]);
+
+export const joinRequests = pgTable("join_request", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  teamId: uuid("teamId")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  // Free text exactly as the requester typed it — not validated against
+  // real deal names (the public form never lists them, so a stranger
+  // with the link can't see the team's client list). Whoever approves
+  // the request picks the actual deal from a real dropdown themselves;
+  // see `matchedDealId` below.
+  dealName: text("dealName").notNull(),
+  status: joinRequestStatusEnum("status").default("pending").notNull(),
+  matchedDealId: uuid("matchedDealId").references(() => deals.id, {
+    onDelete: "set null",
+  }),
+  decidedByUserId: uuid("decidedByUserId").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  decidedAt: timestamp("decidedAt", { mode: "date" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
 // A document attached to a deal directly (as opposed to a meeting

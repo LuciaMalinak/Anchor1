@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings, summaries, users, meetingParticipants, contacts } from "@/db/schema";
+import { meetings, summaries, meetingParticipants, contacts } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { generateHandoffBriefing } from "@/lib/handoffBriefing";
-
-async function authorizeDeal(userId: string, dealId: string) {
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal || !user?.teamId || deal.teamId !== user.teamId) return null;
-  return deal;
-}
+import { authorizeDeal } from "@/lib/dealAccess";
 
 // Generates a point-in-time briefing for a teammate stepping in to run
 // this deal's next meeting — not persisted, since it should always
@@ -22,10 +16,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id: dealId } = await params;
-  const deal = await authorizeDeal(session.user.id, dealId);
-  if (!deal) {
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
+  const { deal } = authorized;
 
   const recentReady = await db
     .select({ meeting: meetings, summary: summaries })

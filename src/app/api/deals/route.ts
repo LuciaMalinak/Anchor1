@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings } from "@/db/schema";
+import { deals, meetings, dealMembers, users } from "@/db/schema";
 import { desc, eq, count } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
+import { accessibleDealIds, dealVisibilityWhere } from "@/lib/dealAccess";
 
 export async function GET() {
   const session = await auth();
@@ -11,7 +12,11 @@ export async function GET() {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
-  const teamId = await getOrCreateTeamId(session.user.id);
+  const access = await accessibleDealIds(session.user.id);
+  if (!access) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
   const rows = await db
     .select({
       id: deals.id,
@@ -21,7 +26,7 @@ export async function GET() {
     })
     .from(deals)
     .leftJoin(meetings, eq(meetings.dealId, deals.id))
-    .where(eq(deals.teamId, teamId))
+    .where(dealVisibilityWhere(access))
     .groupBy(deals.id)
     .orderBy(desc(deals.updatedAt));
 
@@ -45,6 +50,14 @@ export async function POST(req: NextRequest) {
     .insert(deals)
     .values({ teamId, name, createdByUserId: session.user.id })
     .returning();
+
+  // A restricted user (see src/lib/dealAccess.ts) can still start a new
+  // deal — but without this, they'd immediately hit a 404 opening the
+  // one they just created, since restriction is opt-in per deal.
+  const [creator] = await db.select().from(users).where(eq(users.id, session.user.id));
+  if (creator?.restrictedToDeals) {
+    await db.insert(dealMembers).values({ dealId: deal.id, userId: session.user.id });
+  }
 
   return NextResponse.json({ deal }, { status: 201 });
 }

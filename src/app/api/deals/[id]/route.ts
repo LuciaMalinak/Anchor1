@@ -4,13 +4,7 @@ import { db } from "@/db";
 import { deals, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { DEAL_STAGES } from "@/lib/dealStages";
-
-async function authorizeDeal(userId: string, dealId: string) {
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal || !user?.teamId || deal.teamId !== user.teamId) return null;
-  return { deal, teamId: user.teamId };
-}
+import { authorizeDeal } from "@/lib/dealAccess";
 
 // Lead/backup must be null (unassigned) or an actual member of this
 // deal's team — never trust a client-supplied id without checking.

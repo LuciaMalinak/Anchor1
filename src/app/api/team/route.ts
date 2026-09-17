@@ -3,8 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { users, teams, teamInvites } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getOrCreateTeamId } from "@/lib/team";
-import { sendEmail } from "@/lib/email";
+import { getOrCreateTeamId, createInviteAndNotify } from "@/lib/team";
 
 export async function GET() {
   const session = await auth();
@@ -46,26 +45,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Already on the team" }, { status: 400 });
   }
 
-  const [invite] = await db
-    .insert(teamInvites)
-    .values({ teamId, email, invitedByUserId: session.user.id })
-    .returning();
-
-  let emailWarning: string | null = null;
-  try {
-    await sendEmail({
-      to: email,
-      subject: "You've been added to an Anchor team",
-      html: `<p>${session.user.email} invited you to their team on Anchor.</p><p>Sign in at the same email address to join: <a href="${process.env.AUTH_URL}/sign-in">${process.env.AUTH_URL}/sign-in</a></p>`,
-    });
-  } catch (err) {
-    // Don't fail the invite over email delivery — Resend's shared testing
-    // sender can only deliver to the account owner until a domain is
-    // verified. The invite record itself still works: whoever signs in
-    // with this email joins the team regardless of whether they got a
-    // notification about it.
-    emailWarning = err instanceof Error ? err.message : "Couldn't send the invite email";
-  }
+  const { invite, emailWarning } = await createInviteAndNotify({
+    teamId,
+    email,
+    invitedByUserId: session.user.id,
+    invitedByEmail: session.user.email!,
+  });
 
   return NextResponse.json({ invite, emailWarning }, { status: 201 });
 }
