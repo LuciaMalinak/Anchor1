@@ -13,6 +13,7 @@
     "@auth/drizzle-adapter": "^1.11.3",
     "@aws-sdk/client-s3": "^3.1134.0",
     "assemblyai": "^4.41.1",
+    "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
     "mammoth": "^1.12.3",
     "next": "16.3.5",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

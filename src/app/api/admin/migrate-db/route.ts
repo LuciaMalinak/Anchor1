@@ -175,6 +175,12 @@ CREATE TABLE IF NOT EXISTS "task_comment" (
   "createdAt" timestamp NOT NULL DEFAULT now()
 );
 
+-- Password sign-in: set right after a person's first sign-in (see
+-- /welcome/set-password), whichever method got them in. Null for anyone
+-- who hasn't gone through that yet — magic-link/LinkedIn sign-in still
+-- works either way, this just adds a password as an option afterward.
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "passwordHash" text;
+
 -- One-time backfill: materialize a task row for every action item on
 -- every meeting summary that predates the task table, so the home page's
 -- to-do list isn't empty just because it shipped after those meetings

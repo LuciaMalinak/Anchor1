@@ -66,6 +66,13 @@ export const {
     session({ session, user }) {
       if (session.user) {
         session.user.id = user.id;
+        // Just a boolean — never the hash itself — so the proxy can gate
+        // /dashboard on "has this person set a password yet" without an
+        // extra DB query on every request (database-session `user` here
+        // already carries every users-table column, including this one).
+        session.user.hasPassword = Boolean(
+          (user as typeof user & { passwordHash: string | null }).passwordHash
+        );
       }
       return session;
     },
