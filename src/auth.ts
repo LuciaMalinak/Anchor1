@@ -13,6 +13,7 @@ import {
   dealMembers,
 } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { signInEmailHtml, signInEmailText } from "@/lib/emailTemplates";
 
 // Only registered when the LinkedIn app's credentials are actually set —
 // so the app still runs fine (email sign-in only) before that's set up,
@@ -42,6 +43,28 @@ export const {
     Resend({
       apiKey: process.env.RESEND_API_KEY,
       from: process.env.EMAIL_FROM,
+      // Replaces Auth.js's default unbranded sign-in email with one that
+      // carries the Anchor logo/colors — see src/lib/emailTemplates.ts.
+      async sendVerificationRequest({ identifier: to, url, provider }) {
+        const { host } = new URL(url);
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${provider.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: provider.from,
+            to,
+            subject: `Sign in to ${host}`,
+            html: signInEmailHtml({ url, host }),
+            text: signInEmailText({ url, host }),
+          }),
+        });
+        if (!res.ok) {
+          throw new Error("Resend error: " + JSON.stringify(await res.json()));
+        }
+      },
     }),
     ...(linkedInConfigured
       ? [
