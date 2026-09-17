@@ -187,6 +187,36 @@ export default async function MeetingDetailPage({
               </ul>
             </>
           )}
+
+          {summary.dealSignals.length > 0 && (
+            <>
+              <h3 className="mt-5 text-xs font-medium uppercase tracking-wide text-slate-500">
+                Signals
+              </h3>
+              <ul className="mt-2 space-y-1.5 text-sm">
+                {summary.dealSignals.map((signal, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span
+                      className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                        signal.type === "buying_signal"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : signal.type === "risk"
+                            ? "bg-amber-50 text-amber-700"
+                            : "bg-red-50 text-red-700"
+                      }`}
+                    >
+                      {signal.type === "buying_signal"
+                        ? "Buying signal"
+                        : signal.type === "risk"
+                          ? "Risk"
+                          : "Blocker"}
+                    </span>
+                    <span className="text-slate-700">{signal.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
 

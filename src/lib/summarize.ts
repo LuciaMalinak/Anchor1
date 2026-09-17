@@ -27,12 +27,15 @@ export type SpeakerFinding = {
   note: string;
 };
 
+export type DealSignal = { type: "buying_signal" | "risk" | "blocker"; detail: string };
+
 export type MeetingSummaryResult = {
   suggestedTitle: string;
   overview: string;
   keyPoints: string[];
   actionItems: { text: string; owner: string | null }[];
   speakers: SpeakerFinding[];
+  dealSignals: DealSignal[];
 };
 
 const SUMMARY_TOOL = {
@@ -87,8 +90,29 @@ const SUMMARY_TOOL = {
           required: ["speakerLabel", "inferredName", "note"],
         },
       },
+      dealSignals: {
+        type: "array",
+        description:
+          "0-4 concrete, sales-relevant moments — a genuine buying signal, a risk/objection, or something actively blocking progress. Only include ones clearly grounded in what was actually said. Leave empty rather than stretching for one that isn't really there.",
+        items: {
+          type: "object",
+          properties: {
+            type: {
+              type: "string",
+              enum: ["buying_signal", "risk", "blocker"],
+              description:
+                "buying_signal: a concrete sign they want to move forward (asked about pricing/timeline, mentioned internal buy-in, etc). risk: a stated concern, objection, or reason they might not proceed. blocker: something specific and immediate stopping the next step (e.g. waiting on legal, budget not approved yet).",
+            },
+            detail: {
+              type: "string",
+              description: "One concrete sentence, specific to this meeting — not generic advice.",
+            },
+          },
+          required: ["type", "detail"],
+        },
+      },
     },
-    required: ["suggestedTitle", "overview", "keyPoints", "actionItems", "speakers"],
+    required: ["suggestedTitle", "overview", "keyPoints", "actionItems", "speakers", "dealSignals"],
   },
 };
 
@@ -137,17 +161,69 @@ const MEMORY_TOOL = {
         description:
           "One sentence, written for the meeting owner, connecting this meeting to the relationship history with this person (e.g. what changed, what was followed up on).",
       },
+      keyChanges: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "0-3 short bullet points of what actually changed vs. the PRIOR summary — a fact that got corrected, something newly learned, or something dropped because it's now stale/superseded. Empty array if this meeting only reinforced what was already known.",
+      },
     },
-    required: ["updatedRelationshipSummary", "continuityLine"],
+    required: ["updatedRelationshipSummary", "continuityLine", "keyChanges"],
   },
 };
 
+type ContactMemoryUpdate = {
+  updatedRelationshipSummary: string;
+  continuityLine: string;
+  keyChanges: string[];
+};
+
+// Two modes, same tool/output shape:
+//
+// - Incremental (the default, every meeting): merge the prior summary
+//   string with just this meeting's note. Fast and cheap, but it's
+//   compounting a summary of a summary — over many meetings that's lossy
+//   compression with no way to check itself against what was actually
+//   said, so small errors can accumulate ("drift").
+//
+// - Resynthesis (periodic — see shouldResynthesize in processMeeting.ts):
+//   re-derive the summary from the actual raw per-meeting notes
+//   (rawHistory, from the contactNotes table) rather than trusting only
+//   the current summary string. This is the self-correcting step: it
+//   doesn't need a person to notice and fix a drifted summary, it
+//   automatically re-grounds itself in the real history on a regular
+//   cadence as more meetings accumulate.
+//
+// manualNotes (contacts.notes) is passed in both modes so a correction
+// someone typed by hand actually informs future AI output — previously
+// this field existed but was never read by either merge path.
 export async function mergeContactMemory(params: {
   contactName: string;
   priorSummary: string;
   meetingCount: number;
   newNote: string;
-}): Promise<{ updatedRelationshipSummary: string; continuityLine: string }> {
+  manualNotes?: string | null;
+  resynthesize?: boolean;
+  rawHistory?: { note: string; occurredAt: Date }[];
+}): Promise<ContactMemoryUpdate> {
+  const manualNotesBlock = params.manualNotes?.trim()
+    ? `\n\nManual notes this person's teammate has written down about them directly (weigh these as ground truth — they were written by a human, not inferred):\n${params.manualNotes.trim()}`
+    : "";
+
+  const promptBody = params.resynthesize && params.rawHistory?.length
+    ? `Contact: ${params.contactName}\nMeetings with them so far (including today): ${params.meetingCount}\n\n` +
+      `The current rolling summary may have drifted after many incremental updates. Re-derive it from scratch using the actual raw notes below, rather than just trusting the current summary text.\n\n` +
+      `Current (possibly drifted) summary:\n${params.priorSummary}\n\n` +
+      `Raw notes from each meeting with them, oldest first:\n${params.rawHistory
+        .map((h) => `- [${h.occurredAt.toISOString().slice(0, 10)}] ${h.note}`)
+        .join("\n")}\n\n` +
+      `Today's meeting:\n${params.newNote}${manualNotesBlock}\n\n` +
+      `Produce a fresh, accurate relationship summary grounded in this real history, a continuity line, and note what changed vs. the current (possibly drifted) summary.`
+    : `Contact: ${params.contactName}\nMeetings with them so far (including today): ${params.meetingCount}\n\n` +
+      `Existing relationship summary:\n${params.priorSummary}\n\n` +
+      `What happened with them in today's meeting:\n${params.newNote}${manualNotesBlock}\n\n` +
+      `Produce an updated relationship summary, a one-sentence continuity note, and what changed vs. the prior summary.`;
+
   const message = await client().messages.create({
     model: MODEL,
     max_tokens: 512,
@@ -155,12 +231,7 @@ export async function mergeContactMemory(params: {
       "You maintain a concise, accurate rolling summary of a business relationship across multiple meetings. Never invent details.",
     tools: [MEMORY_TOOL],
     tool_choice: { type: "tool", name: MEMORY_TOOL.name },
-    messages: [
-      {
-        role: "user",
-        content: `Contact: ${params.contactName}\nMeetings with them so far (including today): ${params.meetingCount}\n\nExisting relationship summary:\n${params.priorSummary}\n\nWhat happened with them in today's meeting:\n${params.newNote}\n\nProduce an updated relationship summary and a one-sentence continuity note.`,
-      },
-    ],
+    messages: [{ role: "user", content: promptBody }],
   });
 
   const toolUse = message.content.find((b) => b.type === "tool_use");
@@ -168,10 +239,7 @@ export async function mergeContactMemory(params: {
     throw new Error("Model did not return a structured memory update.");
   }
 
-  return toolUse.input as {
-    updatedRelationshipSummary: string;
-    continuityLine: string;
-  };
+  return toolUse.input as ContactMemoryUpdate;
 }
 
 const FOLLOW_UP_EMAIL_TOOL = {
@@ -250,11 +318,24 @@ const DEAL_MEMORY_TOOL = {
         description:
           "A 3-6 sentence rolling summary of this deal — where it stands, what matters to the people on the other side, what's blocking or driving it forward — merging the prior memory with what was learned in this meeting. Keep it factual and current; drop details this meeting has superseded rather than piling everything on.",
       },
+      keyChanges: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "0-3 short bullet points of what actually changed vs. the PRIOR memory — a fact that got corrected, something newly learned, or something dropped because it's now stale/superseded. Empty array if this meeting only reinforced what was already known.",
+      },
     },
-    required: ["updatedMemory"],
+    required: ["updatedMemory", "keyChanges"],
   },
 };
 
+type DealMemoryUpdate = { updatedMemory: string; keyChanges: string[] };
+
+// Same incremental-vs-resynthesis idea as mergeContactMemory above. Deals
+// don't need a dedicated raw-notes table for the resynthesis path — the
+// `summary` row from every past meeting on this deal (joined via
+// meeting.dealId) already IS that grounding history, so
+// recentMeetings just passes those through.
 export async function mergeDealMemory(params: {
   dealName: string;
   priorMemory: string | null;
@@ -263,10 +344,43 @@ export async function mergeDealMemory(params: {
     keyPoints: string[];
     actionItems: { text: string; owner: string | null }[];
   };
-}): Promise<string> {
+  manualNotes?: string | null;
+  resynthesize?: boolean;
+  recentMeetings?: {
+    overview: string;
+    keyPoints: string[];
+    actionItems: { text: string; owner: string | null }[];
+    occurredAt: Date;
+  }[];
+}): Promise<DealMemoryUpdate> {
   const actionItemsText = params.newSummary.actionItems
     .map((a) => a.text + (a.owner ? ` (${a.owner})` : ""))
     .join("; ");
+  const manualNotesBlock = params.manualNotes?.trim()
+    ? `\n\nManual notes someone on the team has written down about this deal directly (weigh these as ground truth — a human wrote these, not an inference):\n${params.manualNotes.trim()}`
+    : "";
+
+  const promptBody = params.resynthesize && params.recentMeetings?.length
+    ? `Deal: ${params.dealName}\n\n` +
+      `The current rolling memory may have drifted after many incremental updates. Re-derive it from scratch using the actual meeting summaries below, rather than just trusting the current memory text.\n\n` +
+      `Current (possibly drifted) memory:\n${params.priorMemory || "No prior notes."}\n\n` +
+      `Actual summaries from past meetings on this deal, oldest first:\n${params.recentMeetings
+        .map(
+          (m) =>
+            `- [${m.occurredAt.toISOString().slice(0, 10)}] ${m.overview} Key points: ${m.keyPoints.join("; ")}${
+              m.actionItems.length ? ` Action items: ${m.actionItems.map((a) => a.text).join("; ")}` : ""
+            }`
+        )
+        .join("\n")}\n\n` +
+      `Today's meeting:\nOverview: ${params.newSummary.overview}\nKey points: ${params.newSummary.keyPoints.join(
+        "; "
+      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}\n\n` +
+      `Produce a fresh, accurate memory grounded in this real history, and note what changed vs. the current (possibly drifted) memory.`
+    : `Deal: ${params.dealName}\n\nExisting deal memory:\n${
+        params.priorMemory || "No prior notes — this is the first meeting."
+      }\n\nWhat happened in today's meeting on this deal:\nOverview: ${params.newSummary.overview}\nKey points: ${params.newSummary.keyPoints.join(
+        "; "
+      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}\n\nProduce an updated rolling memory for this deal, and note what changed vs. the prior memory.`;
 
   const message = await client().messages.create({
     model: MODEL,
@@ -275,12 +389,7 @@ export async function mergeDealMemory(params: {
       "You maintain a concise, accurate rolling summary of a business deal/account across multiple meetings. Never invent details that weren't given to you.",
     tools: [DEAL_MEMORY_TOOL],
     tool_choice: { type: "tool", name: DEAL_MEMORY_TOOL.name },
-    messages: [
-      {
-        role: "user",
-        content: `Deal: ${params.dealName}\n\nExisting deal memory:\n${params.priorMemory || "No prior notes — this is the first meeting."}\n\nWhat happened in today's meeting on this deal:\nOverview: ${params.newSummary.overview}\nKey points: ${params.newSummary.keyPoints.join("; ")}\nAction items: ${actionItemsText || "None"}\n\nProduce an updated rolling memory for this deal.`,
-      },
-    ],
+    messages: [{ role: "user", content: promptBody }],
   });
 
   const toolUse = message.content.find((b) => b.type === "tool_use");
@@ -288,5 +397,5 @@ export async function mergeDealMemory(params: {
     throw new Error("Model did not return a structured deal memory update.");
   }
 
-  return (toolUse.input as { updatedMemory: string }).updatedMemory;
+  return toolUse.input as DealMemoryUpdate;
 }

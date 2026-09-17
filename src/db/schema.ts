@@ -248,6 +248,57 @@ export const summaries = pgTable("summary", {
   // How this meeting connects to prior history with these same people,
   // when Anchor has seen them before. Null on someone's first meeting.
   continuityNote: text("continuityNote"),
+  // Concrete sales-relevant moments the model noticed — buying signals,
+  // risks/objections, and things blocking progress — separate from the
+  // generic keyPoints so they can be called out distinctly in the UI.
+  // Empty array when nothing genuinely stood out; never padded.
+  dealSignals: jsonb("dealSignals")
+    .$type<{ type: "buying_signal" | "risk" | "blocker"; detail: string }[]>()
+    .default([])
+    .notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// Raw per-meeting note about one contact — the actual grounding history
+// behind contacts.relationshipSummary. Without this, the rolling summary
+// only ever sees itself (summarize-the-summary), which drifts over many
+// meetings with no way to check it against what was actually said. This
+// table is what mergeContactMemory's periodic full re-synthesis reads
+// from — see src/lib/summarize.ts and src/lib/processMeeting.ts. Deals
+// don't need an equivalent table: the `summary` table above already
+// gives per-meeting grounding via meeting.dealId.
+export const contactNotes = pgTable("contact_note", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  contactId: uuid("contactId")
+    .notNull()
+    .references(() => contacts.id, { onDelete: "cascade" }),
+  meetingId: uuid("meetingId")
+    .notNull()
+    .references(() => meetings.id, { onDelete: "cascade" }),
+  note: text("note").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// A versioned history of every rolling-memory update (deal or contact) —
+// what deals.memory / contacts.relationshipSummary looked like at each
+// point, what changed, and whether it was an ordinary incremental merge
+// or a full re-synthesis from raw history. Gives an audit trail (a bad
+// merge is visible and traceable) where before there was only ever the
+// current, overwritten-in-place string. subjectId is polymorphic (a
+// deals.id or a contacts.id depending on subjectType) so it isn't a
+// literal foreign key — always filter by subjectType first.
+export const memorySubjectEnum = pgEnum("memory_subject", ["deal", "contact"]);
+
+export const memorySnapshots = pgTable("memory_snapshot", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  subjectType: memorySubjectEnum("subjectType").notNull(),
+  subjectId: uuid("subjectId").notNull(),
+  meetingId: uuid("meetingId").references(() => meetings.id, { onDelete: "set null" }),
+  memory: text("memory").notNull(),
+  // Short bullet points of what changed vs. the prior version, when the
+  // model could identify them — the visible trace of "self-teaching."
+  keyChanges: jsonb("keyChanges").$type<string[]>().default([]).notNull(),
+  method: text("method").notNull(), // "incremental" | "resynthesis"
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
