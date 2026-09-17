@@ -241,6 +241,31 @@ SET "ownerUserId" = (
   SELECT u.id FROM "user" u WHERE u."teamId" = t.id ORDER BY u."createdAt" ASC LIMIT 1
 )
 WHERE t."ownerUserId" IS NULL;
+
+ALTER TABLE "summary" ADD COLUMN IF NOT EXISTS "dealSignals" jsonb NOT NULL DEFAULT '[]';
+
+CREATE TABLE IF NOT EXISTS "contact_note" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "contactId" uuid NOT NULL REFERENCES "contact"("id") ON DELETE CASCADE,
+  "meetingId" uuid NOT NULL REFERENCES "meeting"("id") ON DELETE CASCADE,
+  "note" text NOT NULL,
+  "createdAt" timestamp NOT NULL DEFAULT now()
+);
+
+DO $$ BEGIN
+  CREATE TYPE memory_subject AS ENUM ('deal', 'contact');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "memory_snapshot" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "subjectType" memory_subject NOT NULL,
+  "subjectId" uuid NOT NULL,
+  "meetingId" uuid REFERENCES "meeting"("id") ON DELETE SET NULL,
+  "memory" text NOT NULL,
+  "keyChanges" jsonb NOT NULL DEFAULT '[]',
+  "method" text NOT NULL,
+  "createdAt" timestamp NOT NULL DEFAULT now()
+);
 `;
 
 export async function GET(req: NextRequest) {
@@ -266,7 +291,10 @@ export async function GET(req: NextRequest) {
   `;
   const newTables = await rawClient`
     select table_name from information_schema.tables
-    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection', 'meeting_live_segment', 'task', 'task_comment', 'deal_member', 'join_request')
+    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection', 'meeting_live_segment', 'task', 'task_comment', 'deal_member', 'join_request', 'contact_note', 'memory_snapshot')
+  `;
+  const summaryCols = await rawClient`
+    select column_name from information_schema.columns where table_name = 'summary'
   `;
   const userCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'user'
@@ -300,5 +328,6 @@ export async function GET(req: NextRequest) {
     meetingStatusValues: enumVals.map((r) => r.v),
     taskCount: taskCount[0]?.n ?? null,
     teamInviteColumns: teamInviteCols.map((r) => r.column_name),
+    summaryColumns: summaryCols.map((r) => r.column_name),
   });
 }
