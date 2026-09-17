@@ -143,7 +143,7 @@ export default async function Home() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-brand px-6 py-32 sm:py-40">
+      <section className="relative overflow-hidden bg-brand px-6 pb-32 pt-16 sm:pb-40 sm:pt-20">
         <div
           aria-hidden="true"
           className="drift-bg pointer-events-none absolute inset-0"
