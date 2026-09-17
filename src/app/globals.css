@@ -56,6 +56,17 @@ body {
   .reveal {
     animation: none !important;
   }
+  /* The traveling pulse dots use SVG SMIL (animateMotion), which the
+     animation shorthand above can't touch — hide them outright instead,
+     leaving the big anchor and its trace lines/nodes as a static image. */
+  .neuro-pulse {
+    display: none;
+  }
+  .neuro-glow-shaft,
+  .neuro-glow-arc {
+    animation: none !important;
+    opacity: 0.45;
+  }
 }
 
 @keyframes fadeUp {
@@ -212,6 +223,43 @@ body {
 }
 .travel-dot {
   animation: travel 3.5s ease-in-out infinite;
+}
+
+/* AnchorNeuralField (src/components/AnchorNeuralField.tsx) — the big
+   background anchor on the hero, its "neurons running through it" glow,
+   and the traces spreading out to smaller anchor nodes. */
+@keyframes neuroFlow {
+  to {
+    stroke-dashoffset: -120;
+  }
+}
+@keyframes neuroNodePulse {
+  0%,
+  100% {
+    opacity: 0.32;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+.neuro-trace {
+  stroke-opacity: 0.16;
+}
+.neuro-node {
+  opacity: 0.4;
+  animation: neuroNodePulse 4.5s ease-in-out infinite;
+}
+.neuro-glow {
+  stroke: var(--accent);
+  stroke-width: 0.6;
+}
+.neuro-glow-shaft {
+  stroke-dasharray: 2.6 11;
+  animation: neuroFlow 3.4s linear infinite;
+}
+.neuro-glow-arc {
+  stroke-dasharray: 2.2 9;
+  animation: neuroFlow 4.6s linear infinite reverse;
 }
 
 /* Scroll-triggered reveal — progressive enhancement only. Browsers without
