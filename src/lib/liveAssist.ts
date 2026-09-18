@@ -17,8 +17,13 @@ function client() {
 
 export type DealContext = {
   dealName: string;
+  // Both can come from a connected CRM sync (e.g. Salesforce) as well as
+  // being set directly in Anchor — either way, worth grounding answers in.
+  stage: string | null;
+  companyWebsite: string | null;
   memory: string | null;
   continuityNote: string | null;
+  people: { name: string; role: string | null; company: string | null; relationshipSummary: string | null }[];
   recentMeetings: {
     title: string;
     occurredAt: string;
@@ -33,6 +38,8 @@ export type DealContext = {
 
 function buildContextBlock(ctx: DealContext): string {
   const parts: string[] = [`Deal: ${ctx.dealName}`];
+  if (ctx.stage) parts.push(`Stage: ${ctx.stage}`);
+  if (ctx.companyWebsite) parts.push(`Company website: ${ctx.companyWebsite}`);
 
   if (ctx.memory) {
     parts.push(`\nWhat Anchor has learned about this deal so far: ${ctx.memory}`);
@@ -40,6 +47,15 @@ function buildContextBlock(ctx: DealContext): string {
 
   if (ctx.continuityNote) {
     parts.push(`\nGoing in, remember: ${ctx.continuityNote}`);
+  }
+
+  if (ctx.people.length > 0) {
+    parts.push("\nPeople on this deal:");
+    for (const p of ctx.people) {
+      const roleCompany = [p.role, p.company].filter(Boolean).join(", ");
+      parts.push(`— ${p.name}${roleCompany ? ` (${roleCompany})` : ""}`);
+      if (p.relationshipSummary) parts.push(`  ${p.relationshipSummary}`);
+    }
   }
 
   if (ctx.recentMeetings.length > 0) {

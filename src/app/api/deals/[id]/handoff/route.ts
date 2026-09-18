@@ -38,6 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .selectDistinctOn([contacts.id], {
       name: contacts.name,
       role: contacts.role,
+      company: contacts.company,
       relationshipSummary: contacts.relationshipSummary,
       notes: contacts.notes,
     })
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const briefing = await generateHandoffBriefing({
       dealName: deal.name,
+      stage: deal.stage,
       memory: deal.memory,
       notes: deal.notes,
       people: dealContactRows,
