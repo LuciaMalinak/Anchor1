@@ -14,7 +14,15 @@ type LiveSuggestions = {
   checklist: { label: string; covered: boolean }[];
 } | null;
 
-const POLL_MS = 4000;
+// Was 4000ms — the actual transcript segments aren't behind any
+// server-side debounce (see the live route's GET handler: it reads
+// meetingLiveSegments fresh on every call), so this interval alone was
+// the biggest lever on how quickly new words show up on screen.
+// Tightened for a snappier "it's really listening" feel; the coaching
+// nudges have their own separate, longer server-side debounce (see
+// COACHING_REFRESH_MS in the live route) so this doesn't multiply AI
+// call volume.
+const POLL_MS = 1500;
 
 // Live transcript + AI coaching for a meeting Anchor is actively sitting
 // in on (bot status "joining"/"recording") — polls /api/meetings/[id]/live,

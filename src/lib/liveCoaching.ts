@@ -78,7 +78,7 @@ export async function generateLiveCoaching(params: {
   // reference something concrete a specific past meeting actually
   // covered ("last time they asked about X"), which is what "based on
   // previous discussions" means here. Kept short — this regenerates
-  // every ~20s during a live call (see the route that calls this), so
+  // every ~8s during a live call (see the route that calls this), so
   // it's a few condensed lines per meeting, not full transcripts.
   pastMeetings?: {
     title: string;

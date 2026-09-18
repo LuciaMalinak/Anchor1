@@ -8,18 +8,23 @@ import { canAccessDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 
 // How often live coaching (nudges + checklist) is allowed to regenerate.
-// The During tab polls this route every few seconds for a smooth-feeling
-// live transcript, but re-running the AI call that often would be slow
-// and needlessly expensive — this debounces it server-side so it doesn't
-// matter how often (or how many open tabs) poll this route.
-const COACHING_REFRESH_MS = 20_000;
+// The During tab polls this route every couple of seconds (see
+// LiveMeetingPanel.tsx) for a smooth-feeling live transcript, but
+// re-running the AI call that often would be slow and needlessly
+// expensive — this debounces it server-side so it doesn't matter how
+// often (or how many open tabs) poll this route. Was 20s; tightened to
+// keep nudges feeling like they're keeping up with the conversation
+// rather than lagging noticeably behind it — still bounded, still one
+// call at a time no matter how many people have the tab open (the soft
+// lock below), just a shorter window.
+const COACHING_REFRESH_MS = 8_000;
 // How much of the transcript (from the end) to hand the model each time,
 // in characters — enough context without an ever-growing prompt as a
 // long call goes on.
 const TRANSCRIPT_WINDOW_CHARS = 6_000;
 // How many of this deal's past FINISHED meetings to ground nudges in —
 // same idea as assist/route.ts's recentReady, just smaller since this
-// regenerates far more often (every ~20s) during a live call.
+// regenerates far more often (every ~8s) during a live call.
 const PAST_MEETINGS_LIMIT = 3;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
