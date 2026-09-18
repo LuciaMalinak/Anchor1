@@ -134,6 +134,12 @@ export default async function Home() {
               How it works
             </a>
             <Link
+              href="/pricing"
+              className="hidden text-sm font-medium text-slate-300 transition hover:text-white sm:inline"
+            >
+              Pricing
+            </Link>
+            <Link
               href="/sign-in"
               className="rounded-lg border border-white/25 px-4 py-2 text-sm font-medium text-white transition hover:border-white/40 hover:bg-white/10"
             >
@@ -450,6 +456,9 @@ export default async function Home() {
               © {new Date().getFullYear()} Anchor. All rights reserved.
             </p>
             <nav className="flex items-center gap-5 text-sm font-medium text-brand">
+              <Link href="/pricing" className="hover:underline">
+                Pricing
+              </Link>
               <Link href="/terms" className="hover:underline">
                 Terms
               </Link>
