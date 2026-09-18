@@ -8,7 +8,7 @@
 // so a single Azure AD app registration (one client ID/secret) covers
 // both with different scopes. Presenting them as two separate "connect"
 // buttons would just mean asking for the same credentials twice.
-export type ProviderKey = "google" | "microsoft" | "slack";
+export type ProviderKey = "google" | "microsoft" | "slack" | "salesforce";
 
 export type ProviderConfig = {
   key: ProviderKey;
@@ -63,6 +63,24 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     tokenUrl: "https://slack.com/api/oauth.v2.access",
     clientIdEnv: "SLACK_INTEGRATION_CLIENT_ID",
     clientSecretEnv: "SLACK_INTEGRATION_CLIENT_SECRET",
+  },
+  salesforce: {
+    key: "salesforce",
+    name: "Salesforce",
+    description:
+      "Pull your Salesforce contacts and opportunities into Anchor, enriched with meeting intelligence.",
+    // "refresh_token" is Salesforce's actual scope name for getting a
+    // refresh token back (there's no separate "offline_access" scope like
+    // Google/Microsoft use) — "api" for REST/SOQL access, "openid"+"email"
+    // so /services/oauth2/userinfo can identify who connected it.
+    scopes: ["api", "refresh_token", "openid", "email"],
+    // login.salesforce.com covers both production orgs and free Developer
+    // Edition orgs. A sandbox org needs test.salesforce.com instead — not
+    // handled here yet; flag it if that's what you're connecting.
+    authorizeUrl: "https://login.salesforce.com/services/oauth2/authorize",
+    tokenUrl: "https://login.salesforce.com/services/oauth2/token",
+    clientIdEnv: "SALESFORCE_INTEGRATION_CLIENT_ID",
+    clientSecretEnv: "SALESFORCE_INTEGRATION_CLIENT_SECRET",
   },
 };
 

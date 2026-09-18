@@ -90,6 +90,10 @@ export async function GET(
         ? new Date(Date.now() + tokenBody.expires_in * 1000)
         : null;
     const identityLabel = await fetchIdentityLabel(provider, accessToken, tokenBody);
+    // Only Salesforce's token response carries this (a per-org API base
+    // URL) — undefined/absent for every other provider, so this is a
+    // harmless null for them.
+    const instanceUrl = typeof tokenBody.instance_url === "string" ? tokenBody.instance_url : null;
 
     await db
       .insert(integrationConnections)
@@ -101,6 +105,7 @@ export async function GET(
         refreshToken: tokenBody.refresh_token || null,
         tokenExpiresAt: expiresAt,
         scope: typeof tokenBody.scope === "string" ? tokenBody.scope : cfg.scopes.join(" "),
+        instanceUrl,
       })
       .onConflictDoUpdate({
         target: [integrationConnections.userId, integrationConnections.provider],
@@ -110,6 +115,7 @@ export async function GET(
           refreshToken: tokenBody.refresh_token || null,
           tokenExpiresAt: expiresAt,
           scope: typeof tokenBody.scope === "string" ? tokenBody.scope : cfg.scopes.join(" "),
+          instanceUrl,
           updatedAt: new Date(),
         },
       });

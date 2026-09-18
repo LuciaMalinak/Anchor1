@@ -197,6 +197,10 @@ export const contacts = pgTable("contact", {
   // relationshipSummary so a manual note is never overwritten by the
   // next auto-generated one.
   notes: text("notes"),
+  // Set when this contact was created or matched from a Salesforce sync
+  // — lets a re-sync update the same row instead of creating a duplicate.
+  // Null for every contact that only ever came from a meeting.
+  salesforceContactId: text("salesforceContactId"),
   firstMetAt: timestamp("firstMetAt", { mode: "date" }).defaultNow().notNull(),
   lastMeetingAt: timestamp("lastMeetingAt", { mode: "date" }),
   meetingCount: integer("meetingCount").default(0).notNull(),
@@ -394,6 +398,10 @@ export const deals = pgTable("deal", {
   // briefing is generated. Anchor never infers this; it only ever
   // reflects what you typed here.
   decisionBoundaries: text("decisionBoundaries"),
+  // Set when this deal was created or matched from a synced Salesforce
+  // Opportunity — lets a re-sync update the same row instead of creating
+  // a duplicate. Null for every deal that only ever lived in Anchor.
+  salesforceOpportunityId: text("salesforceOpportunityId"),
   // Standing ownership on the deal, separate from the point-in-time
   // handoff briefing above: who's driving it day to day, and who's
   // designated to step in if the lead is out. Both nullable and both any
@@ -510,6 +518,7 @@ export const integrationProviderEnum = pgEnum("integration_provider", [
   "google",
   "microsoft",
   "slack",
+  "salesforce",
 ]);
 
 export const integrationConnections = pgTable(
@@ -531,6 +540,11 @@ export const integrationConnections = pgTable(
     refreshToken: text("refreshToken"),
     tokenExpiresAt: timestamp("tokenExpiresAt", { mode: "date" }),
     scope: text("scope"),
+    // Salesforce (unlike Google/Microsoft/Slack) has a per-org API base
+    // URL handed back in the token response, not a fixed one — every API
+    // call has to go to this org's instance instead of a shared endpoint.
+    // Unused by other providers.
+    instanceUrl: text("instanceUrl"),
     connectedAt: timestamp("connectedAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
