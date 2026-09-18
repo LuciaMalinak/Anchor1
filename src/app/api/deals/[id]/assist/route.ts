@@ -76,6 +76,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     companyWebsite: deal.companyWebsite,
     memory: deal.memory,
     continuityNote: recentReady[0]?.summary.continuityNote ?? null,
+    notes: deal.notes,
+    decisionBoundaries: deal.decisionBoundaries,
     people: dealContactRows,
     recentMeetings: recentReady.map((r) => ({
       title: r.meeting.title,
@@ -83,6 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       overview: r.summary.overview,
       keyPoints: r.summary.keyPoints,
       actionItems: r.summary.actionItems,
+      dealSignals: r.summary.dealSignals,
     })),
     files: files.map((f) => ({ fileName: f.fileName, excerpt: f.extractedText })),
     companyResearch: deal.companyResearch,

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, meetingLiveSegments, deals } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { meetings, meetingLiveSegments, deals, summaries } from "@/db/schema";
+import { and, desc, eq, ne, asc } from "drizzle-orm";
 import { generateLiveCoaching } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
@@ -17,6 +17,10 @@ const COACHING_REFRESH_MS = 20_000;
 // in characters — enough context without an ever-growing prompt as a
 // long call goes on.
 const TRANSCRIPT_WINDOW_CHARS = 6_000;
+// How many of this deal's past FINISHED meetings to ground nudges in —
+// same idea as assist/route.ts's recentReady, just smaller since this
+// regenerates far more often (every ~20s) during a live call.
+const PAST_MEETINGS_LIMIT = 3;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -76,9 +80,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       // few seconds during a live call, so it reads whatever style
       // profile already exists (possibly a day stale) rather than ever
       // waiting on a rebuild.
-      const leadStyle = await getDealLeadStyle(deal?.leadUserId ?? null, {
-        allowSynchronousRebuild: false,
-      });
+      const [leadStyle, pastMeetingRows] = await Promise.all([
+        getDealLeadStyle(deal?.leadUserId ?? null, { allowSynchronousRebuild: false }),
+        deal
+          ? db
+              .select({ meeting: meetings, summary: summaries })
+              .from(meetings)
+              .innerJoin(summaries, eq(summaries.meetingId, meetings.id))
+              .where(
+                and(
+                  eq(meetings.dealId, deal.id),
+                  eq(meetings.status, "ready"),
+                  ne(meetings.id, id)
+                )
+              )
+              .orderBy(desc(meetings.occurredAt))
+              .limit(PAST_MEETINGS_LIMIT)
+          : Promise.resolve([]),
+      ]);
       const coaching = await generateLiveCoaching({
         dealName: deal?.name || null,
         dealMemory: deal?.memory || null,
@@ -87,6 +106,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         priorChecklist: meeting.liveSuggestions?.checklist || null,
         leadStyle,
         notes: deal?.notes || null,
+        pastMeetings: pastMeetingRows.map((r) => ({
+          title: r.meeting.title,
+          occurredAt: r.meeting.occurredAt.toLocaleDateString(),
+          overview: r.summary.overview,
+          dealSignals: r.summary.dealSignals,
+        })),
       });
       await db
         .update(meetings)

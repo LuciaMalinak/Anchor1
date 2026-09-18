@@ -28,6 +28,13 @@ export type DealContext = {
   companyWebsite: string | null;
   memory: string | null;
   continuityNote: string | null;
+  // What the rep typed in "Before" prep (deals.notes) and any hard
+  // constraints they've set (deals.decisionBoundaries) — already fed into
+  // live coaching (see liveCoaching.ts); Ask Anchor didn't have either
+  // until now, so a mid-meeting question could miss something the rep
+  // explicitly wrote down going in.
+  notes: string | null;
+  decisionBoundaries: string | null;
   people: { name: string; role: string | null; company: string | null; relationshipSummary: string | null }[];
   recentMeetings: {
     title: string;
@@ -35,6 +42,10 @@ export type DealContext = {
     overview: string;
     keyPoints: string[];
     actionItems: { text: string; owner: string | null }[];
+    // Buying signals / risks / blockers the AI flagged after that meeting
+    // (summaries.dealSignals) — previously fetched by the caller and then
+    // silently dropped before reaching the model.
+    dealSignals: { type: "buying_signal" | "risk" | "blocker"; detail: string }[];
   }[];
   files: { fileName: string; excerpt: string | null }[];
   companyResearch: string | null;
@@ -65,6 +76,14 @@ function buildContextBlock(ctx: DealContext): string {
     parts.push(`\nGoing in, remember: ${ctx.continuityNote}`);
   }
 
+  if (ctx.notes) {
+    parts.push(`\nThe rep's own prep notes for this deal: ${ctx.notes}`);
+  }
+
+  if (ctx.decisionBoundaries) {
+    parts.push(`\nDecision boundaries / constraints for this deal: ${ctx.decisionBoundaries}`);
+  }
+
   if (ctx.people.length > 0) {
     parts.push("\nPeople on this deal:");
     for (const p of ctx.people) {
@@ -86,6 +105,12 @@ function buildContextBlock(ctx: DealContext): string {
         parts.push(
           "Action items: " +
             m.actionItems.map((a) => a.text + (a.owner ? ` (${a.owner})` : "")).join("; ")
+        );
+      }
+      if (m.dealSignals.length > 0) {
+        parts.push(
+          "Flagged at the time: " +
+            m.dealSignals.map((s) => `[${s.type.replace("_", " ")}] ${s.detail}`).join("; ")
         );
       }
     }
@@ -131,6 +156,22 @@ function buildContextBlock(ctx: DealContext): string {
   return parts.join("\n");
 }
 
+// Shared by askAnchor and askAnchorStream so the two never drift — they
+// need byte-identical prompts since they're the same feature, just
+// streamed vs. not.
+function buildSystemPrompt(contextBlock: string): string {
+  return `You are Anchor, a live meeting assistant. Someone is in the middle of a real meeting right now and typed you a quick question — they need a short, useful, immediately usable answer, not a lecture.
+
+Ground every answer in the deal context you're given below (past meeting summaries, action items, flagged signals, continuity notes, the rep's own prep notes and decision boundaries, attached file contents) first. You also have a live web search tool — reach for it when the question needs something current that wouldn't be in the deal context: recent company news, funding, industry trends, competitor moves, market conditions. Only search about the company/industry, never to look up a named individual.
+
+If neither the deal context nor a search turns up a real answer, say plainly that Anchor doesn't have that yet and it'll circle back on it next meeting — never invent facts, numbers, names, or commitments. The same applies even when you DO have enough to say something, if answering definitively would mean committing to something risky to state on the rep's behalf right now — a legal term, a contractual commitment, a firm price or discount, a compliance or regulatory claim, anything that should really come from the actual deal lead or a lawyer rather than from you mid-meeting. In that case, say so plainly and that it's worth circling back on next meeting instead of answering as if it's settled.
+
+Keep answers to 2-4 sentences unless the question clearly calls for a short list. Write like you're quietly feeding them a talking point mid-meeting, not writing a report.
+
+--- Deal context ---
+${contextBlock}`;
+}
+
 export async function askAnchor(params: {
   context: DealContext;
   question: string;
@@ -142,14 +183,7 @@ export async function askAnchor(params: {
     model: MODEL,
     max_tokens: 500,
     tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-    system: `You are Anchor, a live meeting assistant. Someone is in the middle of a real meeting right now and typed you a quick question — they need a short, useful, immediately usable answer, not a lecture.
-
-Ground every answer in the deal context you're given below (past meeting summaries, action items, continuity notes, attached file contents) first. You also have a live web search tool — reach for it when the question needs something current that wouldn't be in the deal context: recent company news, funding, industry trends, competitor moves, market conditions. Only search about the company/industry, never to look up a named individual. If neither the deal context nor a search turns up an answer, say plainly that Anchor doesn't have that information yet — never invent facts, numbers, names, or commitments.
-
-Keep answers to 2-4 sentences unless the question clearly calls for a short list. Write like you're quietly feeding them a talking point mid-meeting, not writing a report.
-
---- Deal context ---
-${contextBlock}`,
+    system: buildSystemPrompt(contextBlock),
     messages: [
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user" as const, content: params.question },
@@ -190,14 +224,7 @@ export async function* askAnchorStream(params: {
     model: MODEL,
     max_tokens: 500,
     tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-    system: `You are Anchor, a live meeting assistant. Someone is in the middle of a real meeting right now and typed you a quick question — they need a short, useful, immediately usable answer, not a lecture.
-
-Ground every answer in the deal context you're given below (past meeting summaries, action items, continuity notes, attached file contents) first. You also have a live web search tool — reach for it when the question needs something current that wouldn't be in the deal context: recent company news, funding, industry trends, competitor moves, market conditions. Only search about the company/industry, never to look up a named individual. If neither the deal context nor a search turns up an answer, say plainly that Anchor doesn't have that information yet — never invent facts, numbers, names, or commitments.
-
-Keep answers to 2-4 sentences unless the question clearly calls for a short list. Write like you're quietly feeding them a talking point mid-meeting, not writing a report.
-
---- Deal context ---
-${contextBlock}`,
+    system: buildSystemPrompt(contextBlock),
     messages: [
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user" as const, content: params.question },

@@ -31,7 +31,7 @@ const LIVE_COACHING_TOOL = {
         type: "array",
         items: { type: "string" },
         description:
-          "1-3 short, specific, actionable talking points or things to watch for, based on what's actually been said so far — e.g. 'They haven't mentioned budget yet — worth asking directly' or 'They just raised a concern about integration time — address it before moving on'. Never generic sales advice ('build rapport', 'listen actively'). If nothing notable stands out yet, return an empty array rather than padding with filler.",
+          "1-3 short, specific, actionable talking points or things to watch for, based on what's actually been said so far plus what's known about this deal (prep notes, decision boundaries, past meetings) — e.g. 'They haven't mentioned budget yet — worth asking directly' or 'They just raised a concern about integration time — address it before moving on' or 'Last meeting they asked about our SOC 2 status — worth confirming it came up.' Never generic sales advice ('build rapport', 'listen actively'). If something clearly needs addressing but you don't have enough to say anything concrete about it (no prep, no past-meeting record, and this is a live call so there's no time to research it), phrase the nudge as flagging that gap plainly and that it's worth circling back on next meeting — never invent a fact, number, or commitment to fill it. If nothing notable stands out yet, return an empty array rather than padding with filler.",
       },
       checklist: {
         type: "array",
@@ -72,6 +72,20 @@ export async function generateLiveCoaching(params: {
   // without needing deals.memory to have absorbed it first, which only
   // happens after a meeting finishes. See DealHeaderCard on DealTabs.tsx.
   notes?: string | null;
+  // A handful of the most recent FINISHED meetings on this deal (not
+  // this one) — dealMemory is a rolling free-text synthesis and can
+  // blur specifics together over time, so this gives nudges a way to
+  // reference something concrete a specific past meeting actually
+  // covered ("last time they asked about X"), which is what "based on
+  // previous discussions" means here. Kept short — this regenerates
+  // every ~20s during a live call (see the route that calls this), so
+  // it's a few condensed lines per meeting, not full transcripts.
+  pastMeetings?: {
+    title: string;
+    occurredAt: string;
+    overview: string;
+    dealSignals: { type: "buying_signal" | "risk" | "blocker"; detail: string }[];
+  }[];
 }): Promise<LiveCoaching> {
   const priorChecklistText = params.priorChecklist?.length
     ? `\n\nChecklist from the last update (keep these labels, just update covered status, unless the conversation clearly calls for a different item):\n${params.priorChecklist
@@ -84,12 +98,22 @@ export async function generateLiveCoaching(params: {
   const notesText = params.notes
     ? `\n\nWhat the rep prepped going into this call (their own notes, written before it started — treat this as their intent and prioritize it in the checklist): ${params.notes}`
     : "";
+  const pastMeetingsText = params.pastMeetings?.length
+    ? `\n\nPrevious meetings on this deal (most recent first) — reference these specifically when relevant, don't just treat them as background:\n${params.pastMeetings
+        .map((m) => {
+          const signals = m.dealSignals.length
+            ? ` Flagged at the time: ${m.dealSignals.map((s) => `[${s.type.replace("_", " ")}] ${s.detail}`).join("; ")}.`
+            : "";
+          return `- ${m.title} (${m.occurredAt}): ${m.overview}${signals}`;
+        })
+        .join("\n")}`
+    : "";
 
   const message = await client().messages.create({
     model: MODEL,
     max_tokens: 512,
     system:
-      "You are a live sales-call coach watching a transcript stream in during a real meeting. Give sharp, specific, non-generic guidance grounded only in what's actually been said — never invent facts, commitments, or objections that didn't happen. If the transcript so far doesn't support a checklist item being covered, mark it not covered.",
+      "You are a live sales-call coach watching a transcript stream in during a real meeting. Give sharp, specific, non-generic guidance grounded only in what's actually been said, plus what's known about this deal from its prep notes, decision boundaries, and past meetings — never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for. If the transcript so far doesn't support a checklist item being covered, mark it not covered.",
     tools: [LIVE_COACHING_TOOL],
     tool_choice: { type: "tool", name: LIVE_COACHING_TOOL.name },
     messages: [
@@ -99,7 +123,7 @@ export async function generateLiveCoaching(params: {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${pastMeetingsText}
 ${priorChecklistText}
 
 Transcript so far (most recent portion of an in-progress call):
