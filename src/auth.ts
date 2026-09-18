@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Resend from "next-auth/providers/resend";
 import LinkedIn from "next-auth/providers/linkedin";
+import Google from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import {
@@ -20,6 +21,15 @@ import { signInEmailHtml, signInEmailText } from "@/lib/emailTemplates";
 // instead of crashing on a missing clientId.
 const linkedInConfigured = Boolean(
   process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET
+);
+
+// Same idea for Google — this is a separate, plain NextAuth *sign-in*
+// provider (its own Google Cloud OAuth client), distinct from the
+// GOOGLE_INTEGRATION_CLIENT_ID/SECRET pair used by the Integrations page
+// to read Gmail/Calendar data. Different purpose, different credentials,
+// so they don't share env vars even though both talk to Google.
+const googleConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
 );
 
 export const {
@@ -83,6 +93,17 @@ export const {
             // every provider verified the email correctly) — acceptable
             // here since Resend and LinkedIn both only report verified
             // emails, and this is a small, single-team app for now.
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
+    ...(googleConfigured
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            // Same tradeoff as LinkedIn above, same reasoning: Google only
+            // reports verified emails too.
             allowDangerousEmailAccountLinking: true,
           }),
         ]
