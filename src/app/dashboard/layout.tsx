@@ -3,6 +3,7 @@ import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { PageFade } from "@/components/PageFade";
+import { NavLink } from "@/components/NavLink";
 import { db } from "@/db";
 import { teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -89,22 +90,12 @@ export default async function DashboardLayout({
           <Link href="/dashboard">
             <AnimatedLogo size="lg" />
           </Link>
-          <nav className="flex items-center gap-5 text-sm font-medium text-slate-600">
-            <Link href="/dashboard/deals" className="hover:text-brand">
-              Deals
-            </Link>
-            <Link href="/dashboard/insights" className="hover:text-brand">
-              Insights
-            </Link>
-            <Link href="/dashboard/contacts" className="hover:text-brand">
-              Contacts
-            </Link>
-            <Link href="/dashboard/team" className="hover:text-brand">
-              Team
-            </Link>
-            <Link href="/dashboard/integrations" className="hover:text-brand">
-              Integrations
-            </Link>
+          <nav className="flex items-center gap-5 text-sm font-medium">
+            <NavLink href="/dashboard/deals">Deals</NavLink>
+            <NavLink href="/dashboard/insights">Insights</NavLink>
+            <NavLink href="/dashboard/contacts">Contacts</NavLink>
+            <NavLink href="/dashboard/team">Team</NavLink>
+            <NavLink href="/dashboard/integrations">Integrations</NavLink>
           </nav>
           <div className="flex items-center gap-3 text-sm text-slate-500">
             <Link href="/dashboard/profile" className="flex items-center gap-2 hover:text-brand">
