@@ -293,6 +293,13 @@ CREATE TABLE IF NOT EXISTS "user_style_profile" (
   "sourceCount" integer NOT NULL DEFAULT 0,
   "updatedAt" timestamp NOT NULL DEFAULT now()
 );
+
+-- Cached Gmail/Calendar activity per deal — see
+-- src/lib/dealIntegrationContext.ts. Closes the "connections exist but
+-- nothing ever reads from them" gap for Google.
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "emailContext" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "calendarContext" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "integrationContextUpdatedAt" timestamp;
 `;
 
 export async function GET(req: NextRequest) {

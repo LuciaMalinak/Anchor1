@@ -422,6 +422,16 @@ export const deals = pgTable("deal", {
   // about the company, pulled from the same search — null when nothing
   // that fresh turned up. Drives the "News" callout on the deal page.
   newsHeadline: text("newsHeadline"),
+  // Recent Gmail/Calendar activity involving whoever's on the other side
+  // of this deal — read-only, pulled from whichever of the deal's lead
+  // or creator has Google connected (see src/lib/dealIntegrationContext.ts).
+  // Null whenever there's no connection, no matching activity, or the
+  // deal has no resolved contacts to match against yet — never a
+  // placeholder. Refreshed at most every 6 hours, same rhythm as
+  // companyResearch above.
+  emailContext: text("emailContext"),
+  calendarContext: text("calendarContext"),
+  integrationContextUpdatedAt: timestamp("integrationContextUpdatedAt", { mode: "date" }),
   // What a teammate covering this deal's meeting is allowed to decide on
   // their own (e.g. "can offer up to 10% discount, can't commit to custom
   // features") — set by the deal owner, reused every time a handoff

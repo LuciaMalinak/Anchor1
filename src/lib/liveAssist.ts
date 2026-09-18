@@ -39,6 +39,11 @@ export type DealContext = {
   files: { fileName: string; excerpt: string | null }[];
   companyResearch: string | null;
   newsHeadline: string | null;
+  // Recent Gmail/Calendar activity with this deal's contacts, when the
+  // deal's lead has Google connected (see src/lib/dealIntegrationContext.ts).
+  // Null whenever there's no connection or nothing matched — never invented.
+  emailContext: string | null;
+  calendarContext: string | null;
   // How the deal's actual lead tends to negotiate, decide, and
   // communicate (see src/lib/styleProfile.ts) — null if no lead is set,
   // or there isn't enough of their own material yet to say anything real.
@@ -107,6 +112,14 @@ function buildContextBlock(ctx: DealContext): string {
     parts.push("\nRecent news and public info Anchor already gathered on this company (also shown live in the room right now, so treat it as something the person you're helping can already see):");
     if (ctx.newsHeadline) parts.push(ctx.newsHeadline);
     if (ctx.companyResearch) parts.push(ctx.companyResearch);
+  }
+
+  if (ctx.emailContext) {
+    parts.push(`\nRecent emails with people on this deal:\n${ctx.emailContext}`);
+  }
+
+  if (ctx.calendarContext) {
+    parts.push(`\nRecent and upcoming calendar meetings with people on this deal:\n${ctx.calendarContext}`);
   }
 
   if (ctx.dealLeadStyle) {

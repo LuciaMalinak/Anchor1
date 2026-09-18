@@ -5,6 +5,7 @@ import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingPart
 import { asc, desc, eq } from "drizzle-orm";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { researchCompany, isResearchStale } from "@/lib/companyResearch";
+import { refreshDealIntegrationContext, isIntegrationContextStale } from "@/lib/dealIntegrationContext";
 import { computeDealHealth } from "@/lib/dealHealth";
 import { DealTabs } from "./DealTabs";
 
@@ -51,6 +52,27 @@ export default async function DealDetailPage({
       };
     } catch (err) {
       console.error("Background company research failed:", err);
+    }
+  }
+
+  // Same best-effort, throttled idea, for whatever Gmail/Calendar
+  // activity is happening with this deal's contacts — see
+  // src/lib/dealIntegrationContext.ts for why it uses the deal's lead
+  // (or creator)'s connection rather than whoever's viewing the page.
+  if (isIntegrationContextStale(deal.integrationContextUpdatedAt)) {
+    const refreshed = await refreshDealIntegrationContext({
+      id: deal.id,
+      leadUserId: deal.leadUserId,
+      createdByUserId: deal.createdByUserId,
+      primaryContactEmail: deal.primaryContactEmail,
+    });
+    if (refreshed) {
+      deal = {
+        ...deal,
+        emailContext: refreshed.emailContext,
+        calendarContext: refreshed.calendarContext,
+        integrationContextUpdatedAt: new Date(),
+      };
     }
   }
 
