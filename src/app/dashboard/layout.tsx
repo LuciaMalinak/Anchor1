@@ -58,24 +58,38 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-slate-50" style={accentStyle}>
-      {/* A quiet, fixed backdrop tinted by the team's --accent (set above
-          from src/lib/industries.ts) — a soft glow plus a fine dot grid,
-          same visual language as the marketing page's hero. Since it reads
-          the CSS variable rather than hardcoding a color per industry, it
-          gives every sector's dashboard a slightly different, on-brand
-          look for free, with nothing to keep in sync as industries are
-          added. Fixed + negative z-index so it never intercepts clicks or
-          scrolls with the page. */}
+      {/* A fixed backdrop tinted by the team's --accent (set above from
+          src/lib/industries.ts) — a glow plus a fine dot grid, same visual
+          language as the marketing page's hero. Since it reads the CSS
+          variable rather than hardcoding a color per industry, it gives
+          every sector's dashboard a visibly different, on-brand look for
+          free, with nothing to keep in sync as industries are added.
+          Strong enough to actually notice (most of the viewport is white
+          cards, so anything fainter disappears entirely) while staying
+          behind everything — fixed + negative z-index, never intercepts
+          clicks or scrolls with the page. */}
       <div
         aria-hidden="true"
         className="drift-bg pointer-events-none fixed inset-0 -z-10"
         style={{
           backgroundImage:
-            "radial-gradient(ellipse 55% 40% at 50% -8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%), radial-gradient(circle, rgba(15,23,42,0.05) 1px, transparent 1px)",
-          backgroundSize: "auto, 28px 28px",
+            "radial-gradient(ellipse 70% 50% at 50% -5%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 72%), radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent) 1.5px, transparent 1.5px)",
+          backgroundSize: "auto, 26px 26px",
         }}
       />
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
+        {/* A solid, unmissable signal on top of the ambient wash above — a
+            thin accent-colored line across the top of the header. Lives
+            inside the sticky header so it stays visible on scroll instead
+            of disappearing after the first scroll tick. */}
+        <div
+          aria-hidden="true"
+          className="h-[3px] w-full"
+          style={{
+            background:
+              "linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 15%, transparent))",
+          }}
+        />
         <div className="flex w-full items-center justify-between px-6 py-4 lg:px-10 2xl:px-16">
           <Link href="/dashboard">
             <Logo size="lg" />
