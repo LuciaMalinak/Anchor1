@@ -5,19 +5,26 @@ import type { IndustryKey } from "@/lib/industries";
 // reads as "a clean modern building" and a pharma team's reads as "a
 // molecule," instead of every sector looking like the same product with
 // a different accent color. Deliberately background material: huge,
-// low-opacity, partly cropped off the edge of the screen, plain
-// currentColor line art (no photographic imagery) so it stays "high-tech
-// simple clean" rather than competing with the actual dashboard content.
-// Colored via `text-accent`, so it inherits whatever --accent the layout
-// set for this team — nothing to keep in sync per industry beyond the
-// shape itself.
+// low-opacity, plain currentColor line art (no photographic imagery) so
+// it stays "high-tech simple clean" rather than competing with the
+// actual dashboard content. Colored via `text-accent`, so it inherits
+// whatever --accent the layout set for this team — nothing to keep in
+// sync per industry beyond the shape itself.
+//
+// Deliberately layered ON TOP of the page (a small positive z-index),
+// not behind it: most dashboard pages are nearly wall-to-wall white
+// cards, so anything placed behind that content (negative z-index) has
+// no gap left to actually show through and disappears completely no
+// matter how high the opacity goes. pointer-events-none means it never
+// intercepts a click or drag even where it overlaps a card, and it sits
+// below the sticky header (z-10) so it never competes with real nav.
 export function IndustryBackdrop({ industry }: { industry: IndustryKey | null }) {
   if (!industry) return null;
 
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed -bottom-10 -right-10 -z-10 text-accent opacity-[0.12]"
+      className="pointer-events-none fixed -bottom-10 -right-10 z-[1] text-accent opacity-[0.16]"
     >
       <svg width="480" height="480" viewBox="0 0 400 400" fill="none">
         {SCENES[industry]}
