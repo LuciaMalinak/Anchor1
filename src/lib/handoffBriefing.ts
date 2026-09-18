@@ -53,9 +53,16 @@ export type HandoffBriefingResult = {
 
 export async function generateHandoffBriefing(params: {
   dealName: string;
+  stage: string | null;
   memory: string | null;
   notes: string | null;
-  people: { name: string; role: string | null; relationshipSummary: string | null; notes: string | null }[];
+  people: {
+    name: string;
+    role: string | null;
+    company: string | null;
+    relationshipSummary: string | null;
+    notes: string | null;
+  }[];
   recentMeetings: {
     title: string;
     occurredAt: string;
@@ -78,7 +85,8 @@ export async function generateHandoffBriefing(params: {
     params.people.length > 0
       ? params.people
           .map((p) => {
-            const lines = [`— ${p.name}${p.role ? ` (${p.role})` : ""}`];
+            const roleCompany = [p.role, p.company].filter(Boolean).join(", ");
+            const lines = [`— ${p.name}${roleCompany ? ` (${roleCompany})` : ""}`];
             if (p.relationshipSummary) lines.push(`What Anchor knows: ${p.relationshipSummary}`);
             if (p.notes) lines.push(`Manual notes: ${p.notes}`);
             return lines.join("\n");
@@ -96,7 +104,7 @@ export async function generateHandoffBriefing(params: {
     messages: [
       {
         role: "user",
-        content: `Deal: ${params.dealName}
+        content: `Deal: ${params.dealName}${params.stage ? ` — Stage: ${params.stage}` : ""}
 
 Rolling deal memory (what Anchor has learned so far):
 ${params.memory || "Nothing recorded yet."}

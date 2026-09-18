@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { dealFiles, meetings, summaries } from "@/db/schema";
+import { dealFiles, meetings, summaries, meetingParticipants, contacts } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { askAnchor, type DealContext } from "@/lib/liveAssist";
 import { authorizeDeal } from "@/lib/dealAccess";
@@ -46,10 +46,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const files = await db.select().from(dealFiles).where(eq(dealFiles.dealId, dealId));
 
+  // Same "people Anchor has resolved on this deal" query the handoff
+  // briefing uses — includes anyone synced in from a connected CRM (e.g.
+  // Salesforce) once they've appeared in a meeting on this deal.
+  const dealContactRows = await db
+    .selectDistinctOn([contacts.id], {
+      name: contacts.name,
+      role: contacts.role,
+      company: contacts.company,
+      relationshipSummary: contacts.relationshipSummary,
+    })
+    .from(meetingParticipants)
+    .innerJoin(meetings, eq(meetingParticipants.meetingId, meetings.id))
+    .innerJoin(contacts, eq(meetingParticipants.contactId, contacts.id))
+    .where(eq(meetings.dealId, dealId));
+
   const context: DealContext = {
     dealName: deal.name,
+    stage: deal.stage,
+    companyWebsite: deal.companyWebsite,
     memory: deal.memory,
     continuityNote: recentReady[0]?.summary.continuityNote ?? null,
+    people: dealContactRows,
     recentMeetings: recentReady.map((r) => ({
       title: r.meeting.title,
       occurredAt: r.meeting.occurredAt.toLocaleDateString(),
