@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { signIn } from "@/auth";
 import { Logo } from "@/components/Logo";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
@@ -159,6 +160,16 @@ export default async function SignInPage({
           Email me a sign-in link
         </button>
       </form>
+
+      <p className="text-center text-xs text-slate-400">
+        New to Anchor?{" "}
+        <Link
+          href={industryKey ? `/sign-up?industry=${industryKey}` : "/sign-up"}
+          className="font-medium text-brand hover:underline"
+        >
+          Create an account
+        </Link>
+      </p>
     </main>
   );
 }

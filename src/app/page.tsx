@@ -427,7 +427,7 @@ export default async function Home() {
             {INDUSTRIES.map((ind) => (
               <Link
                 key={ind.key}
-                href={`/sign-in?industry=${ind.key}`}
+                href={`/sign-up?industry=${ind.key}`}
                 className="reveal group block rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 style={{ borderTopWidth: "3px", borderTopColor: ind.accent }}
               >
@@ -459,6 +459,9 @@ export default async function Home() {
               <Link href="/sign-in" className="hover:underline">
                 Sign in
               </Link>
+              <Link href="/sign-up" className="hover:underline">
+                Sign up
+              </Link>
             </nav>
           </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-6">
@@ -468,7 +471,7 @@ export default async function Home() {
             {INDUSTRIES.map((ind) => (
               <Link
                 key={ind.key}
-                href={`/sign-in?industry=${ind.key}`}
+                href={`/sign-up?industry=${ind.key}`}
                 className="text-sm font-medium text-brand hover:underline"
               >
                 {ind.label}
