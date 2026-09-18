@@ -275,6 +275,11 @@ ALTER TYPE integration_provider ADD VALUE IF NOT EXISTS 'salesforce';
 ALTER TABLE "integration_connection" ADD COLUMN IF NOT EXISTS "instanceUrl" text;
 ALTER TABLE "contact" ADD COLUMN IF NOT EXISTS "salesforceContactId" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "salesforceOpportunityId" text;
+
+-- Industry "subsector" a team can optionally pick on the Team page —
+-- plain text (like deal.stage above) rather than an enum, so the list
+-- in src/lib/industries.ts can grow without another migration.
+ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "industry" text;
 `;
 
 export async function GET(req: NextRequest) {

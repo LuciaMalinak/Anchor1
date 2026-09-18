@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { INDUSTRIES } from "@/lib/industries";
 
 type Member = { id: string; name: string | null; email: string; title: string | null; image: string | null };
 type Invite = { id: string; email: string };
@@ -26,6 +27,8 @@ export function TeamClient({
   pendingRequests,
   otherTeamRequests,
   currentUserId,
+  industry,
+  isOwner,
 }: {
   teamId: string;
   teamName: string;
@@ -34,12 +37,38 @@ export function TeamClient({
   pendingRequests: JoinRequest[];
   otherTeamRequests: JoinRequest[];
   currentUserId: string;
+  industry: string | null;
+  isOwner: boolean;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const [savingIndustry, setSavingIndustry] = useState(false);
+  const [industryError, setIndustryError] = useState<string | null>(null);
+
+  async function handleIndustryChange(key: string | null) {
+    setSavingIndustry(true);
+    setIndustryError(null);
+    try {
+      const res = await fetch("/api/team", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ industry: key }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't save that");
+      }
+      router.refresh();
+    } catch (err) {
+      setIndustryError(err instanceof Error ? err.message : "Couldn't save that");
+    } finally {
+      setSavingIndustry(false);
+    }
+  }
 
   const [joinUrl, setJoinUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -86,6 +115,50 @@ export function TeamClient({
         <h1 className="text-xl font-semibold text-brand">{teamName}</h1>
         <p className="text-sm text-slate-500">Everyone here shares deals, files, and recaps.</p>
       </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-sm font-medium text-slate-900">Industry</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          {isOwner
+            ? "Pick the closest match — it gives the dashboard a small accent to match, and it's what future industry-specific Anchor features will build on."
+            : "Set by your team owner — gives the dashboard a small accent to match."}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!isOwner || savingIndustry}
+            onClick={() => handleIndustryChange(null)}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:cursor-default ${
+              !industry
+                ? "border-brand bg-brand text-white"
+                : "border-slate-300 text-slate-600 hover:border-slate-400"
+            } ${!isOwner ? "cursor-default opacity-70" : ""}`}
+          >
+            General
+          </button>
+          {INDUSTRIES.map((ind) => (
+            <button
+              key={ind.key}
+              type="button"
+              disabled={!isOwner || savingIndustry}
+              onClick={() => handleIndustryChange(ind.key)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:cursor-default ${
+                industry === ind.key
+                  ? "text-white"
+                  : "border-slate-300 text-slate-600 hover:border-slate-400"
+              } ${!isOwner ? "cursor-default opacity-70" : ""}`}
+              style={
+                industry === ind.key
+                  ? { backgroundColor: ind.accent, borderColor: ind.accent }
+                  : undefined
+              }
+            >
+              {ind.icon} {ind.label}
+            </button>
+          ))}
+        </div>
+        {industryError && <p className="mt-2 text-sm text-red-600">{industryError}</p>}
+      </section>
 
       <section className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Invite a teammate</h2>

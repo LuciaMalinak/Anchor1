@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users, teams, teamInvites } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateTeamId, createInviteAndNotify } from "@/lib/team";
+import { isIndustryKey } from "@/lib/industries";
 
 export async function GET() {
   const session = await auth();
@@ -53,4 +54,30 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({ invite, emailWarning }, { status: 201 });
+}
+
+// Sets (or clears) the team's industry — only the team owner can change
+// it, same permission the rest of the app treats as "can change
+// team-wide settings" (see src/lib/joinRequestAccess.ts for the same
+// ownerUserId check used elsewhere).
+export async function PATCH(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  const teamId = await getOrCreateTeamId(session.user.id);
+  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  if (!team || team.ownerUserId !== session.user.id) {
+    return NextResponse.json({ error: "Only the team owner can change this" }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const industry = body.industry;
+  if (industry !== null && !(typeof industry === "string" && isIndustryKey(industry))) {
+    return NextResponse.json({ error: "Not a recognized industry" }, { status: 400 });
+  }
+
+  await db.update(teams).set({ industry }).where(eq(teams.id, teamId));
+  return NextResponse.json({ ok: true, industry });
 }

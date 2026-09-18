@@ -327,6 +327,13 @@ export const teams = pgTable("team", {
   // (companyResearch / newsHeadline).
   dailyBriefing: text("dailyBriefing"),
   dailyBriefingUpdatedAt: timestamp("dailyBriefingUpdatedAt", { mode: "date" }),
+  // Optional industry "subsector" the team owner picks on the Team page
+  // (see src/lib/industries.ts for the fixed list). Null means no
+  // preference set — the default look and generic AI behavior. Currently
+  // drives the landing page's industry section and a small accent-color
+  // reskin in the dashboard; industry-tuned AI prompts are a later step,
+  // not built on top of this yet.
+  industry: text("industry"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 

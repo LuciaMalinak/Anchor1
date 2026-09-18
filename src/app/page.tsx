@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { AnchorMark, Logo } from "@/components/Logo";
 import { AnchorNeuralField } from "@/components/AnchorNeuralField";
+import { INDUSTRIES } from "@/lib/industries";
 
 const STEPS = [
   {
@@ -406,15 +407,57 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Industry section — the fixed list a team can pick from on the
+          Team page (src/lib/industries.ts). Positioning/copy only for
+          now: same Anchor, same AI, under every card — industry-tuned AI
+          behavior is a later project, not implied here. */}
+      <section className="border-t border-slate-100 bg-slate-50 px-6 py-24">
+        <div className="mx-auto max-w-5xl">
+          <p className="text-center text-xs font-semibold tracking-[0.2em] text-accent">
+            BUILT FOR YOUR INDUSTRY
+          </p>
+          <h2 className="mx-auto mt-3 max-w-xl text-center text-3xl font-semibold tracking-tight text-brand">
+            Anchor speaks your industry
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-center text-sm leading-relaxed text-slate-500">
+            Set your team&apos;s industry on the Team page and Anchor carries it through the
+            product — starting with a look that matches.
+          </p>
+          <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {INDUSTRIES.map((ind) => (
+              <div
+                key={ind.key}
+                className="reveal group rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                style={{ borderTopWidth: "3px", borderTopColor: ind.accent }}
+              >
+                <span className="text-2xl" aria-hidden="true">
+                  {ind.icon}
+                </span>
+                <p className="mt-3 text-base font-semibold text-slate-900">Anchor for {ind.label}</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">{ind.blurb}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <footer className="border-t border-slate-200 px-6 py-10">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
           <Logo size="sm" />
           <p className="text-xs text-slate-400">
             © {new Date().getFullYear()} Anchor. All rights reserved.
           </p>
-          <Link href="/sign-in" className="text-sm font-medium text-brand hover:underline">
-            Sign in
-          </Link>
+          <nav className="flex items-center gap-5 text-sm font-medium text-brand">
+            <Link href="/terms" className="hover:underline">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:underline">
+              Privacy
+            </Link>
+            <Link href="/sign-in" className="hover:underline">
+              Sign in
+            </Link>
+          </nav>
         </div>
       </footer>
     </main>
