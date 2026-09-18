@@ -58,6 +58,23 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-slate-50" style={accentStyle}>
+      {/* A quiet, fixed backdrop tinted by the team's --accent (set above
+          from src/lib/industries.ts) — a soft glow plus a fine dot grid,
+          same visual language as the marketing page's hero. Since it reads
+          the CSS variable rather than hardcoding a color per industry, it
+          gives every sector's dashboard a slightly different, on-brand
+          look for free, with nothing to keep in sync as industries are
+          added. Fixed + negative z-index so it never intercepts clicks or
+          scrolls with the page. */}
+      <div
+        aria-hidden="true"
+        className="drift-bg pointer-events-none fixed inset-0 -z-10"
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse 55% 40% at 50% -8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%), radial-gradient(circle, rgba(15,23,42,0.05) 1px, transparent 1px)",
+          backgroundSize: "auto, 28px 28px",
+        }}
+      />
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="flex w-full items-center justify-between px-6 py-4 lg:px-10 2xl:px-16">
           <Link href="/dashboard">

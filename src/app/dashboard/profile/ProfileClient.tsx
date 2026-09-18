@@ -42,6 +42,29 @@ export function ProfileClient({ profile }: { profile: Profile }) {
   const [saved, setSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch("/api/profile/delete", { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't delete your account");
+      // A full navigation (not router.push) is deliberate — this just
+      // cleared the session cookie and every cached client-side bit of
+      // "who's signed in" state needs to reset, not just the URL.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = "/";
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete your account");
+      setDeleting(false);
+    }
+  }
+
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) setPreview(URL.createObjectURL(file));
@@ -213,6 +236,62 @@ export function ProfileClient({ profile }: { profile: Profile }) {
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       </form>
+
+      {/* Intentionally low-key — no danger-zone box, no red border — this
+          isn't something anyone should stumble into while editing their
+          name. It's still fully functional, just not the first thing on
+          the page. */}
+      <div className="mt-4 flex justify-end">
+        {!showDelete ? (
+          <button
+            type="button"
+            onClick={() => setShowDelete(true)}
+            className="text-xs text-slate-300 hover:text-slate-400"
+          >
+            Delete account
+          </button>
+        ) : (
+          <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-slate-50 p-4 text-right">
+            <p className="text-left text-xs text-slate-500">
+              This signs you out everywhere, removes your profile info, and — if you&apos;re the
+              only person on your team — deletes your team&apos;s deals and data too. This can&apos;t
+              be undone.
+            </p>
+            <p className="mt-2 text-left text-xs text-slate-500">
+              Type <span className="font-mono font-semibold text-slate-700">DELETE</span> to
+              confirm.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-brand"
+            />
+            {deleteError && <p className="mt-2 text-left text-xs text-red-600">{deleteError}</p>}
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDelete(false);
+                  setDeleteConfirmText("");
+                  setDeleteError(null);
+                }}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText !== "DELETE" || deleting}
+                onClick={handleDelete}
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:cursor-default disabled:opacity-40"
+              >
+                {deleting ? "Deleting…" : "Permanently delete"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
