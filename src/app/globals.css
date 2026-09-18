@@ -53,6 +53,7 @@ body {
   .drift-bg,
   .float-orb,
   .travel-dot,
+  .pulse-glow,
   .reveal {
     animation: none !important;
   }
@@ -223,6 +224,26 @@ body {
 }
 .travel-dot {
   animation: travel 3.5s ease-in-out infinite;
+}
+
+/* AnimatedLogo (src/components/AnimatedLogo.tsx) — a small glow tucked
+   right behind the anchor glyph that gently breathes in place. Kept to
+   a narrow opacity/scale range on purpose: enough to notice on a
+   second look, never enough to compete with the wordmark or read as
+   distracting motion on a page someone's trying to read. */
+@keyframes pulseGlow {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.12);
+  }
+}
+.pulse-glow {
+  animation: pulseGlow 3.4s ease-in-out infinite;
 }
 
 /* AnchorNeuralField (src/components/AnchorNeuralField.tsx) — the big
