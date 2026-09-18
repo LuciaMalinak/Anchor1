@@ -1,18 +1,25 @@
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, users, deals } from "@/db/schema";
+import { meetings, users, deals, teams } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getHomeUpdates } from "@/lib/homeFeed";
 import { getHomeTasks } from "@/lib/homeTasks";
+import { isIndustryKey } from "@/lib/industries";
 import { AttentionPanel } from "./AttentionPanel";
 import { DashboardClient } from "./DashboardClient";
 import { HomeTasks } from "./HomeTasks";
 import { HomeUpdates } from "./HomeUpdates";
 import { WelcomeGate } from "./WelcomeGate";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ setIndustry?: string }>;
+}) {
   const session = await auth();
+  const { setIndustry } = await searchParams;
   const rows = session?.user?.id
     ? await db
         .select()
@@ -30,6 +37,19 @@ export default async function DashboardPage() {
   }));
 
   const teamId = session?.user?.id ? await getOrCreateTeamId(session.user.id) : null;
+
+  // A visitor who clicked an industry link on the homepage or footer
+  // carries ?setIndustry=... through sign-in into here. Apply it once,
+  // only for a fresh team that hasn't picked an industry yet, and only
+  // if this user owns the team — then strip the param either way so a
+  // refresh or share of the URL can't reapply/override it later.
+  if (teamId && session?.user?.id && setIndustry && isIndustryKey(setIndustry)) {
+    const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+    if (team && team.ownerUserId === session.user.id && !team.industry) {
+      await db.update(teams).set({ industry: setIndustry }).where(eq(teams.id, teamId));
+    }
+    redirect("/dashboard");
+  }
 
   let welcomeSeen = true;
   let homeUpdates: Awaited<ReturnType<typeof getHomeUpdates>> = [];

@@ -425,39 +425,56 @@ export default async function Home() {
           </p>
           <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {INDUSTRIES.map((ind) => (
-              <div
+              <Link
                 key={ind.key}
-                className="reveal group rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                href={`/sign-in?industry=${ind.key}`}
+                className="reveal group block rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 style={{ borderTopWidth: "3px", borderTopColor: ind.accent }}
               >
-                <span className="text-2xl" aria-hidden="true">
-                  {ind.icon}
-                </span>
-                <p className="mt-3 text-base font-semibold text-slate-900">Anchor for {ind.label}</p>
+                <p className="text-base font-semibold text-slate-900">Anchor for {ind.label}</p>
                 <p className="mt-2 text-sm leading-relaxed text-slate-500">{ind.blurb}</p>
-              </div>
+                <span className="mt-3 inline-block text-xs font-medium text-accent">
+                  Get started →
+                </span>
+              </Link>
             ))}
           </div>
         </div>
       </section>
 
       <footer className="border-t border-slate-200 px-6 py-10">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
-          <Logo size="sm" />
-          <p className="text-xs text-slate-400">
-            © {new Date().getFullYear()} Anchor. All rights reserved.
-          </p>
-          <nav className="flex items-center gap-5 text-sm font-medium text-brand">
-            <Link href="/terms" className="hover:underline">
-              Terms
-            </Link>
-            <Link href="/privacy" className="hover:underline">
-              Privacy
-            </Link>
-            <Link href="/sign-in" className="hover:underline">
-              Sign in
-            </Link>
-          </nav>
+        <div className="mx-auto flex max-w-6xl flex-col gap-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <Logo size="sm" />
+            <p className="text-xs text-slate-400">
+              © {new Date().getFullYear()} Anchor. All rights reserved.
+            </p>
+            <nav className="flex items-center gap-5 text-sm font-medium text-brand">
+              <Link href="/terms" className="hover:underline">
+                Terms
+              </Link>
+              <Link href="/privacy" className="hover:underline">
+                Privacy
+              </Link>
+              <Link href="/sign-in" className="hover:underline">
+                Sign in
+              </Link>
+            </nav>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-6">
+            <span className="text-xs font-semibold tracking-[0.15em] text-slate-400">
+              INDUSTRIES
+            </span>
+            {INDUSTRIES.map((ind) => (
+              <Link
+                key={ind.key}
+                href={`/sign-in?industry=${ind.key}`}
+                className="text-sm font-medium text-brand hover:underline"
+              >
+                {ind.label}
+              </Link>
+            ))}
+          </div>
         </div>
       </footer>
     </main>
