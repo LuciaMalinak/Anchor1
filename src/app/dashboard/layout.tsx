@@ -8,7 +8,8 @@ import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
 import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
-import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
+import { INDUSTRY_BY_KEY, isIndustryKey, type IndustryKey } from "@/lib/industries";
+import { IndustryBackdrop } from "@/components/IndustryBackdrop";
 
 export default async function DashboardLayout({
   children,
@@ -31,6 +32,7 @@ export default async function DashboardLayout({
   // (see globals.css's `@theme inline` block). Null/unrecognized just
   // falls through to the default brand accent, same as always.
   let accentStyle: React.CSSProperties | undefined;
+  let industryKey: IndustryKey | null = null;
   if (session?.user?.id) {
     try {
       const teamId = await getOrCreateTeamId(session.user.id);
@@ -48,6 +50,7 @@ export default async function DashboardLayout({
       dailyBriefing = team?.dailyBriefing ?? null;
       dailyBriefingUpdatedAt = team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null;
       if (team?.industry && isIndustryKey(team.industry)) {
+        industryKey = team.industry;
         const ind = INDUSTRY_BY_KEY[team.industry];
         accentStyle = { "--accent": ind.accent, "--accent-dark": ind.accentDark } as React.CSSProperties;
       }
@@ -77,6 +80,11 @@ export default async function DashboardLayout({
           backgroundSize: "auto, 26px 26px",
         }}
       />
+      {/* A large, faint, industry-specific scene in the back corner — a
+          building for real estate, a chart for finance, a molecule for
+          pharma, and so on. See src/components/IndustryBackdrop.tsx for
+          why this is line art rather than a photo. */}
+      <IndustryBackdrop industry={industryKey} />
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
         {/* A solid, unmissable signal on top of the ambient wash above — a
             thin accent-colored line across the top of the header. Lives
