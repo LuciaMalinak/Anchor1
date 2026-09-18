@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { signIn } from "@/auth";
-import { Logo } from "@/components/Logo";
+import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 
 const linkedInConfigured = Boolean(
@@ -31,7 +31,7 @@ export default async function SignInPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
       <div className="flex flex-col items-center gap-6 text-center">
-        <Logo size="md" />
+        <AnimatedLogo size="md" />
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">
             Sign in

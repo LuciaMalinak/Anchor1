@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
-import { Logo } from "@/components/Logo";
+import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { db } from "@/db";
 import { teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -57,7 +57,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50" style={accentStyle}>
+    <div className="flex min-h-screen flex-col bg-slate-50" style={accentStyle}>
       {/* A fixed backdrop tinted by the team's --accent (set above from
           src/lib/industries.ts) — one soft, wide, blurred wash in the top
           corner, nothing else. Reads the CSS variable rather than
@@ -86,7 +86,7 @@ export default async function DashboardLayout({
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="flex w-full items-center justify-between px-6 py-4 lg:px-10 2xl:px-16">
           <Link href="/dashboard">
-            <Logo size="lg" />
+            <AnimatedLogo size="lg" />
           </Link>
           <nav className="flex items-center gap-5 text-sm font-medium text-slate-600">
             <Link href="/dashboard/deals" className="hover:text-brand">
@@ -136,13 +136,27 @@ export default async function DashboardLayout({
           </div>
         </div>
       </header>
-      <main className="flex w-full flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
+      <main className="flex w-full flex-1 flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
         <div className="min-w-0 flex-1">{children}</div>
         <GeneralNewsSidebar
           initialDailyBriefing={dailyBriefing}
           initialBriefingUpdatedAt={dailyBriefingUpdatedAt}
         />
       </main>
+      {/* Small, quiet footer on every dashboard page — the site's Terms
+          and Privacy links previously only lived on the marketing
+          homepage, so someone who signed up straight from a sign-up link
+          and never saw that page had no way to find them. */}
+      <footer className="mt-auto border-t border-slate-100 px-6 py-6 text-center text-xs text-slate-400 lg:px-10 2xl:px-16">
+        © {new Date().getFullYear()} Anchor ·{" "}
+        <Link href="/terms" className="hover:text-slate-600 hover:underline">
+          Terms
+        </Link>{" "}
+        ·{" "}
+        <Link href="/privacy" className="hover:text-slate-600 hover:underline">
+          Privacy
+        </Link>
+      </footer>
     </div>
   );
 }
