@@ -354,8 +354,10 @@ export const teams = pgTable("team", {
   // the equivalent live industry news for any other vertical) — a
   // separate, much-faster-refreshing feed from dailyBriefing above, shown
   // as a small scrolling bar rather than a paragraph. See
-  // src/lib/industryTicker.ts.
-  industryTicker: jsonb("industryTicker").$type<string[]>(),
+  // src/lib/industryTicker.ts. A row written before that file's
+  // {text,direction} redesign can still hold a plain string[] until its
+  // next refresh — always read this through normalizeTickerItems().
+  industryTicker: jsonb("industryTicker").$type<{ text: string; direction: "up" | "down" | "flat" }[]>(),
   industryTickerUpdatedAt: timestamp("industryTickerUpdatedAt", { mode: "date" }),
   // Optional industry "subsector" the team owner picks on the Team page
   // (see src/lib/industries.ts for the fixed list). Null means no

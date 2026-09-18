@@ -9,7 +9,7 @@ import { teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
-import { getIndustryTicker, isTickerStale } from "@/lib/industryTicker";
+import { getIndustryTicker, isTickerStale, normalizeTickerItems, type TickerItem } from "@/lib/industryTicker";
 import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 
@@ -31,7 +31,7 @@ export default async function DashboardLayout({
   // actually feels "live" rather than a once-a-shift roundup. Client-side
   // polling (see IndustryTicker.tsx) keeps it moving after this initial
   // load without anyone reloading the page.
-  let tickerItems: string[] = [];
+  let tickerItems: TickerItem[] = [];
   let industryLabel: string | null = null;
   // Small, purely cosmetic reskin: if the team picked an industry on the
   // Team page (see src/lib/industries.ts), swap the --accent/--accent-dark
@@ -77,7 +77,7 @@ export default async function DashboardLayout({
       }
       dailyBriefing = team?.dailyBriefing ?? null;
       dailyBriefingUpdatedAt = team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null;
-      tickerItems = team?.industryTicker ?? [];
+      tickerItems = normalizeTickerItems(team?.industryTicker);
       if (teamIndustry) {
         industryLabel = INDUSTRY_BY_KEY[teamIndustry].label;
         const ind = INDUSTRY_BY_KEY[teamIndustry];
