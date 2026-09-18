@@ -9,12 +9,9 @@ import {
   accounts,
   sessions,
   verificationTokens,
-  teams,
-  teamInvites,
-  dealMembers,
 } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
 import { signInEmailHtml, signInEmailText } from "@/lib/emailTemplates";
+import { assignTeamForNewUser } from "@/lib/onboardUser";
 
 // Only registered when the LinkedIn app's credentials are actually set —
 // so the app still runs fine (email sign-in only) before that's set up,
@@ -135,42 +132,7 @@ export const {
     // this is a new account on its own, so give it a fresh team of one.
     async createUser({ user }) {
       if (!user.id || !user.email) return;
-
-      const [invite] = await db
-        .select()
-        .from(teamInvites)
-        .where(sql`lower(${teamInvites.email}) = lower(${user.email})`)
-        .limit(1);
-
-      if (invite) {
-        await db
-          .update(users)
-          .set({
-            teamId: invite.teamId,
-            // Set only for an invite that came from an approved join
-            // request naming one deal (see
-            // /api/join-requests/[id]/approve) — an ordinary teammate
-            // invite leaves this false, same as always.
-            restrictedToDeals: Boolean(invite.restrictToDealId),
-          })
-          .where(eq(users.id, user.id));
-        if (invite.restrictToDealId) {
-          await db
-            .insert(dealMembers)
-            .values({ dealId: invite.restrictToDealId, userId: user.id })
-            .onConflictDoNothing();
-        }
-        await db
-          .delete(teamInvites)
-          .where(sql`lower(${teamInvites.email}) = lower(${user.email})`);
-        return;
-      }
-
-      const [team] = await db
-        .insert(teams)
-        .values({ name: user.name ? `${user.name}'s Team` : "My Team", ownerUserId: user.id })
-        .returning();
-      await db.update(users).set({ teamId: team.id }).where(eq(users.id, user.id));
+      await assignTeamForNewUser(user.id, user.email, user.name ?? null);
     },
   },
 });
