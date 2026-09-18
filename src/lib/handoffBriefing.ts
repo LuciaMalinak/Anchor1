@@ -76,6 +76,11 @@ export async function generateHandoffBriefing(params: {
   // point of a handoff: focusAreas and whatToPushOn should read like
   // guidance from THEM, not generic sales advice.
   leadStyle?: string | null;
+  // Recent Gmail/Calendar activity with this deal's contacts (see
+  // src/lib/dealIntegrationContext.ts) — null whenever there's no
+  // connection or nothing matched.
+  emailContext?: string | null;
+  calendarContext?: string | null;
 }): Promise<HandoffBriefingResult> {
   const meetingsBlock =
     params.recentMeetings.length > 0
@@ -103,6 +108,10 @@ export async function generateHandoffBriefing(params: {
   const leadStyleBlock = params.leadStyle
     ? `\n\nHow the deal lead actually operates — write focusAreas and whatToPushOn to match this, not generic sales advice:\n${params.leadStyle}`
     : "";
+  const emailBlock = params.emailContext ? `\n\nRecent emails with people on this deal:\n${params.emailContext}` : "";
+  const calendarBlock = params.calendarContext
+    ? `\n\nRecent and upcoming calendar meetings with people on this deal:\n${params.calendarContext}`
+    : "";
 
   const message = await client().messages.create({
     model: MODEL,
@@ -126,7 +135,7 @@ People on the other side:
 ${peopleBlock}
 
 Recent meetings:
-${meetingsBlock}${leadStyleBlock}
+${meetingsBlock}${emailBlock}${calendarBlock}${leadStyleBlock}
 
 Produce a handoff briefing for someone else running the next meeting on this deal.`,
       },

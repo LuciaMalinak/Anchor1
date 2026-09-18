@@ -69,6 +69,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         actionItems: r.summary.actionItems,
       })),
       leadStyle,
+      emailContext: deal.emailContext,
+      calendarContext: deal.calendarContext,
     });
     return NextResponse.json({ briefing });
   } catch (err) {

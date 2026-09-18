@@ -87,6 +87,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     files: files.map((f) => ({ fileName: f.fileName, excerpt: f.extractedText })),
     companyResearch: deal.companyResearch,
     newsHeadline: deal.newsHeadline,
+    // Already cached on the deal row (refreshed at most every 6h when the
+    // deal page loads — see src/lib/dealIntegrationContext.ts), so this
+    // adds zero extra latency to a live answer.
+    emailContext: deal.emailContext,
+    calendarContext: deal.calendarContext,
     dealLeadStyle,
   };
 
