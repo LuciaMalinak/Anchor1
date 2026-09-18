@@ -62,22 +62,22 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-slate-50" style={accentStyle}>
       {/* A fixed backdrop tinted by the team's --accent (set above from
-          src/lib/industries.ts) — a glow plus a fine dot grid, same visual
-          language as the marketing page's hero. Since it reads the CSS
-          variable rather than hardcoding a color per industry, it gives
-          every sector's dashboard a visibly different, on-brand look for
-          free, with nothing to keep in sync as industries are added.
-          Strong enough to actually notice (most of the viewport is white
-          cards, so anything fainter disappears entirely) while staying
-          behind everything — fixed + negative z-index, never intercepts
-          clicks or scrolls with the page. */}
+          src/lib/industries.ts) — one soft, wide, blurred wash in the top
+          corner, nothing else. Reads the CSS variable rather than
+          hardcoding a color per industry, so every sector's dashboard has
+          a subtly different color temperature for free. Deliberately
+          restrained this time: no dot grid, no hard edge, low enough
+          opacity that it reads as "premium ambient light" rather than a
+          pattern or a stripe — the loud version of this (visible dots,
+          35% opacity) is exactly what got called out as unprofessional.
+          Fixed + negative z-index + pointer-events-none, so it never
+          intercepts clicks or competes with real content. */}
       <div
         aria-hidden="true"
         className="drift-bg pointer-events-none fixed inset-0 -z-10"
         style={{
           backgroundImage:
-            "radial-gradient(ellipse 70% 50% at 50% -5%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 72%), radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent) 1.5px, transparent 1.5px)",
-          backgroundSize: "auto, 26px 26px",
+            "radial-gradient(ellipse 55% 38% at 82% -8%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%)",
         }}
       />
       {/* A large, faint, industry-specific scene in the back corner — a
@@ -85,19 +85,13 @@ export default async function DashboardLayout({
           pharma, and so on. See src/components/IndustryBackdrop.tsx for
           why this is line art rather than a photo. */}
       <IndustryBackdrop industry={industryKey} />
+      {/* Plain white header, neutral border — no colored stripe. The bright
+          solid accent bar this used to have (linear-gradient, 3px, full
+          width) is exactly what read as a garish "bar/glow" rather than
+          professional branding; the accent now shows up only in small,
+          deliberate touches (the signed-in avatar, hover states, buttons)
+          instead of a loud band across the top of every page. */}
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
-        {/* A solid, unmissable signal on top of the ambient wash above — a
-            thin accent-colored line across the top of the header. Lives
-            inside the sticky header so it stays visible on scroll instead
-            of disappearing after the first scroll tick. */}
-        <div
-          aria-hidden="true"
-          className="h-[3px] w-full"
-          style={{
-            background:
-              "linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 15%, transparent))",
-          }}
-        />
         <div className="flex w-full items-center justify-between px-6 py-4 lg:px-10 2xl:px-16">
           <Link href="/dashboard">
             <Logo size="lg" />
