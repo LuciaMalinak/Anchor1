@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { IndustryTicker } from "./IndustryTicker";
+import type { TickerItem } from "@/lib/industryTicker";
 
 // Deal detail pages (/dashboard/deals/<id>) already show their own
 // deal-specific news sidebar inside DealTabs — this general, team-wide
@@ -30,7 +31,7 @@ export function GeneralNewsSidebar({
 }: {
   initialDailyBriefing: string | null;
   initialBriefingUpdatedAt: string | null;
-  initialTickerItems: string[];
+  initialTickerItems: TickerItem[];
   industryLabel: string | null;
 }) {
   const pathname = usePathname();

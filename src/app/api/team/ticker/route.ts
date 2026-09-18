@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
-import { getIndustryTicker, isTickerStale } from "@/lib/industryTicker";
+import { getIndustryTicker, isTickerStale, normalizeTickerItems } from "@/lib/industryTicker";
 import { isIndustryKey } from "@/lib/industries";
 
 // Polled every few minutes by IndustryTicker.tsx. Always answers from
@@ -37,7 +37,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    items: team.industryTicker ?? [],
+    items: normalizeTickerItems(team.industryTicker),
     updatedAt: team.industryTickerUpdatedAt ? team.industryTickerUpdatedAt.toISOString() : null,
   });
 }
@@ -55,7 +55,7 @@ export async function POST() {
   const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
   const industry = team?.industry && isIndustryKey(team.industry) ? team.industry : null;
 
-  let items: string[];
+  let items: Awaited<ReturnType<typeof getIndustryTicker>>;
   try {
     items = await getIndustryTicker(industry);
   } catch (err) {

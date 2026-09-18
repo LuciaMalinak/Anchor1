@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { TickerItem } from "@/lib/industryTicker";
 
 // The small "always running" bar above Today's Briefing — short,
 // concrete headlines (market/stock moves for a finance team, the
@@ -12,11 +13,24 @@ import { useEffect, useState } from "react";
 // prices — see globals.css's .ticker-track for the scroll animation.
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
 
+// A small colored arrow/dot next to each line — green up, red down, a
+// neutral dot for headlines with no directional number (an approval, an
+// M&A deal) — the "read it like a real stock ticker at a glance" part.
+function DirectionMark({ direction }: { direction: TickerItem["direction"] }) {
+  if (direction === "up") {
+    return <span className="mr-1 text-emerald-400">▲</span>;
+  }
+  if (direction === "down") {
+    return <span className="mr-1 text-rose-400">▼</span>;
+  }
+  return <span className="mr-1 text-slate-500">●</span>;
+}
+
 export function IndustryTicker({
   initialItems,
   industryLabel,
 }: {
-  initialItems: string[];
+  initialItems: TickerItem[];
   industryLabel: string | null;
 }) {
   const [items, setItems] = useState(initialItems);
@@ -65,8 +79,12 @@ export function IndustryTicker({
       </div>
       <div className="ticker-track flex whitespace-nowrap py-2">
         {loopItems.map((item, i) => (
-          <span key={i} className="mx-4 shrink-0 text-xs font-medium text-slate-100">
-            {item}
+          <span
+            key={i}
+            className="mx-4 flex shrink-0 items-center font-mono text-xs font-medium text-slate-100"
+          >
+            <DirectionMark direction={item.direction} />
+            {item.text}
           </span>
         ))}
       </div>

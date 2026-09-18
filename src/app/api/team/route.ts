@@ -78,6 +78,22 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Not a recognized industry" }, { status: 400 });
   }
 
-  await db.update(teams).set({ industry }).where(eq(teams.id, teamId));
+  // Clear the cached daily briefing and news ticker along with the
+  // industry change — both are keyed off industry when they're built
+  // (see src/lib/dailyBriefing.ts and src/lib/industryTicker.ts), but
+  // neither one re-checks industry on every read, only when its own
+  // staleness window (up to 20 minutes for the ticker, 6 hours for the
+  // briefing) expires. Without this, switching industries would keep
+  // showing the old industry's news until that window happened to pass.
+  await db
+    .update(teams)
+    .set({
+      industry,
+      dailyBriefing: null,
+      dailyBriefingUpdatedAt: null,
+      industryTicker: null,
+      industryTickerUpdatedAt: null,
+    })
+    .where(eq(teams.id, teamId));
   return NextResponse.json({ ok: true, industry });
 }
