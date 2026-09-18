@@ -109,6 +109,8 @@ export default async function TeamPage() {
       pendingRequests={pendingRequests}
       otherTeamRequests={otherTeamRequests}
       currentUserId={session.user.id}
+      industry={team?.industry ?? null}
+      isOwner={team?.ownerUserId === session.user.id}
     />
   );
 }

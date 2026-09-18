@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
 import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
+import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 
 export default async function DashboardLayout({
   children,
@@ -22,6 +23,14 @@ export default async function DashboardLayout({
   // elsewhere: refreshed at most once a day per team, never blocks the page.
   let dailyBriefing: string | null = null;
   let dailyBriefingUpdatedAt: string | null = null;
+  // Small, purely cosmetic reskin: if the team picked an industry on the
+  // Team page (see src/lib/industries.ts), swap the --accent/--accent-dark
+  // CSS variables for the rest of the dashboard to that industry's color —
+  // every `accent`-based Tailwind class (bg-accent, text-accent, etc.)
+  // picks it up automatically since they resolve through those variables
+  // (see globals.css's `@theme inline` block). Null/unrecognized just
+  // falls through to the default brand accent, same as always.
+  let accentStyle: React.CSSProperties | undefined;
   if (session?.user?.id) {
     try {
       const teamId = await getOrCreateTeamId(session.user.id);
@@ -38,13 +47,17 @@ export default async function DashboardLayout({
       }
       dailyBriefing = team?.dailyBriefing ?? null;
       dailyBriefingUpdatedAt = team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null;
+      if (team?.industry && isIndustryKey(team.industry)) {
+        const ind = INDUSTRY_BY_KEY[team.industry];
+        accentStyle = { "--accent": ind.accent, "--accent-dark": ind.accentDark } as React.CSSProperties;
+      }
     } catch (err) {
       console.error("Couldn't load team daily briefing:", err);
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50" style={accentStyle}>
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="flex w-full items-center justify-between px-6 py-4 lg:px-10 2xl:px-16">
           <Link href="/dashboard">

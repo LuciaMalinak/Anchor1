@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { AnchorMark, Logo } from "@/components/Logo";
 import { AnchorNeuralField } from "@/components/AnchorNeuralField";
+import { INDUSTRIES } from "@/lib/industries";
 
 const STEPS = [
   {
@@ -403,6 +404,40 @@ export default async function Home() {
             />
             <span className="relative">Sign in</span>
           </Link>
+        </div>
+      </section>
+
+      {/* Industry section — the fixed list a team can pick from on the
+          Team page (src/lib/industries.ts). Positioning/copy only for
+          now: same Anchor, same AI, under every card — industry-tuned AI
+          behavior is a later project, not implied here. */}
+      <section className="border-t border-slate-100 bg-slate-50 px-6 py-24">
+        <div className="mx-auto max-w-5xl">
+          <p className="text-center text-xs font-semibold tracking-[0.2em] text-accent">
+            BUILT FOR YOUR INDUSTRY
+          </p>
+          <h2 className="mx-auto mt-3 max-w-xl text-center text-3xl font-semibold tracking-tight text-brand">
+            Anchor speaks your industry
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-center text-sm leading-relaxed text-slate-500">
+            Set your team&apos;s industry on the Team page and Anchor carries it through the
+            product — starting with a look that matches.
+          </p>
+          <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {INDUSTRIES.map((ind) => (
+              <div
+                key={ind.key}
+                className="reveal group rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                style={{ borderTopWidth: "3px", borderTopColor: ind.accent }}
+              >
+                <span className="text-2xl" aria-hidden="true">
+                  {ind.icon}
+                </span>
+                <p className="mt-3 text-base font-semibold text-slate-900">Anchor for {ind.label}</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">{ind.blurb}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
