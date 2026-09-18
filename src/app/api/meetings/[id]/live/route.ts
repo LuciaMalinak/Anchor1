@@ -86,6 +86,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         recentTranscript: transcriptText.slice(-TRANSCRIPT_WINDOW_CHARS),
         priorChecklist: meeting.liveSuggestions?.checklist || null,
         leadStyle,
+        notes: deal?.notes || null,
       });
       await db
         .update(meetings)
