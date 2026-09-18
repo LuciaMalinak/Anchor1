@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { INDUSTRY_BY_KEY, type IndustryKey } from "./industries";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
@@ -34,13 +35,21 @@ export function isBriefingStale(updatedAt: Date | null): boolean {
  * (see isBriefingStale) so every deal's News tab doesn't each pay for its
  * own search. Company-specific news lives separately in companyResearch.ts.
  */
-export async function getDailyBriefing(): Promise<string> {
+// industry is optional — this is shared team-wide, and a team that
+// hasn't picked one yet (or a solo account) still gets a perfectly good
+// general business briefing rather than an error or empty state.
+export async function getDailyBriefing(industry?: IndustryKey | null): Promise<string> {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
   });
+
+  const industryLabel = industry ? INDUSTRY_BY_KEY[industry]?.label : null;
+  const focusLine = industryLabel
+    ? `This team works in ${industryLabel}, so weight the search and the briefing toward news relevant to that industry specifically — not just generic business news — while still including any major market-wide story worth knowing.`
+    : "";
 
   const message = await client().messages.create({
     model: MODEL,
@@ -51,7 +60,7 @@ export async function getDailyBriefing(): Promise<string> {
     messages: [
       {
         role: "user",
-        content: `Today is ${today}. Search for today's top business, market, and technology news — the kind of thing worth knowing before a day of sales meetings (market moves, notable funding rounds, major product launches, economic indicators, industry shifts). Reply with a short briefing (4-6 sentences, plain prose, no headers or bullet points, no meta preamble like "Based on the search results") covering the 2-4 most relevant stories. Only state things you found via search.`,
+        content: `Today is ${today}. Search for today's top business, market, and technology news — the kind of thing worth knowing before a day of sales meetings (market moves, notable funding rounds, major product launches, economic indicators, industry shifts). ${focusLine} Reply with a short briefing (4-6 sentences, plain prose, no headers or bullet points, no meta preamble like "Based on the search results") covering the 2-4 most relevant stories. Only state things you found via search.`,
       },
     ],
   });

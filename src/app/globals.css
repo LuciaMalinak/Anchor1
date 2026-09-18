@@ -93,6 +93,7 @@ a {
   .float-orb,
   .travel-dot,
   .pulse-glow,
+  .ticker-track,
   .reveal {
     animation: none !important;
   }
@@ -284,6 +285,26 @@ a {
 }
 .pulse-glow {
   animation: pulseGlow 2.8s ease-in-out infinite;
+}
+
+/* IndustryTicker (src/app/dashboard/IndustryTicker.tsx) — the small
+   "always running" market/industry-news bar above Today's Briefing.
+   Content refreshes server-side every 20 minutes (see
+   src/lib/industryTicker.ts) and is picked up by client-side polling;
+   this animation is what makes it read as continuously live in between —
+   a plain linear scroll from 0 to exactly -50%, which is seamless only
+   because the component renders the item list twice back to back. */
+@keyframes tickerScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.ticker-track {
+  width: max-content;
+  animation: tickerScroll 35s linear infinite;
 }
 
 /* AnchorNeuralField (src/components/AnchorNeuralField.tsx) — the big

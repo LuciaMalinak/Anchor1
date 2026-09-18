@@ -350,6 +350,13 @@ export const teams = pgTable("team", {
   // (companyResearch / newsHeadline).
   dailyBriefing: text("dailyBriefing"),
   dailyBriefingUpdatedAt: timestamp("dailyBriefingUpdatedAt", { mode: "date" }),
+  // Short, ticker-style headlines (market/stock moves for a finance team,
+  // the equivalent live industry news for any other vertical) — a
+  // separate, much-faster-refreshing feed from dailyBriefing above, shown
+  // as a small scrolling bar rather than a paragraph. See
+  // src/lib/industryTicker.ts.
+  industryTicker: jsonb("industryTicker").$type<string[]>(),
+  industryTickerUpdatedAt: timestamp("industryTickerUpdatedAt", { mode: "date" }),
   // Optional industry "subsector" the team owner picks on the Team page
   // (see src/lib/industries.ts for the fixed list). Null means no
   // preference set — the default look and generic AI behavior. Currently

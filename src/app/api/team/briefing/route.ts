@@ -5,6 +5,7 @@ import { teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getDailyBriefing } from "@/lib/dailyBriefing";
+import { isIndustryKey } from "@/lib/industries";
 
 // Manual refresh for the team-wide "Today's briefing" shown on the News
 // tab. Auto-refresh (throttled to once a day) happens in the deal page
@@ -16,10 +17,12 @@ export async function POST() {
   }
 
   const teamId = await getOrCreateTeamId(session.user.id);
+  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  const industry = team?.industry && isIndustryKey(team.industry) ? team.industry : null;
 
   let dailyBriefing: string;
   try {
-    dailyBriefing = await getDailyBriefing();
+    dailyBriefing = await getDailyBriefing(industry);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Couldn't refresh today's briefing" },
