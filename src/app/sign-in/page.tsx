@@ -4,6 +4,9 @@ import { Logo } from "@/components/Logo";
 const linkedInConfigured = Boolean(
   process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET
 );
+const googleConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+);
 
 const SIGN_IN_ERROR_COPY: Record<string, string> = {
   invalid: "Incorrect email or password.",
@@ -26,30 +29,55 @@ export default async function SignInPage({
             Sign in
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Use LinkedIn for one click, sign in with your password, or we&apos;ll email
-            you a link instead — whichever&apos;s easiest.
+            Use Google or LinkedIn for one click, sign in with your password, or
+            we&apos;ll email you a link instead — whichever&apos;s easiest.
           </p>
         </div>
       </div>
 
-      {linkedInConfigured && (
+      {(googleConfigured || linkedInConfigured) && (
         <>
-          <form
-            action={async () => {
-              "use server";
-              await signIn("linkedin", { redirectTo: "/dashboard" });
-            }}
-          >
-            <button
-              type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#0A66C2] px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#004182]"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.15 1.45-2.15 2.94v5.67H9.34V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13zM7.11 20.45H3.56V9h3.55v11.45z" />
-              </svg>
-              Continue with LinkedIn
-            </button>
-          </form>
+          <div className="flex flex-col gap-2">
+            {googleConfigured && (
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("google", { redirectTo: "/dashboard" });
+                }}
+              >
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-400"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.48a5.54 5.54 0 0 1-2.4 3.64v3h3.88c2.27-2.09 3.56-5.17 3.56-8.83z" />
+                    <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.96-2.9l-3.88-3c-1.08.72-2.45 1.15-4.08 1.15-3.14 0-5.8-2.12-6.75-4.96H1.24v3.1A12 12 0 0 0 12 24z" />
+                    <path fill="#FBBC05" d="M5.25 14.29a7.2 7.2 0 0 1 0-4.58v-3.1H1.24a12 12 0 0 0 0 10.78l4.01-3.1z" />
+                    <path fill="#EA4335" d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.24 6.61l4.01 3.1C6.2 6.87 8.86 4.75 12 4.75z" />
+                  </svg>
+                  Continue with Google
+                </button>
+              </form>
+            )}
+            {linkedInConfigured && (
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("linkedin", { redirectTo: "/dashboard" });
+                }}
+              >
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#0A66C2] px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#004182]"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.15 1.45-2.15 2.94v5.67H9.34V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13zM7.11 20.45H3.56V9h3.55v11.45z" />
+                  </svg>
+                  Continue with LinkedIn
+                </button>
+              </form>
+            )}
+          </div>
           <div className="flex items-center gap-3 text-xs text-slate-400">
             <div className="h-px flex-1 bg-slate-200" />
             or
