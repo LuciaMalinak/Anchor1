@@ -86,6 +86,14 @@ export async function generateLiveCoaching(params: {
     overview: string;
     dealSignals: { type: "buying_signal" | "risk" | "blocker"; detail: string }[];
   }[];
+  // Recent Gmail/Calendar activity with this deal's contacts, when the
+  // deal's lead has Google connected (see src/lib/dealIntegrationContext.ts)
+  // — already fetched and cached on the deal row (refreshed at most every
+  // 6h), so this adds zero extra latency here. Ask Anchor and handoff
+  // briefings already had this; live coaching didn't. Null whenever
+  // there's no connection or nothing matched — never invented.
+  emailContext?: string | null;
+  calendarContext?: string | null;
 }): Promise<LiveCoaching> {
   const priorChecklistText = params.priorChecklist?.length
     ? `\n\nChecklist from the last update (keep these labels, just update covered status, unless the conversation clearly calls for a different item):\n${params.priorChecklist
@@ -108,6 +116,12 @@ export async function generateLiveCoaching(params: {
         })
         .join("\n")}`
     : "";
+  const emailContextText = params.emailContext
+    ? `\n\nRecent emails with people on this deal: ${params.emailContext}`
+    : "";
+  const calendarContextText = params.calendarContext
+    ? `\n\nRecent and upcoming calendar meetings with people on this deal: ${params.calendarContext}`
+    : "";
 
   const message = await client().messages.create({
     model: MODEL,
@@ -123,7 +137,7 @@ export async function generateLiveCoaching(params: {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${pastMeetingsText}
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${pastMeetingsText}${emailContextText}${calendarContextText}
 ${priorChecklistText}
 
 Transcript so far (most recent portion of an in-progress call):

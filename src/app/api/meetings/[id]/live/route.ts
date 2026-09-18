@@ -111,6 +111,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         priorChecklist: meeting.liveSuggestions?.checklist || null,
         leadStyle,
         notes: deal?.notes || null,
+        // Already cached on the deal row (refreshed at most every 6h — see
+        // src/lib/dealIntegrationContext.ts), so this adds zero extra
+        // latency to a live poll. Ask Anchor and handoff briefings already
+        // had this; live coaching was blind to Gmail/Calendar until now.
+        emailContext: deal?.emailContext || null,
+        calendarContext: deal?.calendarContext || null,
         pastMeetings: pastMeetingRows.map((r) => ({
           title: r.meeting.title,
           occurredAt: r.meeting.occurredAt.toLocaleDateString(),
