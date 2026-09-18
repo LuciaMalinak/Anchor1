@@ -39,6 +39,12 @@ export type DealContext = {
   files: { fileName: string; excerpt: string | null }[];
   companyResearch: string | null;
   newsHeadline: string | null;
+  // How the deal's actual lead tends to negotiate, decide, and
+  // communicate (see src/lib/styleProfile.ts) — null if no lead is set,
+  // or there isn't enough of their own material yet to say anything real.
+  // Present so a delegate covering this deal's meeting gets answers that
+  // sound like the lead would give them, not a generic assistant voice.
+  dealLeadStyle: string | null;
 };
 
 function buildContextBlock(ctx: DealContext): string {
@@ -103,6 +109,12 @@ function buildContextBlock(ctx: DealContext): string {
     if (ctx.companyResearch) parts.push(ctx.companyResearch);
   }
 
+  if (ctx.dealLeadStyle) {
+    parts.push(
+      `\nHow the person who actually leads this deal tends to operate — match this instinct, not a generic tone, especially if you're helping someone covering for them: ${ctx.dealLeadStyle}`
+    );
+  }
+
   return parts.join("\n");
 }
 
@@ -145,4 +157,47 @@ ${contextBlock}`,
     throw new Error("Anchor didn't return an answer.");
   }
   return text;
+}
+
+// Streaming twin of askAnchor, used by the live "During a call" panel —
+// the whole point of that surface is speed, and the biggest lever for
+// how FAST an answer feels isn't the model (already the fastest one) but
+// whether the first words show up in a few hundred ms instead of waiting
+// for the complete 2-4 sentence answer (which can take several seconds
+// once the model reaches for web search). Yields plain text chunks as
+// they arrive; the caller is responsible for concatenating them.
+export async function* askAnchorStream(params: {
+  context: DealContext;
+  question: string;
+  history: { role: "user" | "assistant"; content: string }[];
+}): AsyncGenerator<string> {
+  const contextBlock = buildContextBlock(params.context);
+
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 500,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+    system: `You are Anchor, a live meeting assistant. Someone is in the middle of a real meeting right now and typed you a quick question — they need a short, useful, immediately usable answer, not a lecture.
+
+Ground every answer in the deal context you're given below (past meeting summaries, action items, continuity notes, attached file contents) first. You also have a live web search tool — reach for it when the question needs something current that wouldn't be in the deal context: recent company news, funding, industry trends, competitor moves, market conditions. Only search about the company/industry, never to look up a named individual. If neither the deal context nor a search turns up an answer, say plainly that Anchor doesn't have that information yet — never invent facts, numbers, names, or commitments.
+
+Keep answers to 2-4 sentences unless the question clearly calls for a short list. Write like you're quietly feeding them a talking point mid-meeting, not writing a report.
+
+--- Deal context ---
+${contextBlock}`,
+    messages: [
+      ...params.history.map((h) => ({ role: h.role, content: h.content })),
+      { role: "user" as const, content: params.question },
+    ],
+  });
+
+  for await (const event of stream) {
+    if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+      yield event.delta.text;
+    }
+  }
+
+  // Surfaces stream-level errors (e.g. an API error mid-response) that a
+  // plain `for await` over content_block_delta events alone would swallow.
+  await stream.finalMessage();
 }

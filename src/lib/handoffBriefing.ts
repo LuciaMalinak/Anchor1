@@ -70,6 +70,12 @@ export async function generateHandoffBriefing(params: {
     keyPoints: string[];
     actionItems: { text: string; owner: string | null }[];
   }[];
+  // How the deal's actual lead tends to negotiate, decide, and
+  // communicate (see src/lib/styleProfile.ts) — null if no lead is set,
+  // or there isn't enough of their own material yet. This is the whole
+  // point of a handoff: focusAreas and whatToPushOn should read like
+  // guidance from THEM, not generic sales advice.
+  leadStyle?: string | null;
 }): Promise<HandoffBriefingResult> {
   const meetingsBlock =
     params.recentMeetings.length > 0
@@ -94,6 +100,10 @@ export async function generateHandoffBriefing(params: {
           .join("\n\n")
       : "No one resolved yet on the other side.";
 
+  const leadStyleBlock = params.leadStyle
+    ? `\n\nHow the deal lead actually operates — write focusAreas and whatToPushOn to match this, not generic sales advice:\n${params.leadStyle}`
+    : "";
+
   const message = await client().messages.create({
     model: MODEL,
     max_tokens: 700,
@@ -116,7 +126,7 @@ People on the other side:
 ${peopleBlock}
 
 Recent meetings:
-${meetingsBlock}
+${meetingsBlock}${leadStyleBlock}
 
 Produce a handoff briefing for someone else running the next meeting on this deal.`,
       },

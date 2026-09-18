@@ -280,6 +280,19 @@ ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "salesforceOpportunityId" text;
 -- plain text (like deal.stage above) rather than an enum, so the list
 -- in src/lib/industries.ts can grow without another migration.
 ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "industry" text;
+
+-- One rolling, AI-maintained profile per person of how THEY negotiate,
+-- decide, and communicate (built only from their own deal notes,
+-- decision boundaries, and deal-chat messages) — see src/lib/styleProfile.ts.
+-- Lets Live Assist and handoff briefings answer the way the actual deal
+-- lead would when someone else is covering their meeting.
+CREATE TABLE IF NOT EXISTS "user_style_profile" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId" uuid NOT NULL UNIQUE REFERENCES "user"("id") ON DELETE CASCADE,
+  "profile" text,
+  "sourceCount" integer NOT NULL DEFAULT 0,
+  "updatedAt" timestamp NOT NULL DEFAULT now()
+);
 `;
 
 export async function GET(req: NextRequest) {
@@ -305,7 +318,7 @@ export async function GET(req: NextRequest) {
   `;
   const newTables = await rawClient`
     select table_name from information_schema.tables
-    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection', 'meeting_live_segment', 'task', 'task_comment', 'deal_member', 'join_request', 'contact_note', 'memory_snapshot')
+    where table_name in ('team', 'team_invite', 'deal', 'deal_file', 'deal_message', 'integration_connection', 'meeting_live_segment', 'task', 'task_comment', 'deal_member', 'join_request', 'contact_note', 'memory_snapshot', 'user_style_profile')
   `;
   const summaryCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'summary'

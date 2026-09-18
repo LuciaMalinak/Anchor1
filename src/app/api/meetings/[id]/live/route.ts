@@ -5,6 +5,7 @@ import { meetings, meetingLiveSegments, deals } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { generateLiveCoaching } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
+import { getDealLeadStyle } from "@/lib/styleProfile";
 
 // How often live coaching (nudges + checklist) is allowed to regenerate.
 // The During tab polls this route every few seconds for a smooth-feeling
@@ -71,12 +72,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       .where(eq(meetings.id, id));
 
     try {
+      // Never rebuilt synchronously here — this route is polled every
+      // few seconds during a live call, so it reads whatever style
+      // profile already exists (possibly a day stale) rather than ever
+      // waiting on a rebuild.
+      const leadStyle = await getDealLeadStyle(deal?.leadUserId ?? null, {
+        allowSynchronousRebuild: false,
+      });
       const coaching = await generateLiveCoaching({
         dealName: deal?.name || null,
         dealMemory: deal?.memory || null,
         decisionBoundaries: deal?.decisionBoundaries || null,
         recentTranscript: transcriptText.slice(-TRANSCRIPT_WINDOW_CHARS),
         priorChecklist: meeting.liveSuggestions?.checklist || null,
+        leadStyle,
       });
       await db
         .update(meetings)

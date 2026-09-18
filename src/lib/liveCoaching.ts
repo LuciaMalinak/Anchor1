@@ -63,11 +63,18 @@ export async function generateLiveCoaching(params: {
   decisionBoundaries: string | null;
   recentTranscript: string;
   priorChecklist: { label: string; covered: boolean }[] | null;
+  // How the deal's actual lead tends to negotiate, decide, and
+  // communicate (see src/lib/styleProfile.ts) — null if no lead is set,
+  // or there isn't enough of their own material yet.
+  leadStyle?: string | null;
 }): Promise<LiveCoaching> {
   const priorChecklistText = params.priorChecklist?.length
     ? `\n\nChecklist from the last update (keep these labels, just update covered status, unless the conversation clearly calls for a different item):\n${params.priorChecklist
         .map((c) => `- [${c.covered ? "x" : " "}] ${c.label}`)
         .join("\n")}`
+    : "";
+  const leadStyleText = params.leadStyle
+    ? `\n\nHow the deal lead actually operates — nudges should sound like guidance from them, not generic coaching: ${params.leadStyle}`
     : "";
 
   const message = await client().messages.create({
@@ -84,7 +91,7 @@ export async function generateLiveCoaching(params: {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}
 ${priorChecklistText}
 
 Transcript so far (most recent portion of an in-progress call):

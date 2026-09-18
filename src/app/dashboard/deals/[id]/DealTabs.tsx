@@ -1195,6 +1195,11 @@ function AskAnchorPanel({ dealId }: { dealId: string }) {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
+  // The answer as it streams in, word by word, before it's a finished
+  // turn — shown as its own bubble so the first words appear almost
+  // immediately instead of everyone staring at "Thinking…" for a few
+  // seconds while the full answer is generated.
+  const [streamingAnswer, setStreamingAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -1207,20 +1212,36 @@ function AskAnchorPanel({ dealId }: { dealId: string }) {
     const nextTurns: ChatTurn[] = [...turns, { role: "user", content: q }];
     setTurns(nextTurns);
     setAsking(true);
+    setStreamingAnswer("");
     try {
       const res = await fetch(`/api/deals/${dealId}/assist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q, history: turns }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Anchor couldn't answer that.");
-      setTurns([...nextTurns, { role: "assistant", content: body.answer }]);
-      requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Anchor couldn't answer that.");
+      }
+      if (!res.body) throw new Error("Anchor couldn't answer that.");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let answer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        answer += decoder.decode(value, { stream: true });
+        setStreamingAnswer(answer);
+        requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
+      }
+      if (!answer.trim()) throw new Error("Anchor couldn't answer that.");
+      setTurns([...nextTurns, { role: "assistant", content: answer }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Anchor couldn't answer that.");
     } finally {
       setAsking(false);
+      setStreamingAnswer("");
     }
   }
 
@@ -1249,8 +1270,8 @@ function AskAnchorPanel({ dealId }: { dealId: string }) {
             </div>
           ))}
           {asking && (
-            <div className="self-start rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400">
-              Thinking…
+            <div className="max-w-[85%] self-start rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-800">
+              {streamingAnswer || <span className="text-slate-400">Thinking…</span>}
             </div>
           )}
           <div ref={bottomRef} />
