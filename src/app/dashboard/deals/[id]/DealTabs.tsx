@@ -1598,29 +1598,52 @@ export function DealTabs({
   // when the tab changes, this component does not.
   const mic = useMicRecorder({ dealId: deal.id, onUploaded: () => router.refresh() });
 
-  // Ticks nowMs (so a scheduled meeting's card and inProgress status
-  // stay current), and — once per meeting, tracked in firedRef so a
-  // stalled bot that never flips out of "joining" doesn't yank the tab
-  // back to During forever — refreshes and jumps to During right when a
-  // scheduled meeting's time arrives, so there's nothing to come back
-  // and click.
-  const firedRef = useRef(new Set<string>());
+  // Ticks nowMs (so a scheduled meeting's card and inProgress status stay
+  // current) and drives the deal onto the tab that actually matches
+  // what's happening, in both directions:
+  //
+  // - Into During the moment a meeting is genuinely live — either a
+  //   scheduled call whose time has arrived, or an immediate join by
+  //   anyone on the team (not just whoever clicked "Join meeting" — see
+  //   onJoinedNow below for that person's own instant switch; this is
+  //   what catches everyone else looking at the same deal). Fires once
+  //   per meeting (firedLiveRef) so a bot stuck in "joining" doesn't yank
+  //   the tab back forever.
+  // - Out to After the moment the call(s) that pulled you into During
+  //   finish processing and nothing is live anymore — only if you're
+  //   still sitting on During, so you're never left parked on a tab with
+  //   nothing left happening, but a tab you deliberately clicked to isn't
+  //   fought either.
+  const firedLiveRef = useRef(new Set<string>());
+  const prevLiveIdsRef = useRef(new Set<string>());
   useEffect(() => {
     function tick() {
       const now = Date.now();
       setNowMs(now);
-      const justDue = meetings.find(
+
+      const newlyLive = meetings.find(
         (m) =>
-          m.status === "joining" &&
-          m.scheduledAt &&
-          new Date(m.scheduledAt).getTime() <= now &&
-          !firedRef.current.has(m.id)
+          (m.status === "joining" || m.status === "recording") &&
+          (!m.scheduledAt || new Date(m.scheduledAt).getTime() <= now) &&
+          !firedLiveRef.current.has(m.id)
       );
-      if (justDue) {
-        firedRef.current.add(justDue.id);
+      if (newlyLive) {
+        firedLiveRef.current.add(newlyLive.id);
         router.refresh();
         setTab("during");
       }
+
+      const currentLiveIds = new Set(
+        meetings
+          .filter((m) => m.status === "joining" || m.status === "recording")
+          .map((m) => m.id)
+      );
+      const justEnded = [...prevLiveIdsRef.current].some((id) => !currentLiveIds.has(id));
+      if (justEnded && currentLiveIds.size === 0) {
+        router.refresh();
+        setTab((current) => (current === "during" ? "after" : current));
+      }
+      prevLiveIdsRef.current = currentLiveIds;
     }
     tick();
     const interval = setInterval(tick, 20_000);
