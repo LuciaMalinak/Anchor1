@@ -266,6 +266,15 @@ CREATE TABLE IF NOT EXISTS "memory_snapshot" (
   "method" text NOT NULL,
   "createdAt" timestamp NOT NULL DEFAULT now()
 );
+
+-- Real Salesforce connection: a per-org API base URL (unlike
+-- Google/Microsoft/Slack, which use one shared endpoint), plus
+-- sync-linkage ids on contact/deal so a re-sync updates existing rows
+-- instead of duplicating them.
+ALTER TYPE integration_provider ADD VALUE IF NOT EXISTS 'salesforce';
+ALTER TABLE "integration_connection" ADD COLUMN IF NOT EXISTS "instanceUrl" text;
+ALTER TABLE "contact" ADD COLUMN IF NOT EXISTS "salesforceContactId" text;
+ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "salesforceOpportunityId" text;
 `;
 
 export async function GET(req: NextRequest) {
@@ -315,6 +324,12 @@ export async function GET(req: NextRequest) {
   const teamInviteCols = await rawClient`
     select column_name from information_schema.columns where table_name = 'team_invite'
   `;
+  const integrationConnectionCols = await rawClient`
+    select column_name from information_schema.columns where table_name = 'integration_connection'
+  `;
+  const integrationProviderValues = await rawClient`
+    select unnest(enum_range(NULL::integration_provider))::text as v
+  `;
 
   return NextResponse.json({
     migrated: true,
@@ -329,5 +344,7 @@ export async function GET(req: NextRequest) {
     taskCount: taskCount[0]?.n ?? null,
     teamInviteColumns: teamInviteCols.map((r) => r.column_name),
     summaryColumns: summaryCols.map((r) => r.column_name),
+    integrationConnectionColumns: integrationConnectionCols.map((r) => r.column_name),
+    integrationProviderValues: integrationProviderValues.map((r) => r.v),
   });
 }

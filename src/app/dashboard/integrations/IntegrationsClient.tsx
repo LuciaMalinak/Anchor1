@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Provider = {
-  key: "google" | "microsoft" | "slack";
+  key: "google" | "microsoft" | "slack" | "salesforce";
   name: string;
   description: string;
   configured: boolean;
@@ -32,10 +32,33 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
   const searchParams = useSearchParams();
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const connectedParam = searchParams.get("connected");
   const errorParam = searchParams.get("error");
   const errorProvider = searchParams.get("provider");
+
+  async function handleSync(key: string, name: string) {
+    setSyncing(key);
+    setSyncMessage(null);
+    setLocalError(null);
+    try {
+      const res = await fetch(`/api/integrations/${key}/sync`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error || `Couldn't sync ${name}`);
+      }
+      setSyncMessage(
+        `Synced ${body.contactsSynced ?? 0} contact${body.contactsSynced === 1 ? "" : "s"} and ${body.dealsSynced ?? 0} deal${body.dealsSynced === 1 ? "" : "s"} from ${name}.`
+      );
+      router.refresh();
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : `Couldn't sync ${name}`);
+    } finally {
+      setSyncing(null);
+    }
+  }
 
   async function handleDisconnect(key: string, name: string) {
     if (!window.confirm(`Disconnect ${name}? Anchor will stop being able to use it until you reconnect.`)) {
@@ -77,6 +100,11 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
           {errorProvider ? ` (${errorProvider})` : ""}
         </div>
       )}
+      {syncMessage && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {syncMessage}
+        </div>
+      )}
       {localError && <p className="text-sm text-red-600">{localError}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -112,14 +140,26 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
             </div>
 
             {p.connected ? (
-              <button
-                type="button"
-                onClick={() => handleDisconnect(p.key, p.name)}
-                disabled={disconnecting === p.key}
-                className="mt-1 self-start rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-              >
-                {disconnecting === p.key ? "Disconnecting…" : "Disconnect"}
-              </button>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {p.key === "salesforce" && (
+                  <button
+                    type="button"
+                    onClick={() => handleSync(p.key, p.name)}
+                    disabled={syncing === p.key}
+                    className="self-start rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-50"
+                  >
+                    {syncing === p.key ? "Syncing…" : "Sync now"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleDisconnect(p.key, p.name)}
+                  disabled={disconnecting === p.key}
+                  className="self-start rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                >
+                  {disconnecting === p.key ? "Disconnecting…" : "Disconnect"}
+                </button>
+              </div>
             ) : p.configured ? (
               <a
                 href={`/api/integrations/${p.key}/connect`}

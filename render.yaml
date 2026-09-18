@@ -47,6 +47,10 @@ services:
         sync: false
       - key: SLACK_INTEGRATION_CLIENT_SECRET
         sync: false
+      - key: SALESFORCE_INTEGRATION_CLIENT_ID
+        sync: false
+      - key: SALESFORCE_INTEGRATION_CLIENT_SECRET
+        sync: false
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID

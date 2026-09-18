@@ -31,6 +31,16 @@ export async function fetchIdentityLabel(
       const team = tokenResponseBody.team as { name?: string } | undefined;
       return team?.name ? `${team.name} workspace` : null;
     }
+    if (key === "salesforce") {
+      const instanceUrl = tokenResponseBody.instance_url as string | undefined;
+      if (!instanceUrl) return null;
+      const res = await fetch(`${instanceUrl}/services/oauth2/userinfo`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return null;
+      const body = await res.json();
+      return typeof body.email === "string" ? body.email : null;
+    }
   } catch (err) {
     console.error(`Couldn't fetch ${key} identity label:`, err);
   }
