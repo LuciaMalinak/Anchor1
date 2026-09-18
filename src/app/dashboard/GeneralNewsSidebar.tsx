@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { IndustryTicker } from "./IndustryTicker";
 
 // Deal detail pages (/dashboard/deals/<id>) already show their own
 // deal-specific news sidebar inside DealTabs — this general, team-wide
@@ -24,9 +25,13 @@ function LiveDot() {
 export function GeneralNewsSidebar({
   initialDailyBriefing,
   initialBriefingUpdatedAt,
+  initialTickerItems,
+  industryLabel,
 }: {
   initialDailyBriefing: string | null;
   initialBriefingUpdatedAt: string | null;
+  initialTickerItems: string[];
+  industryLabel: string | null;
 }) {
   const pathname = usePathname();
   const [dailyBriefing, setDailyBriefing] = useState(initialDailyBriefing);
@@ -61,6 +66,8 @@ export function GeneralNewsSidebar({
         </span>
       </div>
 
+      <IndustryTicker initialItems={initialTickerItems} industryLabel={industryLabel} />
+
       <div className="rounded-lg border border-slate-200 border-l-4 border-l-brand bg-white px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-brand">
@@ -93,8 +100,9 @@ export function GeneralNewsSidebar({
       </div>
 
       <p className="px-1 text-[11px] text-slate-400">
-        Updates automatically once a day, or hit Refresh any time. Open a deal to see news specific
-        to that company instead.
+        The ticker above refreshes itself every few minutes; the briefing below updates automatically
+        through the day, or hit Refresh any time. Open a deal to see news specific to that company
+        instead.
       </p>
     </aside>
   );

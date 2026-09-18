@@ -300,6 +300,12 @@ CREATE TABLE IF NOT EXISTS "user_style_profile" (
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "emailContext" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "calendarContext" text;
 ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "integrationContextUpdatedAt" timestamp;
+
+-- Short, fast-refreshing ticker items (market/stock news for finance,
+-- the equivalent live industry news for any other vertical) — see
+-- src/lib/industryTicker.ts and src/app/dashboard/IndustryTicker.tsx.
+ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "industryTicker" jsonb;
+ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "industryTickerUpdatedAt" timestamp;
 `;
 
 export async function GET(req: NextRequest) {

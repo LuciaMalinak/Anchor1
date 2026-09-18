@@ -9,6 +9,7 @@ import { teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
+import { getIndustryTicker, isTickerStale } from "@/lib/industryTicker";
 import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 
@@ -25,6 +26,13 @@ export default async function DashboardLayout({
   // elsewhere: refreshed at most once a day per team, never blocks the page.
   let dailyBriefing: string | null = null;
   let dailyBriefingUpdatedAt: string | null = null;
+  // The small scrolling ticker above it — same idea, much shorter items,
+  // refreshed far more often (see src/lib/industryTicker.ts) so it
+  // actually feels "live" rather than a once-a-shift roundup. Client-side
+  // polling (see IndustryTicker.tsx) keeps it moving after this initial
+  // load without anyone reloading the page.
+  let tickerItems: string[] = [];
+  let industryLabel: string | null = null;
   // Small, purely cosmetic reskin: if the team picked an industry on the
   // Team page (see src/lib/industries.ts), swap the --accent/--accent-dark
   // CSS variables for the rest of the dashboard to that industry's color —
@@ -37,9 +45,10 @@ export default async function DashboardLayout({
     try {
       const teamId = await getOrCreateTeamId(session.user.id);
       let [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+      const teamIndustry = team?.industry && isIndustryKey(team.industry) ? team.industry : null;
       if (team && isBriefingStale(team.dailyBriefingUpdatedAt)) {
         try {
-          const briefing = await getDailyBriefing();
+          const briefing = await getDailyBriefing(teamIndustry);
           const updatedAt = new Date();
           await db.update(teams).set({ dailyBriefing: briefing, dailyBriefingUpdatedAt: updatedAt }).where(eq(teams.id, teamId));
           team = { ...team, dailyBriefing: briefing, dailyBriefingUpdatedAt: updatedAt };
@@ -47,10 +56,31 @@ export default async function DashboardLayout({
           console.error("Background daily briefing refresh failed:", err);
         }
       }
+      // Unlike the briefing above, this is never awaited here — a
+      // 20-minute staleness window means near enough every page load
+      // would otherwise pay for a synchronous web-search call, which is
+      // exactly the kind of thing tonight's speed work was about
+      // avoiding. The page renders with whatever's already cached (or
+      // nothing, on a brand-new team, until the first poll lands one);
+      // the client-side poller in IndustryTicker.tsx picks up the fresh
+      // result a few minutes later once this finishes.
+      if (team && isTickerStale(team.industryTickerUpdatedAt)) {
+        const tid = teamId;
+        getIndustryTicker(teamIndustry)
+          .then((items) =>
+            db
+              .update(teams)
+              .set({ industryTicker: items, industryTickerUpdatedAt: new Date() })
+              .where(eq(teams.id, tid))
+          )
+          .catch((err) => console.error("Background industry ticker refresh failed:", err));
+      }
       dailyBriefing = team?.dailyBriefing ?? null;
       dailyBriefingUpdatedAt = team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null;
-      if (team?.industry && isIndustryKey(team.industry)) {
-        const ind = INDUSTRY_BY_KEY[team.industry];
+      tickerItems = team?.industryTicker ?? [];
+      if (teamIndustry) {
+        industryLabel = INDUSTRY_BY_KEY[teamIndustry].label;
+        const ind = INDUSTRY_BY_KEY[teamIndustry];
         accentStyle = { "--accent": ind.accent, "--accent-dark": ind.accentDark } as React.CSSProperties;
       }
     } catch (err) {
@@ -135,6 +165,8 @@ export default async function DashboardLayout({
         <GeneralNewsSidebar
           initialDailyBriefing={dailyBriefing}
           initialBriefingUpdatedAt={dailyBriefingUpdatedAt}
+          initialTickerItems={tickerItems}
+          industryLabel={industryLabel}
         />
       </main>
       {/* Small, quiet footer on every dashboard page — the site's Terms
