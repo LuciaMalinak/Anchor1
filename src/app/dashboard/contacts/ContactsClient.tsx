@@ -89,7 +89,7 @@ export function ContactsClient({ initialContacts }: { initialContacts: Contact[]
             <div key={c.id} className="group relative">
               <Link
                 href={`/dashboard/contacts/${c.id}`}
-                className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 pr-9 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                className="card-hover flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 pr-9 shadow-sm hover:border-slate-300"
               >
                 <InitialsAvatar label={c.name} />
                 <div className="min-w-0 flex-1">

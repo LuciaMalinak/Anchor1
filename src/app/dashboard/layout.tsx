@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { AnimatedLogo } from "@/components/AnimatedLogo";
+import { PageFade } from "@/components/PageFade";
 import { db } from "@/db";
 import { teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -137,7 +138,9 @@ export default async function DashboardLayout({
         </div>
       </header>
       <main className="flex w-full flex-1 flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="min-w-0 flex-1">
+          <PageFade>{children}</PageFade>
+        </div>
         <GeneralNewsSidebar
           initialDailyBriefing={dailyBriefing}
           initialBriefingUpdatedAt={dailyBriefingUpdatedAt}

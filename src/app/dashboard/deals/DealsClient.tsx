@@ -76,7 +76,7 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
               <Link
                 key={d.id}
                 href={`/dashboard/deals/${d.id}`}
-                className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                className="card-hover flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300"
               >
                 <div className="flex items-center gap-1.5">
                   <span

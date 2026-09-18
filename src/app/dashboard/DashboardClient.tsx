@@ -251,7 +251,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
               <div key={m.id} className="group relative">
                 <Link
                   href={`/dashboard/meetings/${m.id}`}
-                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                  className="card-hover flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 shadow-sm hover:border-slate-300"
                 >
                   <span className="truncate text-sm font-medium text-slate-900">{m.title}</span>
                   <span

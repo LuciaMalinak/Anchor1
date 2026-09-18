@@ -30,6 +30,45 @@ body {
     sans-serif;
 }
 
+/* A small, global "it responds to you" polish for the signed-in app —
+   buttons and links ease their color/border/shadow instead of
+   snapping instantly, and .card-hover is a light opt-in for clickable
+   card-style rows (deal/contact/meeting list items) that adds a
+   couple of pixels of lift plus a deeper shadow on hover, on top of
+   whatever hover:border-*/hover:shadow-* that row already sets.
+   Deliberately small (150–200ms, ~2px) — this is meant to be felt on
+   interaction, not seen as an effect in its own right. */
+button,
+a {
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease,
+    opacity 150ms ease;
+}
+.card-hover {
+  transition:
+    box-shadow 200ms ease,
+    transform 200ms ease,
+    border-color 200ms ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -10px rgba(15, 23, 42, 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  button,
+  a,
+  .card-hover {
+    transition: none !important;
+  }
+  .card-hover:hover {
+    transform: none !important;
+  }
+}
+
 /* =========================================================================
    Motion — used on the marketing page (src/app/page.tsx) for a "live
    product" feel: a slow-drifting hero background, floating glow orbs, a
