@@ -306,6 +306,29 @@ export const memorySnapshots = pgTable("memory_snapshot", {
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
+// A rolling, AI-maintained profile of how ONE specific person on the team
+// tends to negotiate, decide, and communicate — built only from their own
+// words (deal notes they wrote, decision boundaries they set, deal-chat
+// messages they sent), never from what other people said about them. This
+// is what lets Live Assist and handoff briefings answer the way the actual
+// deal lead would when someone else is covering their meeting, instead of
+// in one generic voice for everyone. See src/lib/styleProfile.ts.
+export const userStyleProfiles = pgTable("user_style_profile", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  // Null until there's enough of this person's own material to build
+  // something real from — never a generic placeholder.
+  profile: text("profile"),
+  // How many source items (deal notes/boundaries/messages) fed the most
+  // recent build — the gate for "is there enough signal yet," and a way
+  // to tell a thin profile from a well-grounded one.
+  sourceCount: integer("sourceCount").default(0).notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
 // ---------------------------------------------------------------------------
 // Teams and deals — lets more than one person share meetings, files, and
 // recap emails for the same client instead of everything being scoped to
