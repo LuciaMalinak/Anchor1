@@ -3,7 +3,12 @@ import Anthropic from "@anthropic-ai/sdk";
 // Same pattern as summarize.ts, but conversational rather than
 // tool-forced structured output: this is "Ask Anchor" during a live
 // meeting, so it just needs a short, grounded answer in plain text.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
+// Latency matters more than anywhere else in the app here — someone's
+// mid-conversation waiting on this — so it deliberately runs on the
+// fastest current model rather than the more capable one summarize.ts
+// and the other, non-real-time features use. Override with
+// ANTHROPIC_MODEL if that trade-off ever needs to move the other way.
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

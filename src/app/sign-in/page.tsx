@@ -170,6 +170,16 @@ export default async function SignInPage({
           Create an account
         </Link>
       </p>
+
+      <p className="text-center text-[11px] text-slate-400">
+        <Link href="/terms" className="hover:text-slate-600 hover:underline">
+          Terms
+        </Link>{" "}
+        ·{" "}
+        <Link href="/privacy" className="hover:text-slate-600 hover:underline">
+          Privacy Policy
+        </Link>
+      </p>
     </main>
   );
 }

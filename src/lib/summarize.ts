@@ -3,7 +3,7 @@ import type { Utterance } from "./transcribe";
 
 // Centralized so it's a one-line change if this needs to point at a
 // different model later.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
