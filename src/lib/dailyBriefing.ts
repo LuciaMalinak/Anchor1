@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -12,7 +12,13 @@ function client() {
   return new Anthropic({ apiKey });
 }
 
-const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // refresh at most once a day, per team
+// Was once a day; shortened so the briefing doesn't visibly go stale
+// mid-workday (e.g. still showing this morning's news at 4pm) while
+// someone's actively using the app — the per-team throttle still
+// keeps this from re-searching on every page load. The manual
+// "Refresh" button (see the team briefing API route) always bypasses
+// this regardless of how recent the last one was.
+const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // refresh at most every 6 hours, per team
 
 // Same reasoning as isResearchStale in companyResearch.ts — kept in a
 // plain lib module so the Date.now() read never runs in a component's

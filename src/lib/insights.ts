@@ -5,7 +5,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 // Same tool-use pattern as summarize.ts, applied across a whole team's
 // deals instead of one meeting — this is what powers the Insights page.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

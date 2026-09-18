@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 // Centralized so it's a one-line change if this needs to point at a
 // different model later.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -14,7 +14,11 @@ function client() {
   return new Anthropic({ apiKey });
 }
 
-const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // refresh at most once a day
+// Was once a day — shortened for the same reason as dailyBriefing.ts's
+// STALE_AFTER_MS: this is a per-deal company-news lookup, so it's worth
+// it being noticeably more current during an active workday, not just
+// once every 24 hours.
+const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // refresh at most every 6 hours
 
 // Kept in a plain lib module (rather than inline in a page component) so
 // the Date.now() read doesn't run inside a component's render path.

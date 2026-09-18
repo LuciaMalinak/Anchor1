@@ -1,6 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
+// Real-time nudges during an active meeting — same latency-first
+// reasoning as liveAssist.ts's MODEL choice: fast beats maximally
+// capable here, since this has to keep up with a live conversation.
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

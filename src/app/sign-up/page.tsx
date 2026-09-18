@@ -89,6 +89,18 @@ export default async function SignUpPage({
           Sign in
         </Link>
       </p>
+
+      <p className="text-center text-[11px] text-slate-400">
+        By creating an account, you agree to Anchor&apos;s{" "}
+        <Link href="/terms" className="hover:text-slate-600 hover:underline">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="hover:text-slate-600 hover:underline">
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </main>
   );
 }
