@@ -409,7 +409,9 @@ export default async function Home() {
       <footer className="border-t border-slate-200 px-6 py-10">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
           <Logo size="sm" />
-          <p className="text-xs text-slate-400">© {new Date().getFullYear()} Anchor</p>
+          <p className="text-xs text-slate-400">
+            © {new Date().getFullYear()} Anchor. All rights reserved.
+          </p>
           <Link href="/sign-in" className="text-sm font-medium text-brand hover:underline">
             Sign in
           </Link>
