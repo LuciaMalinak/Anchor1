@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { INDUSTRIES } from "@/lib/industries";
+import { INDUSTRIES, INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 
 type Member = { id: string; name: string | null; email: string; title: string | null; image: string | null };
 type Invite = { id: string; email: string };
@@ -48,6 +48,13 @@ export function TeamClient({
 
   const [savingIndustry, setSavingIndustry] = useState(false);
   const [industryError, setIndustryError] = useState<string | null>(null);
+  // Once a team has an industry (almost always set automatically the
+  // moment someone signs up through an industry link — see /sign-up and
+  // /dashboard's setIndustry handling), the full button-grid picker is
+  // more clutter than it's worth on every visit to this page. Collapse it
+  // to a small confirmation line instead, and only expand back into the
+  // picker if the owner explicitly asks to change it.
+  const [showIndustryPicker, setShowIndustryPicker] = useState(!industry);
 
   async function handleIndustryChange(key: string | null) {
     setSavingIndustry(true);
@@ -118,45 +125,75 @@ export function TeamClient({
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Industry</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {isOwner
-            ? "Pick the closest match — it gives the dashboard a small accent to match, and it's what future industry-specific Anchor features will build on."
-            : "Set by your team owner — gives the dashboard a small accent to match."}
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={!isOwner || savingIndustry}
-            onClick={() => handleIndustryChange(null)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:cursor-default ${
-              !industry
-                ? "border-brand bg-brand text-white"
-                : "border-slate-300 text-slate-600 hover:border-slate-400"
-            } ${!isOwner ? "cursor-default opacity-70" : ""}`}
-          >
-            General
-          </button>
-          {INDUSTRIES.map((ind) => (
-            <button
-              key={ind.key}
-              type="button"
-              disabled={!isOwner || savingIndustry}
-              onClick={() => handleIndustryChange(ind.key)}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:cursor-default ${
-                industry === ind.key
-                  ? "text-white"
-                  : "border-slate-300 text-slate-600 hover:border-slate-400"
-              } ${!isOwner ? "cursor-default opacity-70" : ""}`}
-              style={
-                industry === ind.key
-                  ? { backgroundColor: ind.accent, borderColor: ind.accent }
-                  : undefined
-              }
-            >
-              {ind.label}
-            </button>
-          ))}
-        </div>
+        {industry && isIndustryKey(industry) && !showIndustryPicker ? (
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <p className="flex items-center gap-2 text-sm text-slate-600">
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: INDUSTRY_BY_KEY[industry].accent }}
+                aria-hidden="true"
+              />
+              {INDUSTRY_BY_KEY[industry].label} — set when your team signed up.
+            </p>
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setShowIndustryPicker(true)}
+                className="shrink-0 text-xs font-medium text-brand hover:underline"
+              >
+                Change
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-slate-500">
+              {isOwner
+                ? "Pick the closest match — it gives the dashboard a small accent to match, and it's what future industry-specific Anchor features will build on."
+                : "Set by your team owner — gives the dashboard a small accent to match."}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={!isOwner || savingIndustry}
+                onClick={() => {
+                  handleIndustryChange(null);
+                  setShowIndustryPicker(true);
+                }}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:cursor-default ${
+                  !industry
+                    ? "border-brand bg-brand text-white"
+                    : "border-slate-300 text-slate-600 hover:border-slate-400"
+                } ${!isOwner ? "cursor-default opacity-70" : ""}`}
+              >
+                General
+              </button>
+              {INDUSTRIES.map((ind) => (
+                <button
+                  key={ind.key}
+                  type="button"
+                  disabled={!isOwner || savingIndustry}
+                  onClick={() => {
+                    handleIndustryChange(ind.key);
+                    setShowIndustryPicker(false);
+                  }}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:cursor-default ${
+                    industry === ind.key
+                      ? "text-white"
+                      : "border-slate-300 text-slate-600 hover:border-slate-400"
+                  } ${!isOwner ? "cursor-default opacity-70" : ""}`}
+                  style={
+                    industry === ind.key
+                      ? { backgroundColor: ind.accent, borderColor: ind.accent }
+                      : undefined
+                  }
+                >
+                  {ind.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         {industryError && <p className="mt-2 text-sm text-red-600">{industryError}</p>}
       </section>
 
