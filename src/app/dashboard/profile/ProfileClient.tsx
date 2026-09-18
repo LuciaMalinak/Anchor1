@@ -240,13 +240,14 @@ export function ProfileClient({ profile }: { profile: Profile }) {
       {/* Intentionally low-key — no danger-zone box, no red border — this
           isn't something anyone should stumble into while editing their
           name. It's still fully functional, just not the first thing on
-          the page. */}
-      <div className="mt-4 flex justify-end">
+          the page (and readable enough to actually find, not just barely
+          rendered pixels). */}
+      <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
         {!showDelete ? (
           <button
             type="button"
             onClick={() => setShowDelete(true)}
-            className="text-xs text-slate-300 hover:text-slate-400"
+            className="text-xs text-slate-400 hover:text-slate-600 hover:underline"
           >
             Delete account
           </button>
