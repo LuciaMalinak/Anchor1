@@ -106,15 +106,19 @@ export default function PrivacyPage() {
           <p>
             We retain your account data, recordings, and derived content for as long as your
             account is active, or as needed to provide the Service. You can delete individual
-            meetings from within Anchor, and you can request deletion of your account and
-            associated data at any time by contacting us.
+            meetings from within Anchor, and you can delete your own account at any time from
+            Profile → Delete account — this signs you out everywhere and removes your personal
+            information immediately. If you&apos;re the sole member of your team, your team&apos;s
+            deals and data are deleted along with it; if others are still on your team, we&apos;ll
+            help move ownership first. You can also reach out to us directly for a data request.
           </p>
         </Section>
 
         <Section title="7. Your choices">
           <ul className="list-disc space-y-1 pl-5">
             <li>You can disconnect a third-party integration at any time from the Integrations page.</li>
-            <li>You can delete meetings, contacts, or your account and request removal of associated data.</li>
+            <li>You can delete individual meetings or contacts from within Anchor at any time.</li>
+            <li>You can delete your own account at any time from Profile → Delete account.</li>
             <li>You control what gets recorded — Anchor only joins or records calls you set it up for.</li>
           </ul>
         </Section>

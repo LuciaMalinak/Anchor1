@@ -266,23 +266,24 @@ a {
 }
 
 /* AnimatedLogo (src/components/AnimatedLogo.tsx) — a small glow tucked
-   right behind the anchor glyph that gently breathes in place. Kept to
-   a narrow opacity/scale range on purpose: enough to notice on a
-   second look, never enough to compete with the wordmark or read as
-   distracting motion on a page someone's trying to read. */
+   right behind the anchor glyph that gently breathes in place. Bumped
+   up a notch from the first pass (higher peak opacity/scale, slightly
+   quicker cycle) so it reads as more clearly "alive" at a glance,
+   while staying a glow behind one small icon rather than growing into
+   a page-wide effect. */
 @keyframes pulseGlow {
   0%,
   100% {
-    opacity: 0.28;
-    transform: scale(0.9);
+    opacity: 0.32;
+    transform: scale(0.88);
   }
   50% {
-    opacity: 0.6;
-    transform: scale(1.12);
+    opacity: 0.75;
+    transform: scale(1.18);
   }
 }
 .pulse-glow {
-  animation: pulseGlow 3.4s ease-in-out infinite;
+  animation: pulseGlow 2.8s ease-in-out infinite;
 }
 
 /* AnchorNeuralField (src/components/AnchorNeuralField.tsx) — the big

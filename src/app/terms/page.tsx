@@ -124,7 +124,16 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="10. Contact">
+        <Section title="10. Governing law">
+          <p>
+            These Terms are governed by the laws of the State of Delaware, without regard to its
+            conflict-of-law principles. Any dispute arising out of or relating to these Terms or
+            the Service will be brought exclusively in the state or federal courts located in
+            Delaware, and you consent to the personal jurisdiction of those courts.
+          </p>
+        </Section>
+
+        <Section title="11. Contact">
           <p>
             Questions about these Terms? Reach out at{" "}
             <a href="mailto:lucia.malinak@gmail.com" className="text-brand hover:underline">
