@@ -23,13 +23,16 @@ export default async function DealDetailPage({
   const { teamId } = authorized;
   let deal = authorized.deal;
 
-  // Best-effort, throttled auto-refresh: if this deal has a company
-  // website and its research is missing or more than a day old, quietly
-  // look it up now so the News callout and research box are current
-  // without anyone having to click "Research company" first. Never
-  // blocks the page on failure — same pattern as the deal-memory update
-  // in processMeeting.ts.
-  if (deal.companyWebsite && isResearchStale(deal.companyResearchUpdatedAt)) {
+  // Best-effort, throttled auto-refresh: if this deal's research is
+  // missing or stale, quietly look it up now so the News callout and
+  // research box are current without anyone having to click "Research
+  // company" first. researchCompany() falls back to just the company
+  // name when there's no website on file, so this no longer requires
+  // one — deals without a website were silently never auto-researched
+  // even though the manual "Research" button worked fine for them (it
+  // never had this gate). Never blocks the page on failure — same
+  // pattern as the deal-memory update in processMeeting.ts.
+  if (isResearchStale(deal.companyResearchUpdatedAt)) {
     try {
       const result = await researchCompany({
         companyName: deal.name,
