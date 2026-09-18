@@ -1,5 +1,6 @@
 import { signIn } from "@/auth";
 import { Logo } from "@/components/Logo";
+import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 
 const linkedInConfigured = Boolean(
   process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET
@@ -16,9 +17,15 @@ const SIGN_IN_ERROR_COPY: Record<string, string> = {
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; industry?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, industry } = await searchParams;
+  // Someone who clicked an industry link on the homepage — carry it
+  // through sign-in so a brand-new account lands with that industry
+  // already set (see /dashboard/page.tsx, which applies it once, only
+  // for a fresh team that has no industry of its own yet).
+  const industryKey = industry && isIndustryKey(industry) ? industry : null;
+  const dashboardRedirect = industryKey ? `/dashboard?setIndustry=${industryKey}` : "/dashboard";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
@@ -32,6 +39,11 @@ export default async function SignInPage({
             Use Google or LinkedIn for one click, sign in with your password, or
             we&apos;ll email you a link instead — whichever&apos;s easiest.
           </p>
+          {industryKey && (
+            <p className="mt-2 text-xs font-medium text-accent">
+              Setting up Anchor for {INDUSTRY_BY_KEY[industryKey].label}
+            </p>
+          )}
         </div>
       </div>
 
@@ -42,7 +54,7 @@ export default async function SignInPage({
               <form
                 action={async () => {
                   "use server";
-                  await signIn("google", { redirectTo: "/dashboard" });
+                  await signIn("google", { redirectTo: dashboardRedirect });
                 }}
               >
                 <button
@@ -63,7 +75,7 @@ export default async function SignInPage({
               <form
                 action={async () => {
                   "use server";
-                  await signIn("linkedin", { redirectTo: "/dashboard" });
+                  await signIn("linkedin", { redirectTo: dashboardRedirect });
                 }}
               >
                 <button
@@ -129,7 +141,7 @@ export default async function SignInPage({
         action={async (formData) => {
           "use server";
           const email = formData.get("email") as string;
-          await signIn("resend", { email, redirectTo: "/dashboard" });
+          await signIn("resend", { email, redirectTo: dashboardRedirect });
         }}
         className="flex flex-col gap-3"
       >

@@ -153,7 +153,7 @@ export function TeamClient({
                   : undefined
               }
             >
-              {ind.icon} {ind.label}
+              {ind.label}
             </button>
           ))}
         </div>

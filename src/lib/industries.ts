@@ -14,7 +14,6 @@ export type IndustryKey =
 export type Industry = {
   key: IndustryKey;
   label: string;
-  icon: string;
   // A short, honest blurb for the landing page — describes what Anchor's
   // existing memory/handoff/follow-up features mean for this kind of
   // work, without claiming compliance certifications or capabilities
@@ -28,7 +27,6 @@ export const INDUSTRIES: Industry[] = [
   {
     key: "real_estate",
     label: "Real Estate",
-    icon: "🏠",
     blurb:
       "Every showing, negotiation, and closing call in one thread — so nothing about a buyer or listing gets lost between agents.",
     accent: "#B2472F",
@@ -37,7 +35,6 @@ export const INDUSTRIES: Industry[] = [
   {
     key: "finance",
     label: "Finance",
-    icon: "📈",
     blurb:
       "Client commitments and numbers captured the moment they're said, with a clean handoff whenever someone else picks up the account.",
     accent: "#1F6E4A",
@@ -46,7 +43,6 @@ export const INDUSTRIES: Industry[] = [
   {
     key: "healthcare",
     label: "Healthcare",
-    icon: "🩺",
     blurb:
       "Referral, partnership, and vendor conversations organized and easy to brief a colleague on — without digging through old notes.",
     accent: "#0E7C86",
@@ -55,7 +51,6 @@ export const INDUSTRIES: Industry[] = [
   {
     key: "hospitality",
     label: "Hospitality",
-    icon: "🛎️",
     blurb:
       "Remember every guest, partner, and vendor relationship the way your best account manager would — even across a busy season.",
     accent: "#C08A1E",
@@ -64,7 +59,6 @@ export const INDUSTRIES: Industry[] = [
   {
     key: "pharma",
     label: "Pharma",
-    icon: "🧪",
     blurb:
       "Keep detailed, sensitive conversations organized and easy to hand off cleanly, meeting after meeting.",
     accent: "#6247AA",
@@ -73,7 +67,6 @@ export const INDUSTRIES: Industry[] = [
   {
     key: "tech",
     label: "Tech",
-    icon: "💻",
     blurb:
       "Turn sales and partnership calls into a shared team memory that never resets just because someone's out.",
     accent: "#2563EB",
