@@ -8,8 +8,7 @@ import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
 import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
-import { INDUSTRY_BY_KEY, isIndustryKey, type IndustryKey } from "@/lib/industries";
-import { IndustryBackdrop } from "@/components/IndustryBackdrop";
+import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 
 export default async function DashboardLayout({
   children,
@@ -32,7 +31,6 @@ export default async function DashboardLayout({
   // (see globals.css's `@theme inline` block). Null/unrecognized just
   // falls through to the default brand accent, same as always.
   let accentStyle: React.CSSProperties | undefined;
-  let industryKey: IndustryKey | null = null;
   if (session?.user?.id) {
     try {
       const teamId = await getOrCreateTeamId(session.user.id);
@@ -50,7 +48,6 @@ export default async function DashboardLayout({
       dailyBriefing = team?.dailyBriefing ?? null;
       dailyBriefingUpdatedAt = team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null;
       if (team?.industry && isIndustryKey(team.industry)) {
-        industryKey = team.industry;
         const ind = INDUSTRY_BY_KEY[team.industry];
         accentStyle = { "--accent": ind.accent, "--accent-dark": ind.accentDark } as React.CSSProperties;
       }
@@ -80,11 +77,6 @@ export default async function DashboardLayout({
             "radial-gradient(ellipse 55% 38% at 82% -8%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%)",
         }}
       />
-      {/* A large, faint, industry-specific scene in the back corner — a
-          building for real estate, a chart for finance, a molecule for
-          pharma, and so on. See src/components/IndustryBackdrop.tsx for
-          why this is line art rather than a photo. */}
-      <IndustryBackdrop industry={industryKey} />
       {/* Plain white header, neutral border — no colored stripe. The bright
           solid accent bar this used to have (linear-gradient, 3px, full
           width) is exactly what read as a garish "bar/glow" rather than
