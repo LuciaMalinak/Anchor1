@@ -65,6 +65,20 @@ export const users = pgTable("user", {
   // team directory doesn't silently start texting someone. See
   // src/lib/dailyDigest.ts and src/lib/sms.ts.
   dailyDigestOptIn: boolean("dailyDigestOptIn").notNull().default(false),
+  // Personal dashboard customization — deliberately per-USER, not
+  // per-team, so one person rearranging their own view never changes
+  // what a teammate sees. Both null/empty means "use the defaults."
+  // colorTheme is a key into src/lib/colorThemes.ts (a small curated
+  // palette, not a free color picker, so nobody accidentally picks
+  // something illegible) and — where set — overrides the team's
+  // industry-derived accent color from src/lib/industries.ts for this
+  // person only; dashboardLayout is the home dashboard's section keys
+  // (see DASHBOARD_SECTIONS in src/lib/dashboardSections.ts)
+  // in the order this person wants them, reordered via that "Customize"
+  // panel rather than drag-and-drop, so it works the same on touch as on
+  // desktop and can't leave a section stuck mid-drag.
+  colorTheme: text("colorTheme"),
+  dashboardLayout: jsonb("dashboardLayout").$type<string[]>(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 

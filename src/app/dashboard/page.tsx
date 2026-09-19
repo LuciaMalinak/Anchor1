@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from "react";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, users, deals, teams, announcements } from "@/db/schema";
@@ -7,9 +8,12 @@ import { getOrCreateTeamId } from "@/lib/team";
 import { getHomeUpdates } from "@/lib/homeFeed";
 import { getHomeTasks } from "@/lib/homeTasks";
 import { isIndustryKey } from "@/lib/industries";
+import { resolveDashboardOrder, type DashboardSectionKey } from "@/lib/dashboardSections";
+import { isColorThemeKey, type ColorThemeKey } from "@/lib/colorThemes";
 import { AttentionPanel } from "./AttentionPanel";
 import { AnnouncementsPanel } from "./AnnouncementsPanel";
 import { DashboardClient } from "./DashboardClient";
+import { DashboardCustomize } from "./DashboardCustomize";
 import { HomeTasks } from "./HomeTasks";
 import { HomeUpdates } from "./HomeUpdates";
 import { WelcomeGate } from "./WelcomeGate";
@@ -58,6 +62,8 @@ export default async function DashboardPage({
   let dealOptions: { id: string; name: string }[] = [];
   let announcementRows: { announcement: typeof announcements.$inferSelect; author: typeof users.$inferSelect }[] = [];
   let isTeamOwner = false;
+  let sectionOrder: DashboardSectionKey[] = resolveDashboardOrder(null);
+  let colorTheme: string | null = null;
 
   if (teamId && session?.user?.id) {
     const [user, team] = await Promise.all([
@@ -66,6 +72,8 @@ export default async function DashboardPage({
     ]);
     welcomeSeen = user?.welcomeSeen ?? true;
     isTeamOwner = team?.ownerUserId === session.user.id;
+    sectionOrder = resolveDashboardOrder(user?.dashboardLayout);
+    colorTheme = user?.colorTheme && isColorThemeKey(user.colorTheme) ? user.colorTheme : null;
 
     [homeUpdates, homeTasks, dealOptions, announcementRows] = await Promise.all([
       getHomeUpdates({ teamId }),
@@ -81,32 +89,52 @@ export default async function DashboardPage({
     ]);
   }
 
+  // Rendered in this person's own saved order (sectionOrder) rather than a
+  // fixed sequence — see DashboardCustomize.tsx and users.dashboardLayout
+  // in schema.ts. "meetings" is one of the reorderable sections too (see
+  // DASHBOARD_SECTIONS in dashboardSections.ts) and always has something to
+  // show, even for a brand-new, team-less account — the other sections only
+  // appear once there's a team.
+  const sectionByKey: Partial<Record<DashboardSectionKey, ReactNode>> = {
+    meetings: <DashboardClient initialMeetings={serializable} />,
+    ...(teamId && session?.user?.id
+      ? {
+          attention: <AttentionPanel teamId={teamId} userId={session.user.id} />,
+          announcements: (
+            <AnnouncementsPanel
+              isTeamOwner={isTeamOwner}
+              initialAnnouncements={announcementRows.map((r) => ({
+                id: r.announcement.id,
+                content: r.announcement.content,
+                createdAt: r.announcement.createdAt.toISOString(),
+                author: { id: r.author.id, name: r.author.name, email: r.author.email, image: r.author.image },
+              }))}
+            />
+          ),
+          tasksAndUpdates: (
+            <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+              <HomeTasks initialTasks={homeTasks} deals={dealOptions} />
+              <HomeUpdates updates={homeUpdates} />
+            </div>
+          ),
+        }
+      : {}),
+  };
+
   return (
     <div className="flex flex-col gap-8">
       {teamId && session?.user?.id && (
         <WelcomeGate show={!welcomeSeen} name={session.user.name ?? null} />
       )}
-      {teamId && session?.user?.id && (
-        <AttentionPanel teamId={teamId} userId={session.user.id} />
-      )}
       {teamId && (
-        <AnnouncementsPanel
-          isTeamOwner={isTeamOwner}
-          initialAnnouncements={announcementRows.map((r) => ({
-            id: r.announcement.id,
-            content: r.announcement.content,
-            createdAt: r.announcement.createdAt.toISOString(),
-            author: { id: r.author.id, name: r.author.name, email: r.author.email, image: r.author.image },
-          }))}
+        <DashboardCustomize
+          initialOrder={sectionOrder}
+          initialColorTheme={colorTheme && isColorThemeKey(colorTheme) ? colorTheme : null}
         />
       )}
-      {teamId && (
-        <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-          <HomeTasks initialTasks={homeTasks} deals={dealOptions} />
-          <HomeUpdates updates={homeUpdates} />
-        </div>
-      )}
-      <DashboardClient initialMeetings={serializable} />
+      {sectionOrder.map((key) => (
+        <Fragment key={key}>{sectionByKey[key] ?? null}</Fragment>
+      ))}
     </div>
   );
 }

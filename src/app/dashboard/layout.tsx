@@ -5,13 +5,14 @@ import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { PageFade } from "@/components/PageFade";
 import { NavLink } from "@/components/NavLink";
 import { db } from "@/db";
-import { teams } from "@/db/schema";
+import { teams, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
 import { getIndustryTicker, isTickerStale, normalizeTickerItems, type TickerItem } from "@/lib/industryTicker";
 import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
+import { COLOR_THEME_BY_KEY, isColorThemeKey } from "@/lib/colorThemes";
 
 export default async function DashboardLayout({
   children,
@@ -91,6 +92,16 @@ export default async function DashboardLayout({
         industryLabel = INDUSTRY_BY_KEY[teamIndustry].label;
         const ind = INDUSTRY_BY_KEY[teamIndustry];
         accentStyle = { "--accent": ind.accent, "--accent-dark": ind.accentDark } as React.CSSProperties;
+      }
+      // This person's own accent color (Customize dashboard, on the home
+      // page) wins over the team's industry color set just above — it's a
+      // personal preference, not a shared one, so it only ever changes
+      // what THIS person sees. "default" (or nothing saved) just falls
+      // through to whatever accentStyle already resolved to above.
+      const [me] = await db.select().from(users).where(eq(users.id, session.user.id));
+      if (me?.colorTheme && isColorThemeKey(me.colorTheme) && me.colorTheme !== "default") {
+        const theme = COLOR_THEME_BY_KEY[me.colorTheme];
+        accentStyle = { "--accent": theme.accent, "--accent-dark": theme.accentDark } as React.CSSProperties;
       }
     } catch (err) {
       console.error("Couldn't load team daily briefing:", err);
