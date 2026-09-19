@@ -13,6 +13,16 @@ const googleConfigured = Boolean(
 const SIGN_IN_ERROR_COPY: Record<string, string> = {
   invalid: "Incorrect email or password.",
   missing: "Enter your email and password.",
+  // These are Auth.js's own error "type" strings — now routed to this
+  // page instead of its bare default error page (see `pages.error` in
+  // src/auth.ts). "Configuration" is the generic bucket Auth.js uses for
+  // basically any unexpected failure, including the magic-link email
+  // failing to send, so its copy here is deliberately about that rather
+  // than sounding like a broken server.
+  Configuration:
+    "We couldn't send that sign-in email just now — try again in a moment, or use Google, LinkedIn, or your password instead.",
+  Verification: "That sign-in link has expired or was already used — request a new one below.",
+  AccessDenied: "That sign-in attempt wasn't allowed. Try again, or use a different sign-in method.",
 };
 
 export default async function SignInPage({

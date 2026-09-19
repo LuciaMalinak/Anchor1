@@ -108,6 +108,19 @@ export const {
   pages: {
     signIn: "/sign-in",
     verifyRequest: "/sign-in/check-email",
+    // Without this, Auth.js falls back to its own built-in error page for
+    // ANY unexpected failure during sign-in — not just genuine
+    // misconfiguration. That page is a bare, unbranded "Server error /
+    // There is a problem with the server configuration. Check the server
+    // logs for more information." screen with zero Anchor styling, and
+    // it's exactly what a transient SendGrid failure while sending the
+    // magic-link email (see the Resend provider above) triggers, since
+    // that throw isn't a "safe" Auth.js error type and Auth.js maps any
+    // unsafe error to the generic "Configuration" type. Routing it back
+    // to our own /sign-in page instead means a real user only ever sees
+    // Anchor's own UI, with a plain-English message (see
+    // SIGN_IN_ERROR_COPY in that page) instead of a scary crash screen.
+    error: "/sign-in",
   },
   callbacks: {
     session({ session, user }) {
