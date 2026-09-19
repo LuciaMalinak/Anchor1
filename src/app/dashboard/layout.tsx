@@ -44,17 +44,26 @@ export default async function DashboardLayout({
   if (session?.user?.id) {
     try {
       const teamId = await getOrCreateTeamId(session.user.id);
-      let [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+      const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
       const teamIndustry = team?.industry && isIndustryKey(team.industry) ? team.industry : null;
+      // Was awaited here — on a brand-new team (or any team whose
+      // briefing hadn't refreshed yet that day) that meant every single
+      // page in the dashboard, header and all, froze for several seconds
+      // on a synchronous web-search call before rendering anything. Fired
+      // in the background instead, same pattern already used for the
+      // ticker just below: the page renders now with whatever's cached
+      // (or nothing yet, on a brand-new team), and GeneralNewsSidebar's
+      // client-side poll picks up the fresh result once this finishes.
       if (team && isBriefingStale(team.dailyBriefingUpdatedAt)) {
-        try {
-          const briefing = await getDailyBriefing(teamIndustry);
-          const updatedAt = new Date();
-          await db.update(teams).set({ dailyBriefing: briefing, dailyBriefingUpdatedAt: updatedAt }).where(eq(teams.id, teamId));
-          team = { ...team, dailyBriefing: briefing, dailyBriefingUpdatedAt: updatedAt };
-        } catch (err) {
-          console.error("Background daily briefing refresh failed:", err);
-        }
+        const tid = teamId;
+        getDailyBriefing(teamIndustry)
+          .then((briefing) =>
+            db
+              .update(teams)
+              .set({ dailyBriefing: briefing, dailyBriefingUpdatedAt: new Date() })
+              .where(eq(teams.id, tid))
+          )
+          .catch((err) => console.error("Background daily briefing refresh failed:", err));
       }
       // Unlike the briefing above, this is never awaited here — a
       // 20-minute staleness window means near enough every page load

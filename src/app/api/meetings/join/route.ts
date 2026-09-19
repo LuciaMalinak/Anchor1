@@ -45,7 +45,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Paste a meeting link first" }, { status: 400 });
   }
   try {
-    // eslint-disable-next-line no-new
     new URL(meetingUrl);
   } catch {
     return NextResponse.json({ error: "That doesn't look like a valid link" }, { status: 400 });

@@ -30,32 +30,30 @@ export default async function DealDetailPage({
   // name when there's no website on file, so this no longer requires
   // one — deals without a website were silently never auto-researched
   // even though the manual "Research" button worked fine for them (it
-  // never had this gate). Never blocks the page on failure — same
-  // pattern as the deal-memory update in processMeeting.ts.
+  // never had this gate).
+  //
+  // Fired in the background rather than awaited — this used to block the
+  // whole page render on a web-search call, which meant opening ANY deal
+  // with no/stale research (true for every newly created deal) froze the
+  // page for several seconds. The page now renders immediately with
+  // whatever's cached (nothing, for a brand-new deal), and the "Research"
+  // panel in DealTabs polls for the result once this finishes — same
+  // pattern used for the dashboard's daily briefing.
   if (isResearchStale(deal.companyResearchUpdatedAt)) {
-    try {
-      const result = await researchCompany({
-        companyName: deal.name,
-        companyWebsite: deal.companyWebsite,
-      });
-      const companyResearchUpdatedAt = new Date();
-      await db
-        .update(deals)
-        .set({
-          companyResearch: result.briefing,
-          newsHeadline: result.newsHeadline,
-          companyResearchUpdatedAt,
-        })
-        .where(eq(deals.id, id));
-      deal = {
-        ...deal,
-        companyResearch: result.briefing,
-        newsHeadline: result.newsHeadline,
-        companyResearchUpdatedAt,
-      };
-    } catch (err) {
-      console.error("Background company research failed:", err);
-    }
+    const dealId = id;
+    const { name: companyName, companyWebsite } = deal;
+    researchCompany({ companyName, companyWebsite })
+      .then((result) =>
+        db
+          .update(deals)
+          .set({
+            companyResearch: result.briefing,
+            newsHeadline: result.newsHeadline,
+            companyResearchUpdatedAt: new Date(),
+          })
+          .where(eq(deals.id, dealId))
+      )
+      .catch((err) => console.error("Background company research failed:", err));
   }
 
   // Same best-effort, throttled idea, for whatever Gmail/Calendar

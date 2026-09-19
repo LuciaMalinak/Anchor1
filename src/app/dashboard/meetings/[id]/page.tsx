@@ -16,6 +16,37 @@ import { MeetingDeleteButton } from "./MeetingDeleteButton";
 import { FollowUpEmailDraft } from "./FollowUpEmailDraft";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 
+// Kept as a plain helper outside the component — same reasoning as
+// isResearchStale() in companyResearch.ts: reading Date.now() directly
+// inside a component's render path trips the "impure function during
+// render" rule, so the read lives in an ordinary function called from
+// render instead.
+function computeMeetingProgress(meeting: {
+  status: string;
+  scheduledAt: Date | null;
+  createdAt: Date;
+}) {
+  const now = Date.now();
+  const scheduledInFuture = Boolean(meeting.scheduledAt && meeting.scheduledAt.getTime() > now);
+
+  // A meeting scheduled for later can legitimately sit in "joining" for
+  // hours before its time arrives — only measure staleness from when it
+  // was actually supposed to start, not from when it was created.
+  const sinceRelevantTime =
+    meeting.scheduledAt && meeting.scheduledAt.getTime() > meeting.createdAt.getTime()
+      ? meeting.scheduledAt.getTime()
+      : meeting.createdAt.getTime();
+  const minutesOld = (now - sinceRelevantTime) / 60000;
+  const stuckJoining =
+    (meeting.status === "joining" || meeting.status === "recording") &&
+    !scheduledInFuture &&
+    minutesOld > 10;
+  const isLiveBotCall =
+    (meeting.status === "joining" || meeting.status === "recording") && !scheduledInFuture;
+
+  return { scheduledInFuture, stuckJoining, isLiveBotCall };
+}
+
 export default async function MeetingDetailPage({
   params,
 }: {
@@ -42,8 +73,7 @@ export default async function MeetingDetailPage({
   if (!isOwner && !sharedViaTeam) notFound();
 
   if (meeting.status !== "ready") {
-    const now = Date.now();
-    const scheduledInFuture = meeting.scheduledAt && meeting.scheduledAt.getTime() > now;
+    const { scheduledInFuture, stuckJoining, isLiveBotCall } = computeMeetingProgress(meeting);
 
     const PROCESSING_MESSAGE: Record<string, string> = {
       joining: scheduledInFuture
@@ -59,22 +89,6 @@ export default async function MeetingDetailPage({
       summarizing: "Summarizing and updating what Anchor knows about the people in it…",
     };
 
-    // A meeting scheduled for later can legitimately sit in "joining"
-    // for hours before its time arrives — only measure staleness from
-    // when it was actually supposed to start, not from when it was
-    // created.
-    const sinceRelevantTime = meeting.scheduledAt && meeting.scheduledAt.getTime() > meeting.createdAt.getTime()
-      ? meeting.scheduledAt.getTime()
-      : meeting.createdAt.getTime();
-    const minutesOld = (now - sinceRelevantTime) / 60000;
-    const stuckJoining =
-      (meeting.status === "joining" || meeting.status === "recording") &&
-      !scheduledInFuture &&
-      minutesOld > 10;
-
-    const isLiveBotCall =
-      (meeting.status === "joining" || meeting.status === "recording") && !scheduledInFuture;
-
     return (
       <div className="flex flex-col gap-6">
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
@@ -88,8 +102,8 @@ export default async function MeetingDetailPage({
           {stuckJoining && (
             <p className="mt-3 text-xs text-amber-600">
               This is taking longer than usual. Double-check the meeting link was correct
-              and the call is still active — if the bot couldn't join, this meeting won't
-              update on its own.
+              and the call is still active — if the bot couldn&apos;t join, this meeting
+              won&apos;t update on its own.
             </p>
           )}
           {meeting.status !== "failed" && (
