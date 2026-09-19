@@ -3,11 +3,22 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { dealFiles, meetings, summaries, meetingParticipants, contacts } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
-import { askAnchorStream, type DealContext } from "@/lib/liveAssist";
+import { askAnchorStream, type DealContext, type AnchorImage } from "@/lib/liveAssist";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
+import { isImageFile, imageMediaType } from "@/lib/extractText";
+import { readStoredFile } from "@/lib/storage";
 
 const MAX_HISTORY_TURNS = 6;
+
+// Vision costs real latency and tokens on every single question, on a
+// model picked specifically for speed (see liveAssist.ts) — so unlike
+// text excerpts (cheap, always included), images are capped hard. A
+// handful of screenshots of a deck is exactly the case this is for; a
+// deal with dozens of photos attached should not turn every question
+// into a slow, expensive one.
+const MAX_IMAGES_PER_QUESTION = 4;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -48,7 +59,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .where(and(eq(meetings.dealId, dealId), eq(meetings.status, "ready")))
       .orderBy(desc(meetings.occurredAt))
       .limit(5),
-    db.select().from(dealFiles).where(eq(dealFiles.dealId, dealId)),
+    // Most recent first — when there are more images than the vision cap
+    // below can afford, the ones someone just attached (almost certainly
+    // what "look at this" refers to) win over older ones.
+    db.select().from(dealFiles).where(eq(dealFiles.dealId, dealId)).orderBy(desc(dealFiles.createdAt)),
     // Same "people Anchor has resolved on this deal" query the handoff
     // briefing uses — includes anyone synced in from a connected CRM
     // (e.g. Salesforce) once they've appeared in a meeting on this deal.
@@ -70,6 +84,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     getDealLeadStyle(deal.leadUserId, { allowSynchronousRebuild: false }),
   ]);
 
+  // Read the raw bytes for a capped, size-bounded set of the deal's image
+  // files so Ask Anchor can actually look at them (screenshots of a deck,
+  // a photo of a whiteboard) — see MAX_IMAGES_PER_QUESTION above for why
+  // this is capped instead of sending every image every time. Best-effort:
+  // a storage read failure just means that one image gets skipped, same
+  // as a text file that fails to parse.
+  const imageCandidates = files.filter((f) => isImageFile(f.fileName) && (f.fileSize ?? 0) <= MAX_IMAGE_BYTES);
+  const images: AnchorImage[] = (
+    await Promise.all(
+      imageCandidates.slice(0, MAX_IMAGES_PER_QUESTION).map(async (f) => {
+        const mediaType = imageMediaType(f.fileName);
+        if (!mediaType) return null;
+        const data = await readStoredFile(f.storagePath).catch(() => null);
+        if (!data) return null;
+        return { fileName: f.fileName, mediaType, base64: data.toString("base64") };
+      })
+    )
+  ).filter((img): img is AnchorImage => img !== null);
+
   const context: DealContext = {
     dealName: deal.name,
     stage: deal.stage,
@@ -87,7 +120,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       actionItems: r.summary.actionItems,
       dealSignals: r.summary.dealSignals,
     })),
-    files: files.map((f) => ({ fileName: f.fileName, excerpt: f.extractedText })),
+    files: files.map((f) => ({ fileName: f.fileName, excerpt: f.extractedText, isImage: isImageFile(f.fileName) })),
     companyResearch: deal.companyResearch,
     newsHeadline: deal.newsHeadline,
     // Already cached on the deal row (refreshed at most every 6h when the
@@ -105,7 +138,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const chunk of askAnchorStream({ context, question, history })) {
+        for await (const chunk of askAnchorStream({ context, question, history, images })) {
           controller.enqueue(encoder.encode(chunk));
         }
       } catch (err) {

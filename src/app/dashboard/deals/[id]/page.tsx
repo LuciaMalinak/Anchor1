@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts, dealMembers } from "@/db/schema";
 import { asc, desc, eq } from "drizzle-orm";
 import { authorizeDeal } from "@/lib/dealAccess";
+import { isImageFile } from "@/lib/extractText";
 import { researchCompany, isResearchStale } from "@/lib/companyResearch";
 import { refreshDealIntegrationContext, isIntegrationContextStale } from "@/lib/dealIntegrationContext";
 import { computeDealHealth } from "@/lib/dealHealth";
@@ -196,7 +197,10 @@ export default async function DealDetailPage({
         fileName: f.fileName,
         fileSize: f.fileSize,
         createdAt: f.createdAt.toISOString(),
-        readableByAI: Boolean(f.extractedText),
+        // Images never get extracted text (see extractText.ts) but Ask
+        // Anchor can still see them directly, via vision — see the assist
+        // route's images cap. Both count as "readable by AI" for the badge.
+        readableByAI: Boolean(f.extractedText) || isImageFile(f.fileName),
       }))}
       teamSize={teammates.length}
       messages={visibleMessageRows.map((r) => ({

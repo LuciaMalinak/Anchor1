@@ -47,7 +47,11 @@ export type DealContext = {
     // silently dropped before reaching the model.
     dealSignals: { type: "buying_signal" | "risk" | "blocker"; detail: string }[];
   }[];
-  files: { fileName: string; excerpt: string | null }[];
+  // isImage files never have an excerpt (no text is ever extracted from
+  // them) but ARE readable by Anchor — via the images array below, not
+  // via this text block. buildContextBlock() uses isImage to say so
+  // correctly instead of claiming the file can't be seen at all.
+  files: { fileName: string; excerpt: string | null; isImage?: boolean }[];
   companyResearch: string | null;
   newsHeadline: string | null;
   // Recent Gmail/Calendar activity with this deal's contacts, when the
@@ -127,6 +131,8 @@ function buildContextBlock(ctx: DealContext): string {
         // excerpt is enough; the full file is still one click away.
         const excerpt = f.excerpt.length > 2000 ? f.excerpt.slice(0, 2000) + "…" : f.excerpt;
         parts.push(`\n— ${f.fileName}:\n${excerpt}`);
+      } else if (f.isImage) {
+        parts.push(`\n— ${f.fileName} (an image — shown to you directly below, if it made the cut)`);
       } else {
         parts.push(`\n— ${f.fileName} (not a readable format — can't see its contents)`);
       }
@@ -172,10 +178,38 @@ Keep answers to 2-4 sentences unless the question clearly calls for a short list
 ${contextBlock}`;
 }
 
+// A deal image attached as a real vision content block — see
+// buildQuestionContent() below for how these get folded into the actual
+// question turn.
+export type AnchorImage = { fileName: string; mediaType: string; base64: string };
+
+// The question always ends up as the final user turn's content. Plain
+// string when there's nothing to look at (the overwhelmingly common
+// case, and identical to the shape this always sent before images
+// existed); an array of image blocks followed by the question text when
+// the assist route decided one or more attached images were worth
+// showing. Images go right next to the question they're answering,
+// rather than e.g. their own separate turn, so the model doesn't have to
+// guess which past image a follow-up question refers to.
+function buildQuestionContent(
+  question: string,
+  images: AnchorImage[]
+): string | Anthropic.MessageParam["content"] {
+  if (images.length === 0) return question;
+  return [
+    ...images.map((img) => ({
+      type: "image" as const,
+      source: { type: "base64" as const, media_type: img.mediaType as "image/jpeg" | "image/png" | "image/webp" | "image/gif", data: img.base64 },
+    })),
+    { type: "text" as const, text: question },
+  ];
+}
+
 export async function askAnchor(params: {
   context: DealContext;
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
+  images?: AnchorImage[];
 }): Promise<string> {
   const contextBlock = buildContextBlock(params.context);
 
@@ -186,7 +220,7 @@ export async function askAnchor(params: {
     system: buildSystemPrompt(contextBlock),
     messages: [
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
-      { role: "user" as const, content: params.question },
+      { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
     ],
   });
 
@@ -217,6 +251,7 @@ export async function* askAnchorStream(params: {
   context: DealContext;
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
+  images?: AnchorImage[];
 }): AsyncGenerator<string> {
   const contextBlock = buildContextBlock(params.context);
 
@@ -227,7 +262,7 @@ export async function* askAnchorStream(params: {
     system: buildSystemPrompt(contextBlock),
     messages: [
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
-      { role: "user" as const, content: params.question },
+      { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
     ],
   });
 

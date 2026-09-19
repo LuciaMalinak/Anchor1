@@ -34,6 +34,32 @@ const MAX_EXTRACTED_CHARS = 12_000;
 
 const PLAIN_TEXT_EXTENSIONS = new Set([".txt", ".md", ".markdown", ".csv", ".json", ".log"]);
 
+// Extensions Ask Anchor can "see" via Claude's vision, rather than via
+// extracted text — a screenshot of a deck or whiteboard, a photo of a
+// printed doc. No text ever comes out of extractTextFromFile() for these
+// (falls through to the null case below, same as any other unsupported
+// type); the caller that actually has the raw bytes (the assist route,
+// which reads storage) is responsible for base64-encoding a capped set of
+// these and handing them to the model as image content blocks — see
+// liveAssist.ts. This map is just the shared source of truth for "is this
+// an image, and what media type is it" so the upload route, the deal page
+// (for the AI-readable badge), and the assist route all agree.
+export const IMAGE_EXTENSIONS: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+};
+
+export function isImageFile(fileName: string): boolean {
+  return path.extname(fileName).toLowerCase() in IMAGE_EXTENSIONS;
+}
+
+export function imageMediaType(fileName: string): string | null {
+  return IMAGE_EXTENSIONS[path.extname(fileName).toLowerCase()] ?? null;
+}
+
 // Pulls every <t>/<a:t> text-run node's inner text out of a chunk of
 // OOXML (the XML format inside .pptx/.xlsx/.docx zip packages). Used
 // instead of a real XML parser (no new dependency for it) — safe here
