@@ -58,7 +58,15 @@ export async function createInviteAndNotify({
     // verified. The invite record itself still works: whoever signs in
     // with this email joins the team regardless of whether they got a
     // notification about it.
-    emailWarning = err instanceof Error ? err.message : "Couldn't send the invite email";
+    //
+    // The raw provider error used to be shown as-is, which meant a
+    // Resend sandbox-mode restriction (and its account email, and a link
+    // to resend.com/domains) leaked straight into the product UI. Only
+    // ever show a clean, generic explanation here — never err.message.
+    const rawMessage = err instanceof Error ? err.message : "";
+    emailWarning = rawMessage.includes("testing emails")
+      ? "the invite email couldn't be sent yet (Anchor's sender isn't verified for outside recipients)"
+      : "the invite email couldn't be sent";
   }
 
   return { invite, emailWarning };
