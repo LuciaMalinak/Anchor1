@@ -107,6 +107,32 @@ export function TeamClient({
     }
   }
 
+  const [cancelingInviteId, setCancelingInviteId] = useState<string | null>(null);
+  const [cancelInviteErrors, setCancelInviteErrors] = useState<Record<string, string>>({});
+
+  async function handleCancelInvite(invite: Invite) {
+    if (!window.confirm(`Cancel the invite to ${invite.email}? They won't be able to join just by signing in anymore.`)) {
+      return;
+    }
+    setCancelingInviteId(invite.id);
+    setCancelInviteErrors((e) => ({ ...e, [invite.id]: "" }));
+    try {
+      const res = await fetch(`/api/team/invites/${invite.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't cancel that invite");
+      }
+      router.refresh();
+    } catch (err) {
+      setCancelInviteErrors((e) => ({
+        ...e,
+        [invite.id]: err instanceof Error ? err.message : "Couldn't cancel that invite",
+      }));
+    } finally {
+      setCancelingInviteId(null);
+    }
+  }
+
   const [joinUrl, setJoinUrl] = useState("");
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -387,10 +413,27 @@ export function TeamClient({
             {invites.map((i) => (
               <li
                 key={i.id}
-                className="flex items-center justify-between rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3"
+                className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3"
               >
-                <span className="text-sm text-slate-600">{i.email}</span>
-                <span className="text-xs text-slate-400">Waiting to sign in</span>
+                <span className="truncate text-sm text-slate-600">{i.email}</span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs text-slate-400">Waiting to sign in</span>
+                  {isOwner && (
+                    <div className="flex flex-col items-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleCancelInvite(i)}
+                        disabled={cancelingInviteId === i.id}
+                        className="text-xs font-medium text-red-500 hover:underline disabled:opacity-50"
+                      >
+                        {cancelingInviteId === i.id ? "Canceling…" : "Cancel"}
+                      </button>
+                      {cancelInviteErrors[i.id] && (
+                        <p className="text-right text-[11px] text-red-600">{cancelInviteErrors[i.id]}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
