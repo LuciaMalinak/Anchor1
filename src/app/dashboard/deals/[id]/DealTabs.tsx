@@ -260,6 +260,7 @@ function BeforePanel({
   memory,
   latestReady,
   decisionBoundaries,
+  backup,
   mic,
   upcoming,
   onJoinedNow,
@@ -269,6 +270,7 @@ function BeforePanel({
   memory: string | null;
   latestReady: DealMeeting | undefined;
   decisionBoundaries: string | null;
+  backup: TeamMember | null;
   mic: MicRecorderState;
   upcoming: DealMeeting[];
   onJoinedNow: () => void;
@@ -307,7 +309,7 @@ function BeforePanel({
           </p>
         </div>
       ))}
-      <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} />
+      <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} backup={backup} />
       <NewMeetingForms dealId={dealId} mic={mic} onJoinedNow={onJoinedNow} />
     </div>
   );
@@ -317,10 +319,12 @@ function HandoffPanel({
   dealId,
   dealName,
   initialDecisionBoundaries,
+  backup,
 }: {
   dealId: string;
   dealName: string;
   initialDecisionBoundaries: string | null;
+  backup: TeamMember | null;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -333,6 +337,8 @@ function HandoffPanel({
   const [genError, setGenError] = useState<string | null>(null);
   const [briefing, setBriefing] = useState<HandoffBriefing | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sendingToSlack, setSendingToSlack] = useState(false);
+  const [slackResult, setSlackResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   async function handleSaveBoundaries() {
     setSavingBoundaries(true);
@@ -372,9 +378,12 @@ function HandoffPanel({
     }
   }
 
-  async function handleCopy() {
-    if (!briefing) return;
-    const text = `Handoff briefing — ${dealName}
+  // Shared by the clipboard copy and the Slack send below, so the two
+  // never drift into showing/sending subtly different text for the same
+  // briefing.
+  function briefingText(): string | null {
+    if (!briefing) return null;
+    return `Handoff briefing — ${dealName}
 
 WHAT'S BEEN DECIDED
 ${briefing.whatWasDecided}
@@ -390,6 +399,11 @@ ${briefing.personalTouches}
 
 WHAT THEY CAN DECIDE ON THEIR OWN
 ${boundaries || "Nothing set yet — check with the deal owner before committing to anything specific."}`;
+  }
+
+  async function handleCopy() {
+    const text = briefingText();
+    if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -397,6 +411,27 @@ ${boundaries || "Nothing set yet — check with the deal owner before committing
     } catch {
       // Clipboard access can fail depending on context — non-fatal, the
       // text is still fully visible on screen to select and copy by hand.
+    }
+  }
+
+  async function handleSendToSlack() {
+    const text = briefingText();
+    if (!text) return;
+    setSendingToSlack(true);
+    setSlackResult(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/handoff/notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't send that to Slack.");
+      setSlackResult({ ok: true, message: `Sent to ${body.sentTo} on Slack` });
+    } catch (err) {
+      setSlackResult({ ok: false, message: err instanceof Error ? err.message : "Couldn't send that to Slack." });
+    } finally {
+      setSendingToSlack(false);
     }
   }
 
@@ -525,13 +560,30 @@ ${boundaries || "Nothing set yet — check with the deal owner before committing
               {boundaries || "Nothing set yet — check with the deal owner before committing to anything specific."}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400"
-          >
-            {copied ? "Copied ✓" : "Copy to share"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400"
+            >
+              {copied ? "Copied ✓" : "Copy to share"}
+            </button>
+            {backup && (
+              <button
+                type="button"
+                onClick={handleSendToSlack}
+                disabled={sendingToSlack}
+                className="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
+              >
+                {sendingToSlack ? "Sending…" : `Send to ${backup.name || backup.email} on Slack`}
+              </button>
+            )}
+          </div>
+          {slackResult && (
+            <p className={`text-xs ${slackResult.ok ? "text-emerald-600" : "text-red-600"}`}>
+              {slackResult.message}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -1907,6 +1959,11 @@ export function DealTabs({
     (m) => m.status !== "ready" && m.status !== "failed" && !upcomingIds.has(m.id)
   );
   const readyMeetings = meetings.filter((m) => m.status === "ready");
+  // Resolved once here rather than inside HandoffPanel — it already has
+  // the full team list in scope, and passing the resolved person down
+  // (rather than an id it would have to look up itself) keeps HandoffPanel
+  // from needing its own copy of `team`.
+  const backup = team.find((t) => t.id === deal.backupUserId) ?? null;
   // A bot Anchor actually confirmed is in the call (as opposed to still
   // "joining") — used to show the live panel alongside whichever tab is
   // active, for when you're running late and still want prep visible.
@@ -2105,6 +2162,7 @@ export function DealTabs({
             memory={deal.memory}
             latestReady={readyMeetings[0]}
             decisionBoundaries={deal.decisionBoundaries}
+            backup={backup}
             mic={mic}
             upcoming={upcoming}
             onJoinedNow={() => {

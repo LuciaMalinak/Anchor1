@@ -57,8 +57,12 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     key: "slack",
     name: "Slack",
     description:
-      "Read the channels you point Anchor at for deal-related context, and post updates back.",
-    scopes: ["channels:history", "chat:write", "users:read"],
+      "Read the channels you point Anchor at for deal-related context, and post updates back — like DMing a handoff briefing straight to whoever's covering a deal.",
+    // users:read.email is separate from users:read and specifically what
+    // users.lookupByEmail (src/lib/integrations/slack.ts) needs to find a
+    // teammate by their Anchor email — without it that lookup 404s even
+    // though users:read alone looks like it should cover it.
+    scopes: ["channels:history", "chat:write", "users:read", "users:read.email"],
     authorizeUrl: "https://slack.com/oauth/v2/authorize",
     tokenUrl: "https://slack.com/api/oauth.v2.access",
     clientIdEnv: "SLACK_INTEGRATION_CLIENT_ID",

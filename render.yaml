@@ -48,6 +48,12 @@ services:
         sync: false
       - key: MICROSOFT_INTEGRATION_CLIENT_SECRET
         sync: false
+      # Slack — create an app at api.slack.com/apps ("From scratch"), add
+      # https://<your-app>.onrender.com/api/integrations/slack/callback as
+      # a redirect URL under OAuth & Permissions, and add the Bot Token
+      # Scopes channels:history, chat:write, users:read, users:read.email
+      # (see src/lib/integrations/config.ts). Lets a teammate DM a handoff
+      # briefing straight to whoever's covering their deal.
       - key: SLACK_INTEGRATION_CLIENT_ID
         sync: false
       - key: SLACK_INTEGRATION_CLIENT_SECRET
