@@ -125,11 +125,16 @@ export default async function DashboardLayout({
           deliberate touches (the signed-in avatar, hover states, buttons)
           instead of a loud band across the top of every page. */}
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="flex w-full items-center justify-between px-6 py-4 lg:px-10 2xl:px-16">
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 px-6 py-4 lg:flex-nowrap lg:px-10 2xl:px-16">
           <Link href="/dashboard">
             <AnimatedLogo size="lg" />
           </Link>
-          <nav className="flex items-center gap-5 text-sm font-medium">
+          {/* flex-wrap on the row above keeps this from being clipped on a
+              phone-width screen (it used to just run off the right edge,
+              unreachable, since the row itself never wrapped); overflow-x
+              here is a second safety net in case even its own row is still
+              too narrow for every item on a very small phone. */}
+          <nav className="order-3 flex w-full items-center gap-5 overflow-x-auto text-sm font-medium lg:order-none lg:w-auto lg:overflow-visible">
             <NavLink href="/dashboard/deals">Deals</NavLink>
             <NavLink href="/dashboard/insights">Insights</NavLink>
             <NavLink href="/dashboard/contacts">Contacts</NavLink>
