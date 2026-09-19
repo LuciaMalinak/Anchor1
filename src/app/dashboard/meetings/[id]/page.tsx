@@ -14,6 +14,7 @@ import { canAccessDeal } from "@/lib/dealAccess";
 import { MeetingStatusPoller } from "./MeetingStatusPoller";
 import { MeetingDeleteButton } from "./MeetingDeleteButton";
 import { FollowUpEmailDraft } from "./FollowUpEmailDraft";
+import { ParticipantsPanel } from "./ParticipantsPanel";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 
 // Kept as a plain helper outside the component — same reasoning as
@@ -142,6 +143,12 @@ export default async function MeetingDetailPage({
     .leftJoin(contacts, eq(meetingParticipants.contactId, contacts.id))
     .where(eq(meetingParticipants.meetingId, id));
 
+  // The raw transcript only ever has AssemblyAI's generic "Speaker A" /
+  // "Speaker B" labels — this resolves each one to whatever real name is
+  // known for that speaker (AI-inferred from the conversation, or set by
+  // hand in the panel below), same as the participants list already did.
+  const speakerNames = new Map(participants.map((p) => [p.speakerLabel, p.displayName]));
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
@@ -237,26 +244,7 @@ export default async function MeetingDetailPage({
       {summary && <FollowUpEmailDraft meetingId={id} />}
 
       {participants.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="text-sm font-medium text-slate-900">People in this meeting</h2>
-          <div className="mt-3 flex flex-col gap-3">
-            {participants.map((p) => (
-              <div key={p.id} className="rounded-lg bg-slate-50 px-4 py-3">
-                <p className="text-sm font-medium text-slate-900">
-                  {p.displayName || p.speakerLabel}
-                  {Boolean(p.meetingCount && p.meetingCount > 1) && (
-                    <span className="ml-2 text-xs font-normal text-slate-400">
-                      {p.meetingCount} meetings
-                    </span>
-                  )}
-                </p>
-                {p.relationshipSummary && (
-                  <p className="mt-1 text-sm text-slate-600">{p.relationshipSummary}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+        <ParticipantsPanel meetingId={id} participants={participants} canEdit={isOwner || sharedViaTeam} />
       )}
 
       {transcript && (
@@ -265,7 +253,9 @@ export default async function MeetingDetailPage({
           <div className="mt-3 flex flex-col gap-3">
             {transcript.utterances?.map((u, i) => (
               <div key={i} className="text-sm">
-                <span className="font-medium text-slate-900">{u.speakerLabel}: </span>
+                <span className="font-medium text-slate-900">
+                  {speakerNames.get(u.speakerLabel) || u.speakerLabel}:{" "}
+                </span>
                 <span className="text-slate-600">{u.text}</span>
               </div>
             ))}
