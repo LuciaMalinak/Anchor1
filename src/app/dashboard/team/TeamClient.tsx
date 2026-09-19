@@ -105,7 +105,7 @@ export function TeamClient({
       setEmail("");
       setNotice(
         body.emailWarning
-          ? `Added — but the invite email didn't send (${body.emailWarning}). They can still sign in with this email to join.`
+          ? `Added — but ${body.emailWarning}. They can still sign in with this email to join.`
           : "Invited — they'll join the team automatically the first time they sign in."
       );
       router.refresh();
