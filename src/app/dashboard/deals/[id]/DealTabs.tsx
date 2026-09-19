@@ -1659,6 +1659,38 @@ export function DealTabs({
   const [researchUpdatedAt, setResearchUpdatedAt] = useState(deal.companyResearchUpdatedAt);
   const [newsHeadline, setNewsHeadline] = useState(deal.newsHeadline);
 
+  // Picks up the deal page's background research refresh (fired
+  // fire-and-forget rather than blocking the page load — see
+  // src/app/dashboard/deals/[id]/page.tsx) once it lands, so a brand-new
+  // deal's research box fills in on its own within a few seconds instead
+  // of staying empty until someone clicks "Research" or reloads the page.
+  useEffect(() => {
+    if (companyResearch) return;
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/deals/${deal.id}/research`);
+        if (!res.ok) return;
+        const body = await res.json().catch(() => null);
+        if (!cancelled && body?.companyResearch) {
+          setCompanyResearch(body.companyResearch);
+          setResearchUpdatedAt(body.companyResearchUpdatedAt);
+          setNewsHeadline(body.newsHeadline);
+        }
+      } catch {
+        // Ambient background polling — a failed check just means we try
+        // again next tick; the "Research" button still works meanwhile.
+      }
+    }
+
+    const interval = setInterval(poll, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [companyResearch, deal.id]);
+
   async function handleResearch() {
     setResearching(true);
     setResearchError(null);

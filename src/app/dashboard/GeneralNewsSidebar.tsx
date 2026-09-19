@@ -1,9 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { IndustryTicker } from "./IndustryTicker";
 import type { TickerItem } from "@/lib/industryTicker";
+
+// How often to check for the background briefing refresh landing (see
+// the dashboard layout — it kicks that off fire-and-forget rather than
+// blocking the page). Only polls while there's nothing to show yet, so
+// this never runs once a briefing has loaded.
+const BRIEFING_POLL_MS = 20 * 1000;
 
 // Deal detail pages (/dashboard/deals/<id>) already show their own
 // deal-specific news sidebar inside DealTabs — this general, team-wide
@@ -39,6 +45,32 @@ export function GeneralNewsSidebar({
   const [briefingUpdatedAt, setBriefingUpdatedAt] = useState(initialBriefingUpdatedAt);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (dailyBriefing) return; // already have one — nothing to wait on
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const res = await fetch("/api/team/briefing");
+        if (!res.ok) return;
+        const body = await res.json().catch(() => null);
+        if (!cancelled && body?.dailyBriefing) {
+          setDailyBriefing(body.dailyBriefing);
+          setBriefingUpdatedAt(body.dailyBriefingUpdatedAt);
+        }
+      } catch {
+        // Ambient background polling — a failed check just means we try
+        // again next tick; the placeholder text stays up meanwhile.
+      }
+    }
+
+    const interval = setInterval(poll, BRIEFING_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [dailyBriefing]);
 
   if (isDealDetailPath(pathname)) return null;
 

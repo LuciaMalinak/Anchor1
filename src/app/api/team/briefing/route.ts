@@ -7,9 +7,30 @@ import { getOrCreateTeamId } from "@/lib/team";
 import { getDailyBriefing } from "@/lib/dailyBriefing";
 import { isIndustryKey } from "@/lib/industries";
 
+// Cheap read of whatever's already cached — no AI call, never blocks.
+// The dashboard layout kicks off a background refresh (fire-and-forget,
+// same pattern as the industry ticker) whenever the briefing is stale
+// rather than awaiting it, so the first page load after a long gap
+// renders immediately instead of freezing on a web-search call; this is
+// what GeneralNewsSidebar polls to pick up that result once it lands.
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  const teamId = await getOrCreateTeamId(session.user.id);
+  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+
+  return NextResponse.json({
+    dailyBriefing: team?.dailyBriefing ?? null,
+    dailyBriefingUpdatedAt: team?.dailyBriefingUpdatedAt ?? null,
+  });
+}
+
 // Manual refresh for the team-wide "Today's briefing" shown on the News
-// tab. Auto-refresh (throttled to once a day) happens in the deal page
-// server component — this route is what the "Refresh" button calls.
+// tab — this is what the "Refresh" button calls, and does trigger a real
+// (slower) AI lookup, unlike GET above.
 export async function POST() {
   const session = await auth();
   if (!session?.user?.id) {
