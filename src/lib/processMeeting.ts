@@ -83,6 +83,28 @@ export async function processMeeting(meetingId: string): Promise<void> {
 
     const continuityLines: string[] = [];
 
+    // The model is only asked to echo back "one entry per distinct
+    // speaker label present in the transcript" — nothing forces it to
+    // reproduce AssemblyAI's exact string ("Speaker A"), and it has
+    // drifted in practice (case, whitespace, or a shortened form). The
+    // transcript view (page.tsx) looks up each line's real name by an
+    // EXACT match against meetingParticipants.speakerLabel, so any
+    // drift here silently broke that lookup while the "People in this
+    // meeting" summary — which doesn't need to match anything, it just
+    // displays whatever's in this table — looked fine. Resolving
+    // against the canonical labels actually present in the utterances
+    // (case/whitespace-insensitive) before storing keeps the two in
+    // sync regardless of what the model echoes back.
+    const canonicalSpeakerLabels = Array.from(
+      new Set(utterances.map((u) => u.speakerLabel))
+    );
+    function resolveSpeakerLabel(raw: string): string {
+      const normalize = (s: string) => s.trim().toLowerCase();
+      return (
+        canonicalSpeakerLabels.find((c) => normalize(c) === normalize(raw)) || raw
+      );
+    }
+
     for (const speaker of result.speakers) {
       let contactId: string | null = null;
 
@@ -188,7 +210,7 @@ export async function processMeeting(meetingId: string): Promise<void> {
       await db.insert(meetingParticipants).values({
         meetingId,
         contactId,
-        speakerLabel: speaker.speakerLabel,
+        speakerLabel: resolveSpeakerLabel(speaker.speakerLabel),
         displayName: speaker.inferredName,
       });
     }

@@ -147,7 +147,19 @@ export default async function MeetingDetailPage({
   // "Speaker B" labels — this resolves each one to whatever real name is
   // known for that speaker (AI-inferred from the conversation, or set by
   // hand in the panel below), same as the participants list already did.
-  const speakerNames = new Map(participants.map((p) => [p.speakerLabel, p.displayName]));
+  // Keyed on a normalized (trimmed/lowercased) label rather than the raw
+  // string: processMeeting.ts now resolves AI-inferred labels against the
+  // transcript's real ones before storing, but this stays as a second,
+  // harmless layer of insurance against any future case/whitespace drift
+  // silently breaking the lookup again the way it did before that fix —
+  // that failure mode is quiet (falls back to the raw label with no
+  // error), so it's worth two guards rather than one.
+  function normalizeSpeakerLabel(label: string) {
+    return label.trim().toLowerCase();
+  }
+  const speakerNames = new Map(
+    participants.map((p) => [normalizeSpeakerLabel(p.speakerLabel), p.displayName])
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -254,7 +266,7 @@ export default async function MeetingDetailPage({
             {transcript.utterances?.map((u, i) => (
               <div key={i} className="text-sm">
                 <span className="font-medium text-slate-900">
-                  {speakerNames.get(u.speakerLabel) || u.speakerLabel}:{" "}
+                  {speakerNames.get(normalizeSpeakerLabel(u.speakerLabel)) || u.speakerLabel}:{" "}
                 </span>
                 <span className="text-slate-600">{u.text}</span>
               </div>
