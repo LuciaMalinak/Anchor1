@@ -77,14 +77,41 @@ export function TeamClient({
     }
   }
 
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeErrors, setRemoveErrors] = useState<Record<string, string>>({});
+
+  async function handleRemoveMember(member: Member) {
+    if (
+      !window.confirm(
+        `Remove ${member.name || member.email} from the team? They'll lose access to every deal here — anything they already added (meetings, notes, chat messages) stays in place for the rest of the team.`
+      )
+    ) {
+      return;
+    }
+    setRemovingId(member.id);
+    setRemoveErrors((e) => ({ ...e, [member.id]: "" }));
+    try {
+      const res = await fetch(`/api/team/members/${member.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't remove them");
+      }
+      router.refresh();
+    } catch (err) {
+      setRemoveErrors((e) => ({
+        ...e,
+        [member.id]: err instanceof Error ? err.message : "Couldn't remove them",
+      }));
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
   const [joinUrl, setJoinUrl] = useState("");
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     // window.location only exists client-side, so this has to run in an
-    // effect rather than during render (which also runs on the server) —
-    // exactly the "read an external system on mount" case the lint rule
-    // otherwise warns about.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // effect rather than during render (which also runs on the server).
     setJoinUrl(`${window.location.origin}/join/${teamId}`);
   }, [teamId]);
 
@@ -331,6 +358,21 @@ export function TeamClient({
                   >
                     Edit
                   </Link>
+                )}
+                {isOwner && !isYou && (
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMember(m)}
+                      disabled={removingId === m.id}
+                      className="text-xs font-medium text-red-500 hover:underline disabled:opacity-50"
+                    >
+                      {removingId === m.id ? "Removing…" : "Remove"}
+                    </button>
+                    {removeErrors[m.id] && (
+                      <p className="text-right text-[11px] text-red-600">{removeErrors[m.id]}</p>
+                    )}
+                  </div>
                 )}
               </div>
             );
