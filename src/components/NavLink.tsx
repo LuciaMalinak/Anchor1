@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// A nav link that knows when it's the current section and shows it with
-// a colored underline that eases in/out (via the global `a { transition }`
-// rule in globals.css) rather than just snapping between plain-text and
-// bold. Small, functional motion — it's telling you where you are, not
-// just decorating the header.
+// A nav link that knows when it's the current section and shows it as a
+// filled pill (white, with a soft shadow) sitting inside the header's
+// track-colored nav group — the same "segmented control" pattern most
+// modern SaaS dashboards use, rather than the plainer underline this
+// used to be. Still eases in/out on hover via the global `a { transition
+// }` rule in globals.css, so moving between sections still feels
+// responsive, not just a hard on/off.
 export function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(`${href}/`);
@@ -15,10 +17,10 @@ export function NavLink({ href, children }: { href: string; children: React.Reac
   return (
     <Link
       href={href}
-      className={`border-b-2 pb-1 ${
+      className={`shrink-0 rounded-full px-3.5 py-1.5 transition-colors ${
         active
-          ? "border-accent text-slate-900"
-          : "border-transparent text-slate-600 hover:border-slate-300 hover:text-brand"
+          ? "bg-white text-slate-900 shadow-sm"
+          : "text-slate-600 hover:bg-white/60 hover:text-brand"
       }`}
     >
       {children}

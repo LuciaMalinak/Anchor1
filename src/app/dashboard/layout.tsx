@@ -133,8 +133,15 @@ export default async function DashboardLayout({
               phone-width screen (it used to just run off the right edge,
               unreachable, since the row itself never wrapped); overflow-x
               here is a second safety net in case even its own row is still
-              too narrow for every item on a very small phone. */}
-          <nav className="order-3 flex w-full items-center gap-5 overflow-x-auto text-sm font-medium lg:order-none lg:w-auto lg:overflow-visible">
+              too narrow for every item on a very small phone.
+
+              The nav itself sits in a soft rounded "track" (bg-slate-100/70)
+              so each NavLink's active state reads as a filled pill inside
+              a segmented control, instead of floating text with an
+              underline — a small change that makes the whole header feel
+              more like a deliberate piece of UI and less like a plain
+              list of links. */}
+          <nav className="order-3 flex w-full items-center gap-1 overflow-x-auto rounded-full bg-slate-100/70 p-1 text-sm font-medium lg:order-none lg:w-auto lg:overflow-visible">
             <NavLink href="/dashboard/deals">Deals</NavLink>
             <NavLink href="/dashboard/insights">Insights</NavLink>
             <NavLink href="/dashboard/contacts">Contacts</NavLink>
@@ -142,30 +149,37 @@ export default async function DashboardLayout({
             <NavLink href="/dashboard/integrations">Integrations</NavLink>
           </nav>
           <div className="flex items-center gap-3 text-sm text-slate-500">
-            <Link href="/dashboard/profile" className="flex items-center gap-2 hover:text-brand">
+            <Link
+              href="/dashboard/profile"
+              className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-slate-100 hover:text-brand"
+            >
               {session?.user?.image ? (
                 <Image
                   src={session.user.image}
                   alt=""
-                  width={24}
-                  height={24}
+                  width={28}
+                  height={28}
                   unoptimized
-                  className="h-6 w-6 rounded-full object-cover"
+                  className="h-7 w-7 rounded-full object-cover ring-2 ring-white"
                 />
               ) : (
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-[10px] font-semibold text-white">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white ring-2 ring-white">
                   {(session?.user?.name || session?.user?.email || "?")[0]?.toUpperCase()}
                 </span>
               )}
-              <span>{session?.user?.name || session?.user?.email}</span>
+              <span className="font-medium text-slate-700">{session?.user?.name || session?.user?.email}</span>
             </Link>
+            <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
             <form
               action={async () => {
                 "use server";
                 await signOut({ redirectTo: "/" });
               }}
             >
-              <button type="submit" className="hover:text-slate-900">
+              <button
+                type="submit"
+                className="rounded-full px-3 py-1.5 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              >
                 Sign out
               </button>
             </form>
