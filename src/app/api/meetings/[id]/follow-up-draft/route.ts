@@ -22,14 +22,21 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   }
 
   const isOwner = meeting.userId === session.user.id;
-  let sharedViaTeam = false;
-  if (!isOwner && meeting.dealId) {
-    const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
-    sharedViaTeam = Boolean(
-      deal && (await canAccessDeal(session.user.id, meeting.dealId, deal.teamId))
-    );
+  let deal: typeof deals.$inferSelect | null = null;
+  if (meeting.dealId) {
+    const [d] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
+    deal = d ?? null;
   }
-  if (!isOwner && !sharedViaTeam) {
+  // A meeting's dealId isn't guaranteed to be one this user — even the
+  // owner — actually has access to (see the root-cause note in
+  // meetings/route.ts; older meetings created before that fix could
+  // still carry a foreign dealId). Previously this check only ran for
+  // a non-owner, so the owner's own meeting could pull ANOTHER team's
+  // deal data below via meeting.dealId with no check at all.
+  const canUseDeal = Boolean(
+    deal && (await canAccessDeal(session.user.id, meeting.dealId as string, deal.teamId))
+  );
+  if (!isOwner && !canUseDeal) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
 
@@ -50,9 +57,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     .where(eq(meetingParticipants.meetingId, id));
 
   let recipientEmails = participants.map((p) => p.email).filter((e): e is string => Boolean(e));
-  if (recipientEmails.length === 0 && meeting.dealId) {
-    const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
-    if (deal?.primaryContactEmail) recipientEmails = [deal.primaryContactEmail];
+  if (recipientEmails.length === 0 && canUseDeal && deal?.primaryContactEmail) {
+    recipientEmails = [deal.primaryContactEmail];
   }
 
   try {

@@ -43,14 +43,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const dealRows = meeting.dealId
     ? await db.select().from(deals).where(eq(deals.id, meeting.dealId))
     : [];
-  const deal = dealRows[0] ?? null;
+  let deal: typeof deals.$inferSelect | null = dealRows[0] ?? null;
 
-  let sharedViaTeam = false;
-  if (!isOwner && deal) {
-    sharedViaTeam = await canAccessDeal(session.user.id, deal.id, deal.teamId);
-  }
-  if (!isOwner && !sharedViaTeam) {
+  // A meeting's dealId isn't guaranteed to be one this user actually has
+  // access to (see the root-cause note in meetings/route.ts) — this used
+  // to only get checked for a non-owner, so the owner's own meeting could
+  // pull another team's deal memory/notes/decision boundaries/email and
+  // calendar context straight into live coaching with no check at all.
+  const canUseDeal = Boolean(deal && (await canAccessDeal(session.user.id, deal.id, deal.teamId)));
+  if (!isOwner && !canUseDeal) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+  }
+  if (!canUseDeal) {
+    deal = null;
   }
 
   const segments = await db

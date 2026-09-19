@@ -50,8 +50,14 @@ export async function getHomeTasks(params: { teamId: string; limit?: number }): 
       lastActivityAt: max(meetings.occurredAt),
     })
     .from(tasks)
-    .leftJoin(deals, eq(tasks.dealId, deals.id))
-    .leftJoin(meetings, eq(meetings.dealId, tasks.dealId))
+    // Constraining the join itself (not just filtering tasks.teamId) so a
+    // task whose dealId happens to point at another team's deal — e.g.
+    // from data created before meetings/route.ts started validating
+    // dealId — simply comes back with no deal/meeting info attached
+    // instead of silently pulling that other team's real deal name,
+    // stage, and meeting activity dates into this home page.
+    .leftJoin(deals, and(eq(tasks.dealId, deals.id), eq(deals.teamId, params.teamId)))
+    .leftJoin(meetings, eq(meetings.dealId, deals.id))
     .where(and(eq(tasks.teamId, params.teamId), eq(tasks.completed, false)))
     .groupBy(
       tasks.id,

@@ -5,6 +5,7 @@ import { meetings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createBot } from "@/lib/recall";
 import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
+import { authorizeDeal } from "@/lib/dealAccess";
 
 // Same fallback used elsewhere (OAuth callbacks, etc.) — prefer the
 // explicit URL when set (needed behind Render's proxy), otherwise derive
@@ -40,6 +41,13 @@ export async function POST(req: NextRequest) {
   const titleField = typeof body.title === "string" ? body.title.trim() : "";
   const dealId = typeof body.dealId === "string" && body.dealId ? body.dealId : null;
   const scheduledAtField = typeof body.scheduledAt === "string" ? body.scheduledAt.trim() : "";
+
+  // Same reasoning as the file-upload path in meetings/route.ts — an
+  // unvalidated dealId here let a meeting get attached to another
+  // team's deal, which other routes then trusted and leaked from.
+  if (dealId && !(await authorizeDeal(session.user.id, dealId))) {
+    return NextResponse.json({ error: "That deal wasn't found" }, { status: 400 });
+  }
 
   if (!meetingUrl) {
     return NextResponse.json({ error: "Paste a meeting link first" }, { status: 400 });

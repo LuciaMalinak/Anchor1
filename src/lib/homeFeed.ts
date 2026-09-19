@@ -29,7 +29,11 @@ export async function getHomeUpdates(params: { teamId: string; limit?: number })
       })
       .from(meetings)
       .innerJoin(users, eq(meetings.userId, users.id))
-      .leftJoin(deals, eq(meetings.dealId, deals.id))
+      // Constrained on team here too, not just id — a meeting's dealId
+      // pointing at another team's deal (possible from data created
+      // before meetings/route.ts started validating it) would otherwise
+      // still show that other team's real deal name in this feed.
+      .leftJoin(deals, and(eq(meetings.dealId, deals.id), eq(deals.teamId, params.teamId)))
       .where(and(eq(users.teamId, params.teamId), eq(meetings.status, "ready")))
       .orderBy(desc(meetings.updatedAt))
       .limit(limit),
