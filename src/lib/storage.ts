@@ -116,6 +116,20 @@ export async function saveDealFile(
   return filePath;
 }
 
+// Removes every stored file for a whole deal at once — used when the
+// deal itself is deleted. dealFiles rows cascade-delete at the database
+// level (see schema.ts), but that never touches R2/disk, so this is the
+// explicit cleanup for the actual bytes. Safe to call even for a deal
+// with zero files.
+export async function deleteAllDealFiles(dealId: string): Promise<void> {
+  if (isR2Configured()) {
+    await r2DeletePrefix(`deals/${dealId}/`).catch(() => {});
+    return;
+  }
+  const dir = path.join(DEAL_STORAGE_ROOT, dealId);
+  await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+}
+
 // Removes one deal file's stored bytes — used when someone deletes a
 // stale/unreadable upload so they can re-attach a fresh copy (e.g. once
 // text extraction for a format has just been added and an already-

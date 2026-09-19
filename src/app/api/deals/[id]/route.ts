@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, users, dealMembers } from "@/db/schema";
+import { deals, users, dealMembers, meetings, teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { DEAL_STAGES } from "@/lib/dealStages";
 import { authorizeDeal } from "@/lib/dealAccess";
+import { deleteMeetingAudio, deleteAllDealFiles } from "@/lib/storage";
 
 // Lead/backup must be null (unassigned) or an actual member of this
 // deal's team — never trust a client-supplied id without checking.
@@ -124,4 +125,55 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   return NextResponse.json({ deal: updated });
+}
+
+// Deal-creator or team-owner only — same bar as removing a teammate
+// (see /api/team/members/[id]/route.ts) and stricter than everyday deal
+// access, since this is permanent and takes the meetings with it.
+//
+// meetings.dealId is "set null" on delete at the database level (a
+// meeting can normally outlive being unlinked from a deal — see
+// schema.ts), so deleting the deal row alone would just orphan its
+// meetings rather than remove them. That's the wrong default here:
+// wiping a whole deal is expected to take its recordings with it, so
+// meetings are deleted explicitly first (which does cascade their
+// transcript/summary/participant rows, and cleans up each one's audio
+// file). dealFiles/dealMessages/dealMembers all cascade-delete
+// automatically once the deal row goes — only their storage bytes (for
+// files) need the explicit cleanup below.
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  const { id: dealId } = await params;
+  const authorized = await authorizeDeal(session.user.id, dealId);
+  if (!authorized) {
+    return NextResponse.json({ error: "Deal not found" }, { status: 404 });
+  }
+  const { deal, teamId } = authorized;
+
+  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  const isCreator = deal.createdByUserId === session.user.id;
+  const isTeamOwner = Boolean(team && team.ownerUserId === session.user.id);
+  if (!isCreator && !isTeamOwner) {
+    return NextResponse.json(
+      { error: "Only the person who created this deal, or the team owner, can delete it" },
+      { status: 403 }
+    );
+  }
+
+  const dealMeetings = await db.select({ id: meetings.id }).from(meetings).where(eq(meetings.dealId, dealId));
+  for (const m of dealMeetings) {
+    await deleteMeetingAudio(m.id);
+  }
+  if (dealMeetings.length > 0) {
+    await db.delete(meetings).where(eq(meetings.dealId, dealId));
+  }
+
+  await deleteAllDealFiles(dealId);
+  await db.delete(deals).where(eq(deals.id, dealId));
+
+  return NextResponse.json({ ok: true });
 }

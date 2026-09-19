@@ -1123,6 +1123,25 @@ function ChatPanel({
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const teamById = new Map(team.map((t) => [t.id, t]));
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+
+  async function handleDeleteMessage(messageId: string) {
+    if (!window.confirm("Delete this message? This can't be undone.")) return;
+    setDeletingMessageId(messageId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/messages/${messageId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't delete that message");
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't delete that message");
+    } finally {
+      setDeletingMessageId(null);
+    }
+  }
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -1204,6 +1223,17 @@ function ChatPanel({
                     >
                       Private
                     </span>
+                  )}
+                  {isYou && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteMessage(m.id)}
+                      disabled={deletingMessageId === m.id}
+                      className="text-[11px] text-slate-400 hover:text-red-600 disabled:opacity-50"
+                      title="Delete this message"
+                    >
+                      {deletingMessageId === m.id ? "…" : "Delete"}
+                    </button>
                   )}
                 </div>
                 <div
@@ -1837,6 +1867,7 @@ export function DealTabs({
   sharedWithUserIds,
   messages,
   currentUserId,
+  canDeleteDeal,
 }: {
   deal: DealProfile & { memory: string | null };
   meetings: DealMeeting[];
@@ -1847,6 +1878,7 @@ export function DealTabs({
   sharedWithUserIds: string[];
   messages: ChatMessage[];
   currentUserId: string;
+  canDeleteDeal: boolean;
 }) {
   // "Now", as state rather than a bare Date.now() call during render —
   // starts null (so the initial/SSR render and first client render
@@ -1980,6 +2012,32 @@ export function DealTabs({
     };
   }, [companyResearch, deal.id]);
 
+  const [deletingDeal, setDeletingDeal] = useState(false);
+  const [deleteDealError, setDeleteDealError] = useState<string | null>(null);
+  async function handleDeleteDeal() {
+    if (
+      !window.confirm(
+        `Permanently delete "${deal.name}"? This removes the deal and everything on it — every meeting recording, transcript, and summary, every attached file, and the chat. This can't be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingDeal(true);
+    setDeleteDealError(null);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't delete this deal");
+      }
+      router.push("/dashboard/deals");
+      router.refresh();
+    } catch (err) {
+      setDeletingDeal(false);
+      setDeleteDealError(err instanceof Error ? err.message : "Couldn't delete this deal");
+    }
+  }
+
   async function handleResearch() {
     setResearching(true);
     setResearchError(null);
@@ -2001,7 +2059,22 @@ export function DealTabs({
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h1 className="text-2xl font-semibold text-brand">{deal.name}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-semibold text-brand">{deal.name}</h1>
+            {canDeleteDeal && (
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  onClick={handleDeleteDeal}
+                  disabled={deletingDeal}
+                  className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                >
+                  {deletingDeal ? "Deleting…" : "Delete deal"}
+                </button>
+                {deleteDealError && <p className="text-xs text-red-600">{deleteDealError}</p>}
+              </div>
+            )}
+          </div>
           <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
         </div>
         <RecordingBanner {...mic} />

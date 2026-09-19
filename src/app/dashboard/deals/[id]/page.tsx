@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts, dealMembers } from "@/db/schema";
+import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts, dealMembers, teams } from "@/db/schema";
 import { asc, desc, eq } from "drizzle-orm";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { isImageFile } from "@/lib/extractText";
@@ -143,6 +143,12 @@ export default async function DealDetailPage({
   const memberRows = await db.select({ userId: dealMembers.userId }).from(dealMembers).where(eq(dealMembers.dealId, id));
   const sharedWithUserIds = memberRows.map((r) => r.userId);
 
+  // Same bar as the DELETE route enforces server-side — computed here too
+  // just so the "Delete deal" button only shows up for someone it'll
+  // actually work for, instead of everyone getting a 403 surprise.
+  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  const canDeleteDeal = deal.createdByUserId === session.user.id || team?.ownerUserId === session.user.id;
+
   const lastActivityAt = dealMeetings[0]?.occurredAt ?? null;
   const health = computeDealHealth({
     stage: deal.stage,
@@ -174,6 +180,7 @@ export default async function DealDetailPage({
         restricted: deal.restricted,
       }}
       sharedWithUserIds={sharedWithUserIds}
+      canDeleteDeal={canDeleteDeal}
       people={dealContactRows}
       team={teammates.map((t) => ({ id: t.id, name: t.name, email: t.email, title: t.title, image: t.image }))}
       meetings={dealMeetings.map((m) => ({
