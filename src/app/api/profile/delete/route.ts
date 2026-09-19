@@ -68,6 +68,15 @@ export async function POST() {
       linkedin: null,
       department: null,
       otherInfo: null,
+      // Leave whatever team this account was on. For the sole-owner path
+      // above this is already a no-op (the team row, and this FK along
+      // with it, is gone). For anyone else — an invited member deleting
+      // their own account — skipping this used to leave a permanent
+      // "deleted-...@anchor.invalid" ghost in the team's member list:
+      // it still counted toward "this team has other people on it,"
+      // which could even block the owner from ever deleting their own
+      // account afterward, with no way to clear it out.
+      teamId: null,
     })
     .where(eq(users.id, userId));
 
