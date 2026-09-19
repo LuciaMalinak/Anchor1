@@ -21,9 +21,14 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: RESEND_API_KEY
+      # All outbound email — invites, recaps, and now the magic-link
+      # sign-in email too (see src/auth.ts) — goes through SendGrid via
+      # src/lib/email.ts. These were already set directly in the Render
+      # dashboard from when invites/recaps were switched over; adding
+      # them here too just so this file matches what's actually live.
+      - key: SENDGRID_API_KEY
         sync: false
-      - key: EMAIL_FROM
+      - key: SENDGRID_FROM_EMAIL
         sync: false
       - key: RECALL_API_KEY
         sync: false

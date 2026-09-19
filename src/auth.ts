@@ -10,8 +10,9 @@ import {
   sessions,
   verificationTokens,
 } from "@/db/schema";
-import { signInEmailHtml, signInEmailText } from "@/lib/emailTemplates";
+import { signInEmailHtml } from "@/lib/emailTemplates";
 import { assignTeamForNewUser } from "@/lib/onboardUser";
+import { sendEmail } from "@/lib/email";
 
 // Only registered when the LinkedIn app's credentials are actually set —
 // so the app still runs fine (email sign-in only) before that's set up,
@@ -47,12 +48,22 @@ export const {
   // with "UntrustedHost" even though AUTH_URL is set correctly.
   trustHost: true,
   providers: [
+    // Despite the name/import (next-auth doesn't ship a generic "Email"
+    // provider preset with this API — Resend's is the closest shape, and
+    // overriding sendVerificationRequest entirely means the provider
+    // itself is really just a config skeleton), this actually sends
+    // through SendGrid now, same as every other email in the app — see
+    // src/lib/email.ts. It used to call Resend's API directly with its
+    // own RESEND_API_KEY, a leftover from before the invite/recap emails
+    // were switched to SendGrid; that key was never kept current after
+    // the switch, which is why magic-link sign-in emails silently
+    // stopped sending. apiKey/from below are unused (sendEmail reads
+    // SENDGRID_API_KEY/SENDGRID_FROM_EMAIL itself) but next-auth's type
+    // for this provider still expects them.
     Resend({
-      apiKey: process.env.RESEND_API_KEY,
-      from: process.env.EMAIL_FROM,
-      // Replaces Auth.js's default unbranded sign-in email with one that
-      // carries the Anchor logo/colors — see src/lib/emailTemplates.ts.
-      async sendVerificationRequest({ identifier: to, url, provider }) {
+      apiKey: process.env.SENDGRID_API_KEY,
+      from: process.env.SENDGRID_FROM_EMAIL,
+      async sendVerificationRequest({ identifier: to, url }) {
         const { host, origin } = new URL(url);
         // Email the real (single-use, token-carrying) callback URL only
         // as a query param on our own confirmation page — not directly —
@@ -60,23 +71,11 @@ export const {
         // it before the person actually clicks. See
         // src/app/sign-in/verify/page.tsx for the other half of this.
         const confirmUrl = `${origin}/sign-in/verify?url=${encodeURIComponent(url)}`;
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${provider.apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: provider.from,
-            to,
-            subject: `Sign in to ${host}`,
-            html: signInEmailHtml({ url: confirmUrl, host }),
-            text: signInEmailText({ url: confirmUrl, host }),
-          }),
+        await sendEmail({
+          to,
+          subject: `Sign in to ${host}`,
+          html: signInEmailHtml({ url: confirmUrl, host }),
         });
-        if (!res.ok) {
-          throw new Error("Resend error: " + JSON.stringify(await res.json()));
-        }
       },
     }),
     ...(linkedInConfigured
