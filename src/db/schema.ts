@@ -216,6 +216,10 @@ export const contacts = pgTable("contact", {
   // — lets a re-sync update the same row instead of creating a duplicate.
   // Null for every contact that only ever came from a meeting.
   salesforceContactId: text("salesforceContactId"),
+  // Same idea, for a HubSpot sync (see src/lib/integrations/hubspot.ts).
+  // A contact can in principle be matched from either CRM (or neither) —
+  // the two ids are independent, not mutually exclusive.
+  hubspotContactId: text("hubspotContactId"),
   firstMetAt: timestamp("firstMetAt", { mode: "date" }).defaultNow().notNull(),
   lastMeetingAt: timestamp("lastMeetingAt", { mode: "date" }),
   meetingCount: integer("meetingCount").default(0).notNull(),
@@ -466,6 +470,8 @@ export const deals = pgTable("deal", {
   // Opportunity — lets a re-sync update the same row instead of creating
   // a duplicate. Null for every deal that only ever lived in Anchor.
   salesforceOpportunityId: text("salesforceOpportunityId"),
+  // Same idea, for a synced HubSpot Deal (see src/lib/integrations/hubspot.ts).
+  hubspotDealId: text("hubspotDealId"),
   // Standing ownership on the deal, separate from the point-in-time
   // handoff briefing above: who's driving it day to day, and who's
   // designated to step in if the lead is out. Both nullable and both any
@@ -618,6 +624,7 @@ export const integrationProviderEnum = pgEnum("integration_provider", [
   "microsoft",
   "slack",
   "salesforce",
+  "hubspot",
 ]);
 
 export const integrationConnections = pgTable(

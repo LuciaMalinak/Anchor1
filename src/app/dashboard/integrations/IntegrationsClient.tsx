@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+const SYNCABLE_PROVIDERS = new Set(["salesforce", "hubspot"]);
+
 type Provider = {
-  key: "google" | "microsoft" | "slack" | "salesforce";
+  key: "google" | "microsoft" | "slack" | "salesforce" | "hubspot";
   name: string;
   description: string;
   configured: boolean;
@@ -141,7 +143,7 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
 
             {p.connected ? (
               <div className="mt-1 flex flex-wrap gap-2">
-                {p.key === "salesforce" && (
+                {SYNCABLE_PROVIDERS.has(p.key) && (
                   <button
                     type="button"
                     onClick={() => handleSync(p.key, p.name)}

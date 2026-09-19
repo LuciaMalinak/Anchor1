@@ -56,6 +56,15 @@ services:
         sync: false
       - key: SALESFORCE_INTEGRATION_CLIENT_SECRET
         sync: false
+      # HubSpot — same idea as Salesforce above, for teams that run
+      # HubSpot instead. Create an app at developers.hubspot.com, add
+      # https://<your-app>.onrender.com/api/integrations/hubspot/callback
+      # as a redirect URL, and grant the crm.objects.contacts.read /
+      # crm.objects.deals.read scopes (see src/lib/integrations/config.ts).
+      - key: HUBSPOT_INTEGRATION_CLIENT_ID
+        sync: false
+      - key: HUBSPOT_INTEGRATION_CLIENT_SECRET
+        sync: false
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID
