@@ -78,7 +78,7 @@ export async function POST(
         error:
           err instanceof Error
             ? err.message
-            : "Couldn't send the email (check your Resend setup)",
+            : "Couldn't send the email (check your email provider setup)",
       },
       { status: 502 }
     );

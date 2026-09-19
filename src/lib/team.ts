@@ -52,21 +52,18 @@ export async function createInviteAndNotify({
       subject: "You've been added to an Anchor team",
       html: `<p>${invitedByEmail} invited you to their team on Anchor.</p><p>Sign in at the same email address to join: <a href="${process.env.AUTH_URL}/sign-in">${process.env.AUTH_URL}/sign-in</a></p>`,
     });
-  } catch (err) {
-    // Don't fail the invite over email delivery — Resend's shared testing
-    // sender can only deliver to the account owner until a domain is
-    // verified. The invite record itself still works: whoever signs in
-    // with this email joins the team regardless of whether they got a
+  } catch {
+    // Don't fail the invite over email delivery — a misconfigured or
+    // rate-limited email provider shouldn't block adding someone to the
+    // team. The invite record itself still works: whoever signs in with
+    // this email joins the team regardless of whether they got a
     // notification about it.
     //
-    // The raw provider error used to be shown as-is, which meant a
-    // Resend sandbox-mode restriction (and its account email, and a link
-    // to resend.com/domains) leaked straight into the product UI. Only
-    // ever show a clean, generic explanation here — never err.message.
-    const rawMessage = err instanceof Error ? err.message : "";
-    emailWarning = rawMessage.includes("testing emails")
-      ? "the invite email couldn't be sent yet (Anchor's sender isn't verified for outside recipients)"
-      : "the invite email couldn't be sent";
+    // The raw provider error used to be shown as-is here, which at one
+    // point leaked an email provider's internal sandbox-mode restriction
+    // (and account details) straight into the product UI. Only ever show
+    // a clean, generic explanation — never the caught error's message.
+    emailWarning = "the invite email couldn't be sent";
   }
 
   return { invite, emailWarning };
