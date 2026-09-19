@@ -59,6 +59,23 @@ services:
         sync: false
       - key: R2_BUCKET_NAME
         sync: false
+      # Daily 9am text digest (deal activity + leadership announcements)
+      # — see src/app/api/cron/daily-digest/route.ts. CRON_SECRET is the
+      # ?key= this endpoint requires (make up any long random string);
+      # the TWILIO_* three are from a Twilio account, and until all four
+      # are set here the endpoint safely no-ops instead of texting
+      # anyone. Something outside this app still has to actually HIT
+      # that URL once a day — Render's own Cron Job service, or a free
+      # external scheduler like cron-job.org, pointed at
+      # https://<your-app>.onrender.com/api/cron/daily-digest?key=...
+      - key: CRON_SECRET
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
 # Note: no persistent disk here — Render's free tier doesn't support one.
 # Uploaded files (profile photos, meeting recordings, deal files) go to
 # local disk and do NOT survive a restart or redeploy UNLESS the four R2_*

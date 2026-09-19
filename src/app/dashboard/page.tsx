@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, users, deals, teams } from "@/db/schema";
+import { meetings, users, deals, teams, announcements } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { getOrCreateTeamId } from "@/lib/team";
@@ -8,6 +8,7 @@ import { getHomeUpdates } from "@/lib/homeFeed";
 import { getHomeTasks } from "@/lib/homeTasks";
 import { isIndustryKey } from "@/lib/industries";
 import { AttentionPanel } from "./AttentionPanel";
+import { AnnouncementsPanel } from "./AnnouncementsPanel";
 import { DashboardClient } from "./DashboardClient";
 import { HomeTasks } from "./HomeTasks";
 import { HomeUpdates } from "./HomeUpdates";
@@ -55,15 +56,28 @@ export default async function DashboardPage({
   let homeUpdates: Awaited<ReturnType<typeof getHomeUpdates>> = [];
   let homeTasks: Awaited<ReturnType<typeof getHomeTasks>> = [];
   let dealOptions: { id: string; name: string }[] = [];
+  let announcementRows: { announcement: typeof announcements.$inferSelect; author: typeof users.$inferSelect }[] = [];
+  let isTeamOwner = false;
 
   if (teamId && session?.user?.id) {
-    const [user] = await db.select().from(users).where(eq(users.id, session.user.id));
+    const [user, team] = await Promise.all([
+      db.select().from(users).where(eq(users.id, session.user.id)).then((r) => r[0]),
+      db.select().from(teams).where(eq(teams.id, teamId)).then((r) => r[0]),
+    ]);
     welcomeSeen = user?.welcomeSeen ?? true;
+    isTeamOwner = team?.ownerUserId === session.user.id;
 
-    [homeUpdates, homeTasks, dealOptions] = await Promise.all([
+    [homeUpdates, homeTasks, dealOptions, announcementRows] = await Promise.all([
       getHomeUpdates({ teamId }),
       getHomeTasks({ teamId }),
       db.select({ id: deals.id, name: deals.name }).from(deals).where(eq(deals.teamId, teamId)),
+      db
+        .select({ announcement: announcements, author: users })
+        .from(announcements)
+        .innerJoin(users, eq(announcements.authorUserId, users.id))
+        .where(eq(announcements.teamId, teamId))
+        .orderBy(desc(announcements.createdAt))
+        .limit(20),
     ]);
   }
 
@@ -74,6 +88,17 @@ export default async function DashboardPage({
       )}
       {teamId && session?.user?.id && (
         <AttentionPanel teamId={teamId} userId={session.user.id} />
+      )}
+      {teamId && (
+        <AnnouncementsPanel
+          isTeamOwner={isTeamOwner}
+          initialAnnouncements={announcementRows.map((r) => ({
+            id: r.announcement.id,
+            content: r.announcement.content,
+            createdAt: r.announcement.createdAt.toISOString(),
+            author: { id: r.author.id, name: r.author.name, email: r.author.email, image: r.author.image },
+          }))}
+        />
       )}
       {teamId && (
         <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">

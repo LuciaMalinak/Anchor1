@@ -23,6 +23,7 @@ export default async function ProfilePage() {
         linkedin: user.linkedin,
         department: user.department,
         otherInfo: user.otherInfo,
+        dailyDigestOptIn: user.dailyDigestOptIn,
       }}
     />
   );

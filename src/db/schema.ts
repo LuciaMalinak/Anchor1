@@ -59,6 +59,12 @@ export const users = pgTable("user", {
   // the Team page) — they can only see deals they have a `dealMembers`
   // row for, checked via src/lib/dealAccess.ts.
   restrictedToDeals: boolean("restrictedToDeals").notNull().default(false),
+  // Explicit consent to receive the daily 9am text digest (deal activity
+  // + leadership announcements) at `phone` above — off by default even
+  // once a phone number is on file, so filling in a phone for, say, the
+  // team directory doesn't silently start texting someone. See
+  // src/lib/dailyDigest.ts and src/lib/sms.ts.
+  dailyDigestOptIn: boolean("dailyDigestOptIn").notNull().default(false),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -569,6 +575,24 @@ export const dealMessages = pgTable("deal_message", {
   // place messages are read or written. Not a foreign key (a jsonb array
   // can't be one) — ids are validated against the team at send time.
   recipientUserIds: jsonb("recipientUserIds").$type<string[]>(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// A team-wide note from leadership — not scoped to any one deal, unlike
+// dealMessages above. Posting is restricted to the team owner (see
+// POST /api/announcements) — the same "leadership" bar used everywhere
+// else in this app (removing a teammate, deleting a whole deal). Reading
+// is everyone on the team, surfaced on the Home dashboard and folded
+// into the daily digest (src/lib/dailyDigest.ts).
+export const announcements = pgTable("announcement", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  teamId: uuid("teamId")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  authorUserId: uuid("authorUserId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
