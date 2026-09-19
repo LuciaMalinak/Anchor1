@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
   DeleteObjectsCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
@@ -56,6 +57,14 @@ export async function r2Get(key: string): Promise<Buffer | null> {
   } catch {
     return null;
   }
+}
+
+// Deletes exactly one object — for removing a single deal file without
+// touching any of the deal's other files, which live under the same
+// `deals/${dealId}/` prefix (unlike r2DeletePrefix below, which is a
+// whole-prefix wipe used for cascading a meeting or user gone entirely).
+export async function r2Delete(key: string): Promise<void> {
+  await client().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
 }
 
 // Deletes every object under a prefix — the R2 equivalent of `fs.rm(dir,

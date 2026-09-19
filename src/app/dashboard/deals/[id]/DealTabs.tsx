@@ -1620,6 +1620,30 @@ function FilesSection({ dealId, files }: { dealId: string; files: DealFile[] }) 
   const router = useRouter();
   const [uploadingFile, setUploadingFile] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+
+  // For swapping out a file that was uploaded before it was readable by
+  // Ask Anchor (e.g. a PowerPoint attached before .pptx support existed) —
+  // delete the stale copy, then re-attach the same file so it gets
+  // extracted fresh. window.confirm is fine here: this is our own app's
+  // delete-confirmation UI, not something driving another site.
+  async function handleDeleteFile(fileId: string, fileName: string) {
+    if (!window.confirm(`Remove "${fileName}" from this deal? This can't be undone.`)) return;
+    setFileError(null);
+    setDeletingFileId(fileId);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/files/${fileId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't remove that file");
+      }
+      router.refresh();
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : "Couldn't remove that file");
+    } finally {
+      setDeletingFileId(null);
+    }
+  }
 
   async function handleFileUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1657,19 +1681,26 @@ function FilesSection({ dealId, files }: { dealId: string; files: DealFile[] }) 
       </p>
       <ul className="mt-3 flex flex-col gap-2">
         {files.map((f) => (
-          <li key={f.id}>
+          <li key={f.id} className="flex items-center gap-1 rounded-md bg-slate-50 hover:bg-slate-100">
             <a
               href={`/api/deals/${dealId}/files/${f.id}`}
-              className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+              className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-sm text-slate-700"
             >
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate">{f.fileName}</span>
-                {f.readableByAI && (
+                {f.readableByAI ? (
                   <span
                     className="shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent"
                     title="Anchor can read this file's contents"
                   >
                     AI-readable
+                  </span>
+                ) : (
+                  <span
+                    className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
+                    title="Anchor can't read this one — if it's a format Anchor now supports, remove and re-attach it"
+                  >
+                    Not readable
                   </span>
                 )}
               </span>
@@ -1677,6 +1708,15 @@ function FilesSection({ dealId, files }: { dealId: string; files: DealFile[] }) 
                 {f.fileSize ? `${Math.round(f.fileSize / 1024)}KB` : ""}
               </span>
             </a>
+            <button
+              type="button"
+              onClick={() => handleDeleteFile(f.id, f.fileName)}
+              disabled={deletingFileId === f.id}
+              className="mr-2 shrink-0 rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              title="Remove this file from the deal"
+            >
+              {deletingFileId === f.id ? "…" : "Remove"}
+            </button>
           </li>
         ))}
         {files.length === 0 && <p className="text-sm text-slate-500">No files yet.</p>}

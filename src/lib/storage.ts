@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { isR2Configured, r2Put, r2Get, r2DeletePrefix, r2FirstKey } from "./r2";
+import { isR2Configured, r2Put, r2Get, r2Delete, r2DeletePrefix, r2FirstKey } from "./r2";
 
 // Local disk storage — the original MVP-only implementation. Fine for one
 // server instance, but does NOT survive a redeploy or restart on Render's
@@ -114,6 +114,21 @@ export async function saveDealFile(
   const filePath = path.join(dir, `${Date.now()}-${fileName}`);
   await fs.writeFile(filePath, data);
   return filePath;
+}
+
+// Removes one deal file's stored bytes — used when someone deletes a
+// stale/unreadable upload so they can re-attach a fresh copy (e.g. once
+// text extraction for a format has just been added and an already-
+// uploaded file needs to be re-processed to pick it up). Best-effort and
+// never throws, same rationale as deleteMeetingAudio above: the DB row is
+// what the app actually reads from, so a storage-side miss shouldn't
+// block the delete the user asked for.
+export async function deleteDealFile(storagePath: string): Promise<void> {
+  if (!storagePath.startsWith("/")) {
+    await r2Delete(storagePath).catch(() => {});
+    return;
+  }
+  await fs.unlink(storagePath).catch(() => {});
 }
 
 // Generic reader for a stored path/key — used by routes that just need
