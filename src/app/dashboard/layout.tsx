@@ -191,6 +191,20 @@ export default async function DashboardLayout({
           <PageFade>{children}</PageFade>
         </div>
         <GeneralNewsSidebar
+          // Keyed by industry so switching sectors (Team page -> Change)
+          // fully remounts this instead of quietly keeping the OLD
+          // sector's briefing/ticker text sitting in this component's own
+          // React state. Without this key, changing team.industry clears
+          // the cache server-side (see PATCH /api/team) and this component
+          // gets fresh, empty `initial*` props on the next render — but a
+          // client component's useState only reads its initial prop once,
+          // on mount, so it would keep showing the previous sector's
+          // already-loaded news indefinitely instead of picking up the
+          // new one. Remounting resets that local state and restarts the
+          // polling effects below from scratch, matching a subscriber's
+          // actual expectation: they signed up for one specific sector,
+          // and switching it should swap the news, not blend or freeze it.
+          key={industryLabel ?? "general"}
           initialDailyBriefing={dailyBriefing}
           initialBriefingUpdatedAt={dailyBriefingUpdatedAt}
           initialTickerItems={tickerItems}

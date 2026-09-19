@@ -65,6 +65,13 @@ export function GeneralNewsSidebar({
       }
     }
 
+    // Check right away instead of waiting a full BRIEFING_POLL_MS first —
+    // this component now remounts (fresh, empty state) the moment a team
+    // switches industry (see the `key` on GeneralNewsSidebar in layout.tsx),
+    // so a prompt first check matters: the background regeneration for the
+    // new sector kicks off at the same moment, and often finishes well
+    // inside 20s.
+    poll();
     const interval = setInterval(poll, BRIEFING_POLL_MS);
     return () => {
       cancelled = true;
