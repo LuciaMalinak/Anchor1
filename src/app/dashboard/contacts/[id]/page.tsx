@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { contacts, meetingParticipants, meetings, deals } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { ContactNotes } from "./ContactNotes";
+import { ContactLinkedIn } from "./ContactLinkedIn";
 
 function InitialsAvatar({ label, size = 64 }: { label: string; size?: number }) {
   return (
@@ -58,6 +59,8 @@ export default async function ContactDetailPage({
           {contact.email && <p className="mt-1 text-sm text-slate-400">{contact.email}</p>}
         </div>
       </div>
+
+      <ContactLinkedIn contactId={contact.id} initialLinkedinUrl={contact.linkedinUrl} />
 
       {contact.relationshipSummary && (
         <section className="rounded-xl border border-accent/40 bg-accent/5 p-6">

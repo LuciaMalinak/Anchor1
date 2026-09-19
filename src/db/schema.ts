@@ -196,8 +196,17 @@ export const contacts = pgTable("contact", {
   email: text("email"),
   company: text("company"),
   role: text("role"),
+  // Filled in by hand, or set automatically when someone pastes profile
+  // text in (see /api/contacts/[id]/linkedin) — LinkedIn's own API won't
+  // let an app like this pull another person's profile data (it's both
+  // technically restricted to the signed-in user and against LinkedIn's
+  // terms for CRM-style enrichment), so this is deliberately just a link
+  // plus whatever a teammate pastes in themselves, never an automated pull.
+  linkedinUrl: text("linkedinUrl"),
   // Rolling, AI-maintained summary of who this person is and what matters
-  // to them, updated after every meeting they appear in.
+  // to them, updated after every meeting they appear in. Also seeded/
+  // merged from a pasted LinkedIn profile (see the linkedin route above) —
+  // the same rolling-memory mechanism processMeeting.ts uses for meetings.
   relationshipSummary: text("relationshipSummary"),
   // What you've typed in directly about this person — kept separate from
   // relationshipSummary so a manual note is never overwritten by the
