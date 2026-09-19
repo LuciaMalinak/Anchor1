@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, users } from "@/db/schema";
+import { deals, users, dealMembers } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { DEAL_STAGES } from "@/lib/dealStages";
 import { authorizeDeal } from "@/lib/dealAccess";
@@ -71,8 +71,29 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Not a valid team member" }, { status: 400 });
     }
   }
+  if (typeof body.restricted === "boolean") {
+    updates.restricted = body.restricted;
+  }
 
-  if (Object.keys(updates).length === 0) {
+  // The full list of who this deal should be limited to, when it's
+  // restricted (or being restricted by this same request) — anyone NOT
+  // in this list loses access, so every id is checked against the team
+  // before anything is written. Optional: a request can turn restriction
+  // on without touching the list (nothing named besides the people who
+  // are always included below), or update the list on an
+  // already-restricted deal without resending `restricted`.
+  let sharedWithUserIds: string[] | undefined;
+  if (Array.isArray(body.sharedWithUserIds)) {
+    const ids = body.sharedWithUserIds.filter((v: unknown): v is string => typeof v === "string");
+    for (const uid of ids) {
+      if (!(await isOnTeam(teamId, uid))) {
+        return NextResponse.json({ error: "Not a valid team member" }, { status: 400 });
+      }
+    }
+    sharedWithUserIds = ids;
+  }
+
+  if (Object.keys(updates).length === 0 && sharedWithUserIds === undefined) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
@@ -81,6 +102,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .set({ ...updates, updatedAt: new Date() })
     .where(eq(deals.id, dealId))
     .returning();
+
+  // Whenever the deal ends up restricted, keep dealMembers in sync with
+  // who should be able to see it — creator, lead, backup, and whoever's
+  // making this change always keep access even if they weren't named in
+  // sharedWithUserIds, so restricting a deal can never accidentally lock
+  // out the person who just set it up.
+  if (updated.restricted && (updates.restricted === true || sharedWithUserIds !== undefined)) {
+    const alwaysIncluded = [
+      updated.createdByUserId,
+      updated.leadUserId,
+      updated.backupUserId,
+      session.user.id,
+    ].filter((v): v is string => Boolean(v));
+    const finalMembers = Array.from(new Set([...(sharedWithUserIds ?? []), ...alwaysIncluded]));
+
+    await db.delete(dealMembers).where(eq(dealMembers.dealId, dealId));
+    if (finalMembers.length > 0) {
+      await db.insert(dealMembers).values(finalMembers.map((userId) => ({ dealId, userId })));
+    }
+  }
 
   return NextResponse.json({ deal: updated });
 }

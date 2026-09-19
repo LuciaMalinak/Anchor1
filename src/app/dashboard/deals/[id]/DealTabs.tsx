@@ -554,6 +554,7 @@ type DealProfile = {
   decisionBoundaries: string | null;
   leadUserId: string | null;
   backupUserId: string | null;
+  restricted: boolean;
 };
 
 type HandoffBriefing = {
@@ -789,6 +790,145 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
   );
 }
 
+// Lets whoever's looking at a deal control who else on the team can see
+// it at all — "Everyone on the team" (the original, still-default
+// behavior) or "Only specific people". Whoever created the deal, its
+// lead, and its backup always keep access even if unchecked below (the
+// server enforces this — see /api/deals/[id]/route.ts); this picker is
+// for everyone ELSE.
+function SharingControl({
+  dealId,
+  team,
+  currentUserId,
+  initialRestricted,
+  initialSharedWithUserIds,
+}: {
+  dealId: string;
+  team: TeamMember[];
+  currentUserId: string;
+  initialRestricted: boolean;
+  initialSharedWithUserIds: string[];
+}) {
+  const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
+  const [restricted, setRestricted] = useState(initialRestricted);
+  const [selected, setSelected] = useState<Set<string>>(new Set(initialSharedWithUserIds));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function persist(nextRestricted: boolean, nextSelected: Set<string>) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restricted: nextRestricted,
+          sharedWithUserIds: Array.from(nextSelected),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't save");
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleModeChange(nextRestricted: boolean) {
+    setRestricted(nextRestricted);
+    void persist(nextRestricted, selected);
+  }
+
+  function toggleMember(userId: string) {
+    const next = new Set(selected);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    setSelected(next);
+    void persist(restricted, next);
+  }
+
+  const otherTeammates = team.filter((t) => t.id !== currentUserId);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <div>
+          <p className="text-sm font-medium text-slate-900">Who can see this deal</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {restricted
+              ? `Restricted — only ${selected.size} picked teammate${selected.size === 1 ? "" : "s"} (plus the lead/backup/creator)`
+              : "Everyone on your team"}
+          </p>
+        </div>
+        <span className="shrink-0 text-xs font-medium text-brand">{expanded ? "Close" : "Change"}</span>
+      </button>
+
+      {expanded && (
+        <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => handleModeChange(false)}
+              disabled={saving}
+              className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm ${
+                !restricted ? "border-brand bg-brand/5 font-medium text-brand" : "border-slate-300 text-slate-600"
+              }`}
+            >
+              Everyone on the team
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange(true)}
+              disabled={saving}
+              className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm ${
+                restricted ? "border-brand bg-brand/5 font-medium text-brand" : "border-slate-300 text-slate-600"
+              }`}
+            >
+              Only specific people
+            </button>
+          </div>
+
+          {restricted && (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs text-slate-500">
+                You, the deal&apos;s lead, backup, and whoever created it always keep access. Pick anyone else who
+                should see it too:
+              </p>
+              {otherTeammates.length === 0 ? (
+                <p className="text-xs text-slate-400">No other teammates yet.</p>
+              ) : (
+                otherTeammates.map((t) => (
+                  <label key={t.id} className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(t.id)}
+                      onChange={() => toggleMember(t.id)}
+                      disabled={saving}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span className="text-slate-700">{t.name || t.email}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          )}
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // A small pulsing dot to give the sidebar a "this is live" feel, next to
 // each section's refresh control.
 function LiveDot() {
@@ -885,22 +1025,104 @@ type ChatMessage = {
   content: string;
   createdAt: string;
   author: { id: string; name: string | null; email: string; image: string | null };
+  recipientUserIds: string[] | null;
 };
+
+// "Whole team" (the default, and every message sent before targeting
+// existed) vs. "just these people" — picked once per message from the
+// same team list the sharing control above uses. The sender is always
+// included server-side, so they never need to pick themselves.
+function RecipientPicker({
+  team,
+  currentUserId,
+  selected,
+  onChange,
+}: {
+  team: TeamMember[];
+  currentUserId: string;
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const pickable = team.filter((t) => t.id !== currentUserId);
+  const isWholeTeam = selected.size === 0;
+
+  function toggle(userId: string) {
+    const next = new Set(selected);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    onChange(next);
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-400"
+      >
+        {isWholeTeam
+          ? "Send to: Whole team"
+          : `Send to: ${selected.size} ${selected.size === 1 ? "person" : "people"}`}
+        <span className="text-slate-400">▾</span>
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 z-10 mb-2 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              onChange(new Set());
+              setOpen(false);
+            }}
+            className={`w-full rounded-md px-2 py-1.5 text-left text-xs font-medium ${
+              isWholeTeam ? "bg-brand/10 text-brand" : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Whole team
+          </button>
+          <div className="my-1 border-t border-slate-100" />
+          {pickable.length === 0 ? (
+            <p className="px-2 py-1 text-xs text-slate-400">No other teammates yet.</p>
+          ) : (
+            pickable.map((t) => (
+              <label
+                key={t.id}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(t.id)}
+                  onChange={() => toggle(t.id)}
+                  className="h-3.5 w-3.5 rounded border-slate-300"
+                />
+                <span className="text-slate-700">{t.name || t.email}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ChatPanel({
   dealId,
   currentUserId,
+  team,
   initialMessages,
 }: {
   dealId: string;
   currentUserId: string;
+  team: TeamMember[];
   initialMessages: ChatMessage[];
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState("");
+  const [recipients, setRecipients] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const teamById = new Map(team.map((t) => [t.id, t]));
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -912,7 +1134,7 @@ function ChatPanel({
       const res = await fetch(`/api/deals/${dealId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, recipientUserIds: Array.from(recipients) }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Couldn't send that");
@@ -930,7 +1152,9 @@ function ChatPanel({
     <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div>
         <p className="text-sm font-medium text-slate-900">Team chat</p>
-        <p className="text-xs text-slate-500">Just for this deal — anyone on your team with access can read and post here.</p>
+        <p className="text-xs text-slate-500">
+          Just for this deal — send to the whole team, or pick specific people for a private note.
+        </p>
       </div>
 
       <div className="flex max-h-[28rem] min-h-[10rem] flex-col gap-3 overflow-y-auto rounded-lg bg-slate-50 p-4">
@@ -940,6 +1164,12 @@ function ChatPanel({
           messages.map((m) => {
             const isYou = m.author.id === currentUserId;
             const label = m.author.name || m.author.email;
+            const isPrivate = Boolean(m.recipientUserIds && m.recipientUserIds.length > 0);
+            const recipientLabel = isPrivate
+              ? m.recipientUserIds!
+                  .map((id) => (id === currentUserId ? "you" : teamById.get(id)?.name || teamById.get(id)?.email || "someone"))
+                  .join(", ")
+              : "";
             return (
               <div key={m.id} className={`flex flex-col ${isYou ? "items-end" : "items-start"}`}>
                 <div className="flex items-center gap-2">
@@ -967,6 +1197,14 @@ function ChatPanel({
                       minute: "2-digit",
                     })}
                   </span>
+                  {isPrivate && (
+                    <span
+                      className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                      title={`Only visible to ${recipientLabel}${isYou ? " (and you, since you sent it)" : ""}`}
+                    >
+                      Private
+                    </span>
+                  )}
                 </div>
                 <div
                   className={`mt-1 max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
@@ -982,27 +1220,35 @@ function ChatPanel({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSend} className="flex items-end gap-2">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend(e);
-            }
-          }}
-          placeholder="Message your team about this deal…"
-          rows={2}
-          className="flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-        />
-        <button
-          type="submit"
-          disabled={sending || !draft.trim()}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-        >
-          {sending ? "…" : "Send"}
-        </button>
+      <form onSubmit={handleSend} className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <RecipientPicker team={team} currentUserId={currentUserId} selected={recipients} onChange={setRecipients} />
+          {recipients.size > 0 && (
+            <span className="text-[11px] text-amber-700">Only picked people (and you) will see this message.</span>
+          )}
+        </div>
+        <div className="flex items-end gap-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend(e);
+              }
+            }}
+            placeholder="Message your team about this deal…"
+            rows={2}
+            className="flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+          <button
+            type="submit"
+            disabled={sending || !draft.trim()}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {sending ? "…" : "Send"}
+          </button>
+        </div>
       </form>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
@@ -1547,6 +1793,7 @@ export function DealTabs({
   teamSize,
   people,
   team,
+  sharedWithUserIds,
   messages,
   currentUserId,
 }: {
@@ -1556,6 +1803,7 @@ export function DealTabs({
   teamSize: number;
   people: DealContact[];
   team: TeamMember[];
+  sharedWithUserIds: string[];
   messages: ChatMessage[];
   currentUserId: string;
 }) {
@@ -1717,6 +1965,13 @@ export function DealTabs({
         </div>
         <RecordingBanner {...mic} />
         <DealHeaderCard deal={deal} />
+        <SharingControl
+          dealId={deal.id}
+          team={team}
+          currentUserId={currentUserId}
+          initialRestricted={deal.restricted}
+          initialSharedWithUserIds={sharedWithUserIds}
+        />
         <PeopleAndTeam
           dealId={deal.id}
           people={people}
@@ -1757,7 +2012,7 @@ export function DealTabs({
           <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
         )}
         {tab === "chat" && (
-          <ChatPanel dealId={deal.id} currentUserId={currentUserId} initialMessages={messages} />
+          <ChatPanel dealId={deal.id} currentUserId={currentUserId} team={team} initialMessages={messages} />
         )}
       </div>
       {/* Always visible — including during a live meeting — so whoever's

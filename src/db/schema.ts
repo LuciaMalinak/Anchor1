@@ -460,6 +460,16 @@ export const deals = pgTable("deal", {
   createdByUserId: uuid("createdByUserId")
     .notNull()
     .references(() => users.id),
+  // False (the default, and true for every existing deal) means every
+  // unrestricted teammate on the team sees this deal — same as always.
+  // True means only the deal's creator/lead/backup and whoever has a
+  // `dealMembers` row for it can see it, regardless of whether those
+  // people are individually restrictedToDeals or not. This is a
+  // per-deal opt-in lock ("only certain people at my company should see
+  // this client"), separate from users.restrictedToDeals, which is a
+  // per-PERSON lock applying to every deal. See src/lib/dealAccess.ts,
+  // which is the only place both are read together.
+  restricted: boolean("restricted").notNull().default(false),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
@@ -552,6 +562,13 @@ export const dealMessages = pgTable("deal_message", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
+  // Null (the default, and every message sent before this existed) means
+  // visible to the whole team, same as always. A non-null array limits
+  // this message to just those user ids, plus the sender themselves —
+  // enforced in /api/deals/[id]/messages/route.ts, which is the only
+  // place messages are read or written. Not a foreign key (a jsonb array
+  // can't be one) — ids are validated against the team at send time.
+  recipientUserIds: jsonb("recipientUserIds").$type<string[]>(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 

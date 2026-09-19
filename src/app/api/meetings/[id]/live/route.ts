@@ -50,7 +50,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // to only get checked for a non-owner, so the owner's own meeting could
   // pull another team's deal memory/notes/decision boundaries/email and
   // calendar context straight into live coaching with no check at all.
-  const canUseDeal = Boolean(deal && (await canAccessDeal(session.user.id, deal.id, deal.teamId)));
+  const canUseDeal = Boolean(deal && (await canAccessDeal(session.user.id, deal.id, deal.teamId, deal)));
   if (!isOwner && !canUseDeal) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }

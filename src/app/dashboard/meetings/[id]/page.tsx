@@ -68,7 +68,7 @@ export default async function MeetingDetailPage({
   if (!isOwner && meeting.dealId) {
     const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
     sharedViaTeam = Boolean(
-      deal && (await canAccessDeal(session.user.id, meeting.dealId, deal.teamId))
+      deal && (await canAccessDeal(session.user.id, meeting.dealId, deal.teamId, deal))
     );
   }
   if (!isOwner && !sharedViaTeam) notFound();

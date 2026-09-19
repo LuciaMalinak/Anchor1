@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts } from "@/db/schema";
+import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts, dealMembers } from "@/db/schema";
 import { asc, desc, eq } from "drizzle-orm";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { researchCompany, isResearchStale } from "@/lib/companyResearch";
@@ -128,6 +128,19 @@ export default async function DealDetailPage({
     .innerJoin(users, eq(dealMessages.userId, users.id))
     .where(eq(dealMessages.dealId, id))
     .orderBy(asc(dealMessages.createdAt));
+  // Same visibility rule as GET /api/deals/[id]/messages (see that
+  // route's visibleTo comment) — this page fetches messages directly
+  // rather than through the API, so it needs its own copy of the filter.
+  const visibleMessageRows = messageRows.filter((r) => {
+    const rids = r.message.recipientUserIds;
+    return !rids || r.message.userId === session.user.id || rids.includes(session.user.id);
+  });
+
+  // Who this restricted deal (if it is one) has been explicitly shared
+  // with — used to pre-fill the sharing picker and the chat's recipient
+  // picker. Harmless to compute even when the deal isn't restricted.
+  const memberRows = await db.select({ userId: dealMembers.userId }).from(dealMembers).where(eq(dealMembers.dealId, id));
+  const sharedWithUserIds = memberRows.map((r) => r.userId);
 
   const lastActivityAt = dealMeetings[0]?.occurredAt ?? null;
   const health = computeDealHealth({
@@ -157,7 +170,9 @@ export default async function DealDetailPage({
         decisionBoundaries: deal.decisionBoundaries,
         leadUserId: deal.leadUserId,
         backupUserId: deal.backupUserId,
+        restricted: deal.restricted,
       }}
+      sharedWithUserIds={sharedWithUserIds}
       people={dealContactRows}
       team={teammates.map((t) => ({ id: t.id, name: t.name, email: t.email, title: t.title, image: t.image }))}
       meetings={dealMeetings.map((m) => ({
@@ -184,11 +199,12 @@ export default async function DealDetailPage({
         readableByAI: Boolean(f.extractedText),
       }))}
       teamSize={teammates.length}
-      messages={messageRows.map((r) => ({
+      messages={visibleMessageRows.map((r) => ({
         id: r.message.id,
         content: r.message.content,
         createdAt: r.message.createdAt.toISOString(),
         author: { id: r.author.id, name: r.author.name, email: r.author.email, image: r.author.image },
+        recipientUserIds: r.message.recipientUserIds,
       }))}
       currentUserId={session.user.id}
     />

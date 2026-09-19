@@ -34,7 +34,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   // a non-owner, so the owner's own meeting could pull ANOTHER team's
   // deal data below via meeting.dealId with no check at all.
   const canUseDeal = Boolean(
-    deal && (await canAccessDeal(session.user.id, meeting.dealId as string, deal.teamId))
+    deal && (await canAccessDeal(session.user.id, meeting.dealId as string, deal.teamId, deal))
   );
   if (!isOwner && !canUseDeal) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
