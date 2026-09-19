@@ -1651,8 +1651,9 @@ function FilesSection({ dealId, files }: { dealId: string; files: DealFile[] }) 
     <div className="rounded-lg border border-slate-200 px-5 py-5">
       <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">FILES</p>
       <p className="mt-1 text-xs text-slate-500">
-        Text files, PDFs, and Word docs are readable by Ask Anchor — attach contracts, notes,
-        or specs and Anchor can answer questions using what&apos;s in them.
+        Text files, PDFs, Word docs, PowerPoint decks, and Excel sheets are readable by Ask
+        Anchor — attach contracts, notes, decks, or specs and Anchor can answer questions using
+        what&apos;s in them.
       </p>
       <ul className="mt-3 flex flex-col gap-2">
         {files.map((f) => (

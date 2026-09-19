@@ -15,6 +15,7 @@
     "assemblyai": "^4.41.1",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
+    "jszip": "^3.10.2",
     "mammoth": "^1.12.3",
     "next": "16.3.5",
     "next-auth": "^5.0.0-beta.32",
