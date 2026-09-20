@@ -104,47 +104,33 @@ function TabBar({
   );
 }
 
-function NewMeetingForms({
+// The big, hard-to-miss way to start a meeting — two large cards ("I'm
+// in the room" vs. "I'm on a Zoom/Teams/Meet call") instead of three
+// same-sized form fields buried in a grid. Both paths already recorded
+// and transcribed automatically before this component existed (the mic
+// path via processMeeting() on upload, the live-call path via the
+// Recall.ai bot's live-transcript webhook) — what was missing was
+// making that obvious and reachable from wherever you actually are,
+// which is why this renders on both the Before and During tabs (see
+// BeforePanel and DuringPanel) rather than only Before.
+function MeetingLauncher({
   dealId,
   mic,
   onJoinedNow,
 }: {
   dealId: string;
   mic: MicRecorderState;
-  onJoinedNow: () => void;
+  // Only meaningful on Before, where starting a live call should jump
+  // you straight to During. DuringPanel omits it — you're already there.
+  onJoinedNow?: () => void;
 }) {
   const router = useRouter();
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
-
-  async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setUploadError(null);
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const file = formData.get("file");
-    if (!(file instanceof File) || file.size === 0) {
-      setUploadError("Choose a recording first.");
-      return;
-    }
-    formData.set("dealId", dealId);
-    setUploading(true);
-    try {
-      const res = await fetch("/api/meetings", { method: "POST", body: formData });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Upload failed");
-      }
-      form.reset();
-      router.refresh();
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
+  const [showMore, setShowMore] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   async function handleJoin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -173,11 +159,12 @@ function NewMeetingForms({
         throw new Error(body.error || "Couldn't send Anchor to that meeting");
       }
       form.reset();
+      setShowMore(false);
       router.refresh();
       // Only jump straight to During for an immediate join — a
       // scheduled-for-later one shows up as "upcoming" on Before instead,
       // and the tab switches on its own once that time arrives.
-      if (!scheduledAt) onJoinedNow();
+      if (!scheduledAt) onJoinedNow?.();
     } catch (err) {
       setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
     } finally {
@@ -185,47 +172,138 @@ function NewMeetingForms({
     }
   }
 
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <form onSubmit={handleJoin} className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm">
-        <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
-        <div className="mt-3 flex flex-col gap-2">
-          <input
-            type="text"
-            name="title"
-            placeholder="Title (optional)"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <input
-            type="text"
-            name="meetingUrl"
-            placeholder="https://zoom.us/j/..."
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-500">
-              Join at (optional — leave blank to join right now)
-            </span>
-            <input
-              type="datetime-local"
-              name="scheduledAt"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={joining}
-            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-          >
-            {joining ? "Sending…" : "Join meeting"}
-          </button>
-        </div>
-        {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
-      </form>
+  async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setUploadError(null);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      setUploadError("Choose a recording first.");
+      return;
+    }
+    formData.set("dealId", dealId);
+    setUploading(true);
+    try {
+      const res = await fetch("/api/meetings", { method: "POST", body: formData });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Upload failed");
+      }
+      form.reset();
+      router.refresh();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
 
-      <form onSubmit={handleUpload} className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
-        <p className="text-sm font-medium text-slate-900">Upload a recording</p>
-        <div className="mt-3 flex flex-col gap-2">
+  const mm = String(Math.floor(mic.seconds / 60)).padStart(2, "0");
+  const ss = String(mic.seconds % 60).padStart(2, "0");
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col justify-between rounded-2xl border-2 border-accent/30 bg-accent/5 p-6">
+          <div>
+            <p className="text-base font-semibold text-slate-900">In the room right now?</p>
+            <p className="mt-1.5 text-sm text-slate-600">
+              One click starts recording from this device&apos;s microphone — Anchor
+              transcribes it automatically as the conversation happens.
+            </p>
+          </div>
+          {mic.recording ? (
+            <button
+              type="button"
+              onClick={mic.stop}
+              className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3.5 text-base font-semibold text-white shadow-sm hover:bg-red-700"
+            >
+              <span className="h-3 w-3 animate-pulse rounded-full bg-white" />
+              Stop recording — {mm}:{ss}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={mic.start}
+              disabled={mic.uploading}
+              className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-50"
+            >
+              <span className="h-3 w-3 rounded-full bg-white/90" />
+              {mic.uploading ? "Uploading…" : "Start recording now"}
+            </button>
+          )}
+          {mic.error && <p className="mt-2 text-xs text-red-600">{mic.error}</p>}
+        </div>
+
+        <div className="flex flex-col justify-between rounded-2xl border-2 border-brand/30 bg-brand/5 p-6">
+          <div>
+            <p className="text-base font-semibold text-slate-900">On a Zoom, Teams, or Meet call?</p>
+            <p className="mt-1.5 text-sm text-slate-600">
+              Paste the link — Anchor joins on its own and transcribes live as people talk.
+            </p>
+          </div>
+          <form onSubmit={handleJoin} className="mt-4 flex flex-col gap-2">
+            <input
+              type="text"
+              name="meetingUrl"
+              placeholder="https://zoom.us/j/..."
+              required
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand"
+            />
+            {showMore && (
+              <>
+                <input
+                  type="text"
+                  name="title"
+                  placeholder="Title (optional)"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand"
+                />
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-500">
+                    Join at (optional — leave blank to join right now)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    name="scheduledAt"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand"
+                  />
+                </label>
+              </>
+            )}
+            <button
+              type="submit"
+              disabled={joining}
+              className="rounded-xl bg-brand px-5 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-50"
+            >
+              {joining ? "Joining…" : "Join meeting now"}
+            </button>
+            {!showMore && (
+              <button
+                type="button"
+                onClick={() => setShowMore(true)}
+                className="self-start text-xs text-slate-500 underline hover:text-slate-700"
+              >
+                Add a title or schedule for later
+              </button>
+            )}
+          </form>
+          {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setShowUpload((v) => !v)}
+        className="self-start text-xs text-slate-400 underline hover:text-slate-600"
+      >
+        Already have a recording? Upload it instead
+      </button>
+      {showUpload && (
+        <form
+          onSubmit={handleUpload}
+          className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4"
+        >
           <input
             type="text"
             name="title"
@@ -242,15 +320,13 @@ function NewMeetingForms({
           <button
             type="submit"
             disabled={uploading}
-            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            className="self-start rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
           >
             {uploading ? "Uploading…" : "Upload"}
           </button>
-        </div>
-        {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
-      </form>
-
-      <MicRecorderView {...mic} />
+          {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+        </form>
+      )}
     </div>
   );
 }
@@ -311,7 +387,7 @@ function BeforePanel({
         </div>
       ))}
       <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} backup={backup} />
-      <NewMeetingForms dealId={dealId} mic={mic} onJoinedNow={onJoinedNow} />
+      <MeetingLauncher dealId={dealId} mic={mic} onJoinedNow={onJoinedNow} />
     </div>
   );
 }
@@ -1548,10 +1624,12 @@ function DuringPanel({
           </div>
         )}
         {inProgress.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            Nothing live right now — Anchor isn&apos;t in a call for this deal. If you&apos;re in
-            the room, record it from here instead:
-          </p>
+          // Nothing live yet — this is the "start a meeting" moment, so it
+          // gets the same big, hard-to-miss launcher as the Before tab
+          // (see MeetingLauncher) rather than a line of text plus a small
+          // recorder button. onJoinedNow is omitted here on purpose: you're
+          // already on During, there's nowhere to jump to.
+          <MeetingLauncher dealId={dealId} mic={mic} />
         ) : (
           <div className="flex flex-col gap-3">
             {inProgress.map((m) =>
@@ -1574,17 +1652,15 @@ function DuringPanel({
                 </Link>
               )
             )}
+            {/* A bot's already in a call, but someone might also be
+                recording in the room alongside it (a hybrid meeting) —
+                keep the plain recorder control available here too. Once
+                nothing's live (the branch above) MeetingLauncher's own
+                "in the room" card takes over instead, so this doesn't
+                duplicate that. */}
+            <MicRecorderView {...mic} />
           </div>
         )}
-        {/* The mic-recording control previously lived only on the Before
-            tab, so there was no way to start an in-person recording once
-            you'd actually moved to During — the tab meant to represent
-            "a meeting is happening now". Show it here too; MicRecorderView
-            is stateless and driven by the same lifted `mic` hook, so
-            starting it here (or on Before) and switching tabs never stops
-            it, and it already shows "Stop" here if a recording (started
-            from either tab) is in progress. */}
-        <MicRecorderView {...mic} />
         <AskAnchorPanel dealId={dealId} />
       </div>
       {!focused && (
