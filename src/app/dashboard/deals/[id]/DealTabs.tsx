@@ -1017,26 +1017,26 @@ function NewsSidebar({
   onResearch: () => void;
 }) {
   return (
-    <aside className="flex w-full flex-col gap-4 lg:w-80 lg:shrink-0">
+    <aside className="flex w-full flex-col gap-4 lg:w-[26rem] lg:shrink-0">
       <div className="flex items-center gap-2 px-1">
         <LiveDot />
-        <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold tracking-[0.15em] text-accent">
+        <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold tracking-[0.15em] text-accent">
           NEWS
         </span>
       </div>
 
       {newsHeadline && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-amber-700">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-4">
+          <p className="text-xs font-semibold tracking-[0.15em] text-amber-700">
             {dealName.toUpperCase()}
           </p>
-          <p className="mt-1 text-sm text-amber-900">{newsHeadline}</p>
+          <p className="mt-1.5 text-base text-amber-900">{newsHeadline}</p>
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 border-l-4 border-l-brand bg-white px-4 py-4">
+      <div className="rounded-lg border border-slate-200 border-l-4 border-l-brand bg-white px-5 py-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-brand">
+          <p className="text-xs font-semibold tracking-[0.15em] text-brand">
             {dealName.toUpperCase()}
           </p>
           <button
@@ -1050,22 +1050,22 @@ function NewsSidebar({
         </div>
         {companyResearch ? (
           <>
-            <p className="mt-1 text-sm text-slate-700">{companyResearch}</p>
+            <p className="mt-2 text-[15px] leading-relaxed text-slate-700">{companyResearch}</p>
             {researchUpdatedAt && (
-              <p className="mt-1 text-[11px] text-slate-400">
+              <p className="mt-2 text-xs text-slate-400">
                 {new Date(researchUpdatedAt).toLocaleDateString()}
               </p>
             )}
           </>
         ) : (
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-slate-400">
             Have Anchor search the web for public info about this company.
           </p>
         )}
-        {researchError && <p className="mt-1 text-xs text-red-600">{researchError}</p>}
+        {researchError && <p className="mt-2 text-xs text-red-600">{researchError}</p>}
       </div>
 
-      <p className="px-1 text-[11px] text-slate-400">
+      <p className="px-1 text-xs text-slate-400">
         Updates automatically once a day, or hit Refresh any time. Ask Anchor also uses this during
         the meeting so its answers can factor in recent news.
       </p>
@@ -1524,15 +1524,20 @@ function DuringPanel({
   newsHeadline,
   files,
   mic,
+  focused,
 }: {
   dealId: string;
   inProgress: DealMeeting[];
   newsHeadline: string | null;
   files: DealFile[];
   mic: MicRecorderState;
+  // True once a meeting here is genuinely live (see inMeetingMode in
+  // DealTabs) — hides Files below, since the point of meeting mode is
+  // trimming this page down to what's actually needed mid-call.
+  focused: boolean;
 }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+    <div className={focused ? "flex flex-col gap-6" : "grid gap-6 lg:grid-cols-[1.4fr_1fr]"}>
       <div className="flex flex-col gap-6">
         {newsHeadline && (
           <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
@@ -1582,9 +1587,11 @@ function DuringPanel({
         <MicRecorderView {...mic} />
         <AskAnchorPanel dealId={dealId} />
       </div>
-      <div className="flex flex-col gap-4">
-        <FilesSection dealId={dealId} files={files} />
-      </div>
+      {!focused && (
+        <div className="flex flex-col gap-4">
+          <FilesSection dealId={dealId} files={files} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1867,6 +1874,33 @@ export function DealTabs({
   // when the tab changes, this component does not.
   const mic = useMicRecorder({ dealId: deal.id, onUploaded: () => router.refresh() });
 
+  // Meeting mode: while something's actually happening right now (Anchor's
+  // bot confirmed in the call, or an in-person mic recording running) and
+  // you're on During, hide the prep/admin stuff (deal header, sharing,
+  // people & team, files) so this page shows only what's needed mid-call —
+  // same idea as the Focus window, just applied to this page itself
+  // instead of a separate popped-out one. `forceFullView` is the escape
+  // hatch ("Show everything") for anyone who wants the full page back
+  // mid-meeting; it resets on its own once nothing's live anymore, so the
+  // next meeting starts simplified again rather than remembering a stale
+  // override.
+  const isLiveNow = liveMeetings.length > 0 || mic.recording;
+  const [forceFullView, setForceFullView] = useState(false);
+  // Resets the override the moment nothing's live anymore, so the NEXT
+  // meeting starts simplified again instead of remembering a stale "show
+  // everything" choice from the last one. This is React's own documented
+  // pattern for adjusting state during render off a prop/derived-value
+  // change (react.dev/reference/react/useState#storing-information-from-previous-renders)
+  // — a plain useState comparison, not a ref or a useEffect, both of
+  // which this project's lint rules (react-hooks/refs,
+  // react-hooks/set-state-in-effect) specifically disallow here.
+  const [wasLive, setWasLive] = useState(isLiveNow);
+  if (isLiveNow !== wasLive) {
+    setWasLive(isLiveNow);
+    if (!isLiveNow && forceFullView) setForceFullView(false);
+  }
+  const inMeetingMode = tab === "during" && isLiveNow && !forceFullView;
+
   // Ticks nowMs (so a scheduled meeting's card and inProgress status stay
   // current) and drives the deal onto the tab that actually matches
   // what's happening, in both directions:
@@ -2026,21 +2060,48 @@ export function DealTabs({
           <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
         </div>
         <RecordingBanner {...mic} />
-        <DealHeaderCard deal={deal} />
-        <SharingControl
-          dealId={deal.id}
-          team={team}
-          currentUserId={currentUserId}
-          initialRestricted={deal.restricted}
-          initialSharedWithUserIds={sharedWithUserIds}
-        />
-        <PeopleAndTeam
-          dealId={deal.id}
-          people={people}
-          team={team}
-          leadUserId={deal.leadUserId}
-          backupUserId={deal.backupUserId}
-        />
+        {inMeetingMode ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+              Meeting mode — showing just what you need for the call.
+            </span>
+            <button
+              type="button"
+              onClick={() => setForceFullView(true)}
+              className="shrink-0 font-medium underline hover:no-underline"
+            >
+              Show everything
+            </button>
+          </div>
+        ) : (
+          <>
+            <DealHeaderCard deal={deal} />
+            <SharingControl
+              dealId={deal.id}
+              team={team}
+              currentUserId={currentUserId}
+              initialRestricted={deal.restricted}
+              initialSharedWithUserIds={sharedWithUserIds}
+            />
+            <PeopleAndTeam
+              dealId={deal.id}
+              people={people}
+              team={team}
+              leadUserId={deal.leadUserId}
+              backupUserId={deal.backupUserId}
+            />
+            {isLiveNow && tab === "during" && (
+              <button
+                type="button"
+                onClick={() => setForceFullView(false)}
+                className="self-start rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:border-emerald-400"
+              >
+                Back to meeting mode
+              </button>
+            )}
+          </>
+        )}
         {/* Running late and still on Before (or After/Chat)? Don't make
             switching tabs the only way to see a call that's already
             live — show it right here too. */}
@@ -2069,6 +2130,7 @@ export function DealTabs({
             newsHeadline={newsHeadline}
             files={files}
             mic={mic}
+            focused={inMeetingMode}
           />
         )}
         {tab === "after" && (
