@@ -196,10 +196,22 @@ function NewMeetingForms({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <form onSubmit={handleJoin} className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm">
+    // flex-wrap with a per-card min-width, not a column-count grid — this
+    // renders inside the main content column next to the news/research
+    // aside (see the top-level layout in DealTabs), which is narrower
+    // than the viewport itself. A grid-cols-3 keyed off viewport
+    // breakpoints doesn't know that and squeezes all three cards down to
+    // ~180px each (cut-off placeholders, a barely-visible date field).
+    // Letting cards wrap based on their own min-width means each one
+    // always gets at least ~260px, however wide the actual column is —
+    // three across on a wide screen, one per row on a narrower one.
+    <div className="flex flex-wrap gap-4">
+      <form
+        onSubmit={handleJoin}
+        className="min-w-[260px] flex-1 rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm"
+      >
         <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col gap-2.5">
           <input
             type="text"
             name="title"
@@ -233,9 +245,12 @@ function NewMeetingForms({
         {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
       </form>
 
-      <form onSubmit={handleUpload} className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
+      <form
+        onSubmit={handleUpload}
+        className="min-w-[260px] flex-1 rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm"
+      >
         <p className="text-sm font-medium text-slate-900">Upload a recording</p>
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col gap-2.5">
           <input
             type="text"
             name="title"
@@ -260,7 +275,9 @@ function NewMeetingForms({
         {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
       </form>
 
-      <MicRecorderView {...mic} />
+      <div className="min-w-[260px] flex-1">
+        <MicRecorderView {...mic} />
+      </div>
     </div>
   );
 }
