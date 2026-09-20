@@ -1,75 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-
-type LiveSegment = {
-  id: string;
-  speakerName: string | null;
-  text: string;
-  relativeSeconds: number | null;
-};
-
-type LiveSuggestions = {
-  nudges: string[];
-  checklist: { label: string; covered: boolean }[];
-} | null;
-
-// Was 4000ms — the actual transcript segments aren't behind any
-// server-side debounce (see the live route's GET handler: it reads
-// meetingLiveSegments fresh on every call), so this interval alone was
-// the biggest lever on how quickly new words show up on screen.
-// Tightened for a snappier "it's really listening" feel; the coaching
-// nudges have their own separate, longer server-side debounce (see
-// COACHING_REFRESH_MS in the live route) so this doesn't multiply AI
-// call volume.
-const POLL_MS = 1500;
+import { useEffect, useRef } from "react";
+import { useLiveMeeting } from "@/lib/useLiveMeeting";
+import { openFocusWindow } from "@/lib/focusWindow";
 
 // Live transcript + AI coaching for a meeting Anchor is actively sitting
-// in on (bot status "joining"/"recording") — polls /api/meetings/[id]/live,
-// which itself debounces the actual coaching regeneration server-side
-// (see that route), so polling here just needs to feel responsive.
+// in on (bot status "joining"/"recording"). The actual polling now lives
+// in useLiveMeeting (src/lib/useLiveMeeting.ts) — pulled out so the
+// focus-mode pop-out window (src/app/focus) can share it instead of
+// running a second, independent poll of the same endpoint.
 export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; title: string }) {
-  const [segments, setSegments] = useState<LiveSegment[]>([]);
-  const [suggestions, setSuggestions] = useState<LiveSuggestions>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { segments, suggestions, status, error } = useLiveMeeting(meetingId);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const stoppedRef = useRef(false);
-
-  useEffect(() => {
-    stoppedRef.current = false;
-
-    async function poll() {
-      if (stoppedRef.current) return;
-      try {
-        const res = await fetch(`/api/meetings/${meetingId}/live`);
-        if (!res.ok) throw new Error("Couldn't load live updates");
-        const body = await res.json();
-        setSegments(body.segments || []);
-        setSuggestions(body.liveSuggestions || null);
-        setStatus(body.status);
-        setError(null);
-        // Stop polling once the meeting's left the live states — the
-        // panel's parent will stop rendering it on the next refresh.
-        if (body.status !== "joining" && body.status !== "recording") {
-          stoppedRef.current = true;
-          return;
-        }
-      } catch {
-        setError("Couldn't reach the live feed — retrying…");
-      }
-      if (!stoppedRef.current) {
-        timer = setTimeout(poll, POLL_MS);
-      }
-    }
-
-    let timer: ReturnType<typeof setTimeout>;
-    poll();
-    return () => {
-      stoppedRef.current = true;
-      clearTimeout(timer);
-    };
-  }, [meetingId]);
 
   useEffect(() => {
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -82,9 +24,23 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
           <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
           <span className="text-sm font-semibold">{title}</span>
         </div>
-        <span className="text-xs text-slate-200">
-          {status === "joining" ? "Joining…" : "Live"}
-        </span>
+        <div className="flex items-center gap-3">
+          {/* Pops the same live data into its own small window — see
+              openFocusWindow's comment for why this is a real popup
+              rather than an in-page overlay: it's meant to sit on a
+              second monitor next to the actual call, showing only
+              whichever widgets this person has chosen to keep (see
+              src/app/focus/[meetingId]), not the rest of the deal page. */}
+          <button
+            type="button"
+            onClick={() => openFocusWindow(meetingId)}
+            className="rounded-md bg-white/15 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-white/25"
+            title="Open a small focus window with just the live coaching and Ask Anchor — good for a second monitor"
+          >
+            Focus window ⛶
+          </button>
+          <span className="text-xs text-slate-200">{status === "joining" ? "Joining…" : "Live"}</span>
+        </div>
       </div>
 
       <div className="grid gap-0 sm:grid-cols-[1.3fr_1fr]">

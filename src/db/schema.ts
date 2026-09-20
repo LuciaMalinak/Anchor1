@@ -79,6 +79,15 @@ export const users = pgTable("user", {
   // desktop and can't leave a section stuck mid-drag.
   colorTheme: text("colorTheme"),
   dashboardLayout: jsonb("dashboardLayout").$type<string[]>(),
+  // Which widgets this person's focus-mode window (src/app/focus/[meetingId],
+  // opened from the "Focus window" button on a live meeting) shows —
+  // see src/lib/focusWidgets.ts for the key list. Null means "use the
+  // default set." Also per-user, same reasoning as colorTheme/
+  // dashboardLayout above: the whole point of focus mode is trimming a
+  // live call down to what ONE person finds useful, so one person's
+  // choice here should never affect what a teammate's own focus window
+  // shows for the same meeting.
+  focusWidgets: jsonb("focusWidgets").$type<string[]>(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
