@@ -104,80 +104,30 @@ function TabBar({
   );
 }
 
-// The big, hard-to-miss way to start a meeting. Both paths already
-// recorded and transcribed automatically before this component existed
-// (the mic path via processMeeting() on upload, the live-call path via
-// the Recall.ai bot's live-transcript webhook) — what was missing was
-// making that obvious.
-//
-// Only the "in the room" card renders on During (showLiveCallOption
-// false there, see DuringPanel) — pasting a Zoom/Teams/Meet link is
-// what GETS you into a meeting, and the moment that succeeds you're
-// bounced onto During automatically (onJoinedNow), so a "join a call"
-// button sitting on During would only ever be reached after you're
-// already on the call. Before is the only tab where it's ever actually
-// useful. The upload-a-past-recording option follows the same tab
-// split for the same reason — it's a Before-tab, not-yet-started action.
-function MeetingLauncher({
+// The original three small forms for starting a meeting: join a live
+// Zoom/Teams/Meet call (a Recall.ai bot joins and transcribes live),
+// upload a past recording, or record straight from this device's mic
+// (also transcribed automatically, via processMeeting() on upload).
+// Shown on both Before and During — During's "nothing live yet" state
+// used to only offer the mic recorder, with no way to paste a live-call
+// link once you'd already moved off Before; both tabs now offer all
+// three the same way.
+function NewMeetingForms({
   dealId,
   mic,
   onJoinedNow,
-  showLiveCallOption = true,
 }: {
   dealId: string;
   mic: MicRecorderState;
-  // Only meaningful on Before, where starting a live call should jump
-  // you straight to During. DuringPanel omits it — you're already there.
+  // Only meaningful on Before — During is already the tab a live
+  // meeting lands you on, so there's nowhere for it to jump to.
   onJoinedNow?: () => void;
-  showLiveCallOption?: boolean;
 }) {
   const router = useRouter();
-  const [joining, setJoining] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
-  const [showMore, setShowMore] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-
-  async function handleJoin(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setJoinError(null);
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const meetingUrl = String(formData.get("meetingUrl") || "").trim();
-    const title = String(formData.get("title") || "").trim();
-    const scheduledAtLocal = String(formData.get("scheduledAt") || "").trim();
-    if (!meetingUrl) {
-      setJoinError("Paste a meeting link first.");
-      return;
-    }
-    // The <input type="datetime-local"> value has no timezone — treat it
-    // as the browser's own local time, same as any calendar app would.
-    const scheduledAt = scheduledAtLocal ? new Date(scheduledAtLocal).toISOString() : undefined;
-    setJoining(true);
-    try {
-      const res = await fetch("/api/meetings/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meetingUrl, title, dealId, scheduledAt }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Couldn't send Anchor to that meeting");
-      }
-      form.reset();
-      setShowMore(false);
-      router.refresh();
-      // Only jump straight to During for an immediate join — a
-      // scheduled-for-later one shows up as "upcoming" on Before instead,
-      // and the tab switches on its own once that time arrives.
-      if (!scheduledAt) onJoinedNow?.();
-    } catch (err) {
-      setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
-    } finally {
-      setJoining(false);
-    }
-  }
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -206,123 +156,86 @@ function MeetingLauncher({
     }
   }
 
-  const mm = String(Math.floor(mic.seconds / 60)).padStart(2, "0");
-  const ss = String(mic.seconds % 60).padStart(2, "0");
+  async function handleJoin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setJoinError(null);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const meetingUrl = String(formData.get("meetingUrl") || "").trim();
+    const title = String(formData.get("title") || "").trim();
+    const scheduledAtLocal = String(formData.get("scheduledAt") || "").trim();
+    if (!meetingUrl) {
+      setJoinError("Paste a meeting link first.");
+      return;
+    }
+    // The <input type="datetime-local"> value has no timezone — treat it
+    // as the browser's own local time, same as any calendar app would.
+    const scheduledAt = scheduledAtLocal ? new Date(scheduledAtLocal).toISOString() : undefined;
+    setJoining(true);
+    try {
+      const res = await fetch("/api/meetings/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meetingUrl, title, dealId, scheduledAt }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't send Anchor to that meeting");
+      }
+      form.reset();
+      router.refresh();
+      // Only jump straight to During for an immediate join — a
+      // scheduled-for-later one shows up as "upcoming" on Before instead,
+      // and the tab switches on its own once that time arrives.
+      if (!scheduledAt) onJoinedNow?.();
+    } catch (err) {
+      setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
+    } finally {
+      setJoining(false);
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Stacks until lg rather than sm: on the (rare, showLiveCallOption)
-          case where this renders inside a narrower column, switching to
-          2-up too early squeezed both cards' text onto itself. Below lg
-          both cards get the full column width instead. */}
-      <div className={showLiveCallOption ? "grid items-stretch gap-5 lg:grid-cols-2" : "flex flex-col"}>
-        <div className="flex flex-col justify-between gap-6 rounded-2xl border-2 border-accent/30 bg-accent/5 p-7">
-          <div className="flex flex-col gap-2.5">
-            <p className="text-lg font-semibold leading-snug text-slate-900">
-              In the room right now?
-            </p>
-            <p className="text-sm leading-relaxed text-slate-600">
-              One click starts recording from this device&apos;s microphone — Anchor
-              transcribes it automatically as the conversation happens.
-            </p>
-          </div>
-          {mic.recording ? (
-            <button
-              type="button"
-              onClick={mic.stop}
-              className="flex items-center justify-center gap-2.5 rounded-xl bg-red-600 px-5 py-4 text-base font-semibold text-white shadow-sm hover:bg-red-700"
-            >
-              <span className="h-3 w-3 shrink-0 animate-pulse rounded-full bg-white" />
-              Stop recording — {mm}:{ss}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={mic.start}
-              disabled={mic.uploading}
-              className="flex items-center justify-center gap-2.5 rounded-xl bg-accent px-5 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-50"
-            >
-              <span className="h-3 w-3 shrink-0 rounded-full bg-white/90" />
-              {mic.uploading ? "Uploading…" : "Start recording now"}
-            </button>
-          )}
-          {mic.error && <p className="text-xs text-red-600">{mic.error}</p>}
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <form onSubmit={handleJoin} className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm">
+        <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
+        <div className="mt-3 flex flex-col gap-2">
+          <input
+            type="text"
+            name="title"
+            placeholder="Title (optional)"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+          <input
+            type="text"
+            name="meetingUrl"
+            placeholder="https://zoom.us/j/..."
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-500">
+              Join at (optional — leave blank to join right now)
+            </span>
+            <input
+              type="datetime-local"
+              name="scheduledAt"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={joining}
+            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {joining ? "Sending…" : "Join meeting"}
+          </button>
         </div>
+        {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
+      </form>
 
-        {showLiveCallOption && (
-          <div className="flex flex-col justify-between gap-6 rounded-2xl border-2 border-brand/30 bg-brand/5 p-7">
-            <div className="flex flex-col gap-2.5">
-              <p className="text-lg font-semibold leading-snug text-slate-900">
-                On a Zoom, Teams, or Meet call?
-              </p>
-              <p className="text-sm leading-relaxed text-slate-600">
-                Paste the link — Anchor joins on its own and transcribes live as people talk.
-              </p>
-            </div>
-            <form onSubmit={handleJoin} className="flex flex-col gap-3">
-              <input
-                type="text"
-                name="meetingUrl"
-                placeholder="https://zoom.us/j/..."
-                required
-                className="rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-brand"
-              />
-              {showMore && (
-                <>
-                  <input
-                    type="text"
-                    name="title"
-                    placeholder="Title (optional)"
-                    className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand"
-                  />
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-xs leading-relaxed text-slate-500">
-                      Join at (optional — leave blank to join right now)
-                    </span>
-                    <input
-                      type="datetime-local"
-                      name="scheduledAt"
-                      className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand"
-                    />
-                  </label>
-                </>
-              )}
-              <button
-                type="submit"
-                disabled={joining}
-                className="rounded-xl bg-brand px-5 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-50"
-              >
-                {joining ? "Joining…" : "Join meeting now"}
-              </button>
-              {!showMore && (
-                <button
-                  type="button"
-                  onClick={() => setShowMore(true)}
-                  className="self-start text-xs text-slate-500 underline hover:text-slate-700"
-                >
-                  Add a title or schedule for later
-                </button>
-              )}
-            </form>
-            {joinError && <p className="text-xs text-red-600">{joinError}</p>}
-          </div>
-        )}
-      </div>
-
-      {showLiveCallOption && (
-        <button
-          type="button"
-          onClick={() => setShowUpload((v) => !v)}
-          className="self-start text-xs text-slate-400 underline hover:text-slate-600"
-        >
-          Already have a recording? Upload it instead
-        </button>
-      )}
-      {showLiveCallOption && showUpload && (
-        <form
-          onSubmit={handleUpload}
-          className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4"
-        >
+      <form onSubmit={handleUpload} className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
+        <p className="text-sm font-medium text-slate-900">Upload a recording</p>
+        <div className="mt-3 flex flex-col gap-2">
           <input
             type="text"
             name="title"
@@ -339,13 +252,15 @@ function MeetingLauncher({
           <button
             type="submit"
             disabled={uploading}
-            className="self-start rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
+            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
           >
             {uploading ? "Uploading…" : "Upload"}
           </button>
-          {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
-        </form>
-      )}
+        </div>
+        {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
+      </form>
+
+      <MicRecorderView {...mic} />
     </div>
   );
 }
@@ -406,7 +321,7 @@ function BeforePanel({
         </div>
       ))}
       <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} backup={backup} />
-      <MeetingLauncher dealId={dealId} mic={mic} onJoinedNow={onJoinedNow} />
+      <NewMeetingForms dealId={dealId} mic={mic} onJoinedNow={onJoinedNow} />
     </div>
   );
 }
@@ -1643,14 +1558,11 @@ function DuringPanel({
           </div>
         )}
         {inProgress.length === 0 ? (
-          // Nothing live yet — this is the "start a meeting" moment, so it
-          // gets the same big, hard-to-miss "I'm in the room" card as the
-          // Before tab (see MeetingLauncher) rather than a line of text
-          // plus a small recorder button. showLiveCallOption is false
-          // here on purpose — pasting a Zoom/Teams/Meet link is what GETS
-          // you into a meeting, and joining one bounces you onto During
-          // automatically, so that button only ever makes sense on Before.
-          <MeetingLauncher dealId={dealId} mic={mic} showLiveCallOption={false} />
+          // Nothing live yet — offer the same three ways to start a
+          // meeting as Before, join-a-live-call included. Previously this
+          // only offered the mic recorder, with no way to paste a live
+          // call link once you'd already moved off Before.
+          <NewMeetingForms dealId={dealId} mic={mic} />
         ) : (
           <div className="flex flex-col gap-3">
             {inProgress.map((m) =>
@@ -1676,8 +1588,8 @@ function DuringPanel({
             {/* A bot's already in a call, but someone might also be
                 recording in the room alongside it (a hybrid meeting) —
                 keep the plain recorder control available here too. Once
-                nothing's live (the branch above) MeetingLauncher's own
-                "in the room" card takes over instead, so this doesn't
+                nothing's live (the branch above) NewMeetingForms' own
+                mic recorder takes over instead, so this doesn't
                 duplicate that. */}
             <MicRecorderView {...mic} />
           </div>
