@@ -3,7 +3,7 @@
 // src/lib/joinRequestAccess.ts, the only place this is checked.
 // Comma-separated so more owner emails can be added later without a code
 // change; defaults to Lucia's own email so this works out of the box.
-const APP_OWNER_EMAILS = (process.env.APP_OWNER_EMAILS ?? "lucia.malinak@gmail.com")
+export const APP_OWNER_EMAILS = (process.env.APP_OWNER_EMAILS ?? "lucia.malinak@gmail.com")
   .split(",")
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
