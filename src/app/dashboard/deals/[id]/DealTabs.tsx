@@ -1591,61 +1591,61 @@ function DuringPanel({
   focused: boolean;
 }) {
   return (
-    <div className={focused ? "flex flex-col gap-6" : "grid gap-6 lg:grid-cols-[1.4fr_1fr]"}>
-      <div className="flex flex-col gap-6">
-        {newsHeadline && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-            <LiveDot />
-            <p className="text-sm text-amber-900">
-              <span className="font-semibold">In the news right now:</span> {newsHeadline}
-            </p>
-          </div>
-        )}
-        {inProgress.length === 0 ? (
-          // Nothing live yet — offer the same three ways to start a
-          // meeting as Before, join-a-live-call included. Previously this
-          // only offered the mic recorder, with no way to paste a live
-          // call link once you'd already moved off Before. recordFirst
-          // is On here only — During shows Record in person before
-          // Upload a recording, while Before keeps its original order.
-          <NewMeetingForms dealId={dealId} mic={mic} recordFirst />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {inProgress.map((m) =>
-              m.status === "joining" || m.status === "recording" ? (
-                // A bot Anchor sent into a Zoom/Meet/Teams call — show the
-                // live transcript + coaching panel instead of just a link,
-                // since there's something to actually watch while it runs.
-                <LiveMeetingPanel key={m.id} meetingId={m.id} title={m.title} />
-              ) : (
-                <Link
-                  key={m.id}
-                  href={`/dashboard/meetings/${m.id}`}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                    <span className="text-sm font-medium text-slate-900">{m.title}</span>
-                  </div>
-                  <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
-                </Link>
-              )
-            )}
-            {/* A bot's already in a call, but someone might also be
-                recording in the room alongside it (a hybrid meeting) —
-                keep the plain recorder control available here too. Once
-                nothing's live (the branch above) NewMeetingForms' own
-                mic recorder takes over instead, so this doesn't
-                duplicate that. */}
-            <MicRecorderView {...mic} />
-          </div>
-        )}
-      </div>
-      {!focused && (
-        <div className="flex flex-col gap-4">
-          <FilesSection dealId={dealId} files={files} />
+    // A single stacked column, not a side-by-side grid — Files used to
+    // sit in a right-hand column next to Upload a recording, which read
+    // as a stray extra column on top of the news/research aside this
+    // whole page already has. Now it's just the last thing on the page:
+    // everything you'd actually do during a meeting first, Files at the
+    // very bottom.
+    <div className="flex flex-col gap-6">
+      {newsHeadline && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <LiveDot />
+          <p className="text-sm text-amber-900">
+            <span className="font-semibold">In the news right now:</span> {newsHeadline}
+          </p>
         </div>
       )}
+      {inProgress.length === 0 ? (
+        // Nothing live yet — offer the same three ways to start a
+        // meeting as Before, join-a-live-call included. Previously this
+        // only offered the mic recorder, with no way to paste a live
+        // call link once you'd already moved off Before. recordFirst
+        // is On here only — During shows Record in person before
+        // Upload a recording, while Before keeps its original order.
+        <NewMeetingForms dealId={dealId} mic={mic} recordFirst />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {inProgress.map((m) =>
+            m.status === "joining" || m.status === "recording" ? (
+              // A bot Anchor sent into a Zoom/Meet/Teams call — show the
+              // live transcript + coaching panel instead of just a link,
+              // since there's something to actually watch while it runs.
+              <LiveMeetingPanel key={m.id} meetingId={m.id} title={m.title} />
+            ) : (
+              <Link
+                key={m.id}
+                href={`/dashboard/meetings/${m.id}`}
+                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                  <span className="text-sm font-medium text-slate-900">{m.title}</span>
+                </div>
+                <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
+              </Link>
+            )
+          )}
+          {/* A bot's already in a call, but someone might also be
+              recording in the room alongside it (a hybrid meeting) —
+              keep the plain recorder control available here too. Once
+              nothing's live (the branch above) NewMeetingForms' own
+              mic recorder takes over instead, so this doesn't
+              duplicate that. */}
+          <MicRecorderView {...mic} />
+        </div>
+      )}
+      {!focused && <FilesSection dealId={dealId} files={files} />}
     </div>
   );
 }
