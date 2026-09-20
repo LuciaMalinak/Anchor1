@@ -1437,8 +1437,15 @@ function PeopleAndTeam({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    // flex-wrap with a min-width per card, not a grid-cols-2 keyed off
+    // viewport breakpoints — this renders in the main content column
+    // next to the news/research aside (see the squeezed-cards fix
+    // earlier in this file), so a fixed column count can end up
+    // narrower than it looks like it should be. This way each card
+    // always gets at least ~280px, wrapping to one-per-row when the
+    // column itself is narrower than two would need.
+    <div className="flex flex-wrap gap-4">
+      <div className="min-w-[280px] flex-1 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm font-medium text-slate-900">People involved</p>
         <p className="mt-0.5 text-xs text-slate-500">
           Who Anchor has recognized speaking in this deal&apos;s meetings.
@@ -1466,7 +1473,7 @@ function PeopleAndTeam({
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="min-w-[280px] flex-1 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm font-medium text-slate-900">Your team</p>
         <p className="mt-0.5 text-xs text-slate-500">Everyone with access to this deal.</p>
 
@@ -1611,7 +1618,6 @@ function DuringPanel({
             <MicRecorderView {...mic} />
           </div>
         )}
-        <AskAnchorPanel dealId={dealId} />
       </div>
       {!focused && (
         <div className="flex flex-col gap-4">
@@ -2103,13 +2109,27 @@ export function DealTabs({
         ) : (
           <>
             <DealHeaderCard deal={deal} />
-            <SharingControl
-              dealId={deal.id}
-              team={team}
-              currentUserId={currentUserId}
-              initialRestricted={deal.restricted}
-              initialSharedWithUserIds={sharedWithUserIds}
-            />
+            {/* Who can see this deal + Ask Anchor share a row (flex-wrap,
+                not a fixed grid — same reasoning as the cards above and
+                PeopleAndTeam below: this column is narrower than the
+                viewport, next to the news/research aside), putting Ask
+                Anchor right between this and People involved/Your team
+                below, and making it available on every tab instead of
+                only during a live meeting. */}
+            <div className="flex flex-wrap gap-4">
+              <div className="min-w-[280px] flex-1">
+                <SharingControl
+                  dealId={deal.id}
+                  team={team}
+                  currentUserId={currentUserId}
+                  initialRestricted={deal.restricted}
+                  initialSharedWithUserIds={sharedWithUserIds}
+                />
+              </div>
+              <div className="min-w-[280px] flex-1">
+                <AskAnchorPanel dealId={deal.id} />
+              </div>
+            </div>
             <PeopleAndTeam
               dealId={deal.id}
               people={people}
