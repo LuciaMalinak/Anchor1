@@ -111,40 +111,54 @@ export function MicRecorderView({ recording, seconds, uploading, error, start, s
   const ss = String(seconds % 60).padStart(2, "0");
 
   return (
-    <div className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
-      <p className="text-sm font-medium text-slate-900">Record in person</p>
-      <p className="mt-1 text-xs text-slate-500">
-        For a call or meeting Anchor can&apos;t join on its own — record straight from
-        this device&apos;s microphone. Recording keeps running even if you switch tabs.
-      </p>
-      <div className="mt-3 flex items-center gap-3">
-        {!recording ? (
-          <button
-            type="button"
-            onClick={start}
-            disabled={uploading}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
-          >
-            <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-            {uploading ? "Uploading…" : "Start recording"}
-          </button>
-        ) : (
-          <>
+    // h-full + justify-between: this card sits next to "Upload a
+    // recording" (see NewMeetingForms in DealTabs.tsx), which usually
+    // has more content and is taller. h-full lets this card match that
+    // stretched height instead of staying its own shorter, content-sized
+    // height (leaving a mismatched card with dead space below it) —
+    // harmless where this renders without a stretched parent (e.g. the
+    // During tab's "already in a call" list), since h-full is then just
+    // 100% of an auto-height parent, i.e. no-op. justify-between pins
+    // the button to the bottom of whatever height that ends up being,
+    // rather than leaving a gap between it and the description above.
+    <div className="flex h-full flex-col justify-between rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
+      <div>
+        <p className="text-sm font-medium text-slate-900">Record in person</p>
+        <p className="mt-1 text-xs text-slate-500">
+          For a call or meeting Anchor can&apos;t join on its own — record straight from
+          this device&apos;s microphone. Recording keeps running even if you switch tabs.
+        </p>
+      </div>
+      <div className="mt-3">
+        <div className="flex items-center gap-3">
+          {!recording ? (
             <button
               type="button"
-              onClick={stop}
-              className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+              onClick={start}
+              disabled={uploading}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
             >
-              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
-              Stop
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+              {uploading ? "Uploading…" : "Start recording"}
             </button>
-            <span className="text-sm font-mono text-slate-600">
-              {mm}:{ss}
-            </span>
-          </>
-        )}
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={stop}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
+                Stop
+              </button>
+              <span className="text-sm font-mono text-slate-600">
+                {mm}:{ss}
+              </span>
+            </>
+          )}
+        </div>
+        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
-      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
