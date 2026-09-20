@@ -249,6 +249,10 @@ function NewMeetingForms({
       </form>
 
       <div className="flex flex-wrap gap-4">
+        <div className="min-w-[260px] flex-1">
+          <MicRecorderView {...mic} />
+        </div>
+
         <form
           onSubmit={handleUpload}
           className="min-w-[260px] flex-1 rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm"
@@ -278,10 +282,6 @@ function NewMeetingForms({
           </div>
           {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
         </form>
-
-        <div className="min-w-[260px] flex-1">
-          <MicRecorderView {...mic} />
-        </div>
       </div>
     </div>
   );
