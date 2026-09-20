@@ -204,11 +204,18 @@ function MeetingLauncher({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col justify-between rounded-2xl border-2 border-accent/30 bg-accent/5 p-6">
-          <div>
-            <p className="text-base font-semibold text-slate-900">In the room right now?</p>
-            <p className="mt-1.5 text-sm text-slate-600">
+      {/* Stacks until lg rather than sm: on the During tab this renders
+          inside a narrower ~58%-width column (alongside the news aside —
+          see DuringPanel), so switching to 2-up too early squeezed both
+          cards' text onto itself. Below lg both cards get the full column
+          width instead, which reads far better than a cramped 2-up. */}
+      <div className="grid items-stretch gap-5 lg:grid-cols-2">
+        <div className="flex flex-col justify-between gap-6 rounded-2xl border-2 border-accent/30 bg-accent/5 p-7">
+          <div className="flex flex-col gap-2.5">
+            <p className="text-lg font-semibold leading-snug text-slate-900">
+              In the room right now?
+            </p>
+            <p className="text-sm leading-relaxed text-slate-600">
               One click starts recording from this device&apos;s microphone — Anchor
               transcribes it automatically as the conversation happens.
             </p>
@@ -217,9 +224,9 @@ function MeetingLauncher({
             <button
               type="button"
               onClick={mic.stop}
-              className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3.5 text-base font-semibold text-white shadow-sm hover:bg-red-700"
+              className="flex items-center justify-center gap-2.5 rounded-xl bg-red-600 px-5 py-4 text-base font-semibold text-white shadow-sm hover:bg-red-700"
             >
-              <span className="h-3 w-3 animate-pulse rounded-full bg-white" />
+              <span className="h-3 w-3 shrink-0 animate-pulse rounded-full bg-white" />
               Stop recording — {mm}:{ss}
             </button>
           ) : (
@@ -227,29 +234,31 @@ function MeetingLauncher({
               type="button"
               onClick={mic.start}
               disabled={mic.uploading}
-              className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-50"
+              className="flex items-center justify-center gap-2.5 rounded-xl bg-accent px-5 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-50"
             >
-              <span className="h-3 w-3 rounded-full bg-white/90" />
+              <span className="h-3 w-3 shrink-0 rounded-full bg-white/90" />
               {mic.uploading ? "Uploading…" : "Start recording now"}
             </button>
           )}
-          {mic.error && <p className="mt-2 text-xs text-red-600">{mic.error}</p>}
+          {mic.error && <p className="text-xs text-red-600">{mic.error}</p>}
         </div>
 
-        <div className="flex flex-col justify-between rounded-2xl border-2 border-brand/30 bg-brand/5 p-6">
-          <div>
-            <p className="text-base font-semibold text-slate-900">On a Zoom, Teams, or Meet call?</p>
-            <p className="mt-1.5 text-sm text-slate-600">
+        <div className="flex flex-col justify-between gap-6 rounded-2xl border-2 border-brand/30 bg-brand/5 p-7">
+          <div className="flex flex-col gap-2.5">
+            <p className="text-lg font-semibold leading-snug text-slate-900">
+              On a Zoom, Teams, or Meet call?
+            </p>
+            <p className="text-sm leading-relaxed text-slate-600">
               Paste the link — Anchor joins on its own and transcribes live as people talk.
             </p>
           </div>
-          <form onSubmit={handleJoin} className="mt-4 flex flex-col gap-2">
+          <form onSubmit={handleJoin} className="flex flex-col gap-3">
             <input
               type="text"
               name="meetingUrl"
               placeholder="https://zoom.us/j/..."
               required
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand"
+              className="rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-brand"
             />
             {showMore && (
               <>
@@ -257,16 +266,16 @@ function MeetingLauncher({
                   type="text"
                   name="title"
                   placeholder="Title (optional)"
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand"
                 />
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-500">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs leading-relaxed text-slate-500">
                     Join at (optional — leave blank to join right now)
                   </span>
                   <input
                     type="datetime-local"
                     name="scheduledAt"
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand"
+                    className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand"
                   />
                 </label>
               </>
@@ -274,7 +283,7 @@ function MeetingLauncher({
             <button
               type="submit"
               disabled={joining}
-              className="rounded-xl bg-brand px-5 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-50"
+              className="rounded-xl bg-brand px-5 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-50"
             >
               {joining ? "Joining…" : "Join meeting now"}
             </button>
@@ -288,7 +297,7 @@ function MeetingLauncher({
               </button>
             )}
           </form>
-          {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
+          {joinError && <p className="text-xs text-red-600">{joinError}</p>}
         </div>
       </div>
 
