@@ -196,19 +196,22 @@ function NewMeetingForms({
   }
 
   return (
-    // flex-wrap with a per-card min-width, not a column-count grid — this
-    // renders inside the main content column next to the news/research
-    // aside (see the top-level layout in DealTabs), which is narrower
-    // than the viewport itself. A grid-cols-3 keyed off viewport
-    // breakpoints doesn't know that and squeezes all three cards down to
-    // ~180px each (cut-off placeholders, a barely-visible date field).
-    // Letting cards wrap based on their own min-width means each one
-    // always gets at least ~260px, however wide the actual column is —
-    // three across on a wide screen, one per row on a narrower one.
-    <div className="flex flex-wrap gap-4">
+    // Join-a-live-meeting gets its own full-width row — it's the primary
+    // action here — and Upload/Record-in-person are grouped underneath
+    // as their own pair. That grouping is a nested flex-wrap rather than
+    // just three equal cards in one row: with three equal cards, a
+    // narrower container (this renders next to the news/research aside,
+    // so it's often narrower than the viewport suggests — see the
+    // squeezed-cards fix elsewhere in this file) can wrap two-per-row in
+    // a way that splits Upload from Record-in-person instead of keeping
+    // them next to each other. Nesting them in their own row means
+    // they either sit side by side or stack directly on top of each
+    // other, but never get separated by the Join card landing between
+    // them.
+    <div className="flex flex-col gap-4">
       <form
         onSubmit={handleJoin}
-        className="min-w-[260px] flex-1 rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm"
+        className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm"
       >
         <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
         <div className="mt-3 flex flex-col gap-2.5">
@@ -245,38 +248,40 @@ function NewMeetingForms({
         {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
       </form>
 
-      <form
-        onSubmit={handleUpload}
-        className="min-w-[260px] flex-1 rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm"
-      >
-        <p className="text-sm font-medium text-slate-900">Upload a recording</p>
-        <div className="mt-3 flex flex-col gap-2.5">
-          <input
-            type="text"
-            name="title"
-            placeholder="Title (optional)"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <input
-            type="file"
-            name="file"
-            accept="audio/*,video/*"
-            required
-            className="text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
-          />
-          <button
-            type="submit"
-            disabled={uploading}
-            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-          >
-            {uploading ? "Uploading…" : "Upload"}
-          </button>
-        </div>
-        {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
-      </form>
+      <div className="flex flex-wrap gap-4">
+        <form
+          onSubmit={handleUpload}
+          className="min-w-[260px] flex-1 rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm"
+        >
+          <p className="text-sm font-medium text-slate-900">Upload a recording</p>
+          <div className="mt-3 flex flex-col gap-2.5">
+            <input
+              type="text"
+              name="title"
+              placeholder="Title (optional)"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+            <input
+              type="file"
+              name="file"
+              accept="audio/*,video/*"
+              required
+              className="text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            />
+            <button
+              type="submit"
+              disabled={uploading}
+              className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            >
+              {uploading ? "Uploading…" : "Upload"}
+            </button>
+          </div>
+          {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
+        </form>
 
-      <div className="min-w-[260px] flex-1">
-        <MicRecorderView {...mic} />
+        <div className="min-w-[260px] flex-1">
+          <MicRecorderView {...mic} />
+        </div>
       </div>
     </div>
   );
