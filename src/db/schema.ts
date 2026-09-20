@@ -186,6 +186,12 @@ export const meetings = pgTable("meeting", {
   liveSuggestions: jsonb("liveSuggestions").$type<{
     nudges: string[];
     checklist: { label: string; covered: boolean }[];
+    // The most recent question the other side asked that still looks
+    // unanswered, plus a grounded suggested answer — an "interview AI"
+    // style prompt, kept visible until the transcript shows the rep
+    // actually addressed it (see generateLiveCoaching in liveCoaching.ts).
+    // Null whenever nothing's currently hanging.
+    liveQuestion: { question: string; suggestedAnswer: string } | null;
   }>(),
   liveSuggestionsUpdatedAt: timestamp("liveSuggestionsUpdatedAt", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),

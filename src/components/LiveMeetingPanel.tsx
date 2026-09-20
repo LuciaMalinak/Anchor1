@@ -69,6 +69,20 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
         </div>
 
         <div className="flex flex-col gap-4 px-5 py-4">
+          {suggestions?.liveQuestion && (
+            <div className="rounded-lg border border-brand/30 bg-brand/5 px-3 py-3">
+              <p className="mb-1 text-[11px] font-semibold tracking-[0.15em] text-brand">
+                THEY JUST ASKED
+              </p>
+              <p className="text-xs italic text-slate-500">
+                &ldquo;{suggestions.liveQuestion.question}&rdquo;
+              </p>
+              <p className="mt-1.5 text-sm font-medium text-slate-900">
+                {suggestions.liveQuestion.suggestedAnswer}
+              </p>
+            </div>
+          )}
+
           <div>
             <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
               SUGGESTIONS

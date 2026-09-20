@@ -170,6 +170,20 @@ export function FocusWindow({
           </section>
         )}
 
+        {widgets.has("coaching") && suggestions?.liveQuestion && (
+          <section className="rounded-lg border border-brand/30 bg-brand/5 p-3">
+            <p className="mb-1 text-[11px] font-semibold tracking-[0.15em] text-brand">
+              THEY JUST ASKED
+            </p>
+            <p className="text-xs italic text-slate-500">
+              &ldquo;{suggestions.liveQuestion.question}&rdquo;
+            </p>
+            <p className="mt-1.5 text-sm font-medium text-slate-900">
+              {suggestions.liveQuestion.suggestedAnswer}
+            </p>
+          </section>
+        )}
+
         {widgets.has("coaching") && (
           <section className="rounded-lg border border-slate-200 bg-white p-3">
             <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">

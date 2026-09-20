@@ -35,6 +35,14 @@ export type DealContext = {
   // explicitly wrote down going in.
   notes: string | null;
   decisionBoundaries: string | null;
+  // The tail end of THIS call's own live transcript, if one is actually
+  // in progress right now (see meetingLiveSegments / the live route) —
+  // separate from recentMeetings below, which are only past, FINISHED
+  // meetings. Without this, a mid-call question like "what did they just
+  // say about pricing" had no way to be answered — Ask Anchor could only
+  // reason from what was already synthesized after past calls ended.
+  // Null whenever no meeting on this deal is currently live.
+  liveTranscript: string | null;
   people: { name: string; role: string | null; company: string | null; relationshipSummary: string | null }[];
   recentMeetings: {
     title: string;
@@ -86,6 +94,12 @@ function buildContextBlock(ctx: DealContext): string {
 
   if (ctx.decisionBoundaries) {
     parts.push(`\nDecision boundaries / constraints for this deal: ${ctx.decisionBoundaries}`);
+  }
+
+  if (ctx.liveTranscript) {
+    parts.push(
+      `\nThe most recent portion of THIS call's own live transcript (it's happening right now — answer questions about "what did they just say" from this, not from past meetings):\n${ctx.liveTranscript}`
+    );
   }
 
   if (ctx.people.length > 0) {

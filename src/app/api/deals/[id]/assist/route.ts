@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { dealFiles, meetings, summaries, meetingParticipants, contacts } from "@/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { dealFiles, meetings, summaries, meetingParticipants, contacts, meetingLiveSegments } from "@/db/schema";
+import { and, asc, desc, eq, or } from "drizzle-orm";
 import { askAnchorStream, type DealContext, type AnchorImage } from "@/lib/liveAssist";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
@@ -19,6 +19,12 @@ const MAX_HISTORY_TURNS = 6;
 // into a slow, expensive one.
 const MAX_IMAGES_PER_QUESTION = 4;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+// How much of THIS call's own live transcript (from the end) to hand the
+// model, in characters — same idea as TRANSCRIPT_WINDOW_CHARS in the live
+// coaching route, just smaller since Ask Anchor's prompt already carries
+// a lot else (files, past meetings, email/calendar context) and speed
+// matters most here.
+const LIVE_TRANSCRIPT_WINDOW_CHARS = 4_000;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -51,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Independent queries — run together instead of one after another.
   // Doesn't change what's asked of the model, just how long someone
   // waits before the first token of the answer even starts generating.
-  const [recentReady, files, dealContactRows, dealLeadStyle] = await Promise.all([
+  const [recentReady, files, dealContactRows, dealLeadStyle, liveMeetingRows] = await Promise.all([
     db
       .select({ meeting: meetings, summary: summaries })
       .from(meetings)
@@ -82,7 +88,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // style profile is a fine trade for not adding a beat to a real-time
     // answer.
     getDealLeadStyle(deal.leadUserId, { allowSynchronousRebuild: false }),
+    // Is a meeting on this deal actually live right now? If so, Ask
+    // Anchor should be able to answer "what did they just say" from
+    // THIS call, not just from past, finished ones (see liveTranscript
+    // on DealContext below).
+    db
+      .select({ id: meetings.id })
+      .from(meetings)
+      .where(
+        and(eq(meetings.dealId, dealId), or(eq(meetings.status, "joining"), eq(meetings.status, "recording")))
+      )
+      .orderBy(desc(meetings.occurredAt))
+      .limit(1),
   ]);
+
+  let liveTranscript: string | null = null;
+  const liveMeetingId = liveMeetingRows[0]?.id;
+  if (liveMeetingId) {
+    const segments = await db
+      .select({ speakerName: meetingLiveSegments.speakerName, text: meetingLiveSegments.text })
+      .from(meetingLiveSegments)
+      .where(eq(meetingLiveSegments.meetingId, liveMeetingId))
+      .orderBy(asc(meetingLiveSegments.createdAt));
+    const transcriptText = segments
+      .map((s) => (s.speakerName ? `${s.speakerName}: ${s.text}` : s.text))
+      .join("\n");
+    liveTranscript = transcriptText ? transcriptText.slice(-LIVE_TRANSCRIPT_WINDOW_CHARS) : null;
+  }
 
   // Read the raw bytes for a capped, size-bounded set of the deal's image
   // files so Ask Anchor can actually look at them (screenshots of a deck,
@@ -111,6 +143,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     continuityNote: recentReady[0]?.summary.continuityNote ?? null,
     notes: deal.notes,
     decisionBoundaries: deal.decisionBoundaries,
+    liveTranscript,
     people: dealContactRows,
     recentMeetings: recentReady.map((r) => ({
       title: r.meeting.title,

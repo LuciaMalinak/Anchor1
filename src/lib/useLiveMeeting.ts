@@ -12,6 +12,7 @@ export type LiveSegment = {
 export type LiveSuggestions = {
   nudges: string[];
   checklist: { label: string; covered: boolean }[];
+  liveQuestion: { question: string; suggestedAnswer: string } | null;
 } | null;
 
 // Was 4000ms — the actual transcript segments aren't behind any

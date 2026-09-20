@@ -2117,19 +2117,37 @@ export function DealTabs({
         </div>
         <RecordingBanner {...mic} />
         {inMeetingMode ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
-            <span className="flex items-center gap-2">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-              Meeting mode — showing just what you need for the call.
-            </span>
-            <button
-              type="button"
-              onClick={() => setForceFullView(true)}
-              className="shrink-0 font-medium underline hover:no-underline"
-            >
-              Show everything
-            </button>
-          </div>
+          <>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
+              <span className="flex items-center gap-2">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                Meeting mode — showing just what you need for the call.
+              </span>
+              <button
+                type="button"
+                onClick={() => setForceFullView(true)}
+                className="shrink-0 font-medium underline hover:no-underline"
+              >
+                Show everything
+              </button>
+            </div>
+            {/* Whoever's actually running this call may not be the usual
+                deal lead (a backup stepping in) — surfacing this here,
+                front and center during the live call itself, matters
+                more for them than for the lead who already knows it by
+                heart. Same wording as the Focus window's "Key facts"
+                widget. */}
+            {deal.decisionBoundaries && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+                <span className="font-semibold">Can decide on your own: </span>
+                {deal.decisionBoundaries}
+              </div>
+            )}
+            {/* Ask Anchor stays reachable in meeting mode too now — no
+                reason a live question should mean leaving the compact
+                view and losing everything meeting mode was hiding. */}
+            <AskAnchorPanel dealId={deal.id} />
+          </>
         ) : (
           <>
             <DealHeaderCard deal={deal} />
