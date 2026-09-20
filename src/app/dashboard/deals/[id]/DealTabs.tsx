@@ -104,25 +104,32 @@ function TabBar({
   );
 }
 
-// The big, hard-to-miss way to start a meeting — two large cards ("I'm
-// in the room" vs. "I'm on a Zoom/Teams/Meet call") instead of three
-// same-sized form fields buried in a grid. Both paths already recorded
-// and transcribed automatically before this component existed (the mic
-// path via processMeeting() on upload, the live-call path via the
-// Recall.ai bot's live-transcript webhook) — what was missing was
-// making that obvious and reachable from wherever you actually are,
-// which is why this renders on both the Before and During tabs (see
-// BeforePanel and DuringPanel) rather than only Before.
+// The big, hard-to-miss way to start a meeting. Both paths already
+// recorded and transcribed automatically before this component existed
+// (the mic path via processMeeting() on upload, the live-call path via
+// the Recall.ai bot's live-transcript webhook) — what was missing was
+// making that obvious.
+//
+// Only the "in the room" card renders on During (showLiveCallOption
+// false there, see DuringPanel) — pasting a Zoom/Teams/Meet link is
+// what GETS you into a meeting, and the moment that succeeds you're
+// bounced onto During automatically (onJoinedNow), so a "join a call"
+// button sitting on During would only ever be reached after you're
+// already on the call. Before is the only tab where it's ever actually
+// useful. The upload-a-past-recording option follows the same tab
+// split for the same reason — it's a Before-tab, not-yet-started action.
 function MeetingLauncher({
   dealId,
   mic,
   onJoinedNow,
+  showLiveCallOption = true,
 }: {
   dealId: string;
   mic: MicRecorderState;
   // Only meaningful on Before, where starting a live call should jump
   // you straight to During. DuringPanel omits it — you're already there.
   onJoinedNow?: () => void;
+  showLiveCallOption?: boolean;
 }) {
   const router = useRouter();
   const [joining, setJoining] = useState(false);
@@ -204,12 +211,11 @@ function MeetingLauncher({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Stacks until lg rather than sm: on the During tab this renders
-          inside a narrower ~58%-width column (alongside the news aside —
-          see DuringPanel), so switching to 2-up too early squeezed both
-          cards' text onto itself. Below lg both cards get the full column
-          width instead, which reads far better than a cramped 2-up. */}
-      <div className="grid items-stretch gap-5 lg:grid-cols-2">
+      {/* Stacks until lg rather than sm: on the (rare, showLiveCallOption)
+          case where this renders inside a narrower column, switching to
+          2-up too early squeezed both cards' text onto itself. Below lg
+          both cards get the full column width instead. */}
+      <div className={showLiveCallOption ? "grid items-stretch gap-5 lg:grid-cols-2" : "flex flex-col"}>
         <div className="flex flex-col justify-between gap-6 rounded-2xl border-2 border-accent/30 bg-accent/5 p-7">
           <div className="flex flex-col gap-2.5">
             <p className="text-lg font-semibold leading-snug text-slate-900">
@@ -243,72 +249,76 @@ function MeetingLauncher({
           {mic.error && <p className="text-xs text-red-600">{mic.error}</p>}
         </div>
 
-        <div className="flex flex-col justify-between gap-6 rounded-2xl border-2 border-brand/30 bg-brand/5 p-7">
-          <div className="flex flex-col gap-2.5">
-            <p className="text-lg font-semibold leading-snug text-slate-900">
-              On a Zoom, Teams, or Meet call?
-            </p>
-            <p className="text-sm leading-relaxed text-slate-600">
-              Paste the link — Anchor joins on its own and transcribes live as people talk.
-            </p>
-          </div>
-          <form onSubmit={handleJoin} className="flex flex-col gap-3">
-            <input
-              type="text"
-              name="meetingUrl"
-              placeholder="https://zoom.us/j/..."
-              required
-              className="rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-brand"
-            />
-            {showMore && (
-              <>
-                <input
-                  type="text"
-                  name="title"
-                  placeholder="Title (optional)"
-                  className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand"
-                />
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs leading-relaxed text-slate-500">
-                    Join at (optional — leave blank to join right now)
-                  </span>
+        {showLiveCallOption && (
+          <div className="flex flex-col justify-between gap-6 rounded-2xl border-2 border-brand/30 bg-brand/5 p-7">
+            <div className="flex flex-col gap-2.5">
+              <p className="text-lg font-semibold leading-snug text-slate-900">
+                On a Zoom, Teams, or Meet call?
+              </p>
+              <p className="text-sm leading-relaxed text-slate-600">
+                Paste the link — Anchor joins on its own and transcribes live as people talk.
+              </p>
+            </div>
+            <form onSubmit={handleJoin} className="flex flex-col gap-3">
+              <input
+                type="text"
+                name="meetingUrl"
+                placeholder="https://zoom.us/j/..."
+                required
+                className="rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-brand"
+              />
+              {showMore && (
+                <>
                   <input
-                    type="datetime-local"
-                    name="scheduledAt"
+                    type="text"
+                    name="title"
+                    placeholder="Title (optional)"
                     className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand"
                   />
-                </label>
-              </>
-            )}
-            <button
-              type="submit"
-              disabled={joining}
-              className="rounded-xl bg-brand px-5 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-50"
-            >
-              {joining ? "Joining…" : "Join meeting now"}
-            </button>
-            {!showMore && (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs leading-relaxed text-slate-500">
+                      Join at (optional — leave blank to join right now)
+                    </span>
+                    <input
+                      type="datetime-local"
+                      name="scheduledAt"
+                      className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand"
+                    />
+                  </label>
+                </>
+              )}
               <button
-                type="button"
-                onClick={() => setShowMore(true)}
-                className="self-start text-xs text-slate-500 underline hover:text-slate-700"
+                type="submit"
+                disabled={joining}
+                className="rounded-xl bg-brand px-5 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-50"
               >
-                Add a title or schedule for later
+                {joining ? "Joining…" : "Join meeting now"}
               </button>
-            )}
-          </form>
-          {joinError && <p className="text-xs text-red-600">{joinError}</p>}
-        </div>
+              {!showMore && (
+                <button
+                  type="button"
+                  onClick={() => setShowMore(true)}
+                  className="self-start text-xs text-slate-500 underline hover:text-slate-700"
+                >
+                  Add a title or schedule for later
+                </button>
+              )}
+            </form>
+            {joinError && <p className="text-xs text-red-600">{joinError}</p>}
+          </div>
+        )}
       </div>
 
-      <button
-        type="button"
-        onClick={() => setShowUpload((v) => !v)}
-        className="self-start text-xs text-slate-400 underline hover:text-slate-600"
-      >
-        Already have a recording? Upload it instead
-      </button>
-      {showUpload && (
+      {showLiveCallOption && (
+        <button
+          type="button"
+          onClick={() => setShowUpload((v) => !v)}
+          className="self-start text-xs text-slate-400 underline hover:text-slate-600"
+        >
+          Already have a recording? Upload it instead
+        </button>
+      )}
+      {showLiveCallOption && showUpload && (
         <form
           onSubmit={handleUpload}
           className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4"
@@ -1634,11 +1644,13 @@ function DuringPanel({
         )}
         {inProgress.length === 0 ? (
           // Nothing live yet — this is the "start a meeting" moment, so it
-          // gets the same big, hard-to-miss launcher as the Before tab
-          // (see MeetingLauncher) rather than a line of text plus a small
-          // recorder button. onJoinedNow is omitted here on purpose: you're
-          // already on During, there's nowhere to jump to.
-          <MeetingLauncher dealId={dealId} mic={mic} />
+          // gets the same big, hard-to-miss "I'm in the room" card as the
+          // Before tab (see MeetingLauncher) rather than a line of text
+          // plus a small recorder button. showLiveCallOption is false
+          // here on purpose — pasting a Zoom/Teams/Meet link is what GETS
+          // you into a meeting, and joining one bounces you onto During
+          // automatically, so that button only ever makes sense on Before.
+          <MeetingLauncher dealId={dealId} mic={mic} showLiveCallOption={false} />
         ) : (
           <div className="flex flex-col gap-3">
             {inProgress.map((m) =>
