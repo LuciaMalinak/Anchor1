@@ -2109,33 +2109,29 @@ export function DealTabs({
         ) : (
           <>
             <DealHeaderCard deal={deal} />
-            {/* Who can see this deal + Ask Anchor share a row (flex-wrap,
-                not a fixed grid — same reasoning as the cards above and
-                PeopleAndTeam below: this column is narrower than the
-                viewport, next to the news/research aside), putting Ask
-                Anchor right between this and People involved/Your team
-                below, and making it available on every tab instead of
-                only during a live meeting. */}
-            <div className="flex flex-wrap gap-4">
-              <div className="min-w-[280px] flex-1">
-                <SharingControl
-                  dealId={deal.id}
-                  team={team}
-                  currentUserId={currentUserId}
-                  initialRestricted={deal.restricted}
-                  initialSharedWithUserIds={sharedWithUserIds}
-                />
-              </div>
-              <div className="min-w-[280px] flex-1">
-                <AskAnchorPanel dealId={deal.id} />
-              </div>
-            </div>
+            {/* Ask Anchor gets the full column width now (rather than
+                sharing a row) so its answers and question box have real
+                room to breathe — it's also available on every tab now
+                instead of only during a live meeting. "Who can see this
+                deal" moves to the bottom of this section: it's a settings
+                control someone sets once and rarely touches, not
+                something that needs top billing next to People
+                involved/Your team, which are what you actually look at
+                on a normal visit. */}
+            <AskAnchorPanel dealId={deal.id} />
             <PeopleAndTeam
               dealId={deal.id}
               people={people}
               team={team}
               leadUserId={deal.leadUserId}
               backupUserId={deal.backupUserId}
+            />
+            <SharingControl
+              dealId={deal.id}
+              team={team}
+              currentUserId={currentUserId}
+              initialRestricted={deal.restricted}
+              initialSharedWithUserIds={sharedWithUserIds}
             />
             {isLiveNow && tab === "during" && (
               <button
