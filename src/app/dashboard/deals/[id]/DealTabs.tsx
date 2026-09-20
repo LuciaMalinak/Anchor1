@@ -116,12 +116,18 @@ function NewMeetingForms({
   dealId,
   mic,
   onJoinedNow,
+  recordFirst = false,
 }: {
   dealId: string;
   mic: MicRecorderState;
   // Only meaningful on Before — During is already the tab a live
   // meeting lands you on, so there's nowhere for it to jump to.
   onJoinedNow?: () => void;
+  // Before and During share this component but want the Record-in-
+  // person/Upload-a-recording pair in different orders: Before keeps
+  // its original Upload-then-Record order, During shows Record first.
+  // Default false matches Before's original order.
+  recordFirst?: boolean;
 }) {
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
@@ -249,11 +255,14 @@ function NewMeetingForms({
       </form>
 
       <div className="flex flex-wrap gap-4">
-        <div className="min-w-[260px] flex-1">
-          <MicRecorderView {...mic} />
-        </div>
+        {recordFirst && (
+          <div key="record" className="min-w-[260px] flex-1">
+            <MicRecorderView {...mic} />
+          </div>
+        )}
 
         <form
+          key="upload"
           onSubmit={handleUpload}
           className="min-w-[260px] flex-1 rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm"
         >
@@ -282,6 +291,12 @@ function NewMeetingForms({
           </div>
           {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
         </form>
+
+        {!recordFirst && (
+          <div key="record" className="min-w-[260px] flex-1">
+            <MicRecorderView {...mic} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1590,8 +1605,10 @@ function DuringPanel({
           // Nothing live yet — offer the same three ways to start a
           // meeting as Before, join-a-live-call included. Previously this
           // only offered the mic recorder, with no way to paste a live
-          // call link once you'd already moved off Before.
-          <NewMeetingForms dealId={dealId} mic={mic} />
+          // call link once you'd already moved off Before. recordFirst
+          // is On here only — During shows Record in person before
+          // Upload a recording, while Before keeps its original order.
+          <NewMeetingForms dealId={dealId} mic={mic} recordFirst />
         ) : (
           <div className="flex flex-col gap-3">
             {inProgress.map((m) =>
