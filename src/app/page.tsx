@@ -178,7 +178,7 @@ export default async function Home() {
         <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-7 text-center">
           <span className="enter-fade enter-1 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] font-semibold tracking-[0.18em] text-slate-200">
             <span className="live-dot h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
-            MEETING INTELLIGENCE FOR SALES TEAMS
+            MEETING INTELLIGENCE FOR EVERY TEAM
           </span>
           <div className="enter-fade enter-2 relative">
             <div
