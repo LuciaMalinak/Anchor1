@@ -345,6 +345,10 @@ export async function mergeDealMemory(params: {
     actionItems: { text: string; owner: string | null }[];
   };
   manualNotes?: string | null;
+  // A short digest of files/voice notes attached to this deal (see
+  // src/lib/dealFilesContext.ts) — background material, weighed the same
+  // as manualNotes below.
+  attachedFiles?: string | null;
   resynthesize?: boolean;
   recentMeetings?: {
     overview: string;
@@ -358,6 +362,9 @@ export async function mergeDealMemory(params: {
     .join("; ");
   const manualNotesBlock = params.manualNotes?.trim()
     ? `\n\nManual notes someone on the team has written down about this deal directly (weigh these as ground truth — a human wrote these, not an inference):\n${params.manualNotes.trim()}`
+    : "";
+  const attachedFilesBlock = params.attachedFiles
+    ? `\n\nFiles/voice notes attached to this deal:\n${params.attachedFiles}`
     : "";
 
   const promptBody = params.resynthesize && params.recentMeetings?.length
@@ -374,13 +381,13 @@ export async function mergeDealMemory(params: {
         .join("\n")}\n\n` +
       `Today's meeting:\nOverview: ${params.newSummary.overview}\nKey points: ${params.newSummary.keyPoints.join(
         "; "
-      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}\n\n` +
+      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}${attachedFilesBlock}\n\n` +
       `Produce a fresh, accurate memory grounded in this real history, and note what changed vs. the current (possibly drifted) memory.`
     : `Deal: ${params.dealName}\n\nExisting deal memory:\n${
         params.priorMemory || "No prior notes — this is the first meeting."
       }\n\nWhat happened in today's meeting on this deal:\nOverview: ${params.newSummary.overview}\nKey points: ${params.newSummary.keyPoints.join(
         "; "
-      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}\n\nProduce an updated rolling memory for this deal, and note what changed vs. the prior memory.`;
+      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}${attachedFilesBlock}\n\nProduce an updated rolling memory for this deal, and note what changed vs. the prior memory.`;
 
   const message = await client().messages.create({
     model: MODEL,

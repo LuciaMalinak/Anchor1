@@ -10,12 +10,14 @@ import {
   meetingParticipants,
   deals,
   tasks,
+  dealFiles,
 } from "@/db/schema";
 import { transcribeAudioFile } from "./transcribe";
 import { summarizeMeeting, mergeContactMemory, mergeDealMemory } from "./summarize";
 import { readStoredFile } from "./storage";
 import { getOrCreateTeamId } from "./team";
 import { withRetry } from "./retry";
+import { summarizeDealFiles } from "./dealFilesContext";
 
 // Every Nth memory update re-derives the summary from actual raw history
 // instead of just trusting the current (possibly drifted) summary text —
@@ -292,6 +294,14 @@ export async function processMeeting(meetingId: string): Promise<void> {
               .limit(RESYNTHESIS_HISTORY_LIMIT);
           }
 
+          // Files/voice notes attached from the Before tab's "Give Anchor
+          // more context" box (see DealContextBox.tsx) — a bounded digest,
+          // not the full text (see dealFilesContext.ts for why).
+          const dealFileRows = await db
+            .select()
+            .from(dealFiles)
+            .where(eq(dealFiles.dealId, deal.id));
+
           const { updatedMemory, keyChanges } = await withRetry(
             () =>
               mergeDealMemory({
@@ -305,6 +315,7 @@ export async function processMeeting(meetingId: string): Promise<void> {
                 manualNotes: deal.notes,
                 resynthesize: shouldResynthesize,
                 recentMeetings,
+                attachedFiles: summarizeDealFiles(dealFileRows),
               }),
             { label: `deal memory ${deal.id}` }
           );

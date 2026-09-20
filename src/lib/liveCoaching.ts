@@ -94,6 +94,11 @@ export async function generateLiveCoaching(params: {
   // there's no connection or nothing matched — never invented.
   emailContext?: string | null;
   calendarContext?: string | null;
+  // A short digest of files/voice notes attached to this deal (see
+  // src/lib/dealFilesContext.ts) — background material the rep uploaded
+  // ahead of time (a contract, a prior proposal, a voice memo), not
+  // something said in this call.
+  attachedFiles?: string | null;
 }): Promise<LiveCoaching> {
   const priorChecklistText = params.priorChecklist?.length
     ? `\n\nChecklist from the last update (keep these labels, just update covered status, unless the conversation clearly calls for a different item):\n${params.priorChecklist
@@ -122,6 +127,9 @@ export async function generateLiveCoaching(params: {
   const calendarContextText = params.calendarContext
     ? `\n\nRecent and upcoming calendar meetings with people on this deal: ${params.calendarContext}`
     : "";
+  const attachedFilesText = params.attachedFiles
+    ? `\n\nFiles/voice notes attached to this deal ahead of the call:\n${params.attachedFiles}`
+    : "";
 
   const message = await client().messages.create({
     model: MODEL,
@@ -137,7 +145,7 @@ export async function generateLiveCoaching(params: {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${pastMeetingsText}${emailContextText}${calendarContextText}
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}
 ${priorChecklistText}
 
 Transcript so far (most recent portion of an in-progress call):

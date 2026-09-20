@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, meetingLiveSegments, deals, summaries } from "@/db/schema";
+import { meetings, meetingLiveSegments, deals, summaries, dealFiles } from "@/db/schema";
 import { and, desc, eq, ne, asc } from "drizzle-orm";
 import { generateLiveCoaching } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
+import { summarizeDealFiles } from "@/lib/dealFilesContext";
 
 // How often live coaching (nudges + checklist) is allowed to regenerate.
 // The During tab polls this route every couple of seconds (see
@@ -90,7 +91,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       // few seconds during a live call, so it reads whatever style
       // profile already exists (possibly a day stale) rather than ever
       // waiting on a rebuild.
-      const [leadStyle, pastMeetingRows] = await Promise.all([
+      const [leadStyle, pastMeetingRows, fileRows] = await Promise.all([
         getDealLeadStyle(deal?.leadUserId ?? null, { allowSynchronousRebuild: false }),
         deal
           ? db
@@ -107,6 +108,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
               .orderBy(desc(meetings.occurredAt))
               .limit(PAST_MEETINGS_LIMIT)
           : Promise.resolve([]),
+        // Files/voice notes attached from the Before tab's "Give Anchor
+        // more context" box (see DealContextBox.tsx) — a bounded digest,
+        // not the full text (see dealFilesContext.ts for why).
+        deal
+          ? db.select().from(dealFiles).where(eq(dealFiles.dealId, deal.id))
+          : Promise.resolve([]),
       ]);
       const coaching = await generateLiveCoaching({
         dealName: deal?.name || null,
@@ -122,6 +129,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         // had this; live coaching was blind to Gmail/Calendar until now.
         emailContext: deal?.emailContext || null,
         calendarContext: deal?.calendarContext || null,
+        attachedFiles: summarizeDealFiles(fileRows),
         pastMeetings: pastMeetingRows.map((r) => ({
           title: r.meeting.title,
           occurredAt: r.meeting.occurredAt.toLocaleDateString(),

@@ -10,6 +10,7 @@ import { getCompanyLogoUrl } from "@/lib/companyLogo";
 import { HEALTH_LABEL, HEALTH_BADGE_CLASSES, HEALTH_DOT_CLASSES, type DealHealth } from "@/lib/dealHealth";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { AskAnchorPanel } from "@/components/AskAnchorPanel";
+import { DealContextBox } from "@/components/DealContextBox";
 
 type MeetingStatus =
   | "joining"
@@ -311,6 +312,11 @@ function BeforePanel({
   backup,
   mic,
   upcoming,
+  notes,
+  team,
+  currentUserId,
+  initialRestricted,
+  initialSharedWithUserIds,
   onJoinedNow,
 }: {
   dealId: string;
@@ -321,6 +327,11 @@ function BeforePanel({
   backup: TeamMember | null;
   mic: MicRecorderState;
   upcoming: DealMeeting[];
+  notes: string | null;
+  team: TeamMember[];
+  currentUserId: string;
+  initialRestricted: boolean;
+  initialSharedWithUserIds: string[];
   onJoinedNow: () => void;
 }) {
   const goingIn = memory || latestReady?.summary?.continuityNote || null;
@@ -359,6 +370,18 @@ function BeforePanel({
       ))}
       <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} backup={backup} />
       <NewMeetingForms dealId={dealId} mic={mic} onJoinedNow={onJoinedNow} />
+      <DealContextBox dealId={dealId} initialNotes={notes} />
+      {/* "Who can see this deal" is a settings control someone sets once
+          and rarely touches — it used to sit near the top of every tab;
+          now it's the very last thing on Before specifically, out of the
+          way of everything actually used day to day. */}
+      <SharingControl
+        dealId={dealId}
+        team={team}
+        currentUserId={currentUserId}
+        initialRestricted={initialRestricted}
+        initialSharedWithUserIds={initialSharedWithUserIds}
+      />
     </div>
   );
 }
@@ -706,7 +729,6 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
   const [contactRole, setContactRole] = useState(deal.primaryContactRole || "");
   const [contactEmail, setContactEmail] = useState(deal.primaryContactEmail || "");
   const [website, setWebsite] = useState(deal.companyWebsite || "");
-  const [notes, setNotes] = useState(deal.notes || "");
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -722,7 +744,6 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
           primaryContactRole: contactRole,
           primaryContactEmail: contactEmail,
           companyWebsite: website,
-          notes,
         }),
       });
       if (!res.ok) {
@@ -798,16 +819,6 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
           />
         </div>
-        <div className="flex w-full flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">Your notes</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Anything you want Anchor to remember that didn't come from a meeting — background, context, a heads up for your team…"
-            rows={3}
-            className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-        </div>
         <div className="flex gap-2">
           <button
             type="submit"
@@ -879,13 +890,6 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
           Edit
         </button>
       </div>
-
-      {deal.notes && (
-        <div className="rounded-lg border border-slate-200 bg-white px-5 py-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">YOUR NOTES</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{deal.notes}</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -2135,11 +2139,9 @@ export function DealTabs({
                 sharing a row) so its answers and question box have real
                 room to breathe — it's also available on every tab now
                 instead of only during a live meeting. "Who can see this
-                deal" moves to the bottom of this section: it's a settings
-                control someone sets once and rarely touches, not
-                something that needs top billing next to People
-                involved/Your team, which are what you actually look at
-                on a normal visit. */}
+                deal" moved out of here entirely — it's now the very last
+                thing on the Before tab (see BeforePanel below), not
+                something every tab shows near the top. */}
             <AskAnchorPanel dealId={deal.id} />
             <PeopleAndTeam
               dealId={deal.id}
@@ -2147,13 +2149,6 @@ export function DealTabs({
               team={team}
               leadUserId={deal.leadUserId}
               backupUserId={deal.backupUserId}
-            />
-            <SharingControl
-              dealId={deal.id}
-              team={team}
-              currentUserId={currentUserId}
-              initialRestricted={deal.restricted}
-              initialSharedWithUserIds={sharedWithUserIds}
             />
             {isLiveNow && tab === "during" && (
               <button
@@ -2181,6 +2176,11 @@ export function DealTabs({
             backup={backup}
             mic={mic}
             upcoming={upcoming}
+            notes={deal.notes}
+            team={team}
+            currentUserId={currentUserId}
+            initialRestricted={deal.restricted}
+            initialSharedWithUserIds={sharedWithUserIds}
             onJoinedNow={() => {
               router.refresh();
               setTab("during");

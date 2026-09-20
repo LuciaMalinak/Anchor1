@@ -81,6 +81,9 @@ export async function generateHandoffBriefing(params: {
   // connection or nothing matched.
   emailContext?: string | null;
   calendarContext?: string | null;
+  // A short digest of files/voice notes attached to this deal (see
+  // src/lib/dealFilesContext.ts).
+  attachedFiles?: string | null;
 }): Promise<HandoffBriefingResult> {
   const meetingsBlock =
     params.recentMeetings.length > 0
@@ -112,6 +115,9 @@ export async function generateHandoffBriefing(params: {
   const calendarBlock = params.calendarContext
     ? `\n\nRecent and upcoming calendar meetings with people on this deal:\n${params.calendarContext}`
     : "";
+  const attachedFilesBlock = params.attachedFiles
+    ? `\n\nFiles/voice notes attached to this deal:\n${params.attachedFiles}`
+    : "";
 
   const message = await client().messages.create({
     model: MODEL,
@@ -135,7 +141,7 @@ People on the other side:
 ${peopleBlock}
 
 Recent meetings:
-${meetingsBlock}${emailBlock}${calendarBlock}${leadStyleBlock}
+${meetingsBlock}${emailBlock}${calendarBlock}${attachedFilesBlock}${leadStyleBlock}
 
 Produce a handoff briefing for someone else running the next meeting on this deal.`,
       },
