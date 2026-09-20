@@ -194,8 +194,8 @@ export default async function Home() {
             Your knowledge in the room. Without you in the room.
           </p>
           <p className="enter-fade enter-5 max-w-lg text-base leading-relaxed text-slate-400">
-            Meeting intelligence for teams that sell — Anchor joins the call, remembers what
-            matters, and keeps every deal covered.
+            Meeting intelligence for teams — Anchor joins the call, remembers what matters, and
+            keeps every deal covered.
           </p>
           <div className="enter-fade enter-6 mt-4 flex flex-wrap items-center justify-center gap-4">
             <Link
