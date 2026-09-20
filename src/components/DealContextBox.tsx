@@ -13,21 +13,22 @@ type Mode = "type" | "record" | "upload";
 // meeting prep (see dealFilesContext.ts and its callers — live
 // coaching, handoff briefings, and the rolling deal-memory merge, plus
 // Ask Anchor which already read deals.notes and dealFiles directly):
-//   - Type: PATCHes deals.notes directly.
+//   - Type: appends a dated entry via /api/deals/[id]/context/note.
 //   - Record: transcribes via /api/deals/[id]/context/voice-note and
-//     appends the transcript to deals.notes (audio itself is discarded
-//     — this is meant to feel like talking instead of typing, not
-//     another recording archive).
+//     appends the transcript the same way (audio itself is discarded —
+//     this is meant to feel like talking instead of typing, not another
+//     recording archive).
 //   - Upload: reuses the existing /api/deals/[id]/files pipeline
 //     (already extracted and read by Ask Anchor, and now also folded
 //     into the same bounded digest the other AI touchpoints read).
-export function DealContextBox({
-  dealId,
-  initialNotes,
-}: {
-  dealId: string;
-  initialNotes: string | null;
-}) {
+//
+// Type and Record are both deliberately append-only, not edit-in-place —
+// each save clears the box rather than reloading what's already stored.
+// There's nothing to directly edit or delete here: the only way to
+// change what Anchor knows is to add something new — another note here,
+// something said in a call (which updates the deal's rolling memory —
+// see summarize.ts), or a corrected file upload.
+export function DealContextBox({ dealId }: { dealId: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("type");
 
@@ -61,9 +62,7 @@ export function DealContextBox({
       </div>
 
       <div className="mt-4">
-        {mode === "type" && (
-          <TypeMode dealId={dealId} initialNotes={initialNotes} onSaved={() => router.refresh()} />
-        )}
+        {mode === "type" && <TypeMode dealId={dealId} onSaved={() => router.refresh()} />}
         {mode === "record" && (
           <RecordMode dealId={dealId} onTranscribed={() => router.refresh()} />
         )}
@@ -75,37 +74,34 @@ export function DealContextBox({
   );
 }
 
-function TypeMode({
-  dealId,
-  initialNotes,
-  onSaved,
-}: {
-  dealId: string;
-  initialNotes: string | null;
-  onSaved: () => void;
-}) {
-  const [notes, setNotes] = useState(initialNotes ?? "");
+function TypeMode({ dealId, onSaved }: { dealId: string; onSaved: () => void }) {
+  const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastAdded, setLastAdded] = useState<string | null>(null);
 
   async function handleSave() {
+    const trimmed = text.trim();
+    if (!trimmed || saving) return;
     setSaving(true);
     setError(null);
-    setSaved(false);
+    setLastAdded(null);
     try {
-      const res = await fetch(`/api/deals/${dealId}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/deals/${dealId}/context/note`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes }),
+        body: JSON.stringify({ text: trimmed }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Couldn't save that.");
       }
-      setSaved(true);
+      // Clear rather than keep the saved text on screen — this is a log
+      // entry, not a document being edited, so the box resets and is
+      // ready for the next thing worth telling Anchor.
+      setText("");
+      setLastAdded(trimmed);
       onSaved();
-      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save that.");
     } finally {
@@ -113,13 +109,11 @@ function TypeMode({
     }
   }
 
-  const dirty = notes !== (initialNotes ?? "");
-
   return (
     <div>
       <textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
         rows={5}
         placeholder="e.g. They're price-sensitive right now — budget was just cut. Don't lead with the premium tier."
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-accent focus:outline-none"
@@ -128,14 +122,19 @@ function TypeMode({
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving || !dirty}
+          disabled={saving || !text.trim()}
           className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save"}
         </button>
-        {saved && <span className="text-xs text-emerald-600">Saved</span>}
         {error && <span className="text-xs text-red-600">{error}</span>}
       </div>
+      {lastAdded && (
+        <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          Added: &ldquo;{lastAdded.length > 160 ? `${lastAdded.slice(0, 160)}…` : lastAdded}&rdquo; — Anchor will
+          keep this in mind going forward. To correct it, add a new note rather than edit this one.
+        </p>
+      )}
     </div>
   );
 }

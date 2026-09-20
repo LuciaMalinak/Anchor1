@@ -312,7 +312,6 @@ function BeforePanel({
   backup,
   mic,
   upcoming,
-  notes,
   team,
   currentUserId,
   initialRestricted,
@@ -327,7 +326,6 @@ function BeforePanel({
   backup: TeamMember | null;
   mic: MicRecorderState;
   upcoming: DealMeeting[];
-  notes: string | null;
   team: TeamMember[];
   currentUserId: string;
   initialRestricted: boolean;
@@ -370,7 +368,7 @@ function BeforePanel({
       ))}
       <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} backup={backup} />
       <NewMeetingForms dealId={dealId} mic={mic} onJoinedNow={onJoinedNow} />
-      <DealContextBox dealId={dealId} initialNotes={notes} />
+      <DealContextBox dealId={dealId} />
       {/* "Who can see this deal" is a settings control someone sets once
           and rarely touches — it used to sit near the top of every tab;
           now it's the very last thing on Before specifically, out of the
@@ -2176,7 +2174,6 @@ export function DealTabs({
             backup={backup}
             mic={mic}
             upcoming={upcoming}
-            notes={deal.notes}
             team={team}
             currentUserId={currentUserId}
             initialRestricted={deal.restricted}

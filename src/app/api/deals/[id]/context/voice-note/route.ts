@@ -5,6 +5,7 @@ import { deals } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { transcribeAudioFile } from "@/lib/transcribe";
+import { appendDealNoteEntry } from "@/lib/dealNotes";
 
 // Voice notes recorded from the "Give Anchor more context" box (Before
 // tab) — transcribed and folded straight into deals.notes, the same
@@ -60,13 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  const dateLabel = new Date().toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const entry = `[Voice note — ${dateLabel}]\n${transcript}`;
-  const updatedNotes = deal.notes ? `${deal.notes}\n\n${entry}` : entry;
+  const updatedNotes = appendDealNoteEntry(deal.notes, "Voice note", transcript);
 
   await db
     .update(deals)
