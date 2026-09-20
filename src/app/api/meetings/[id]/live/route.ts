@@ -71,9 +71,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const transcriptText = segments
     .map((s) => (s.speakerName ? `${s.speakerName}: ${s.text}` : s.text))
     .join("\n");
+  // No longer gated on the transcript having anything in it yet — nudges
+  // used to stay blank ("Nudges show up here once the conversation gets
+  // going") until the first words were transcribed, which could be a
+  // real gap right at the start of a call when there's nothing urgent to
+  // react to live but plenty already known about the deal (prep notes,
+  // decision boundaries, what happened last meeting). Coaching now keeps
+  // regenerating on the same debounced cadence the whole time the
+  // meeting is live, transcript or not — see generateLiveCoaching's
+  // instruction to always ground nudges in known facts when the live
+  // conversation hasn't given it anything new yet, rather than going
+  // quiet.
   const dueForRefresh =
     isLive &&
-    transcriptText.length > 0 &&
     (!meeting.liveSuggestionsUpdatedAt ||
       Date.now() - meeting.liveSuggestionsUpdatedAt.getTime() > COACHING_REFRESH_MS);
 

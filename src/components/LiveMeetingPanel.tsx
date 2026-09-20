@@ -87,11 +87,12 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
             <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
               SUGGESTIONS
             </p>
-            {!suggestions || suggestions.nudges.length === 0 ? (
+            {!suggestions ? (
+              <p className="text-sm text-slate-500">Preparing suggestions…</p>
+            ) : suggestions.nudges.length === 0 ? (
               <p className="text-sm text-slate-500">
-                {segments.length === 0
-                  ? "Nudges show up here once the conversation gets going."
-                  : "Nothing urgent right now."}
+                Nothing to go on yet for this deal — no prep notes, history, or conversation so
+                far. This fills in the moment any of those show up.
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
