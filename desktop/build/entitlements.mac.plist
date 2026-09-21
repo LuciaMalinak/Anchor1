@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the packaged macOS build (see package.json's
+  "build.mac.entitlements") — required once this is built with Apple's
+  "hardened runtime" (mandatory for notarization). Electron itself needs
+  the allow-jit/unsigned-executable-memory/dyld-environment-variables
+  entries to run at all under a hardened runtime; audio-input is what
+  lets Recall's Desktop SDK actually capture microphone audio once macOS
+  grants the permission. Screen Recording and Accessibility (the SDK's
+  other two permissions — see desktop/src/main.ts) aren't hardened-runtime
+  entitlements at all, just plain TCC permissions the person grants in
+  System Settings the first time the app asks — nothing to declare here
+  for those.
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+  </dict>
+</plist>
