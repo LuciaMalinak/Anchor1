@@ -95,6 +95,30 @@ export async function createBot(
   return res.json();
 }
 
+// Ends a live "Send Anchor to a live meeting" bot early, instead of
+// waiting for everyone else to leave the call (or the bot to eventually
+// time out on its own). Per docs.recall.ai's "Remove Bot From Call"
+// reference (checked Sept 2026): POST /bot/{id}/leave_call/, no body,
+// irreversible. This does NOT end the call for anyone else on it — it
+// only tells Anchor's bot to leave; the person on the call keeps going
+// same as if Anchor had never joined. Anything already recorded up to
+// this point still finishes processing normally — Recall.ai fires the
+// same recording.done webhook it always does once a bot leaves a call
+// (see src/app/api/webhooks/recall/route.ts), whether that's because
+// this was called or because the call itself just ended.
+export async function leaveCall(botId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/bot/${botId}/leave_call/`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `Recall.ai couldn't end that call (${res.status}): ${detail || "no details"}`
+    );
+  }
+}
+
 type RecallBot = {
   id: string;
   media_shortcuts?: {

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
 import { AskAnchorPanel } from "@/components/AskAnchorPanel";
+import { StopMeetingButton } from "@/components/StopMeetingButton";
 import { FOCUS_WIDGETS, type FocusWidgetKey } from "@/lib/focusWidgets";
 
 // How long the "meeting ended" notice sits on screen before this window
@@ -112,20 +113,28 @@ export function FocusWindow({
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-900">{meetingTitle}</p>
           <p className="text-xs text-slate-400">
             {stillLive ? "Focus mode — live" : "This meeting has ended"}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCustomize}
-          className="shrink-0 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700"
-        >
-          Customize
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Ends Anchor's bot early instead of waiting for the call to
+              end on its own — see StopMeetingButton's comment for why
+              this doesn't hang up the call for anyone else. Only while
+              still live; once it's ended the auto-close notice below
+              takes over. */}
+          {stillLive && status && <StopMeetingButton meetingId={meetingId} variant="solid" />}
+          <button
+            type="button"
+            onClick={openCustomize}
+            className="shrink-0 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700"
+          >
+            Customize
+          </button>
+        </div>
       </header>
 
       {customizing && (

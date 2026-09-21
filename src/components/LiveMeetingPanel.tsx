@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
 import { requestFocusWindow } from "@/lib/focusWindowBus";
+import { StopMeetingButton } from "@/components/StopMeetingButton";
 
 // Live transcript + AI coaching for a meeting Anchor is actively sitting
 // in on (bot status "joining"/"recording"). The actual polling now lives
@@ -19,12 +20,12 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center justify-between rounded-t-lg bg-brand px-5 py-3 text-white">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-lg bg-brand px-5 py-3 text-white">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
           <span className="text-sm font-semibold">{title}</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Pops the same live data into its own small window — a real
               always-on-top window (Picture-in-Picture) where the browser
               supports it, an ordinary popup otherwise. See
@@ -41,6 +42,10 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
           >
             Focus window ⛶
           </button>
+          {/* Ends Anchor's bot early instead of waiting for the call to
+              end on its own — see StopMeetingButton's comment for why
+              this doesn't hang up the call for anyone else. */}
+          <StopMeetingButton meetingId={meetingId} variant="light" />
           <span className="text-xs text-slate-200">{status === "joining" ? "Joining…" : "Live"}</span>
         </div>
       </div>
