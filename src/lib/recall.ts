@@ -227,3 +227,97 @@ export async function downloadBotAudio(botId: string): Promise<Buffer> {
   }
   return Buffer.from(await audioRes.arrayBuffer());
 }
+
+// --- Desktop Recording SDK (no-bot / "Granola-style" recording) -----------
+//
+// Unlike the bot flow above (well-documented, verified against live
+// webhook payloads earlier in this project), the exact response shape of
+// sdk_upload creation and the exact webhook event Recall fires when an
+// SDK upload finishes are NOT fully confirmed against Recall's reference
+// docs as of writing this — their interactive docs pages wouldn't render
+// full example payloads. What's below is grounded in Recall's own
+// engineering blog (recall.ai/blog/how-to-build-a-desktop-recording-app,
+// checked Sept 2026), which is a first-party source but less
+// authoritative than the API reference. Treat field names here as "best
+// available, not yet battle-tested" — src/app/api/webhooks/recall/route.ts
+// logs the full raw payload of anything it doesn't recognize specifically
+// so the real shape can be read off Render's logs the first time a real
+// desktop recording completes, and this code adjusted if needed.
+
+type SdkUploadCreateResponse = {
+  upload_token?: string;
+  recording_id?: string;
+  id?: string;
+};
+
+// Creates an "upload slot" for one Desktop SDK recording — the desktop
+// app's local RecallAiSdk.startRecording() call needs the upload_token
+// this returns to know where to stream the recording to. recording_id
+// (if present in the response — see the uncertainty note above) is what
+// we store on the meeting row (recallRecordingId) to later match this
+// recording up with its completion webhook.
+export async function createSdkUpload(): Promise<{ uploadToken: string; recordingId: string }> {
+  const res = await fetch(`${BASE_URL}/sdk_upload/`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      recording_config: { audio_mixed: {} },
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Recall.ai couldn't create a desktop recording upload (${res.status}): ${detail || "no details"}`);
+  }
+  const body = (await res.json()) as SdkUploadCreateResponse;
+  const uploadToken = body.upload_token;
+  // Fall back to `id` in case this particular account/API version calls
+  // the created resource's own id "id" rather than "recording_id" — see
+  // the uncertainty note above.
+  const recordingId = body.recording_id || body.id;
+  if (!uploadToken || !recordingId) {
+    throw new Error(
+      "Recall.ai's sdk_upload response didn't include the fields Anchor expected (upload_token/recording_id) — check Render logs for the raw response."
+    );
+  }
+  return { uploadToken, recordingId };
+}
+
+type RecallRecording = {
+  id: string;
+  media_shortcuts?: {
+    audio_mixed?: {
+      data?: {
+        download_url?: string;
+      };
+    };
+  };
+  // Defensive fallback in case a desktop-SDK recording's downloadable
+  // media shows up at the top level instead of nested under
+  // media_shortcuts the way a bot's does.
+  download_url?: string;
+};
+
+export async function getRecording(recordingId: string): Promise<RecallRecording> {
+  const res = await fetch(`${BASE_URL}/recording/${recordingId}/`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch recording ${recordingId} from Recall.ai (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function downloadRecordingAudio(recordingId: string): Promise<Buffer> {
+  const recording = await getRecording(recordingId);
+  const url = recording.media_shortcuts?.audio_mixed?.data?.download_url || recording.download_url;
+  if (!url) {
+    throw new Error(
+      "Recall.ai desktop recording finished but Anchor couldn't find a download URL in the response — check Render logs."
+    );
+  }
+  const audioRes = await fetch(url);
+  if (!audioRes.ok) {
+    throw new Error(`Failed to download recording audio (${audioRes.status})`);
+  }
+  return Buffer.from(await audioRes.arrayBuffer());
+}

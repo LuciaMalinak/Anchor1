@@ -166,6 +166,15 @@ export const meetings = pgTable("meeting", {
   // flow rather than a file upload — lets the webhook find its way back
   // to the right meeting row when Recall.ai says the recording is ready.
   recallBotId: text("recallBotId"),
+  // Set when this meeting came from the desktop app instead (Recall.ai's
+  // Desktop Recording SDK — no bot joins the call, recording happens
+  // locally on the person's computer). A separate column from
+  // recallBotId rather than reusing it: a desktop recording isn't a
+  // "bot" Recall can be told to leave a call (leaveCall in recall.ts
+  // doesn't apply here), so keeping the id spaces distinct avoids code
+  // that assumes recallBotId means "there's a bot" ever seeing one that
+  // isn't. See src/app/api/desktop/meetings/start/route.ts.
+  recallRecordingId: text("recallRecordingId"),
   // Set when "Send Anchor to a live meeting" was scheduled for a future
   // time rather than joined immediately — Recall.ai's own infra (via
   // join_at on bot creation) handles the actual joining reliably even if
@@ -211,6 +220,25 @@ export const meetingLiveSegments = pgTable("meeting_live_segment", {
   speakerName: text("speakerName"),
   text: text("text").notNull(),
   relativeSeconds: integer("relativeSeconds"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// A long-lived credential for Anchor's desktop app (see /desktop) to act
+// as this user without a browser session cookie — generated once from
+// the Integrations page (src/app/api/profile/desktop-token/route.ts),
+// pasted into the app, and checked on every request the app makes (see
+// src/lib/apiToken.ts). Only the SHA-256 hash is stored, same reasoning
+// as a password: the raw token is shown to the person exactly once, at
+// creation, and can't be recovered afterward — only revoked and
+// replaced with a new one.
+export const apiTokens = pgTable("api_token", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("tokenHash").notNull().unique(),
+  label: text("label").notNull(),
+  lastUsedAt: timestamp("lastUsedAt", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 

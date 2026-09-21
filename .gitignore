@@ -4,3 +4,4 @@ storage
 screenshots
 *.log
 .env.local
+desktop/dist

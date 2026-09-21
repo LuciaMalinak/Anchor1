@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { DesktopTokenPanel } from "@/components/DesktopTokenPanel";
 
 const SYNCABLE_PROVIDERS = new Set(["salesforce", "hubspot"]);
 
@@ -182,6 +183,14 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
         Connecting sets up secure access — Anchor pulling this data into deal context (so Ask Anchor and
         handoff briefings can use it) is the next step once a connection is live.
       </p>
+
+      <div>
+        <h2 className="text-sm font-semibold text-brand">Desktop app</h2>
+        <p className="mt-1 text-xs text-slate-500">Early access — recording without a bot joining the call.</p>
+        <div className="mt-3 max-w-xl">
+          <DesktopTokenPanel />
+        </div>
+      </div>
     </div>
   );
 }

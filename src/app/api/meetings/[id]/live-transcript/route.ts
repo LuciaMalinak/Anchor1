@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, meetingLiveSegments } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { authenticateBearer } from "@/lib/apiToken";
 
 // Appends one finalized utterance to a meeting's live transcript, from
 // the browser's own live speech-to-text running during an in-person
@@ -13,10 +14,15 @@ import { eq } from "drizzle-orm";
 // meeting_live_segment table is what makes the During tab's live panel,
 // the Focus window, and live coaching all work for an in-person meeting
 // exactly the way they already do for Zoom/Teams — none of that code
-// cares where a segment came from.
+// cares where a segment came from. Also accepts the desktop app's bearer
+// token (src/lib/apiToken.ts) instead of a session cookie, so it can
+// forward whatever real-time transcript events Recall's Desktop SDK
+// delivers to it the same way.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (!session?.user?.id) {
+  const bearerUserId = session?.user?.id ? null : await authenticateBearer(req);
+  const userId = session?.user?.id ?? bearerUserId;
+  if (!userId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
@@ -25,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .select({ id: meetings.id, userId: meetings.userId, status: meetings.status })
     .from(meetings)
     .where(eq(meetings.id, id));
-  if (!meeting || meeting.userId !== session.user.id) {
+  if (!meeting || meeting.userId !== userId) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
   if (meeting.status !== "recording" && meeting.status !== "joining") {

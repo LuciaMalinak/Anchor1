@@ -1,0 +1,20 @@
+{
+  "name": "anchor-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Anchor Desktop — records Zoom/Teams/Meet calls locally with no bot joining, using Recall.ai's Desktop Recording SDK. Phase 1: proves the no-bot recording pipeline works end to end.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --dev"
+  },
+  "dependencies": {
+    "@recallai/desktop-sdk": "^2.0.32"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
