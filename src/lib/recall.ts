@@ -23,10 +23,24 @@ function authHeaders() {
   };
 }
 
+// "Anchor.Lucia" instead of a plain "Anchor" in the call's participant
+// list — lets anyone on the call (and the person who sent it) tell whose
+// Anchor bot this is when more than one person on a team uses it. Falls
+// back to plain "Anchor" if this account has no name set.
+export function botDisplayName(userName: string | null | undefined): string {
+  const first = userName?.trim().split(/\s+/)[0];
+  return first ? `Anchor.${first}` : "Anchor";
+}
+
 export async function createBot(
   meetingUrl: string,
   liveTranscriptWebhookUrl?: string,
-  joinAt?: string
+  joinAt?: string,
+  // Shows up as this bot's display name in the actual Zoom/Meet/Teams
+  // participant list — "Anchor" alone was confusing on a call with more
+  // than one Anchor user, since there was no way to tell whose bot it
+  // was. Defaults to plain "Anchor" for any caller that doesn't pass one.
+  botName = "Anchor"
 ): Promise<{ id: string }> {
   const recordingConfig: Record<string, unknown> = {
     // Only request mixed audio for the final recording — we run our own
@@ -55,7 +69,7 @@ export async function createBot(
 
   const body: Record<string, unknown> = {
     meeting_url: meetingUrl,
-    bot_name: "Anchor",
+    bot_name: botName,
     recording_config: recordingConfig,
   };
 
@@ -112,9 +126,24 @@ export async function leaveCall(botId: string): Promise<void> {
     headers: authHeaders(),
   });
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
+    const bodyText = await res.text().catch(() => "");
+    // Recall's bot doesn't finish actually dialing into the call the
+    // instant we create it — there's a real gap (a few seconds, longer
+    // with a waiting room) between us marking the meeting "recording" and
+    // the bot genuinely being in the call, and leave_call fails with this
+    // specific code during that gap. Surfaced as something actionable
+    // rather than the raw API error JSON.
+    let code: string | undefined;
+    try {
+      code = JSON.parse(bodyText)?.code;
+    } catch {
+      // Not JSON — fall through to the generic error below.
+    }
+    if (code === "cannot_command_unstarted_bot") {
+      throw new Error("Anchor is still joining the call — wait a few seconds and try Stop again.");
+    }
     throw new Error(
-      `Recall.ai couldn't end that call (${res.status}): ${detail || "no details"}`
+      `Recall.ai couldn't end that call (${res.status}): ${bodyText || "no details"}`
     );
   }
 }

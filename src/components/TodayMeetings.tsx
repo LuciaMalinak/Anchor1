@@ -77,7 +77,17 @@ export function TodayMeetings() {
         body: JSON.stringify({ meetingUrl: m.joinUrl, title: m.summary, dealId: m.dealId }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Couldn't send Anchor to that meeting");
+      if (!res.ok) {
+        // Anchor's already in a live meeting for this deal (a double
+        // click, or clicking this same entry again after already
+        // joining it) — the most useful thing to do is take her straight
+        // to it rather than just report the conflict.
+        if (res.status === 409 && body.meeting?.dealId) {
+          router.push(`/dashboard/deals/${body.meeting.dealId}`);
+          return;
+        }
+        throw new Error(body.error || "Couldn't send Anchor to that meeting");
+      }
       router.push(`/dashboard/deals/${m.dealId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");

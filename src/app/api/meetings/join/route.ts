@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { createBot } from "@/lib/recall";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { createBot, botDisplayName } from "@/lib/recall";
 import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
 import { authorizeDeal } from "@/lib/dealAccess";
 
@@ -70,6 +70,37 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Guards against sending a SECOND Anchor bot into a call that already
+  // has one — a double-click on "Join meeting"/"Join now", or clicking a
+  // calendar-matched "Today" entry a second time after already joining
+  // it. Scoped to (this person, this deal) rather than by the exact
+  // meeting link, since the link itself isn't stored anywhere to compare
+  // against; only checked for an immediate join — a scheduled-for-later
+  // one is a separate, legitimate future bot even if something's live
+  // right now.
+  if (!scheduledAt) {
+    const [existing] = await db
+      .select({ id: meetings.id, dealId: meetings.dealId })
+      .from(meetings)
+      .where(
+        and(
+          eq(meetings.userId, session.user.id),
+          dealId ? eq(meetings.dealId, dealId) : isNull(meetings.dealId),
+          inArray(meetings.status, ["joining", "recording"])
+        )
+      )
+      .limit(1);
+    if (existing) {
+      return NextResponse.json(
+        {
+          error: "Anchor's already in a live meeting here — check the During tab.",
+          meeting: existing,
+        },
+        { status: 409 }
+      );
+    }
+  }
+
   const [meeting] = await db
     .insert(meetings)
     .values({
@@ -86,7 +117,8 @@ export async function POST(req: NextRequest) {
     const bot = await createBot(
       meetingUrl,
       liveTranscriptWebhookUrl,
-      scheduledAt ? scheduledAt.toISOString() : undefined
+      scheduledAt ? scheduledAt.toISOString() : undefined,
+      botDisplayName(session.user.name)
     );
     // A meeting scheduled for later stays "joining" (with scheduledAt
     // set) until the live-transcript webhook sees the bot's first real
