@@ -1,12 +1,18 @@
 // Anchor Desktop — Electron main process.
 //
-// Phase 1 goal (per the plan already agreed with Lucia): scaffold this
-// app, wire up Recall.ai's Desktop Recording SDK, detect a Zoom/Teams/
-// Meet window, record it locally with no bot ever joining the call, and
-// prove the recording makes it all the way through Anchor's existing
-// transcribe -> summarize -> ready pipeline. Live coaching / Ask Anchor
-// during the call (Phase 2) and packaging/signing for distribution
-// (Phase 4) come later.
+// Detects a Zoom/Teams/Meet window, records it locally with no bot ever
+// joining the call, and streams both the finished recording and a
+// real-time transcript back to Anchor — the finished recording through
+// Anchor's existing transcribe -> summarize -> ready pipeline (same as
+// any other meeting, via Recall's webhook once it's done uploading), and
+// the real-time transcript live, utterance by utterance, into the same
+// meeting_live_segment feed a Zoom bot call already writes to — see the
+// "realtime-event" listener below and src/lib/recall.ts::createSdkUpload
+// in the main repo for how that stream gets turned on. That's what
+// drives the During tab's live panel, the Focus window, and live
+// coaching for a desktop recording the same way it already works for a
+// bot-joined call. A real installer (packaging/signing) is a separate,
+// later phase — see desktop/README.md.
 //
 // IMPORTANT: @recallai/desktop-sdk's postinstall step downloads real
 // platform-specific native binaries (see its setup.js) — `npm install`
@@ -75,17 +81,52 @@ async function initSdk() {
     send("recording-ended", evt.window);
   });
 
-  // Real-time transcript / other events during the call. Recall's exact
-  // desktop-SDK realtime-transcript event shape isn't independently
-  // confirmed in this codebase yet (see the note in
-  // src/lib/recall.ts::createSdkUpload in the main repo for the same
-  // caveat on the webhook side) — logged in full for now rather than
-  // guessed at, so Phase 2 (live transcript/coaching) can be wired up
-  // against the real payload once one's been seen.
+  // Real-time transcript events during the call — turned on by
+  // src/lib/recall.ts::createSdkUpload in the main repo (recallai_streaming
+  // + a "desktop_sdk_callback" realtime_endpoint), which is what makes
+  // Recall deliver transcript.data here instead of (or in addition to) a
+  // webhook. The nested shape (words[].text, participant.name,
+  // words[0].start_timestamp.relative) mirrors what
+  // src/app/api/webhooks/recall/transcript/route.ts already parses for
+  // bot calls, since it's the same underlying provider — not yet seen
+  // for real off a desktop recording, so this stays defensive (bails
+  // quietly on anything unexpected) and logs the raw event too, in case
+  // the shape turns out to differ once tested for real.
   RecallAiSdk.addEventListener("realtime-event", (evt) => {
     const active = activeRecordings.get(evt.window.id);
-    log(`Realtime event "${evt.event}" for window ${evt.window.id}${active ? ` (meeting ${active.meetingId})` : ""}`);
-    send("realtime-event", evt);
+    if (evt.event !== "transcript.data") {
+      // Anything else (participant events, other providers' formats,
+      // etc.) — just logged, not forwarded anywhere yet.
+      log(`Realtime event "${evt.event}" for window ${evt.window.id}${active ? ` (meeting ${active.meetingId})` : ""}`);
+      return;
+    }
+    if (!active) return;
+
+    const data = evt.data as
+      | {
+          words?: { text?: string; start_timestamp?: { relative?: number } }[];
+          participant?: { name?: string | null };
+        }
+      | undefined;
+    const text = (data?.words || [])
+      .map((w) => w.text || "")
+      .join(" ")
+      .trim();
+    if (!text) return;
+
+    const relativeSeconds = data?.words?.[0]?.start_timestamp?.relative;
+    try {
+      getApi()
+        .pushLiveTranscript(
+          active.meetingId,
+          text,
+          data?.participant?.name ?? null,
+          typeof relativeSeconds === "number" ? Math.round(relativeSeconds) : null
+        )
+        .catch((err) => log(`Couldn't push live transcript line: ${err instanceof Error ? err.message : err}`));
+    } catch (err) {
+      log(`Couldn't push live transcript line: ${err instanceof Error ? err.message : err}`);
+    }
   });
 
   RecallAiSdk.addEventListener("permission-status", (evt) => {

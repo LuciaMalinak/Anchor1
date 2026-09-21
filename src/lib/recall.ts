@@ -256,12 +256,41 @@ type SdkUploadCreateResponse = {
 // (if present in the response — see the uncertainty note above) is what
 // we store on the meeting row (recallRecordingId) to later match this
 // recording up with its completion webhook.
+//
+// Also asks for the same real-time transcript stream the bot flow uses
+// (recallai_streaming — see createBot() above), but delivered a
+// different way: `realtime_endpoints` with type "desktop_sdk_callback"
+// (confirmed via docs.recall.ai/docs/dsdk-realtime-transcription, Sept
+// 2026 — unlike the sdk_upload response shape, this page rendered a
+// concrete example) tells Recall to push transcript.data events straight
+// to the desktop app's own RecallAiSdk.addEventListener("realtime-event",
+// ...) instead of a webhook — see desktop/src/main.ts. The nested
+// payload shape (data.words[].text, data.participant.name) is expected
+// to match what src/app/api/webhooks/recall/transcript/route.ts already
+// parses for bot calls, since it's the same provider — just delivered
+// over the SDK instead of a webhook.
 export async function createSdkUpload(): Promise<{ uploadToken: string; recordingId: string }> {
   const res = await fetch(`${BASE_URL}/sdk_upload/`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({
-      recording_config: { audio_mixed: {} },
+      recording_config: {
+        audio_mixed: {},
+        transcript: {
+          provider: {
+            recallai_streaming: {
+              mode: "prioritize_low_latency",
+              language_code: "en",
+            },
+          },
+        },
+        realtime_endpoints: [
+          {
+            type: "desktop_sdk_callback",
+            events: ["transcript.data"],
+          },
+        ],
+      },
     }),
   });
   if (!res.ok) {

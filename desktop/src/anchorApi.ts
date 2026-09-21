@@ -50,15 +50,21 @@ export class AnchorApi {
     }
   }
 
-  // Forwards one finalized transcript utterance — same endpoint the
+  // Forwards one finalized transcript utterance from Recall's real-time
+  // stream (see main.ts's "realtime-event" handler) — same endpoint the
   // in-browser in-person recorder uses (see MicRecorder.tsx in the main
-  // repo), just bearer-authed instead of session-authed. Used once the
-  // SDK's realtime-event transcript wiring is confirmed (Phase 2); kept
-  // here now so main.ts has somewhere to send it the moment it is.
-  async pushLiveTranscript(meetingId: string, text: string): Promise<void> {
+  // repo), just bearer-authed instead of session-authed. speakerName and
+  // relativeSeconds are optional since the in-person flow doesn't have
+  // them.
+  async pushLiveTranscript(
+    meetingId: string,
+    text: string,
+    speakerName?: string | null,
+    relativeSeconds?: number | null
+  ): Promise<void> {
     await this.request(`/api/meetings/${meetingId}/live-transcript`, {
       method: "POST",
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, speakerName, relativeSeconds }),
     }).catch(() => {
       // Best-effort — a dropped live-transcript line isn't worth
       // interrupting a recording over. The full audio still gets

@@ -46,10 +46,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!text) {
     return NextResponse.json({ error: "No text" }, { status: 400 });
   }
+  // Only the desktop app (via Recall's real-time transcript stream) has
+  // these — the in-person mic recorder's browser speech-to-text has no
+  // speaker attribution or call-relative timing, so both are optional.
+  const speakerName = typeof body.speakerName === "string" && body.speakerName.trim() ? body.speakerName.trim() : null;
+  const relativeSeconds = typeof body.relativeSeconds === "number" ? Math.round(body.relativeSeconds) : null;
 
   await db.insert(meetingLiveSegments).values({
     meetingId: meeting.id,
     text,
+    speakerName,
+    relativeSeconds,
   });
 
   return NextResponse.json({ ok: true });
