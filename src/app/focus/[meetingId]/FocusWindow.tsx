@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
 import { AskAnchorPanel } from "@/components/AskAnchorPanel";
 import { FOCUS_WIDGETS, type FocusWidgetKey } from "@/lib/focusWidgets";
+
+// How long the "meeting ended" notice sits on screen before this window
+// closes itself — long enough to read, short enough that it doesn't just
+// linger afterward. "Keep this window open" cancels it.
+const AUTO_CLOSE_MS = 8_000;
 
 export function FocusWindow({
   meetingId,
@@ -15,6 +20,7 @@ export function FocusWindow({
   primaryContactRole,
   decisionBoundaries,
   initialWidgets,
+  onClose,
 }: {
   meetingId: string;
   meetingTitle: string;
@@ -25,6 +31,14 @@ export function FocusWindow({
   primaryContactRole: string | null;
   decisionBoundaries: string | null;
   initialWidgets: FocusWidgetKey[];
+  // Closes THIS window. Defaults to a plain window.close(), which is
+  // correct for the ordinary popup (src/app/focus/[meetingId]/page.tsx —
+  // its own real browser window). The Picture-in-Picture launcher (see
+  // src/lib/useFocusWindow.ts) overrides this to close the PiP window
+  // instead: this component's code keeps running in the OPENER page's JS
+  // realm when portaled into a PiP window, so a bare window.close() in
+  // here would otherwise try to close the wrong window.
+  onClose?: () => void;
 }) {
   const { segments, suggestions, status } = useLiveMeeting(meetingId);
   const [widgets, setWidgets] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
@@ -32,8 +46,30 @@ export function FocusWindow({
   const [draft, setDraft] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [closeCancelled, setCloseCancelled] = useState(false);
 
   const stillLive = status === "joining" || status === "recording" || status === null;
+  const failed = status === "failed";
+  // Fully derived from status, rather than tracked in its own state: the
+  // moment the meeting actually ends (status moves off "joining"/
+  // "recording" — see useLiveMeeting, which itself stops polling right
+  // here), Anchor's already processing the recording in the background —
+  // the summary lands in this deal's After tab on its own once that
+  // finishes, same pipeline a manual upload goes through. This window has
+  // nothing left to do, so it closes itself a few seconds later (below)
+  // instead of sitting there indefinitely.
+  const autoClosing = Boolean(status) && !stillLive && !closeCancelled;
+
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!autoClosing) return;
+    const t = setTimeout(() => (closeRef.current ?? (() => window.close()))(), AUTO_CLOSE_MS);
+    return () => clearTimeout(t);
+  }, [autoClosing]);
 
   function openCustomize() {
     setDraft(new Set(widgets));
@@ -135,11 +171,33 @@ export function FocusWindow({
       )}
 
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-        {!stillLive && (
-          <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">
-            This window keeps working after the call ends, but nothing new will come in — you can
-            close it anytime.
-          </p>
+        {autoClosing && (
+          <div
+            className={`rounded-lg border px-3 py-3 ${
+              failed ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"
+            }`}
+          >
+            <p className={`text-sm font-medium ${failed ? "text-amber-800" : "text-emerald-800"}`}>
+              {failed ? "Meeting ended — processing hit a snag" : "Meeting ended"}
+            </p>
+            <p className={`mt-1 text-xs ${failed ? "text-amber-700" : "text-emerald-700"}`}>
+              {failed
+                ? "Anchor had trouble processing this recording — check the After tab for details."
+                : "Anchor's processing the recording now — the summary will show up in this deal's After tab shortly."}{" "}
+              Closing this window…
+            </p>
+            <button
+              type="button"
+              onClick={() => setCloseCancelled(true)}
+              className={`mt-2 rounded-md border px-2.5 py-1 text-xs font-medium ${
+                failed
+                  ? "border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+                  : "border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100"
+              }`}
+            >
+              Keep this window open
+            </button>
+          </div>
         )}
 
         {widgets.has("keyFacts") && (dealName || primaryContactName || decisionBoundaries) && (

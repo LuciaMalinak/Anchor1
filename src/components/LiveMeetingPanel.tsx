@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
-import { openFocusWindow } from "@/lib/focusWindow";
+import { requestFocusWindow } from "@/lib/focusWindowBus";
 
 // Live transcript + AI coaching for a meeting Anchor is actively sitting
 // in on (bot status "joining"/"recording"). The actual polling now lives
@@ -25,17 +25,19 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
           <span className="text-sm font-semibold">{title}</span>
         </div>
         <div className="flex items-center gap-3">
-          {/* Pops the same live data into its own small window — see
-              openFocusWindow's comment for why this is a real popup
-              rather than an in-page overlay: it's meant to sit on a
-              second monitor next to the actual call, showing only
-              whichever widgets this person has chosen to keep (see
-              src/app/focus/[meetingId]), not the rest of the deal page. */}
+          {/* Pops the same live data into its own small window — a real
+              always-on-top window (Picture-in-Picture) where the browser
+              supports it, an ordinary popup otherwise. See
+              useFocusWindow.ts for why the actual window/session is owned
+              by a single instance mounted in the dashboard layout
+              (LiveMeetingWatcher) rather than here — this just asks for
+              it via the bus so a PiP session survives navigating off this
+              page, the same way the old plain popup always did. */}
           <button
             type="button"
-            onClick={() => openFocusWindow(meetingId)}
+            onClick={() => requestFocusWindow(meetingId)}
             className="rounded-md bg-white/15 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-white/25"
-            title="Open a small focus window with just the live coaching and Ask Anchor — good for a second monitor"
+            title="Open a small always-on-top focus window with just the live coaching and Ask Anchor — good for keeping next to Zoom or Teams"
           >
             Focus window ⛶
           </button>
