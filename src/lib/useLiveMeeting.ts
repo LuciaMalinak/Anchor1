@@ -34,6 +34,11 @@ export function useLiveMeeting(meetingId: string) {
   const [segments, setSegments] = useState<LiveSegment[]>([]);
   const [suggestions, setSuggestions] = useState<LiveSuggestions>(null);
   const [status, setStatus] = useState<string | null>(null);
+  // Whether Anchor's bot actually joined this call (Zoom/Teams) vs. an
+  // in-person recording — see the /live route's comment. Defaults true
+  // so the Stop button doesn't flash in and immediately disappear while
+  // this is still loading (the common case).
+  const [hasBot, setHasBot] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const stoppedRef = useRef(false);
 
@@ -49,6 +54,7 @@ export function useLiveMeeting(meetingId: string) {
         setSegments(body.segments || []);
         setSuggestions(body.liveSuggestions || null);
         setStatus(body.status);
+        setHasBot(body.hasBot !== false);
         setError(null);
         // Stop polling once the meeting's left the live states — the
         // caller decides what to show once that happens.
@@ -72,5 +78,5 @@ export function useLiveMeeting(meetingId: string) {
     };
   }, [meetingId]);
 
-  return { segments, suggestions, status, error };
+  return { segments, suggestions, status, hasBot, error };
 }

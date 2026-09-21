@@ -1949,7 +1949,11 @@ export function DealTabs({
   // recording and then clicking to a different tab doesn't unmount it and
   // kill the recording — only BeforePanel/DuringPanel below get unmounted
   // when the tab changes, this component does not.
-  const mic = useMicRecorder({ dealId: deal.id, onUploaded: () => router.refresh() });
+  const mic = useMicRecorder({
+    dealId: deal.id,
+    onUploaded: () => router.refresh(),
+    onStarted: () => router.refresh(),
+  });
 
   // Meeting mode: while something's actually happening right now (Anchor's
   // bot confirmed in the call, or an in-person mic recording running) and

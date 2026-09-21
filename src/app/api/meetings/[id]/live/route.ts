@@ -164,6 +164,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({
     status: meeting.status,
     isLive,
+    // Whether this is a Zoom/Teams call Anchor's bot actually joined
+    // (recallBotId set) vs. an in-person recording — the Stop button
+    // only makes sense for the former (it tells Recall's bot to leave a
+    // call; there's no such thing to tell an in-person recording, which
+    // stops from its own Record-in-person control instead). See
+    // LiveMeetingPanel.tsx and FocusWindow.tsx.
+    hasBot: Boolean(meeting.recallBotId),
     segments: segments.map((s) => ({
       id: s.id,
       speakerName: s.speakerName,

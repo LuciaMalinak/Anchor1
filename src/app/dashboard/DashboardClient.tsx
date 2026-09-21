@@ -70,7 +70,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
     }
   }, []);
 
-  const mic = useMicRecorder({ onUploaded: refresh });
+  const mic = useMicRecorder({ onUploaded: refresh, onStarted: refresh });
 
   useEffect(() => {
     if (!hasInFlight) return;

@@ -41,7 +41,7 @@ export function FocusWindow({
   // here would otherwise try to close the wrong window.
   onClose?: () => void;
 }) {
-  const { segments, suggestions, status } = useLiveMeeting(meetingId);
+  const { segments, suggestions, status, hasBot } = useLiveMeeting(meetingId);
   const [widgets, setWidgets] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
@@ -124,9 +124,11 @@ export function FocusWindow({
           {/* Ends Anchor's bot early instead of waiting for the call to
               end on its own — see StopMeetingButton's comment for why
               this doesn't hang up the call for anyone else. Only while
-              still live; once it's ended the auto-close notice below
-              takes over. */}
-          {stillLive && status && <StopMeetingButton meetingId={meetingId} variant="solid" />}
+              still live, and only for a Zoom/Teams call Anchor's bot
+              actually joined — an in-person recording stops from its own
+              Record-in-person control, not this window. Once it's ended
+              the auto-close notice below takes over. */}
+          {hasBot && stillLive && status && <StopMeetingButton meetingId={meetingId} variant="solid" />}
           <button
             type="button"
             onClick={openCustomize}
