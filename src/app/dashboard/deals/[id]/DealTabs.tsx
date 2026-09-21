@@ -178,6 +178,16 @@ function NewMeetingForms({
     // The <input type="datetime-local"> value has no timezone — treat it
     // as the browser's own local time, same as any calendar app would.
     const scheduledAt = scheduledAtLocal ? new Date(scheduledAtLocal).toISOString() : undefined;
+    // Opens the actual Zoom/Meet/Teams page so you join it as yourself
+    // too, not just as a name Anchor's bot brings into the room — right
+    // alongside onJoinedNow below switching this page to During (meeting
+    // mode). Only for joining right now: a scheduled-for-later meeting
+    // has no click to open that link with once the time actually
+    // arrives (browsers block a popup outside a real user gesture), so
+    // that one still waits for you to open it yourself when it starts.
+    if (!scheduledAt) {
+      window.open(meetingUrl, "_blank", "noopener,noreferrer");
+    }
     setJoining(true);
     try {
       const res = await fetch("/api/meetings/join", {

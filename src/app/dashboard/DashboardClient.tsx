@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMicRecorder, MicRecorderView } from "@/components/MicRecorder";
+import { TodayMeetings } from "@/components/TodayMeetings";
 
 type Meeting = {
   id: string;
@@ -44,6 +46,7 @@ function TrashIcon() {
 }
 
 export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[] }) {
+  const router = useRouter();
   const [meetings, setMeetings] = useState<Meeting[]>(initialMeetings);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +116,11 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
       return;
     }
 
+    // Opens the actual Zoom/Meet/Teams page so you join it as yourself
+    // too, not just as a name Anchor's bot brings into the room — a
+    // direct result of this click, so it won't get popup-blocked.
+    window.open(meetingUrl, "_blank", "noopener,noreferrer");
+
     setJoining(true);
     try {
       const res = await fetch("/api/meetings/join", {
@@ -120,12 +128,19 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingUrl, title }),
       });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Couldn't send Anchor to that meeting");
       }
       form.reset();
-      await refresh();
+      // Jumps straight to this meeting's own page — that's where meeting
+      // mode (the live transcript + coaching panel) actually lives once
+      // Anchor's in the call, same as a deal's During tab.
+      if (body.meeting?.id) {
+        router.push(`/dashboard/meetings/${body.meeting.id}`);
+      } else {
+        await refresh();
+      }
     } catch (err) {
       setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
     } finally {
@@ -166,6 +181,12 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
           shows up below once it&apos;s processed.
         </p>
       </div>
+
+      {/* Calendar-matched deal meetings for today, one click away from
+          joining — see TodayMeetings.tsx. Renders nothing (not even an
+          empty card) on a day with nothing to show, so it doesn't push
+          the rest of the page down when it's quiet. */}
+      <TodayMeetings />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm lg:col-span-2">
