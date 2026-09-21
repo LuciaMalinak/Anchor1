@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 
 type TodayMeeting = {
   eventId: string;
@@ -70,6 +71,10 @@ export function TodayMeetings() {
     // won't get popup-blocked; waiting on the fetch first risked losing
     // that.
     window.open(m.joinUrl, "_blank", "noopener,noreferrer");
+    // Opens the Focus window right now, in this same click — see
+    // requestFocusWindowPending()'s comment for why it can't wait for
+    // the fetch below to come back with a meeting id first.
+    const focusWindow = requestFocusWindowPending();
     try {
       const res = await fetch("/api/meetings/join", {
         method: "POST",
@@ -83,11 +88,16 @@ export function TodayMeetings() {
         // joining it) — the most useful thing to do is take her straight
         // to it rather than just report the conflict.
         if (res.status === 409 && body.meeting?.dealId) {
+          if (body.meeting?.id) focusWindow.attach(body.meeting.id);
+          else focusWindow.cancel();
           router.push(`/dashboard/deals/${body.meeting.dealId}`);
           return;
         }
+        focusWindow.cancel();
         throw new Error(body.error || "Couldn't send Anchor to that meeting");
       }
+      if (body.meeting?.id) focusWindow.attach(body.meeting.id);
+      else focusWindow.cancel();
       router.push(`/dashboard/deals/${m.dealId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");

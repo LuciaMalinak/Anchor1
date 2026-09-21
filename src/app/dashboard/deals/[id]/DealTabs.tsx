@@ -11,6 +11,7 @@ import { HEALTH_LABEL, HEALTH_BADGE_CLASSES, HEALTH_DOT_CLASSES, type DealHealth
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { AskAnchorPanel } from "@/components/AskAnchorPanel";
 import { DealContextBox } from "@/components/DealContextBox";
+import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 
 type MeetingStatus =
   | "joining"
@@ -185,8 +186,15 @@ function NewMeetingForms({
     // has no click to open that link with once the time actually
     // arrives (browsers block a popup outside a real user gesture), so
     // that one still waits for you to open it yourself when it starts.
+    // Opens the Focus window right now, in this same click — for an
+    // immediate join only, same as the real meeting link above (a
+    // scheduled-for-later one has nothing to open yet either way). See
+    // requestFocusWindowPending()'s comment for why this can't wait for
+    // the fetch below to come back with a meeting id first.
+    let focusWindow: ReturnType<typeof requestFocusWindowPending> | null = null;
     if (!scheduledAt) {
       window.open(meetingUrl, "_blank", "noopener,noreferrer");
+      focusWindow = requestFocusWindowPending();
     }
     setJoining(true);
     try {
@@ -195,10 +203,13 @@ function NewMeetingForms({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingUrl, title, dealId, scheduledAt }),
       });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+        focusWindow?.cancel();
         throw new Error(body.error || "Couldn't send Anchor to that meeting");
       }
+      if (body.meeting?.id) focusWindow?.attach(body.meeting.id);
+      else focusWindow?.cancel();
       form.reset();
       router.refresh();
       // Only jump straight to During for an immediate join — a
@@ -2019,6 +2030,49 @@ export function DealTabs({
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meetings.map((m) => `${m.id}:${m.status}:${m.scheduledAt}`).join(",")]);
+
+  // The tick effect above only reacts to `meetings` changing — but
+  // nothing was actually re-fetching it, so a meeting ending (Stop, or
+  // the call just finishing on its own) never made it back to this page
+  // on its own: the live panel and meeting-mode view just kept showing
+  // it as live until something else happened to reload the page. This
+  // polls every in-progress meeting's own status directly (same endpoint
+  // MeetingStatusPoller uses on the standalone meeting page) and
+  // refreshes the page — feeding tick() the fresh `meetings` it needs —
+  // the moment any of them actually changes, instead of only noticing
+  // long after the fact.
+  const inProgressIds = meetings.filter((m) => m.status !== "ready" && m.status !== "failed").map((m) => m.id);
+  useEffect(() => {
+    if (inProgressIds.length === 0) return;
+    const knownStatus = new Map(meetings.map((m) => [m.id, m.status]));
+    let stopped = false;
+    async function poll() {
+      if (stopped) return;
+      try {
+        const results = await Promise.all(
+          inProgressIds.map((id) =>
+            fetch(`/api/meetings/${id}`)
+              .then((res) => (res.ok ? res.json() : null))
+              .catch(() => null)
+          )
+        );
+        const changed = results.some(
+          (r) => r?.meeting && r.meeting.status !== knownStatus.get(r.meeting.id)
+        );
+        if (changed && !stopped) router.refresh();
+      } catch {
+        // Best-effort — a missed check just tries again next tick.
+      }
+      if (!stopped) timer = setTimeout(poll, 3_000);
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    timer = setTimeout(poll, 3_000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inProgressIds.join(",")]);
 
   // Company research + news lives here (not inside DealHeaderCard) so both
   // the News tab's badge and its content can share it.

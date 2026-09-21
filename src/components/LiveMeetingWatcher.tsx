@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFocusWindow } from "@/lib/useFocusWindow";
-import { onFocusWindowRequest } from "@/lib/focusWindowBus";
+import { onFocusWindowRequest, onFocusWindowPendingRequest } from "@/lib/focusWindowBus";
 
 type LiveMeeting = { id: string; title: string; dealId: string | null; status: string };
 
@@ -38,12 +38,17 @@ export function LiveMeetingWatcher() {
   // notification for the same call.
   const seenRef = useRef<Set<string>>(new Set());
   const askedPermissionRef = useRef(false);
-  const { open, portal } = useFocusWindow();
+  const { open, openPending, portal } = useFocusWindow();
 
   // Lets a button elsewhere in the app (LiveMeetingPanel's "Focus window"
   // button) ask for the window to open without holding its own session —
   // see the comment above.
   useEffect(() => onFocusWindowRequest(open), [open]);
+  // Same idea, for a "Join meeting" click that wants the Focus window to
+  // pop open the instant you join, before Anchor even knows which
+  // meeting it'll be yet — see openPending()'s own comment and
+  // focusWindowBus.ts's requestFocusWindowPending().
+  useEffect(() => onFocusWindowPendingRequest(openPending), [openPending]);
 
   useEffect(() => {
     let stopped = false;

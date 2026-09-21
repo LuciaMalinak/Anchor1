@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMicRecorder, MicRecorderView } from "@/components/MicRecorder";
 import { TodayMeetings } from "@/components/TodayMeetings";
+import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 
 type Meeting = {
   id: string;
@@ -121,6 +122,12 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
     // direct result of this click, so it won't get popup-blocked.
     window.open(meetingUrl, "_blank", "noopener,noreferrer");
 
+    // Also opens the Focus window right now, before the meeting even
+    // exists yet — see requestFocusWindowPending()'s comment for why it
+    // has to happen here, synchronously in this click, rather than after
+    // the fetch below comes back with a meeting id.
+    const focusWindow = requestFocusWindowPending();
+
     setJoining(true);
     try {
       const res = await fetch("/api/meetings/join", {
@@ -130,6 +137,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
+        focusWindow.cancel();
         throw new Error(body.error || "Couldn't send Anchor to that meeting");
       }
       form.reset();
@@ -137,8 +145,10 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
       // mode (the live transcript + coaching panel) actually lives once
       // Anchor's in the call, same as a deal's During tab.
       if (body.meeting?.id) {
+        focusWindow.attach(body.meeting.id);
         router.push(`/dashboard/meetings/${body.meeting.id}`);
       } else {
+        focusWindow.cancel();
         await refresh();
       }
     } catch (err) {
