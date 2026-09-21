@@ -13,6 +13,7 @@ import { getIndustryTicker, isTickerStale, normalizeTickerItems, type TickerItem
 import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { COLOR_THEME_BY_KEY, isColorThemeKey } from "@/lib/colorThemes";
+import { LiveMeetingWatcher } from "@/components/LiveMeetingWatcher";
 
 export default async function DashboardLayout({
   children,
@@ -245,6 +246,13 @@ export default async function DashboardLayout({
           LinkedIn
         </a>
       </footer>
+      {/* Notices when one of this person's own scheduled meetings goes
+          live and offers a one-click way to open the Focus window (see
+          src/components/LiveMeetingWatcher.tsx) — mounted here, in the
+          shared dashboard shell, so it fires no matter which page they're
+          on, not just when they happen to be sitting on that deal's
+          During tab. */}
+      {session?.user?.id && <LiveMeetingWatcher />}
     </div>
   );
 }
