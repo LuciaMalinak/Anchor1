@@ -117,16 +117,19 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
       return;
     }
 
+    // Opens the Focus window right now, before the meeting even exists
+    // yet — see requestFocusWindowPending()'s comment for why it has to
+    // happen here, synchronously in this click. Deliberately BEFORE the
+    // window.open() below: opening the real meeting link first can shift
+    // focus to that new tab in some browsers, and Picture-in-Picture
+    // requires THIS document to still have focus/activation at the
+    // moment it's requested — asking for it first avoids that race.
+    const focusWindow = requestFocusWindowPending();
+
     // Opens the actual Zoom/Meet/Teams page so you join it as yourself
     // too, not just as a name Anchor's bot brings into the room — a
     // direct result of this click, so it won't get popup-blocked.
     window.open(meetingUrl, "_blank", "noopener,noreferrer");
-
-    // Also opens the Focus window right now, before the meeting even
-    // exists yet — see requestFocusWindowPending()'s comment for why it
-    // has to happen here, synchronously in this click, rather than after
-    // the fetch below comes back with a meeting id.
-    const focusWindow = requestFocusWindowPending();
 
     setJoining(true);
     try {

@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { FocusWindow } from "@/app/focus/[meetingId]/FocusWindow";
-import { openFocusWindow as openFocusWindowPopup } from "@/lib/focusWindow";
+import { openFocusWindow as openFocusWindowPopup, openFocusWindowPending as openPopupPending } from "@/lib/focusWindow";
 import { isFocusPipSupported, copyStylesInto } from "@/lib/focusWindowPip";
 import type { FocusWidgetKey } from "@/lib/focusWidgets";
 import type { PendingFocusWindow } from "@/lib/focusWindowBus";
@@ -114,23 +114,20 @@ export function useFocusWindow() {
   // session.
   const openPending = useCallback((): PendingFocusWindow => {
     if (!isFocusPipSupported()) {
-      // No real always-on-top window on this browser — the best this can
-      // do is open the ordinary popup once the meeting id is known,
-      // exactly like open() already falls back to.
-      return {
-        attach: (meetingId: string) => openFocusWindowPopup(meetingId),
-        cancel: () => {},
-      };
+      // No real always-on-top window on this browser (Safari, older
+      // Chrome/Firefox) — pre-open a blank popup right now instead, for
+      // the same reason PiP has to happen synchronously below: a
+      // window.open() called only after this click's own fetch comes
+      // back with a meeting id is exactly what popup blockers exist to
+      // catch.
+      return openPopupPending();
     }
 
     const pip = window.documentPictureInPicture;
     if (!pip) {
       // isFocusPipSupported() just said this existed — treat a race
       // here the same as "not supported" rather than throwing.
-      return {
-        attach: (meetingId: string) => openFocusWindowPopup(meetingId),
-        cancel: () => {},
-      };
+      return openPopupPending();
     }
 
     let cancelled = false;

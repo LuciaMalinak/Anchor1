@@ -187,14 +187,18 @@ function NewMeetingForms({
     // arrives (browsers block a popup outside a real user gesture), so
     // that one still waits for you to open it yourself when it starts.
     // Opens the Focus window right now, in this same click — for an
-    // immediate join only, same as the real meeting link above (a
+    // immediate join only, same as the real meeting link below (a
     // scheduled-for-later one has nothing to open yet either way). See
     // requestFocusWindowPending()'s comment for why this can't wait for
-    // the fetch below to come back with a meeting id first.
+    // the fetch below to come back with a meeting id first. Deliberately
+    // BEFORE window.open() below: opening the real meeting link first can
+    // shift focus to that new tab in some browsers, and Picture-in-
+    // Picture requires THIS document to still have focus/activation at
+    // the moment it's requested.
     let focusWindow: ReturnType<typeof requestFocusWindowPending> | null = null;
     if (!scheduledAt) {
-      window.open(meetingUrl, "_blank", "noopener,noreferrer");
       focusWindow = requestFocusWindowPending();
+      window.open(meetingUrl, "_blank", "noopener,noreferrer");
     }
     setJoining(true);
     try {

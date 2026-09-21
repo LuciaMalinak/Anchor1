@@ -66,15 +66,19 @@ export function TodayMeetings() {
     if (!m.joinUrl) return;
     setJoiningId(m.eventId);
     setError(null);
+    // Opens the Focus window right now, in this same click — see
+    // requestFocusWindowPending()'s comment for why it can't wait for
+    // the fetch below to come back with a meeting id first. Deliberately
+    // BEFORE window.open() below: opening the real meeting link first can
+    // shift focus to that new tab in some browsers, and Picture-in-
+    // Picture requires THIS document to still have focus/activation at
+    // the moment it's requested.
+    const focusWindow = requestFocusWindowPending();
     // Opens the real meeting as its own step (not gated on the API call
     // below) — this is a direct click, so it's a genuine user gesture and
     // won't get popup-blocked; waiting on the fetch first risked losing
     // that.
     window.open(m.joinUrl, "_blank", "noopener,noreferrer");
-    // Opens the Focus window right now, in this same click — see
-    // requestFocusWindowPending()'s comment for why it can't wait for
-    // the fetch below to come back with a meeting id first.
-    const focusWindow = requestFocusWindowPending();
     try {
       const res = await fetch("/api/meetings/join", {
         method: "POST",
