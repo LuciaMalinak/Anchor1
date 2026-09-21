@@ -21,14 +21,25 @@ export function StopMeetingButton({
   const [confirming, setConfirming] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when the server says this specific failure can be forced through
+  // instead of retried — see the route's `force` handling. Lets Stop
+  // offer a guaranteed way out instead of just repeating the same error.
+  const [canForceEnd, setCanForceEnd] = useState(false);
 
-  async function stop() {
+  async function stop(force = false) {
     setStopping(true);
     setError(null);
     try {
-      const res = await fetch(`/api/meetings/${meetingId}/stop`, { method: "POST" });
+      const res = await fetch(`/api/meetings/${meetingId}/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Couldn't end the meeting");
+      if (!res.ok) {
+        setCanForceEnd(Boolean(body.canForceEnd));
+        throw new Error(body.error || "Couldn't end the meeting");
+      }
       // Deliberately leaving `stopping`/`confirming` as-is on success —
       // the live poll elsewhere (useLiveMeeting) picks up the status
       // change within a couple of seconds and swaps the whole panel to
@@ -53,7 +64,7 @@ export function StopMeetingButton({
         </span>
         <button
           type="button"
-          onClick={stop}
+          onClick={() => stop(false)}
           disabled={stopping}
           className="shrink-0 rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
         >
@@ -69,6 +80,18 @@ export function StopMeetingButton({
           </button>
         )}
         {error && <span className={`text-xs ${errorText}`}>{error}</span>}
+        {/* Only shown after a failed attempt whose error the server says
+            is safe to force through — not offered up front, so a normal
+            Stop always tries the clean path first. */}
+        {error && canForceEnd && !stopping && (
+          <button
+            type="button"
+            onClick={() => stop(true)}
+            className="shrink-0 rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700"
+          >
+            End it anyway
+          </button>
+        )}
       </div>
     );
   }

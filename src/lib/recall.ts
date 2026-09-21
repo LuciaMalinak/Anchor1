@@ -148,6 +148,50 @@ export async function leaveCall(botId: string): Promise<void> {
   }
 }
 
+// Best-effort cancel for a bot that was told to join but never actually
+// made it into the call — Recall's "Delete Scheduled Bot" endpoint (per
+// docs.recall.ai, checked Sept 2026). This only succeeds for a bot that
+// hasn't attempted to join yet (still just scheduled); a bot already
+// stuck mid-join (joining_call/in_waiting_room) 405s here, same as
+// leave_call fails on it with cannot_command_unstarted_bot — there is no
+// Recall-side way to force a genuinely mid-join bot to stop right now.
+// Callers treat this as fire-and-forget and always fall back to ending
+// the meeting locally in Anchor regardless of what this does.
+export async function cancelBot(botId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/bot/${botId}/`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Recall.ai couldn't cancel bot ${botId} (${res.status}): ${detail || "no details"}`);
+  }
+}
+
+// Friendly text for a bot.fatal webhook's sub_code (docs.recall.ai's "Bot
+// Sub Codes" reference, checked Sept 2026) — shown to the user instead of
+// a raw error code when Anchor's bot permanently fails to join a call.
+const FATAL_SUB_CODE_MESSAGES: Record<string, string> = {
+  bot_errored: "Anchor's bot ran into an unexpected error trying to join.",
+  meeting_not_found: "Recall couldn't find a meeting at that link.",
+  meeting_not_accessible: "Anchor's bot wasn't allowed into that meeting.",
+  meeting_not_started: "The meeting hadn't started yet when Anchor's bot tried to join.",
+  meeting_requires_registration: "That meeting requires registering in advance, so Anchor's bot couldn't join.",
+  meeting_requires_sign_in: "That meeting only allows signed-in participants, so Anchor's bot couldn't join.",
+  meeting_link_expired: "That meeting link had expired.",
+  meeting_link_invalid: "That doesn't look like a valid meeting link.",
+  meeting_password_incorrect: "The meeting password was incorrect.",
+  meeting_locked: "The meeting was locked when Anchor's bot tried to join.",
+  meeting_full: "The meeting was full when Anchor's bot tried to join.",
+  meeting_ended: "The meeting had already ended before Anchor's bot could join.",
+  failed_to_launch_in_time: "Anchor's bot didn't start in time — worth trying again.",
+};
+
+export function fatalBotMessage(subCode: string | null | undefined): string {
+  if (subCode && FATAL_SUB_CODE_MESSAGES[subCode]) return FATAL_SUB_CODE_MESSAGES[subCode];
+  return "Anchor's bot couldn't join that meeting.";
+}
+
 type RecallBot = {
   id: string;
   media_shortcuts?: {

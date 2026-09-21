@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { downloadBotAudio } from "@/lib/recall";
+import { downloadBotAudio, fatalBotMessage } from "@/lib/recall";
 import { saveMeetingAudio } from "@/lib/storage";
 import { processMeeting } from "@/lib/processMeeting";
 import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
@@ -24,6 +24,29 @@ export async function POST(req: NextRequest) {
   const payload = await req.json().catch(() => null);
   const event = payload?.event as string | undefined;
   const botId = (payload?.data?.bot?.id ?? payload?.data?.id) as string | undefined;
+  const subCode = payload?.data?.data?.sub_code as string | null | undefined;
+
+  // A bot that permanently fails to join (bad link, locked meeting,
+  // expired password, etc.) never reaches "recording.done" — without
+  // this, the meeting it belongs to sat at status "joining"/"recording"
+  // forever, with no automatic way to know the call was never actually
+  // entered. This is what left meetings stuck "live" in Anchor even
+  // after the bot itself had already given up. See docs.recall.ai's
+  // Bot Status Change Events / Sub Codes references (checked Sept 2026).
+  if (event === "bot.fatal" && botId) {
+    const [meeting] = await db.select().from(meetings).where(eq(meetings.recallBotId, botId));
+    if (meeting && meeting.status !== "ready" && meeting.status !== "failed") {
+      await db
+        .update(meetings)
+        .set({
+          status: "failed",
+          errorMessage: fatalBotMessage(subCode),
+          updatedAt: new Date(),
+        })
+        .where(eq(meetings.id, meeting.id));
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   // We only care about the recording finishing. Every other event
   // (bot joining, in-call status changes, etc.) is a no-op ack.
