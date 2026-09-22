@@ -211,6 +211,32 @@ function hideOverlay() {
   }
 }
 
+// Recall.ai's API is region-scoped — see
+// src/app/api/desktop/recall-region/route.ts for the full explanation.
+// Without this, RecallAiSdk.init() defaults to a host that may not match
+// the region our backend created the upload token against, and every
+// recording fails with "Invalid upload token" even though the token
+// itself is perfectly valid. Best-effort with a short timeout: if this
+// can't be reached (offline, slow network), initSdk() proceeds without an
+// override rather than blocking startup — recordings just fall back to
+// whatever the SDK's own default region-guessing does in that case.
+async function fetchRecallApiUrl(): Promise<string | undefined> {
+  const config = loadConfig();
+  const apiBase = config.apiBase || DEFAULT_API_BASE;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`${apiBase}/api/desktop/recall-region`, { signal: controller.signal });
+    if (!res.ok) return undefined;
+    const body = await res.json().catch(() => ({}));
+    return typeof body.apiUrl === "string" && body.apiUrl ? body.apiUrl : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function initSdk() {
   // acquirePermissionsOnStartup does NOT actually trigger macOS's permission
   // prompts on its own (confirmed against docs.recall.ai/docs/macos-permissions
@@ -218,7 +244,13 @@ async function initSdk() {
   // prompt was ever appearing). The real, documented way is to explicitly call
   // requestPermission() per permission after init(), which is what the loop
   // below does.
-  await RecallAiSdk.init({ acquirePermissionsOnStartup: [] });
+  const recallApiUrl = await fetchRecallApiUrl();
+  if (recallApiUrl) {
+    log(`Using Recall.ai region endpoint: ${recallApiUrl}`);
+  } else {
+    log("Couldn't fetch Anchor's Recall.ai region — falling back to the SDK's default, which may cause 'Invalid upload token' errors if it doesn't match Anchor's account region.");
+  }
+  await RecallAiSdk.init({ apiUrl: recallApiUrl, acquirePermissionsOnStartup: [] });
 
   // All event listeners are registered BEFORE the permission-request loop
   // below (this used to be the other way around) — requestPermission()
