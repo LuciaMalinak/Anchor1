@@ -98,5 +98,13 @@ window.anchor.onRecordingEnded((win) => {
 
 window.anchor.onLog(appendLog);
 window.anchor.onSdkError((evt) => appendLog(`SDK error: ${evt.message || JSON.stringify(evt)}`));
+window.anchor.onTokenConnected(() => {
+  // Fired after a one-click anchor-desktop://connect link from the
+  // website saves a token automatically — same save-token codepath the
+  // token-input box below already used, just without anyone having to
+  // copy/paste it by hand. Refresh the "Connected to ..." status line so
+  // that's visibly true immediately.
+  refreshStatus();
+});
 
 refreshStatus();

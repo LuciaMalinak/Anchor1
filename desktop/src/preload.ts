@@ -19,4 +19,6 @@ contextBridge.exposeInMainWorld("anchor", {
     ipcRenderer.on("recording-ended", (_evt, window) => cb(window)),
   onLog: (cb: (message: string) => void) => ipcRenderer.on("log", (_evt, message) => cb(message)),
   onSdkError: (cb: (evt: unknown) => void) => ipcRenderer.on("sdk-error", (_evt, evt) => cb(evt)),
+  onTokenConnected: (cb: (payload: { apiBase: string }) => void) =>
+    ipcRenderer.on("token-connected", (_evt, payload) => cb(payload)),
 });

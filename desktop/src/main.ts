@@ -342,6 +342,40 @@ async function initSdk() {
   }
 }
 
+// The "super easy" connect flow: instead of a member copying a token off
+// the website and pasting it into this app by hand, the website's
+// "Connect Anchor Desktop" button mints a token the same way the manual
+// flow always has (POST /api/profile/desktop-token) and then navigates
+// the browser straight to anchor-desktop://connect?token=...&apiBase=...
+// — macOS/Windows hand that URL to whichever app registered the
+// "anchor-desktop" scheme (see setAsDefaultProtocolClient below), which
+// is this app, so it arrives here as either an "open-url" event (macOS)
+// or an argv entry on a second-instance launch / cold start (Windows —
+// see the second-instance handler and the process.argv check in
+// whenReady below). Same saveConfig call the manual "Save token" button
+// already used; a member never has to see or copy the token itself.
+function handleDeepLink(url: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    log(`Ignoring a link that isn't a valid URL: ${url}`);
+    return;
+  }
+  if (parsed.protocol !== "anchor-desktop:") return;
+
+  const token = parsed.searchParams.get("token");
+  if (!token) {
+    log("Opened an Anchor Desktop link, but it didn't include a token.");
+    return;
+  }
+  const apiBase = parsed.searchParams.get("apiBase") || DEFAULT_API_BASE;
+  saveConfig({ ...loadConfig(), apiBase, token });
+  log("Connected to your Anchor account from the website.");
+  send("token-connected", { apiBase });
+  showWindow();
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("get-config", () => {
     const config = loadConfig();
@@ -450,6 +484,24 @@ function refreshTrayMenu() {
   );
 }
 
+// Registers this app to handle anchor-desktop:// links — what makes the
+// website's one-click "Connect Anchor Desktop" button (see
+// handleDeepLink above) actually land here instead of the browser just
+// showing an error. Safe/idempotent to call every launch; must be called
+// unconditionally (not inside the single-instance-lock branch below) so
+// even the instance that's about to quit still registers the app itself
+// with the OS at least once.
+app.setAsDefaultProtocolClient("anchor-desktop");
+
+// macOS delivers a custom-protocol link via this event — including to an
+// app that isn't running yet, in which case it can fire before
+// whenReady, so this listener is registered immediately rather than
+// nested inside app.whenReady().
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
 // A menu-bar app that's meant to always be running invites exactly the
 // failure mode that turned up while diagnosing why nothing was
 // auto-popping-up: launching it again (double-click, Spotlight, a
@@ -465,7 +517,14 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, commandLine) => {
+    // Windows/Linux deliver a custom-protocol link by launching a second
+    // instance with the URL as a command-line argument — which
+    // requestSingleInstanceLock redirects here instead of letting a
+    // second copy actually start. macOS never takes this path (it uses
+    // "open-url" above instead), but this is harmless there too.
+    const deepLink = commandLine.find((arg) => arg.startsWith("anchor-desktop://"));
+    if (deepLink) handleDeepLink(deepLink);
     showWindow();
   });
 
@@ -473,6 +532,14 @@ if (!gotSingleInstanceLock) {
     registerIpcHandlers();
     createWindow();
     createTray();
+
+    // Same Windows/Linux deep-link case as the second-instance handler
+    // above, but for a COLD start — i.e. this app wasn't running yet
+    // when the link was clicked, so there's no second instance to
+    // redirect; the link instead shows up as this very first launch's
+    // own argv.
+    const coldStartDeepLink = process.argv.find((arg) => arg.startsWith("anchor-desktop://"));
+    if (coldStartDeepLink) handleDeepLink(coldStartDeepLink);
 
     // Turn "launch at login" on by default the first time this app ever
     // runs on this machine, so installing it is the only setup step anyone

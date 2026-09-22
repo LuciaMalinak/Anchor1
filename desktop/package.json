@@ -29,6 +29,10 @@
     },
     "publish": null,
     "files": ["dist/**/*", "src/renderer/**/*", "package.json"],
+    "protocols": {
+      "name": "Anchor Desktop Connect",
+      "schemes": ["anchor-desktop"]
+    },
     "mac": {
       "category": "public.app-category.productivity",
       "target": ["dmg", "zip"],
