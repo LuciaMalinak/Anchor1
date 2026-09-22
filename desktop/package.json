@@ -32,7 +32,6 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": ["dmg", "zip"],
-      "identity": "-",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -41,6 +40,7 @@
         "NSMicrophoneUsageDescription": "Anchor Desktop records your microphone during a call you choose to record."
       }
     },
+    "afterSign": "build/afterSign.js",
     "dmg": {
       "sign": false
     },
