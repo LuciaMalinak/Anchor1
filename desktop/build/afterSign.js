@@ -24,6 +24,16 @@ module.exports = async function afterSign(context) {
   const appName = context.packager.appInfo.productFilename;
   const appPath = path.join(context.appOutDir, `${appName}.app`);
 
+  // codesign refuses to sign over leftover extended attributes
+  // (resource forks / Finder info / quarantine flags) that can end up
+  // on files after being copied or synced by other tools — "resource
+  // fork, Finder information, or similar detritus not allowed" is
+  // codesign's actual error for this. Stripping them first with `xattr
+  // -cr` is the standard fix; it's a no-op (does nothing, harmless) on
+  // a bundle that's already clean.
+  console.log(`[afterSign] Clearing extended attributes on ${appPath} …`);
+  execFileSync("xattr", ["-cr", appPath], { stdio: "inherit" });
+
   console.log(`[afterSign] Ad-hoc signing ${appPath} …`);
   execFileSync("codesign", ["--force", "--deep", "--sign", "-", appPath], {
     stdio: "inherit",
