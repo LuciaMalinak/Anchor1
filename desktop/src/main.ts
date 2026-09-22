@@ -19,13 +19,21 @@
 // here has to run on the actual target machine (an Apple Silicon Mac or
 // Windows; Intel Macs aren't supported per Recall's docs), not in a
 // Linux dev sandbox. See desktop/README.md.
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from "electron";
 import * as path from "path";
 import RecallAiSdk from "@recallai/desktop-sdk";
 import { loadConfig, saveConfig, DEFAULT_API_BASE } from "./config";
 import { AnchorApi } from "./anchorApi";
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+// Closing the window (the red dot) hides it rather than quitting — see
+// createWindow()'s "close" handler — so the app keeps detecting meetings
+// in the background the way Granola/Zoom/Slack do. Only the tray menu's
+// "Quit Anchor Desktop" (or Cmd+Q while the window has focus) actually
+// exits, and sets this flag so the window's "close" handler knows to let
+// it through instead of hiding it again.
+let isQuitting = false;
 
 // windowId (Recall SDK's id for a detected meeting window) -> the
 // Anchor meeting this recording became, once started. Lets the
@@ -48,6 +56,24 @@ function getApi(): AnchorApi {
     throw new Error("No Anchor desktop token saved yet — paste one in from the Integrations page first.");
   }
   return new AnchorApi(config.apiBase || DEFAULT_API_BASE, config.token);
+}
+
+// Starts recording a detected window — called automatically the instant
+// meeting-detected fires (see initSdk below), and also reachable from the
+// renderer's Record button as a manual fallback (e.g. if auto-start
+// failed because no token was saved yet). Idempotent: if this window is
+// already recording, just returns the existing meeting rather than
+// starting a second one.
+async function beginRecording(windowId: string, title: string): Promise<{ meetingId: string }> {
+  const existing = activeRecordings.get(windowId);
+  if (existing) return existing;
+
+  const api = getApi();
+  const { meeting, uploadToken } = await api.startMeeting(title);
+  await RecallAiSdk.startRecording({ windowId, uploadToken });
+  const active = { meetingId: meeting.id };
+  activeRecordings.set(windowId, active);
+  return active;
 }
 
 async function initSdk() {
@@ -76,8 +102,16 @@ async function initSdk() {
   }
 
   RecallAiSdk.addEventListener("meeting-detected", (evt) => {
-    log(`Meeting detected: ${evt.window.title ?? evt.window.platform ?? evt.window.id}`);
+    const title = evt.window.title || evt.window.platform || evt.window.id;
+    log(`Meeting detected: ${title} — starting to record automatically`);
     send("meeting-detected", evt.window);
+    // Auto-record on detection — no manual "Record" click needed, so
+    // this only depends on the app already being open (which, once
+    // installed, it always is — see the tray/launch-at-login setup
+    // below) rather than on someone remembering to press a button.
+    beginRecording(evt.window.id, title).catch((err) => {
+      log(`Couldn't auto-start recording: ${err instanceof Error ? err.message : err}`);
+    });
   });
 
   RecallAiSdk.addEventListener("meeting-closed", (evt) => {
@@ -165,16 +199,18 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("set-token", (_evt, token: string, apiBase?: string) => {
-    saveConfig({ apiBase: apiBase || DEFAULT_API_BASE, token });
+    saveConfig({ ...loadConfig(), apiBase: apiBase || DEFAULT_API_BASE, token });
     return { ok: true };
   });
 
+  // Manual fallback — recording normally already started automatically
+  // the moment the meeting was detected (see the meeting-detected
+  // listener above); this only does anything if that failed (e.g. no
+  // token was saved yet) or the window somehow isn't in
+  // activeRecordings for another reason.
   ipcMain.handle("start-recording", async (_evt, windowId: string, title: string) => {
-    const api = getApi();
-    const { meeting, uploadToken } = await api.startMeeting(title);
-    await RecallAiSdk.startRecording({ windowId, uploadToken });
-    activeRecordings.set(windowId, { meetingId: meeting.id });
-    return meeting;
+    const active = await beginRecording(windowId, title);
+    return { id: active.meetingId };
   });
 
   ipcMain.handle("stop-recording", async (_evt, windowId: string) => {
@@ -205,11 +241,81 @@ function createWindow() {
     },
   });
   mainWindow.loadFile(path.join(__dirname, "..", "src", "renderer", "index.html"));
+
+  // Closing the window (the red dot) should not stop Anchor from watching
+  // for meetings — that only happens if the person explicitly quits (tray
+  // menu, or Cmd+Q). So intercept the close and hide instead, same as any
+  // other always-on menu-bar app.
+  mainWindow.on("close", (evt) => {
+    if (isQuitting) return;
+    evt.preventDefault();
+    mainWindow?.hide();
+  });
+}
+
+function showWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  } else {
+    mainWindow.show();
+  }
+  mainWindow?.focus();
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, "..", "src", "renderer", "icons", "trayTemplate.png");
+  const icon = nativeImage.createFromPath(iconPath);
+  icon.setTemplateImage(true); // lets macOS auto-tint it for light/dark menu bars
+  tray = new Tray(icon);
+  tray.setToolTip("Anchor Desktop — watching for Zoom, Teams, and Meet calls");
+  refreshTrayMenu();
+  tray.on("click", showWindow);
+}
+
+function refreshTrayMenu() {
+  if (!tray) return;
+  const openAtLogin = app.getLoginItemSettings().openAtLogin;
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "Open Anchor Desktop", click: showWindow },
+      { type: "separator" },
+      {
+        label: "Launch at login",
+        type: "checkbox",
+        checked: openAtLogin,
+        click: (item) => {
+          app.setLoginItemSettings({ openAtLogin: item.checked });
+          saveConfig({ ...loadConfig(), launchAtLoginDefaultApplied: true });
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Quit Anchor Desktop",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ])
+  );
 }
 
 app.whenReady().then(async () => {
   registerIpcHandlers();
   createWindow();
+  createTray();
+
+  // Turn "launch at login" on by default the first time this app ever
+  // runs on this machine, so installing it is the only setup step anyone
+  // needs — exactly once; if someone later turns it off via the tray
+  // menu, we remember that and don't force it back on.
+  const config = loadConfig();
+  if (!config.launchAtLoginDefaultApplied) {
+    app.setLoginItemSettings({ openAtLogin: true });
+    saveConfig({ ...config, launchAtLoginDefaultApplied: true });
+    refreshTrayMenu();
+  }
+
   try {
     await initSdk();
     log("Recall Desktop SDK initialized.");
@@ -219,9 +325,15 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  // Never quit on window close — see createWindow()'s "close" handler.
+  // This listener now only matters on Windows/Linux where closing every
+  // window used to end the app; the tray keeps it alive there too.
+});
+
+app.on("before-quit", () => {
+  isQuitting = true;
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  showWindow();
 });

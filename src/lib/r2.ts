@@ -6,6 +6,7 @@ import {
   DeleteObjectsCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Cloudflare R2 is S3-compatible, so the regular AWS S3 SDK works against
 // it unchanged — just pointed at R2's endpoint instead of AWS's. This is
@@ -87,4 +88,43 @@ export async function r2FirstKey(prefix: string): Promise<string | null> {
     new ListObjectsV2Command({ Bucket: bucket(), Prefix: prefix, MaxKeys: 1 })
   );
   return list.Contents?.[0]?.Key ?? null;
+}
+
+// Short-lived, direct-to-R2 upload/download URLs — used for large files
+// (see src/app/api/admin/desktop-app/upload-url/route.ts and
+// src/app/api/download/desktop-app/[platform]/route.ts) so the bytes
+// never pass through — and are never buffered in memory by — our own
+// Render instance. `expiresInSeconds` caps how long the URL is usable;
+// keep uploads short (a few minutes, since it's issued right before an
+// immediate curl) and downloads short too (the download route re-signs a
+// fresh one on every click, so the public link itself never expires even
+// though each individual signed URL does).
+export async function r2PresignedPutUrl(
+  key: string,
+  contentType: string,
+  expiresInSeconds: number
+): Promise<string> {
+  return getSignedUrl(
+    client(),
+    new PutObjectCommand({ Bucket: bucket(), Key: key, ContentType: contentType }),
+    { expiresIn: expiresInSeconds }
+  );
+}
+
+export async function r2PresignedGetUrl(
+  key: string,
+  expiresInSeconds: number,
+  downloadFilename?: string
+): Promise<string> {
+  return getSignedUrl(
+    client(),
+    new GetObjectCommand({
+      Bucket: bucket(),
+      Key: key,
+      ResponseContentDisposition: downloadFilename
+        ? `attachment; filename="${downloadFilename}"`
+        : undefined,
+    }),
+    { expiresIn: expiresInSeconds }
+  );
 }

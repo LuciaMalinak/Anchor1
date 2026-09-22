@@ -14,6 +14,11 @@ export const DEFAULT_API_BASE = "https://anchor-be6o.onrender.com";
 type Config = {
   apiBase: string;
   token: string | null;
+  // Whether we've already turned on "launch at login" once, on this
+  // machine, by default. Tracked so a user who later turns it off (via
+  // the tray menu) doesn't get overridden back to on next launch — see
+  // main.ts's tray setup.
+  launchAtLoginDefaultApplied?: boolean;
 };
 
 function configPath(): string {
@@ -27,6 +32,7 @@ export function loadConfig(): Config {
     return {
       apiBase: typeof parsed.apiBase === "string" && parsed.apiBase ? parsed.apiBase : DEFAULT_API_BASE,
       token: typeof parsed.token === "string" ? parsed.token : null,
+      launchAtLoginDefaultApplied: Boolean(parsed.launchAtLoginDefaultApplied),
     };
   } catch {
     return { apiBase: DEFAULT_API_BASE, token: null };
