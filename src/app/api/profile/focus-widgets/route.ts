@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { isFocusWidgetKey } from "@/lib/focusWidgets";
+import { authenticateBearer } from "@/lib/apiToken";
 
 // Saves this person's own focus-mode widget selection (users.focusWidgets
 // — see src/lib/focusWidgets.ts and src/app/focus/[meetingId]). Separate
@@ -11,7 +12,12 @@ import { isFocusWidgetKey } from "@/lib/focusWidgets";
 // same "per-user, plain JSON PATCH" shape.
 export async function PATCH(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  // Also accepts the desktop app's bearer token — the desktop overlay's
+  // Focus window (see desktop/src/main.ts's showOverlay) has its own
+  // "Customize" panel that PATCHes this same route without a session.
+  const bearerUserId = session?.user?.id ? null : await authenticateBearer(req);
+  const userId = session?.user?.id ?? bearerUserId;
+  if (!userId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
@@ -22,7 +28,7 @@ export async function PATCH(req: NextRequest) {
     const [updated] = await db
       .update(users)
       .set({ focusWidgets: null })
-      .where(eq(users.id, session.user.id))
+      .where(eq(users.id, userId))
       .returning();
     return NextResponse.json({ focusWidgets: updated.focusWidgets });
   }
@@ -48,7 +54,7 @@ export async function PATCH(req: NextRequest) {
   const [updated] = await db
     .update(users)
     .set({ focusWidgets: clean })
-    .where(eq(users.id, session.user.id))
+    .where(eq(users.id, userId))
     .returning();
 
   return NextResponse.json({ focusWidgets: updated.focusWidgets });

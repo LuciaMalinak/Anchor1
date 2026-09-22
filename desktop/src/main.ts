@@ -19,7 +19,7 @@
 // here has to run on the actual target machine (an Apple Silicon Mac or
 // Windows; Intel Macs aren't supported per Recall's docs), not in a
 // Linux dev sandbox. See desktop/README.md.
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, session as electronSession } from "electron";
 import * as path from "path";
 import RecallAiSdk from "@recallai/desktop-sdk";
 import { loadConfig, saveConfig, DEFAULT_API_BASE } from "./config";
@@ -27,6 +27,8 @@ import { AnchorApi } from "./anchorApi";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+// The Granola-style floating panel — see showOverlay/hideOverlay below.
+let overlayWindow: BrowserWindow | null = null;
 // Closing the window (the red dot) hides it rather than quitting — see
 // createWindow()'s "close" handler — so the app keeps detecting meetings
 // in the background the way Granola/Zoom/Slack do. Only the tray menu's
@@ -70,10 +72,117 @@ async function beginRecording(windowId: string, title: string): Promise<{ meetin
 
   const api = getApi();
   const { meeting, uploadToken } = await api.startMeeting(title);
-  await RecallAiSdk.startRecording({ windowId, uploadToken });
   const active = { meetingId: meeting.id };
+  // Recorded BEFORE calling startRecording (not after) so the
+  // recording-started listener below — which the SDK can fire the
+  // instant startRecording takes effect — is guaranteed to already find
+  // this window's meetingId here and can show the overlay for it. This
+  // ordering is the whole reason showOverlay works off activeRecordings
+  // rather than a separate map.
   activeRecordings.set(windowId, active);
+  await RecallAiSdk.startRecording({ windowId, uploadToken });
   return active;
+}
+
+// The overlay's own session/partition, separate from the main window's —
+// so its cookies and this Authorization-header injection stay scoped to
+// just this floating panel. onBeforeSendHeaders is registered once and
+// re-reads the config fresh on every request (not just page load) so it
+// covers both the initial navigation AND every fetch/XHR the loaded
+// Focus window's own React code makes afterward (useLiveMeeting's poll,
+// Ask Anchor, Customize) — none of that page's client-side fetches know
+// to attach a header themselves, so this is what makes the desktop
+// app's bearer token stand in for the browser session cookie those
+// calls would normally send. Only attached for requests to the
+// configured Anchor apiBase host — never leaked to any other origin the
+// panel might somehow end up loading (fonts, etc).
+let overlaySessionReady = false;
+function overlaySession() {
+  const ses = electronSession.fromPartition("persist:anchor-overlay");
+  if (!overlaySessionReady) {
+    overlaySessionReady = true;
+    ses.webRequest.onBeforeSendHeaders((details, callback) => {
+      try {
+        const config = loadConfig();
+        if (config.token) {
+          const apiHost = new URL(config.apiBase || DEFAULT_API_BASE).host;
+          const reqHost = new URL(details.url).host;
+          if (reqHost === apiHost) {
+            details.requestHeaders["Authorization"] = `Bearer ${config.token}`;
+          }
+        }
+      } catch {
+        // Malformed URL or similar — just pass the request through
+        // unmodified rather than failing it.
+      }
+      callback({ requestHeaders: details.requestHeaders });
+    });
+  }
+  return ses;
+}
+
+const OVERLAY_WIDTH = 420;
+const OVERLAY_HEIGHT = 640;
+const OVERLAY_MARGIN = 16;
+
+// Auto-popup floating panel (Granola-style) — reuses the website's own
+// Focus window (src/app/focus/[meetingId] in the main repo) instead of
+// rebuilding its live-transcript/coaching UI natively, so it's always in
+// sync with whatever that page shows in a browser tab. Positioned in the
+// screen's top-right corner, frameless, always-on-top, and shown WITHOUT
+// stealing focus from the actual meeting app (showInactive) — the point
+// is a glanceable panel next to the call, not something that interrupts
+// it.
+function showOverlay(meetingId: string) {
+  const config = loadConfig();
+  if (!config.token) {
+    log("Recording started but no Anchor token is saved yet — can't show the live coaching overlay.");
+    return;
+  }
+  const apiBase = config.apiBase || DEFAULT_API_BASE;
+  const url = `${apiBase}/focus/${meetingId}`;
+
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    const { workArea } = screen.getPrimaryDisplay();
+    overlayWindow = new BrowserWindow({
+      width: OVERLAY_WIDTH,
+      height: OVERLAY_HEIGHT,
+      x: Math.round(workArea.x + workArea.width - OVERLAY_WIDTH - OVERLAY_MARGIN),
+      y: Math.round(workArea.y + OVERLAY_MARGIN),
+      frame: false,
+      alwaysOnTop: true,
+      resizable: true,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      show: false,
+      webPreferences: {
+        session: overlaySession(),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    overlayWindow.setAlwaysOnTop(true, "floating");
+    // Keeps the panel visible even if the meeting app is fullscreen
+    // (e.g. Zoom in fullscreen gallery view) — otherwise macOS would
+    // treat the overlay as belonging to a different Space and hide it.
+    overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    overlayWindow.on("closed", () => {
+      overlayWindow = null;
+    });
+  }
+
+  overlayWindow.loadURL(url).catch((err) => {
+    log(`Couldn't load the live coaching overlay: ${err instanceof Error ? err.message : err}`);
+  });
+  overlayWindow.showInactive();
+}
+
+function hideOverlay() {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.hide();
+  }
 }
 
 async function initSdk() {
@@ -121,12 +230,28 @@ async function initSdk() {
   RecallAiSdk.addEventListener("recording-started", (evt) => {
     log(`Recording started for window ${evt.window.id}`);
     send("recording-started", evt.window);
+    const active = activeRecordings.get(evt.window.id);
+    if (active) {
+      showOverlay(active.meetingId);
+    } else {
+      // Shouldn't normally happen — beginRecording records this before
+      // ever calling RecallAiSdk.startRecording (see its comment) — but
+      // fall back quietly rather than throwing if it ever does.
+      log("Recording started but no Anchor meeting is tracked for this window yet — overlay not shown.");
+    }
   });
 
   RecallAiSdk.addEventListener("recording-ended", (evt) => {
     log(`Recording ended for window ${evt.window.id} — Recall is uploading it now`);
     activeRecordings.delete(evt.window.id);
     send("recording-ended", evt.window);
+    // Simple for now: hides the overlay whenever ANY tracked recording
+    // ends, which is correct for the common case (one call at a time).
+    // If someone's ever recording two windows at once, the overlay would
+    // hide when the first of the two ends even though the second is
+    // still live — a known limitation, not worth the complexity of a
+    // per-window overlay for how rare that case is.
+    hideOverlay();
   });
 
   // Real-time transcript events during the call — turned on by

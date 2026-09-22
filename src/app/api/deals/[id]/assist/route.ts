@@ -8,6 +8,7 @@ import { authorizeDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { isImageFile, imageMediaType } from "@/lib/extractText";
 import { readStoredFile } from "@/lib/storage";
+import { authenticateBearer } from "@/lib/apiToken";
 
 const MAX_HISTORY_TURNS = 6;
 
@@ -28,12 +29,17 @@ const LIVE_TRANSCRIPT_WINDOW_CHARS = 4_000;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (!session?.user?.id) {
+  // Also accepts the desktop app's bearer token — Ask Anchor is one of
+  // the Focus window's default widgets, which the desktop overlay loads
+  // without a browser session (see desktop/src/main.ts's showOverlay).
+  const bearerUserId = session?.user?.id ? null : await authenticateBearer(req);
+  const userId = session?.user?.id ?? bearerUserId;
+  if (!userId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
   const { id: dealId } = await params;
-  const authorized = await authorizeDeal(session.user.id, dealId);
+  const authorized = await authorizeDeal(userId, dealId);
   if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }

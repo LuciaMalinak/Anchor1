@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, meetingLiveSegments, deals, summaries, dealFiles } from "@/db/schema";
@@ -7,6 +7,7 @@ import { generateLiveCoaching } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { summarizeDealFiles } from "@/lib/dealFilesContext";
+import { authenticateBearer } from "@/lib/apiToken";
 
 // How often live coaching (nudges + checklist) is allowed to regenerate.
 // The During tab polls this route every couple of seconds (see
@@ -28,9 +29,15 @@ const TRANSCRIPT_WINDOW_CHARS = 6_000;
 // regenerates far more often (every ~8s) during a live call.
 const PAST_MEETINGS_LIMIT = 3;
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (!session?.user?.id) {
+  // Also accepts the desktop app's bearer token — its floating overlay
+  // (see desktop/src/main.ts's showOverlay) loads the Focus window
+  // instead of a browser tab, and that window polls this same route for
+  // its live transcript + coaching the same way the During tab does.
+  const bearerUserId = session?.user?.id ? null : await authenticateBearer(req);
+  const userId = session?.user?.id ?? bearerUserId;
+  if (!userId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
@@ -40,7 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
 
-  const isOwner = meeting.userId === session.user.id;
+  const isOwner = meeting.userId === userId;
   const dealRows = meeting.dealId
     ? await db.select().from(deals).where(eq(deals.id, meeting.dealId))
     : [];
@@ -51,7 +58,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // to only get checked for a non-owner, so the owner's own meeting could
   // pull another team's deal memory/notes/decision boundaries/email and
   // calendar context straight into live coaching with no check at all.
-  const canUseDeal = Boolean(deal && (await canAccessDeal(session.user.id, deal.id, deal.teamId, deal)));
+  const canUseDeal = Boolean(deal && (await canAccessDeal(userId, deal.id, deal.teamId, deal)));
   if (!isOwner && !canUseDeal) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
