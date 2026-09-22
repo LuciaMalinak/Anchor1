@@ -18,11 +18,54 @@
 const { execFileSync, spawnSync } = require("child_process");
 const path = require("path");
 
+// Ad-hoc signing ("-") has no certificate behind it at all — its "identity"
+// is just a hash of that exact build's bytes, which is different on every
+// single rebuild. macOS ties Accessibility and Screen Recording grants to
+// that identity, so every rebuild silently un-grants both, even though
+// nothing is actually wrong — this is what was seen live: granted, then
+// "denied" again immediately after the very next rebuild, with the exact
+// same appId and code otherwise unchanged. A real certificate (even a
+// self-signed, non-Apple-issued one — no paid Developer ID needed) gives
+// the app a STABLE identity across rebuilds instead, so a grant made once
+// keeps working. See build/create-local-signing-cert.sh, a one-time setup
+// script that creates exactly that kind of certificate, scoped to this
+// Mac's own login keychain only. If that certificate exists, this hook
+// automatically prefers it over ad-hoc; if it doesn't exist yet, this
+// falls back to ad-hoc signing exactly as before (still fully functional,
+// just with the re-grant-after-every-rebuild caveat).
+const LOCAL_SIGNING_IDENTITY_NAME = "Anchor Desktop Local Signing";
+
+function pickSigningIdentity() {
+  try {
+    const out = execFileSync("security", ["find-identity", "-v", "-p", "codesigning"], {
+      encoding: "utf8",
+    });
+    if (out.includes(LOCAL_SIGNING_IDENTITY_NAME)) {
+      return LOCAL_SIGNING_IDENTITY_NAME;
+    }
+  } catch (err) {
+    // `security` missing or find-identity failing — fall back to ad-hoc
+    // rather than aborting the whole build over a diagnostic step.
+    console.warn(`[afterSign] Couldn't check for a local signing certificate: ${err.message}`);
+  }
+  return "-";
+}
+
 module.exports = async function afterSign(context) {
   if (context.electronPlatformName !== "darwin") return;
 
   const appName = context.packager.appInfo.productFilename;
   const appPath = path.join(context.appOutDir, `${appName}.app`);
+  const signingIdentity = pickSigningIdentity();
+  if (signingIdentity === "-") {
+    console.log(
+      "[afterSign] No local signing certificate found — signing ad-hoc. " +
+        "Accessibility/Screen Recording will need re-granting after this build. " +
+        "Run desktop/build/create-local-signing-cert.sh once to fix that permanently."
+    );
+  } else {
+    console.log(`[afterSign] Found local signing certificate "${signingIdentity}" — using it instead of ad-hoc.`);
+  }
 
   // codesign refuses to sign over leftover extended attributes
   // (resource forks / Finder info / quarantine flags) that can end up
@@ -66,8 +109,8 @@ module.exports = async function afterSign(context) {
     }
   }
 
-  console.log(`[afterSign] Ad-hoc signing ${appPath} …`);
-  execFileSync("codesign", ["--force", "--deep", "--sign", "-", appPath], {
+  console.log(`[afterSign] Signing ${appPath} with identity "${signingIdentity}" …`);
+  execFileSync("codesign", ["--force", "--deep", "--sign", signingIdentity, appPath], {
     stdio: "inherit",
   });
 
@@ -101,5 +144,7 @@ module.exports = async function afterSign(context) {
       `[afterSign] Signed, but Identifier is not com.anchor.desktop. Output:\n${identifierOutput}`
     );
   }
-  console.log("[afterSign] Confirmed Identifier=com.anchor.desktop. Done.");
+  console.log(
+    `[afterSign] Confirmed Identifier=com.anchor.desktop, signed with "${signingIdentity}". Done.`
+  );
 };
