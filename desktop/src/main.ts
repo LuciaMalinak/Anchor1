@@ -321,6 +321,17 @@ async function initSdk() {
     // instead of only surfacing here if requestPermission itself throws
     // (it doesn't, for an ordinary denial; a denial is a normal resolved
     // status, not an exception).
+    //
+    // That logging is what caught a real build-config bug: accessibility
+    // and screen-capture were both resolving "denied" in the same
+    // instant as "SDK initialized" — no dialog, no wait, nothing for
+    // anyone to click Allow on. That's the signature of Hardened Runtime
+    // silently blocking these two prompts on an app with no real Apple
+    // Developer ID signature (this app is ad-hoc/unsigned — no paid
+    // account yet). Hardened Runtime only means anything once there's a
+    // real certificate to notarize against; until then it's turned off
+    // (see desktop/package.json's build.mac.hardenedRuntime) so macOS
+    // actually shows these prompts instead of auto-denying them.
     for (const permission of ["accessibility", "screen-capture", "system-audio", "microphone"] as const) {
       try {
         await RecallAiSdk.requestPermission(permission);
