@@ -4,6 +4,16 @@
     <meta charset="utf-8" />
     <title>Anchor Desktop</title>
     <style>
+      /* Same brand tokens as the website (src/app/globals.css): navy
+         primary, copper accent, clean white surfaces. Keeping the
+         desktop app's own colors in sync with these by hand (no shared
+         CSS between the two apps) — update both places if the brand
+         colors ever change. */
+      :root {
+        --brand: #12294a;
+        --brand-dark: #0b1930;
+        --copper: #b4531f;
+      }
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         margin: 0;
@@ -11,9 +21,18 @@
         color: #1e293b;
         background: #f8fafc;
       }
-      h1 {
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .brand h1 {
         font-size: 16px;
-        margin: 0 0 4px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin: 0;
+        color: var(--brand);
       }
       p.sub {
         color: #64748b;
@@ -37,7 +56,7 @@
         margin-bottom: 8px;
       }
       button {
-        background: #4f46e5;
+        background: var(--brand);
         color: white;
         border: none;
         border-radius: 6px;
@@ -45,12 +64,18 @@
         font-size: 12px;
         cursor: pointer;
       }
+      button:hover:not(:disabled) {
+        background: var(--brand-dark);
+      }
       button:disabled {
         opacity: 0.5;
         cursor: default;
       }
       button.stop {
         background: #dc2626;
+      }
+      button.stop:hover:not(:disabled) {
+        background: #b91c1c;
       }
       .meeting {
         display: flex;
@@ -79,7 +104,20 @@
     </style>
   </head>
   <body>
-    <h1>Anchor Desktop</h1>
+    <div class="brand">
+      <!-- Same anchor glyph as the website's Logo.tsx / icon.svg — keep the
+           path data in sync if either changes. -->
+      <svg width="22" height="22" viewBox="0 0 32 32" fill="none" stroke="#12294a" stroke-width="1.9"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="16" cy="7.5" r="2.25" />
+        <path d="M16 9.75V24.5" />
+        <path d="M11 13.5H21" />
+        <path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5" />
+        <path d="M8 18.5L6 15.8M8 18.5L10.3 17" />
+        <path d="M24 18.5L26 15.8M24 18.5L21.7 17" />
+      </svg>
+      <h1>Anchor Desktop</h1>
+    </div>
     <p class="sub">Records Zoom, Teams, and Meet calls straight from your computer — no bot joins the call.</p>
     <p class="sub" style="margin-top: -12px">
       Closing this window keeps Anchor running quietly in your menu bar, watching for calls. Look for the anchor
