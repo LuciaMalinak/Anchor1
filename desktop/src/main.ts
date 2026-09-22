@@ -425,40 +425,60 @@ function refreshTrayMenu() {
   );
 }
 
-app.whenReady().then(async () => {
-  registerIpcHandlers();
-  createWindow();
-  createTray();
+// A menu-bar app that's meant to always be running invites exactly the
+// failure mode that turned up while diagnosing why nothing was
+// auto-popping-up: launching it again (double-click, Spotlight, a
+// reinstall's first open) while an old copy is still alive in the tray
+// silently starts a SECOND process — a second Tray icon, a second
+// RecallAiSdk.init(), a second everything, competing with the first in
+// ways that can make meeting detection/recording/the overlay flaky or
+// silent with no visible error. requestSingleInstanceLock stops that: if
+// another copy is already running, THIS one quits immediately and instead
+// asks the original (via "second-instance", below) to just bring its
+// existing window forward.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    showWindow();
+  });
 
-  // Turn "launch at login" on by default the first time this app ever
-  // runs on this machine, so installing it is the only setup step anyone
-  // needs — exactly once; if someone later turns it off via the tray
-  // menu, we remember that and don't force it back on.
-  const config = loadConfig();
-  if (!config.launchAtLoginDefaultApplied) {
-    app.setLoginItemSettings({ openAtLogin: true });
-    saveConfig({ ...config, launchAtLoginDefaultApplied: true });
-    refreshTrayMenu();
-  }
+  app.whenReady().then(async () => {
+    registerIpcHandlers();
+    createWindow();
+    createTray();
 
-  try {
-    await initSdk();
-    log("Recall Desktop SDK initialized.");
-  } catch (err) {
-    log(`Failed to initialize the Recall Desktop SDK: ${err instanceof Error ? err.message : err}`);
-  }
-});
+    // Turn "launch at login" on by default the first time this app ever
+    // runs on this machine, so installing it is the only setup step anyone
+    // needs — exactly once; if someone later turns it off via the tray
+    // menu, we remember that and don't force it back on.
+    const config = loadConfig();
+    if (!config.launchAtLoginDefaultApplied) {
+      app.setLoginItemSettings({ openAtLogin: true });
+      saveConfig({ ...config, launchAtLoginDefaultApplied: true });
+      refreshTrayMenu();
+    }
 
-app.on("window-all-closed", () => {
-  // Never quit on window close — see createWindow()'s "close" handler.
-  // This listener now only matters on Windows/Linux where closing every
-  // window used to end the app; the tray keeps it alive there too.
-});
+    try {
+      await initSdk();
+      log("Recall Desktop SDK initialized.");
+    } catch (err) {
+      log(`Failed to initialize the Recall Desktop SDK: ${err instanceof Error ? err.message : err}`);
+    }
+  });
 
-app.on("before-quit", () => {
-  isQuitting = true;
-});
+  app.on("window-all-closed", () => {
+    // Never quit on window close — see createWindow()'s "close" handler.
+    // This listener now only matters on Windows/Linux where closing every
+    // window used to end the app; the tray keeps it alive there too.
+  });
 
-app.on("activate", () => {
-  showWindow();
-});
+  app.on("before-quit", () => {
+    isQuitting = true;
+  });
+
+  app.on("activate", () => {
+    showWindow();
+  });
+}
