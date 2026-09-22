@@ -15,7 +15,7 @@
 // com.anchor.desktop identity, so macOS's permission system (TCC) can
 // finally tell it apart from every other unsigned Electron app on the
 // machine instead of lumping them all together.
-const { execFileSync } = require("child_process");
+const { execFileSync, spawnSync } = require("child_process");
 const path = require("path");
 
 module.exports = async function afterSign(context) {
@@ -83,10 +83,18 @@ module.exports = async function afterSign(context) {
   execFileSync("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath], {
     stdio: "inherit",
   });
-  const identifierOutput = execFileSync("codesign", ["-dv", "--verbose=4", appPath], {
+  // `codesign -dv` writes its human-readable info (including Identifier=)
+  // to STDERR, not stdout — execFileSync's return value only ever carries
+  // stdout, so capturing it that way silently gets an empty string and
+  // makes the check below always fail even on a perfectly good signature
+  // (exactly what happened on the first run after moving off Desktop: the
+  // "valid on disk" / "satisfies its Designated Requirement" lines a few
+  // steps above prove the signing itself was already fine). spawnSync
+  // gives stdout and stderr back separately, so combine both here.
+  const identifierCheck = spawnSync("codesign", ["-dv", "--verbose=4", appPath], {
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  }).toString();
+  });
+  const identifierOutput = `${identifierCheck.stdout || ""}${identifierCheck.stderr || ""}`;
   console.log(identifierOutput);
   if (!identifierOutput.includes("Identifier=com.anchor.desktop")) {
     throw new Error(
