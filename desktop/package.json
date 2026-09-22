@@ -32,6 +32,7 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": ["dmg", "zip"],
+      "identity": "-",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
