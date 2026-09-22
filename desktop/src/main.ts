@@ -51,15 +51,29 @@ function getApi(): AnchorApi {
 }
 
 async function initSdk() {
-  await RecallAiSdk.init({
-    // macOS needs these three granted before it can capture anything;
-    // Windows needs none of them (per docs.recall.ai/docs/desktop-sdk).
-    // Requesting them here at startup rather than lazily on first
-    // recording means the permission prompts happen once, predictably,
-    // instead of interrupting someone mid-join.
-    acquirePermissionsOnStartup:
-      process.platform === "darwin" ? ["accessibility", "screen-capture", "microphone"] : [],
-  });
+  // acquirePermissionsOnStartup does NOT actually trigger macOS's permission
+  // prompts on its own (confirmed against docs.recall.ai/docs/macos-permissions
+  // — the earlier assumption baked into this option was wrong, and it's why no
+  // prompt was ever appearing). The real, documented way is to explicitly call
+  // requestPermission() per permission after init(), which is what the loop
+  // below does.
+  await RecallAiSdk.init({ acquirePermissionsOnStartup: [] });
+
+  if (process.platform === "darwin") {
+    // macOS needs all four before it can detect windows, capture the
+    // screen, capture the other participants' audio, and capture your own
+    // mic, respectively. Requesting them here at startup rather than
+    // lazily on first recording means the permission prompts happen once,
+    // predictably, instead of interrupting someone mid-join. Windows needs
+    // none of them (per docs.recall.ai/docs/desktop-sdk).
+    for (const permission of ["accessibility", "screen-capture", "system-audio", "microphone"] as const) {
+      try {
+        await RecallAiSdk.requestPermission(permission);
+      } catch (err) {
+        log(`Couldn't request "${permission}" permission: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+  }
 
   RecallAiSdk.addEventListener("meeting-detected", (evt) => {
     log(`Meeting detected: ${evt.window.title ?? evt.window.platform ?? evt.window.id}`);
@@ -130,6 +144,7 @@ async function initSdk() {
   });
 
   RecallAiSdk.addEventListener("permission-status", (evt) => {
+    log(`Permission "${evt.permission}": ${evt.status}`);
     send("permission-status", evt);
   });
 

@@ -6,3 +6,5 @@ screenshots
 .env.local
 desktop/dist
 desktop/release
+.DS_Store
+*.tsbuildinfo
