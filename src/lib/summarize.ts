@@ -117,9 +117,25 @@ const SUMMARY_TOOL = {
 };
 
 export async function summarizeMeeting(
-  utterances: Utterance[]
+  utterances: Utterance[],
+  // Optional deal-level background — the deal's rolling memory and its
+  // email digest (see dealEmailDigest.ts) — so the summary and action
+  // items this meeting produces can connect what was actually said to
+  // what's already known about the deal (e.g. a commitment made over
+  // email getting confirmed or updated on the call). This is background
+  // ONLY: the model is still asked to ground everything in the
+  // transcript, never to invent an action item purely from an email that
+  // was never mentioned on the call.
+  dealContext?: { memory?: string | null; emailContext?: string | null } | null
 ): Promise<MeetingSummaryResult> {
   const transcriptText = transcriptToPlainText(utterances);
+
+  const dealContextBlock =
+    dealContext?.memory || dealContext?.emailContext
+      ? `\n\nBackground on this deal, for context only — ground your summary and action items in what was actually said on THIS call, not in this background alone:\n${
+          dealContext.memory ? `Deal history: ${dealContext.memory}\n` : ""
+        }${dealContext.emailContext ? `Relevant email history: ${dealContext.emailContext}` : ""}`
+      : "";
 
   const message = await client().messages.create({
     model: MODEL,
@@ -131,7 +147,7 @@ export async function summarizeMeeting(
     messages: [
       {
         role: "user",
-        content: `Here is a meeting transcript with speakers separated. Summarize it.\n\n${transcriptText}`,
+        content: `Here is a meeting transcript with speakers separated. Summarize it.\n\n${transcriptText}${dealContextBlock}`,
       },
     ],
   });
@@ -349,6 +365,12 @@ export async function mergeDealMemory(params: {
   // src/lib/dealFilesContext.ts) — background material, weighed the same
   // as manualNotes below.
   attachedFiles?: string | null;
+  // The deal's smart-extracted email digest (see dealEmailDigest.ts /
+  // dealIntegrationContext.ts) — commitments, facts, and open questions
+  // pulled from connected-account email, folded in the same way as
+  // attachedFiles so the rolling deal memory reflects what's actually
+  // been said over email, not just what happened on calls.
+  emailContext?: string | null;
   resynthesize?: boolean;
   recentMeetings?: {
     overview: string;
@@ -366,6 +388,9 @@ export async function mergeDealMemory(params: {
   const attachedFilesBlock = params.attachedFiles
     ? `\n\nFiles/voice notes attached to this deal:\n${params.attachedFiles}`
     : "";
+  const emailContextBlock = params.emailContext
+    ? `\n\nRelevant email history with this deal's contacts:\n${params.emailContext}`
+    : "";
 
   const promptBody = params.resynthesize && params.recentMeetings?.length
     ? `Deal: ${params.dealName}\n\n` +
@@ -381,13 +406,13 @@ export async function mergeDealMemory(params: {
         .join("\n")}\n\n` +
       `Today's meeting:\nOverview: ${params.newSummary.overview}\nKey points: ${params.newSummary.keyPoints.join(
         "; "
-      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}${attachedFilesBlock}\n\n` +
+      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}${attachedFilesBlock}${emailContextBlock}\n\n` +
       `Produce a fresh, accurate memory grounded in this real history, and note what changed vs. the current (possibly drifted) memory.`
     : `Deal: ${params.dealName}\n\nExisting deal memory:\n${
         params.priorMemory || "No prior notes — this is the first meeting."
       }\n\nWhat happened in today's meeting on this deal:\nOverview: ${params.newSummary.overview}\nKey points: ${params.newSummary.keyPoints.join(
         "; "
-      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}${attachedFilesBlock}\n\nProduce an updated rolling memory for this deal, and note what changed vs. the prior memory.`;
+      )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}${attachedFilesBlock}${emailContextBlock}\n\nProduce an updated rolling memory for this deal, and note what changed vs. the prior memory.`;
 
   const message = await client().messages.create({
     model: MODEL,

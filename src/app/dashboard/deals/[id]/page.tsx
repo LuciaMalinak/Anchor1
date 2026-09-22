@@ -64,6 +64,7 @@ export default async function DealDetailPage({
   if (isIntegrationContextStale(deal.integrationContextUpdatedAt)) {
     const refreshed = await refreshDealIntegrationContext({
       id: deal.id,
+      name: deal.name,
       leadUserId: deal.leadUserId,
       createdByUserId: deal.createdByUserId,
       primaryContactEmail: deal.primaryContactEmail,

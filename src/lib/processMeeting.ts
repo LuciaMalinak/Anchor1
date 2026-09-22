@@ -55,6 +55,13 @@ export async function processMeeting(meetingId: string): Promise<void> {
       throw new Error("The audio file for this meeting is missing from storage.");
     }
 
+    // Fetched once, up front, so it's available both to ground today's
+    // summary/action items (below) and, later, to update the deal's own
+    // rolling memory — avoids a second identical query for the same row.
+    const deal = meeting.dealId
+      ? (await db.select().from(deals).where(eq(deals.id, meeting.dealId)))[0]
+      : undefined;
+
     const { fullText, utterances } = await withRetry(
       () => transcribeAudioFile(audioBuffer),
       { label: `transcribe ${meetingId}` }
@@ -79,7 +86,11 @@ export async function processMeeting(meetingId: string): Promise<void> {
       .where(eq(meetings.id, meetingId));
 
     const result = await withRetry(
-      () => summarizeMeeting(utterances),
+      () =>
+        summarizeMeeting(
+          utterances,
+          deal ? { memory: deal.memory, emailContext: deal.emailContext } : null
+        ),
       { label: `summarize ${meetingId}` }
     );
 
@@ -263,7 +274,6 @@ export async function processMeeting(meetingId: string): Promise<void> {
     // here shouldn't flip an otherwise-successful meeting to "failed".
     if (meeting.dealId) {
       try {
-        const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
         if (deal) {
           // How many meetings on this deal have a summary so far
           // (including the one just inserted above) — decides whether
@@ -316,6 +326,7 @@ export async function processMeeting(meetingId: string): Promise<void> {
                 resynthesize: shouldResynthesize,
                 recentMeetings,
                 attachedFiles: summarizeDealFiles(dealFileRows),
+                emailContext: deal.emailContext,
               }),
             { label: `deal memory ${deal.id}` }
           );
