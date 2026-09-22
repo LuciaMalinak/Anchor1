@@ -28,9 +28,17 @@ module.exports = async function afterSign(context) {
   // (resource forks / Finder info / quarantine flags) that can end up
   // on files after being copied or synced by other tools — "resource
   // fork, Finder information, or similar detritus not allowed" is
-  // codesign's actual error for this. Stripping them first with `xattr
-  // -cr` is the standard fix; it's a no-op (does nothing, harmless) on
-  // a bundle that's already clean.
+  // codesign's actual error for this. xattr -cr handles the extended
+  // ATTRIBUTES; it doesn't touch actual leftover junk FILES (.DS_Store,
+  // AppleDouble ._* resource-fork files) that trip the same codesign
+  // error and that xattr has nothing to do with — deleting those too,
+  // recursively, since a nested helper .app (inside Contents/Frameworks)
+  // hit exactly this on the first pass with xattr alone. All of this is
+  // a no-op on an already-clean bundle.
+  console.log(`[afterSign] Removing .DS_Store / AppleDouble junk files in ${appPath} …`);
+  execFileSync("find", [appPath, "-name", ".DS_Store", "-delete"], { stdio: "inherit" });
+  execFileSync("find", [appPath, "-name", "._*", "-delete"], { stdio: "inherit" });
+
   console.log(`[afterSign] Clearing extended attributes on ${appPath} …`);
   execFileSync("xattr", ["-cr", appPath], { stdio: "inherit" });
 
