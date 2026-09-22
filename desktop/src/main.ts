@@ -71,7 +71,15 @@ async function beginRecording(windowId: string, title: string): Promise<{ meetin
   if (existing) return existing;
 
   const api = getApi();
-  const { meeting, uploadToken } = await api.startMeeting(title);
+  // Best-effort: figure out which deal this call is for before creating
+  // the meeting, so it lands there automatically instead of coming
+  // through unassigned — see AnchorApi.matchDealNow(). Never blocks or
+  // fails the recording if this comes back empty.
+  const dealMatch = await api.matchDealNow().catch(() => undefined);
+  if (dealMatch) {
+    log(`Matched this call to "${dealMatch.dealName}" — recording will be added there automatically.`);
+  }
+  const { meeting, uploadToken } = await api.startMeeting(title, dealMatch?.dealId);
   const active = { meetingId: meeting.id };
   // Recorded BEFORE calling startRecording (not after) so the
   // recording-started listener below — which the SDK can fire the
@@ -80,7 +88,25 @@ async function beginRecording(windowId: string, title: string): Promise<{ meetin
   // ordering is the whole reason showOverlay works off activeRecordings
   // rather than a separate map.
   activeRecordings.set(windowId, active);
-  await RecallAiSdk.startRecording({ windowId, uploadToken });
+  try {
+    await RecallAiSdk.startRecording({ windowId, uploadToken });
+  } catch (err) {
+    // startMeeting already created this meeting "live" on Anchor's
+    // backend before we knew whether the local SDK would actually accept
+    // it — if it didn't, undo both sides: drop it from activeRecordings
+    // (so a retry isn't short-circuited by the "existing" check above)
+    // and tell Anchor to mark it failed (so it doesn't stay stuck
+    // "recording" forever and block every future call for this deal via
+    // the one-live-capture guard — this is what caused that exact stuck
+    // state the first time this shipped).
+    activeRecordings.delete(windowId);
+    await api.stopMeeting(meeting.id, { failed: true }).catch((cleanupErr) => {
+      log(
+        `Also couldn't mark the failed meeting as failed on Anchor's side: ${cleanupErr instanceof Error ? cleanupErr.message : cleanupErr}`
+      );
+    });
+    throw err;
+  }
   return active;
 }
 

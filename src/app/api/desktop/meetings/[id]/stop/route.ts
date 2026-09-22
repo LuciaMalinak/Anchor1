@@ -15,6 +15,15 @@ import { authenticateBearer } from "@/lib/apiToken";
 // (src/app/api/webhooks/recall/route.ts) and moves it to "uploaded", same
 // gap that already exists between a bot leaving a call and its
 // recording.done webhook arriving.
+//
+// Exception: `{ failed: true }` — sent when the desktop app's own
+// RecallAiSdk.startRecording() call itself threw (e.g. an invalid upload
+// token), meaning no recording ever actually started and no completion
+// webhook will EVER arrive to move this out of "recording". Without this,
+// that meeting stays stuck "live" forever and blocks every future
+// recording for the same deal via the one-live-capture guard in
+// /api/desktop/meetings/start — see beginRecording() in desktop/src/main.ts,
+// which calls this the moment startRecording rejects.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = await authenticateBearer(req);
   if (!userId) {
@@ -25,6 +34,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const [meeting] = await db.select().from(meetings).where(eq(meetings.id, id));
   if (!meeting || meeting.userId !== userId) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  if (body?.failed === true) {
+    const [updated] = await db
+      .update(meetings)
+      .set({ status: "failed" })
+      .where(eq(meetings.id, id))
+      .returning();
+    return NextResponse.json({ ok: true, meeting: updated });
   }
 
   return NextResponse.json({ ok: true, meeting });
