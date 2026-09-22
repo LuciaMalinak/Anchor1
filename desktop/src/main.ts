@@ -194,22 +194,15 @@ async function initSdk() {
   // below does.
   await RecallAiSdk.init({ acquirePermissionsOnStartup: [] });
 
-  if (process.platform === "darwin") {
-    // macOS needs all four before it can detect windows, capture the
-    // screen, capture the other participants' audio, and capture your own
-    // mic, respectively. Requesting them here at startup rather than
-    // lazily on first recording means the permission prompts happen once,
-    // predictably, instead of interrupting someone mid-join. Windows needs
-    // none of them (per docs.recall.ai/docs/desktop-sdk).
-    for (const permission of ["accessibility", "screen-capture", "system-audio", "microphone"] as const) {
-      try {
-        await RecallAiSdk.requestPermission(permission);
-      } catch (err) {
-        log(`Couldn't request "${permission}" permission: ${err instanceof Error ? err.message : err}`);
-      }
-    }
-  }
-
+  // All event listeners are registered BEFORE the permission-request loop
+  // below (this used to be the other way around) — requestPermission()
+  // itself fires "permission-status" the moment each answer comes back,
+  // and a listener attached only after the loop already finished misses
+  // every one of those events. That gap was actively hiding the cause of
+  // "nothing is being detected": the Activity log never showed whether a
+  // permission had actually been granted or denied, only that the loop
+  // ran without throwing (which it does either way — requestPermission
+  // resolves either outcome without an exception).
   RecallAiSdk.addEventListener("meeting-detected", (evt) => {
     const title = evt.window.title || evt.window.platform || evt.window.id;
     log(`Meeting detected: ${title} — starting to record automatically`);
@@ -315,6 +308,27 @@ async function initSdk() {
   RecallAiSdk.addEventListener("shutdown", (evt) => {
     log(`SDK shut down (code ${evt.code})`);
   });
+
+  if (process.platform === "darwin") {
+    // macOS needs all four before it can detect windows, capture the
+    // screen, capture the other participants' audio, and capture your own
+    // mic, respectively. Requesting them here at startup rather than
+    // lazily on first recording means the permission prompts happen once,
+    // predictably, instead of interrupting someone mid-join. Windows needs
+    // none of them (per docs.recall.ai/docs/desktop-sdk). Every outcome
+    // now also lands in the Activity log via the permission-status
+    // listener registered above — "granted" or "denied" per permission —
+    // instead of only surfacing here if requestPermission itself throws
+    // (it doesn't, for an ordinary denial; a denial is a normal resolved
+    // status, not an exception).
+    for (const permission of ["accessibility", "screen-capture", "system-audio", "microphone"] as const) {
+      try {
+        await RecallAiSdk.requestPermission(permission);
+      } catch (err) {
+        log(`Couldn't request "${permission}" permission: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+  }
 }
 
 function registerIpcHandlers() {
