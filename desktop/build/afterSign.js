@@ -42,9 +42,56 @@ module.exports = async function afterSign(context) {
   console.log(`[afterSign] Clearing extended attributes on ${appPath} …`);
   execFileSync("xattr", ["-cr", appPath], { stdio: "inherit" });
 
+  // `xattr -cr` clears attributes on everything INSIDE appPath plus appPath
+  // itself in theory, but com.apple.FinderInfo on the top-level bundle
+  // DIRECTORY has proven to survive that call in practice (Finder writes this
+  // attribute onto folders it displays — window/icon layout metadata — and
+  // since this bundle sits inside a folder that's open in Finder on the
+  // Desktop, Finder can rewrite it at any moment, including between our -cr
+  // call and the codesign call a few lines down). Belt-and-suspenders: name
+  // the known-bad attributes explicitly and delete them one more time, right
+  // on the bundle path itself, immediately before signing. `xattr -d` exits
+  // non-zero if the attribute isn't present, which is fine and expected on a
+  // clean bundle, so each call is wrapped to swallow that "not found" case.
+  for (const attr of ["com.apple.FinderInfo", "com.apple.ResourceFork"]) {
+    try {
+      execFileSync("xattr", ["-d", attr, appPath], { stdio: "pipe" });
+      console.log(`[afterSign] Removed lingering ${attr} from ${appPath}`);
+    } catch (err) {
+      // "No such xattr" is expected and fine; anything else, surface it.
+      const msg = (err.stderr || "").toString();
+      if (!/no such xattr/i.test(msg)) {
+        console.warn(`[afterSign] xattr -d ${attr} on ${appPath}: ${msg.trim()}`);
+      }
+    }
+  }
+
   console.log(`[afterSign] Ad-hoc signing ${appPath} …`);
   execFileSync("codesign", ["--force", "--deep", "--sign", "-", appPath], {
     stdio: "inherit",
   });
-  console.log("[afterSign] Done.");
+
+  // Verify right here, inside the same build, instead of relying on a
+  // separate manual codesign run afterward — a manual re-run minutes later
+  // is itself exposed to the same Finder-rewrites-FinderInfo race described
+  // above (this is likely exactly what happened with the "detritus not
+  // allowed" failure on a manual re-sign after an already-successful build:
+  // Finder touched the bundle again in the gap). Checking immediately, in
+  // the same process, right after signing, closes that gap and makes the
+  // build log itself the source of truth.
+  console.log(`[afterSign] Verifying signature on ${appPath} …`);
+  execFileSync("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath], {
+    stdio: "inherit",
+  });
+  const identifierOutput = execFileSync("codesign", ["-dv", "--verbose=4", appPath], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).toString();
+  console.log(identifierOutput);
+  if (!identifierOutput.includes("Identifier=com.anchor.desktop")) {
+    throw new Error(
+      `[afterSign] Signed, but Identifier is not com.anchor.desktop. Output:\n${identifierOutput}`
+    );
+  }
+  console.log("[afterSign] Confirmed Identifier=com.anchor.desktop. Done.");
 };
