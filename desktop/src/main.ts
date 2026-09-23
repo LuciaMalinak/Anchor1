@@ -317,7 +317,19 @@ async function initSdk() {
   });
 
   RecallAiSdk.addEventListener("recording-started", (evt) => {
-    log(`Recording started for window ${evt.window.id}`);
+    log(`Recording started for window ${evt.window.id} (rawMedia: ${evt.rawMedia})`);
+    if (!evt.rawMedia) {
+      // Per the SDK's own docs, rawMedia is "the source of truth for the
+      // active recording; false includes recordings that fell back to
+      // local capture" — previously never read anywhere in this file, so
+      // this distinction was silently discarded even though it's exactly
+      // the kind of signal worth having on hand while transcript.data's
+      // real shape off a desktop recording is still unconfirmed (see the
+      // realtime-event listener below): if live transcript delivery ever
+      // behaves differently, whether this call used Raw Media or fell
+      // back to local capture is one of the first things worth checking.
+      log(`Window ${evt.window.id} fell back to local capture (rawMedia: false) instead of Desktop SDK Raw Media.`);
+    }
     send("recording-started", evt.window);
     const active = activeRecordings.get(evt.window.id);
     if (active) {
@@ -365,13 +377,24 @@ async function initSdk() {
   // src/lib/recall.ts::createSdkUpload in the main repo (recallai_streaming
   // + a "desktop_sdk_callback" realtime_endpoint), which is what makes
   // Recall deliver transcript.data here instead of (or in addition to) a
-  // webhook. The nested shape (words[].text, participant.name,
-  // words[0].start_timestamp.relative) mirrors what
+  // webhook. Recall's own docs
+  // (https://docs.recall.ai/docs/real-time-event-payloads) confirm the
+  // word-level fields (words[].text, participant.name,
+  // words[0].start_timestamp.relative) — that part mirrors what
   // src/app/api/webhooks/recall/transcript/route.ts already parses for
-  // bot calls, since it's the same underlying provider — not yet seen
+  // bot calls, since it's the same underlying provider. What the docs
+  // DON'T confirm is how many levels deep that object sits inside
+  // evt.data for THIS delivery mechanism specifically: the example
+  // payload they show nests it two levels ({data: {data: {words...}}}),
+  // matching the webhook route's payload.data.data, but it's undocumented
+  // whether the SDK's desktop_sdk_callback delivery hands this listener
+  // that same outer envelope (2 levels) or already unwraps it (1 level,
+  // this file's original assumption) — see the shape-detection below,
+  // which now handles both instead of assuming one. Still not yet seen
   // for real off a desktop recording, so this stays defensive (bails
-  // quietly on anything unexpected) and logs the raw event too, in case
-  // the shape turns out to differ once tested for real.
+  // quietly, with a log line, on anything neither shape matches) and
+  // logs the raw event too, in case the real shape turns out to be
+  // neither.
   //
   // DIAGNOSTIC LOGGING: every transcript.data event's raw JSON gets
   // logged to the Activity panel (truncated) regardless of whether text
@@ -402,18 +425,47 @@ async function initSdk() {
       return;
     }
 
-    const data = evt.data as
-      | {
-          words?: { text?: string; start_timestamp?: { relative?: number } }[];
-          participant?: { name?: string | null };
-        }
-      | undefined;
+    // ROOT-CAUSE FINDING: Recall's own docs
+    // (https://docs.recall.ai/docs/real-time-event-payloads) show
+    // transcript.data's JSON with the words array nested TWO levels
+    // deep — {"data": {"data": {"words": [...]}}} — matching exactly
+    // what src/app/api/webhooks/recall/transcript/route.ts already
+    // parses for a bot call's webhook delivery (payload.data.data). This
+    // file, however, has always assumed ONE level (evt.data.words
+    // directly) for the desktop SDK's desktop_sdk_callback delivery —
+    // and Recall's docs don't say whether the SDK hands over that same
+    // outer envelope as evt.data (2 levels) or already unwraps it before
+    // calling this listener (1 level, the original assumption). Rather
+    // than guess and risk silently dropping every real transcript line,
+    // check both shapes and use whichever one actually has a words
+    // array — correct either way, and the shape actually found is
+    // logged so a real test confirms it for good instead of leaving it
+    // to keep being an assumption.
+    type TranscriptPayload = {
+      words?: { text?: string; start_timestamp?: { relative?: number } }[];
+      participant?: { name?: string | null };
+    };
+    const rawData = evt.data as (TranscriptPayload & { data?: TranscriptPayload }) | undefined;
+    let data: TranscriptPayload | undefined;
+    let shape: "direct" | "nested" | "unrecognized";
+    if (rawData && Array.isArray(rawData.words)) {
+      data = rawData;
+      shape = "direct";
+    } else if (rawData?.data && Array.isArray(rawData.data.words)) {
+      data = rawData.data;
+      shape = "nested";
+    } else {
+      data = undefined;
+      shape = "unrecognized";
+    }
+    log(`transcript.data payload shape: ${shape}`);
+
     const text = (data?.words || [])
       .map((w) => w.text || "")
       .join(" ")
       .trim();
     if (!text) {
-      log(`Couldn't extract text from transcript.data payload (expected data.words[].text) — see raw payload above.`);
+      log(`Couldn't extract text from transcript.data payload (tried both evt.data.words and evt.data.data.words) — see raw payload above.`);
       return;
     }
 
@@ -444,6 +496,29 @@ async function initSdk() {
 
   RecallAiSdk.addEventListener("shutdown", (evt) => {
     log(`SDK shut down (code ${evt.code})`);
+  });
+
+  // Two more real, documented SDK events — confirmed against the
+  // installed package's own index.d.ts — that weren't wired up anywhere
+  // in this file before now. Added as root-cause diagnostic instrumentation
+  // alongside the transcript.data raw-payload logging above: if a live
+  // recording ever shows no transcript (or a shape this file doesn't
+  // parse), these are the next places to look for WHY, one level below
+  // Anchor's own event handling, in the native SDK process itself.
+  RecallAiSdk.addEventListener("network-status", (evt) => {
+    log(`Network ${evt.status}`);
+    send("network-status", evt);
+  });
+
+  RecallAiSdk.addEventListener("log", (evt) => {
+    // 'debug'/'info' come from the native SDK process and can fire far
+    // more often than anything else this file logs — filtered out so
+    // they don't drown the Activity panel; 'warning'/'error' are exactly
+    // the kind of native-level signal worth surfacing.
+    if (evt.level !== "warning" && evt.level !== "error") return;
+    log(
+      `SDK ${evt.level} [${evt.subsystem}/${evt.category}]${evt.window_id ? ` (window ${evt.window_id})` : ""}: ${evt.message}`
+    );
   });
 
   if (process.platform === "darwin") {
