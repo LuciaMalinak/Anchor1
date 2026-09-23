@@ -199,6 +199,7 @@ function showOverlay(meetingId: string) {
     });
   }
 
+  log(`Showing live coaching overlay for meeting ${meetingId} (${url})`);
   overlayWindow.loadURL(url).catch((err) => {
     log(`Couldn't load the live coaching overlay: ${err instanceof Error ? err.message : err}`);
   });
@@ -316,6 +317,14 @@ async function initSdk() {
   // for real off a desktop recording, so this stays defensive (bails
   // quietly on anything unexpected) and logs the raw event too, in case
   // the shape turns out to differ once tested for real.
+  //
+  // DIAGNOSTIC LOGGING: every transcript.data event's raw JSON gets
+  // logged to the Activity panel (truncated) regardless of whether text
+  // extraction below succeeds — this is temporary, until a real desktop
+  // recording has actually confirmed the payload shape matches what's
+  // parsed. Without this, a shape mismatch fails completely silently:
+  // the old code just `return`ed on empty text with no log line at all,
+  // so a live test would show nothing happening with zero clue why.
   RecallAiSdk.addEventListener("realtime-event", (evt) => {
     const active = activeRecordings.get(evt.window.id);
     if (evt.event !== "transcript.data") {
@@ -324,7 +333,19 @@ async function initSdk() {
       log(`Realtime event "${evt.event}" for window ${evt.window.id}${active ? ` (meeting ${active.meetingId})` : ""}`);
       return;
     }
-    if (!active) return;
+
+    let rawJson = "";
+    try {
+      rawJson = JSON.stringify(evt.data);
+    } catch {
+      rawJson = String(evt.data);
+    }
+    log(`transcript.data raw payload: ${rawJson.slice(0, 500)}${rawJson.length > 500 ? "…" : ""}`);
+
+    if (!active) {
+      log(`(no active recording tracked for window ${evt.window.id} — dropping this transcript line)`);
+      return;
+    }
 
     const data = evt.data as
       | {
@@ -336,7 +357,10 @@ async function initSdk() {
       .map((w) => w.text || "")
       .join(" ")
       .trim();
-    if (!text) return;
+    if (!text) {
+      log(`Couldn't extract text from transcript.data payload (expected data.words[].text) — see raw payload above.`);
+      return;
+    }
 
     const relativeSeconds = data?.words?.[0]?.start_timestamp?.relative;
     try {
