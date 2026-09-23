@@ -52,6 +52,21 @@ function log(message: string) {
   send("log", message);
 }
 
+// Allow-list for handleDeepLink's apiBase — see the comment there. The
+// production host plus localhost/127.0.0.1 (any port) for local dev
+// against `npm run dev`. Everything else is rejected.
+function isAllowedApiBase(candidate: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (url.origin === DEFAULT_API_BASE) return true;
+  if (url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1")) return true;
+  return false;
+}
+
 function getApi(): AnchorApi {
   const config = loadConfig();
   if (!config.token) {
@@ -59,6 +74,17 @@ function getApi(): AnchorApi {
   }
   return new AnchorApi(config.apiBase || DEFAULT_API_BASE, config.token);
 }
+
+// windowId -> the in-flight beginRecording() promise for that window, if
+// one is currently running. Closes a race the `existing` check below
+// can't catch on its own: activeRecordings isn't populated until AFTER
+// two network round-trips (matchDealNow, startMeeting), so the automatic
+// meeting-detected call and a manual Record-button click landing in that
+// gap would both see nothing in activeRecordings and both proceed,
+// creating two meetings and two RecallAiSdk.startRecording calls for the
+// same window. Setting this synchronously, before any await, closes that
+// window; it's cleared in a `finally` once the call settles either way.
+const startsInFlight = new Map<string, Promise<{ meetingId: string }>>();
 
 // Starts recording a detected window — called automatically the instant
 // meeting-detected fires (see initSdk below), and also reachable from the
@@ -70,6 +96,17 @@ async function beginRecording(windowId: string, title: string): Promise<{ meetin
   const existing = activeRecordings.get(windowId);
   if (existing) return existing;
 
+  const inFlight = startsInFlight.get(windowId);
+  if (inFlight) return inFlight;
+
+  const promise = beginRecordingUnguarded(windowId, title).finally(() => {
+    startsInFlight.delete(windowId);
+  });
+  startsInFlight.set(windowId, promise);
+  return promise;
+}
+
+async function beginRecordingUnguarded(windowId: string, title: string): Promise<{ meetingId: string }> {
   const api = getApi();
   // Best-effort: figure out which deal this call is for before creating
   // the meeting, so it lands there automatically instead of coming
@@ -295,7 +332,25 @@ async function initSdk() {
 
   RecallAiSdk.addEventListener("recording-ended", (evt) => {
     log(`Recording ended for window ${evt.window.id} — Recall is uploading it now`);
-    activeRecordings.delete(evt.window.id);
+    // Deletes from activeRecordings after a short grace period rather
+    // than immediately — a transcript.data event for the last few
+    // finalized words of the call can still arrive after recording-ended
+    // fires, and the realtime-event handler below drops anything for a
+    // window it can't find in activeRecordings. This just gives those
+    // trailing lines a few seconds to land before the window stops being
+    // tracked; the final audio/transcript pipeline (via the completed-
+    // recording webhook) isn't affected either way.
+    const windowId = evt.window.id;
+    const endedRecording = activeRecordings.get(windowId);
+    setTimeout(() => {
+      // Only delete if this window's entry is still the SAME recording
+      // that just ended — guards against a quick re-record of the same
+      // window (a new beginRecording within this grace window) having
+      // its fresh entry wiped out by this stale timer.
+      if (activeRecordings.get(windowId) === endedRecording) {
+        activeRecordings.delete(windowId);
+      }
+    }, 5000);
     send("recording-ended", evt.window);
     // Simple for now: hides the overlay whenever ANY tracked recording
     // ends, which is correct for the common case (one call at a time).
@@ -451,7 +506,21 @@ function handleDeepLink(url: string) {
     log("Opened an Anchor Desktop link, but it didn't include a token.");
     return;
   }
-  const apiBase = parsed.searchParams.get("apiBase") || DEFAULT_API_BASE;
+  // anchor-desktop:// is registered as a SYSTEM-WIDE protocol handler
+  // (see setAsDefaultProtocolClient below) — any link with this scheme,
+  // from any source (not just Anchor's own "Connect" button), reaches
+  // this function. Without validating apiBase against a known host, a
+  // malicious "anchor-desktop://connect?token=x&apiBase=evil.example"
+  // link would silently repoint every future request this app makes —
+  // meeting start, deal matching, live-transcript push, and the overlay
+  // window's own page load — at an attacker's server. Only accept the
+  // real Anchor host or a local dev server; anything else falls back to
+  // DEFAULT_API_BASE instead of being trusted.
+  const requestedApiBase = parsed.searchParams.get("apiBase");
+  const apiBase = requestedApiBase && isAllowedApiBase(requestedApiBase) ? requestedApiBase : DEFAULT_API_BASE;
+  if (requestedApiBase && requestedApiBase !== apiBase) {
+    log(`Ignoring untrusted apiBase in connect link ("${requestedApiBase}") — using the default Anchor server instead.`);
+  }
   saveConfig({ ...loadConfig(), apiBase, token });
   log("Connected to your Anchor account from the website.");
   send("token-connected", { apiBase });

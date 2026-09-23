@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, meetingLiveSegments, deals, summaries, dealFiles } from "@/db/schema";
-import { and, desc, eq, ne, asc } from "drizzle-orm";
+import { and, desc, eq, ne, asc, isNull } from "drizzle-orm";
 import { generateLiveCoaching } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
@@ -66,11 +66,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     deal = null;
   }
 
-  const segments = await db
+  const rawSegments = await db
     .select()
     .from(meetingLiveSegments)
     .where(eq(meetingLiveSegments.meetingId, id))
     .orderBy(asc(meetingLiveSegments.createdAt));
+  // Segments are written from two independent, network-dependent paths
+  // (Recall's webhook for bot calls, the desktop app's live-transcript
+  // push for desktop recordings) that don't guarantee arrival order
+  // matches speech order — a retried delivery can land after a later
+  // line. relativeSeconds reflects true call-relative timing when it's
+  // present, so re-sort by that where both sides have it; segments
+  // missing it (or being compared to one that is) keep the createdAt
+  // (arrival) order the query above already gave them, via a stable
+  // sort's guarantee that a `0` comparison leaves relative order intact.
+  const segments = [...rawSegments].sort((a, b) => {
+    if (a.relativeSeconds != null && b.relativeSeconds != null) {
+      return a.relativeSeconds - b.relativeSeconds;
+    }
+    return 0;
+  });
 
   let liveSuggestions = meeting.liveSuggestions;
 
@@ -97,13 +112,32 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (dueForRefresh) {
     // Soft lock: stamp the timestamp before the (slow) AI call so a
     // second poll landing a moment later doesn't kick off a duplicate
-    // generation for the same window.
-    await db
+    // generation for the same window. This has to be a compare-and-swap
+    // (only update if liveSuggestionsUpdatedAt still matches what THIS
+    // request read) rather than an unconditional update — the During tab
+    // and the Focus window/overlay both poll this route independently on
+    // similar cadences, and an unconditional update let two requests that
+    // both read the same stale timestamp both "win" the lock and both
+    // fire a full generateLiveCoaching call. The .returning() row is only
+    // present if this request's WHERE actually matched, i.e. actually won.
+    const [wonLock] = await db
       .update(meetings)
       .set({ liveSuggestionsUpdatedAt: new Date() })
-      .where(eq(meetings.id, id));
+      .where(
+        and(
+          eq(meetings.id, id),
+          meeting.liveSuggestionsUpdatedAt
+            ? eq(meetings.liveSuggestionsUpdatedAt, meeting.liveSuggestionsUpdatedAt)
+            : isNull(meetings.liveSuggestionsUpdatedAt)
+        )
+      )
+      .returning({ id: meetings.id });
 
-    try {
+    // !wonLock means another concurrent poll already claimed this refresh
+    // cycle — skip regenerating and fall through to the same response
+    // below with the not-yet-refreshed liveSuggestions; that other
+    // request's result is what the next poll will see.
+    if (wonLock) try {
       // Never rebuilt synchronously here — this route is polled every
       // few seconds during a live call, so it reads whatever style
       // profile already exists (possibly a day stale) rather than ever

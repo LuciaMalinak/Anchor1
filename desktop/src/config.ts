@@ -40,5 +40,16 @@ export function loadConfig(): Config {
 }
 
 export function saveConfig(config: Config): void {
-  fs.writeFileSync(configPath(), JSON.stringify(config, null, 2), "utf8");
+  // Swallows write failures (disk full, permissions, sandbox
+  // restriction) instead of throwing. Most call sites are inside
+  // ipcMain.handle, which would catch this fine on its own, but
+  // main.ts's handleDeepLink calls this directly from a raw Electron
+  // "open-url"/second-instance event listener — an uncaught throw there
+  // isn't caught by anything and can crash the whole main process over
+  // what should only ever fail one connect attempt.
+  try {
+    fs.writeFileSync(configPath(), JSON.stringify(config, null, 2), "utf8");
+  } catch (err) {
+    console.error(`[anchor-desktop] Couldn't save config: ${err instanceof Error ? err.message : err}`);
+  }
 }

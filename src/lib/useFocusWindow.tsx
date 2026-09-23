@@ -78,26 +78,64 @@ export function useFocusWindow() {
       openFocusWindowPopup(meetingId);
       return;
     }
-    try {
-      // Called before any `await` so the click that triggered this
-      // (the "Focus window" button, the "just went live" banner/
-      // notification) is still "fresh" enough for the browser to allow
-      // it — see openPending()'s comment for why this ordering matters.
-      const pip = window.documentPictureInPicture;
-      if (!pip) throw new Error("Picture-in-Picture unavailable");
-      const pipWindowPromise = pip.requestPictureInPicture({ width: WIDTH, height: HEIGHT });
-      const contextPromise = fetch(`/api/meetings/${meetingId}/focus-context`).then((res) => {
-        if (!res.ok) throw new Error("Couldn't load this meeting's Focus window context");
-        return res.json() as Promise<FocusContext>;
-      });
-      const [pipWindow, context] = await Promise.all([pipWindowPromise, contextPromise]);
+    // Called before any `await` so the click that triggered this
+    // (the "Focus window" button, the "just went live" banner/
+    // notification) is still "fresh" enough for the browser to allow
+    // it — see openPending()'s comment for why this ordering matters.
+    const pip = window.documentPictureInPicture;
+    if (!pip) {
+      console.error("Focus window: Picture-in-Picture unavailable, falling back to a popup.");
+      openFocusWindowPopup(meetingId);
+      return;
+    }
 
-      const container = mountPipWindow(pipWindow);
-      setSession({ meetingId, pipWindow, container, context, loadError: null });
+    // requestPictureInPicture can throw SYNCHRONOUSLY (not just reject) —
+    // e.g. NotAllowedError if the browser decides this click is no longer
+    // "fresh" enough — so this is its own try/catch rather than relying
+    // on the async function's implicit one, which the allSettled below
+    // deliberately doesn't provide (see its comment).
+    let pipWindowPromise: Promise<Window>;
+    try {
+      pipWindowPromise = pip.requestPictureInPicture({ width: WIDTH, height: HEIGHT });
     } catch (err) {
       console.error("Focus window: Picture-in-Picture failed, falling back to a popup:", err);
       openFocusWindowPopup(meetingId);
+      return;
     }
+    const contextPromise = fetch(`/api/meetings/${meetingId}/focus-context`).then((res) => {
+      if (!res.ok) throw new Error("Couldn't load this meeting's Focus window context");
+      return res.json() as Promise<FocusContext>;
+    });
+
+    // Promise.allSettled rather than Promise.all — a Promise.all rejection
+    // here used to jump straight to a catch block that only opened the
+    // popup fallback, leaving a real, already-open, blank PiP window on
+    // screen with no content and nothing that would ever close it
+    // (mountPipWindow, which wires up the only close-tracking listener,
+    // was never reached). Settling both individually means a PiP window
+    // that DID open successfully gets closed explicitly before falling
+    // back, instead of abandoned.
+    const [pipResult, contextResult] = await Promise.allSettled([pipWindowPromise, contextPromise]);
+
+    if (pipResult.status === "fulfilled" && contextResult.status === "fulfilled") {
+      const pipWindow = pipResult.value;
+      const container = mountPipWindow(pipWindow);
+      setSession({ meetingId, pipWindow, container, context: contextResult.value, loadError: null });
+      return;
+    }
+
+    if (pipResult.status === "fulfilled") {
+      // The PiP window itself opened fine, but its content failed to
+      // load — close it rather than leaving it abandoned alongside the
+      // popup fallback below.
+      pipResult.value.close();
+    }
+
+    console.error(
+      "Focus window: Picture-in-Picture failed, falling back to a popup:",
+      pipResult.status === "rejected" ? pipResult.reason : contextResult.status === "rejected" ? contextResult.reason : undefined
+    );
+    openFocusWindowPopup(meetingId);
   }, []);
 
   // Opens a blank Focus window immediately (no meeting yet), for a "Join

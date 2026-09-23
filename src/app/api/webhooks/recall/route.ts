@@ -17,7 +17,11 @@ import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
 // signatures before this is load-bearing for anyone but us.
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret");
-  if (secret !== RECALL_WEBHOOK_SECRET) {
+  // RECALL_WEBHOOK_SECRET is null when the env var isn't set. Rejecting
+  // unconditionally in that case (rather than just `secret !== null`) is
+  // deliberate — otherwise a request with NO ?secret= param at all would
+  // also read as null and pass, defeating the whole check.
+  if (!RECALL_WEBHOOK_SECRET || secret !== RECALL_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
