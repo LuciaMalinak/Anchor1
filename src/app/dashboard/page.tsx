@@ -9,7 +9,7 @@ import { getHomeUpdates } from "@/lib/homeFeed";
 import { getHomeTasks } from "@/lib/homeTasks";
 import { isIndustryKey } from "@/lib/industries";
 import { resolveDashboardOrder, type DashboardSectionKey } from "@/lib/dashboardSections";
-import { isColorThemeKey, type ColorThemeKey } from "@/lib/colorThemes";
+import { isColorThemeKey } from "@/lib/colorThemes";
 import { AttentionPanel } from "./AttentionPanel";
 import { AnnouncementsPanel } from "./AnnouncementsPanel";
 import { DashboardClient } from "./DashboardClient";
@@ -75,7 +75,17 @@ export default async function DashboardPage({
     sectionOrder = resolveDashboardOrder(user?.dashboardLayout);
     colorTheme = user?.colorTheme && isColorThemeKey(user.colorTheme) ? user.colorTheme : null;
 
-    [homeUpdates, homeTasks, dealOptions, announcementRows] = await Promise.all([
+    // Promise.allSettled rather than Promise.all — a single rejection
+    // (one bad row, a flaky query, a bug in one section's own data
+    // fetch) used to reject the whole Promise.all with nothing catching
+    // it here, which crashed this entire Home page into the site-wide
+    // error boundary — even the always-available meeting upload/join
+    // panel above (already rendered from data fetched earlier, unrelated
+    // to this Promise.all) never got a chance to show. Each section now
+    // degrades to an empty default on its own failure instead of taking
+    // the rest of the page down with it — same idea layout.tsx already
+    // uses for its own team-data fetch.
+    const [updatesResult, tasksResult, dealsResult, announcementsResult] = await Promise.allSettled([
       getHomeUpdates({ teamId }),
       getHomeTasks({ teamId }),
       db.select({ id: deals.id, name: deals.name }).from(deals).where(eq(deals.teamId, teamId)),
@@ -87,6 +97,15 @@ export default async function DashboardPage({
         .orderBy(desc(announcements.createdAt))
         .limit(20),
     ]);
+    homeUpdates = updatesResult.status === "fulfilled" ? updatesResult.value : [];
+    homeTasks = tasksResult.status === "fulfilled" ? tasksResult.value : [];
+    dealOptions = dealsResult.status === "fulfilled" ? dealsResult.value : [];
+    announcementRows = announcementsResult.status === "fulfilled" ? announcementsResult.value : [];
+    for (const result of [updatesResult, tasksResult, dealsResult, announcementsResult]) {
+      if (result.status === "rejected") {
+        console.error("[dashboard] a home-page section failed to load:", result.reason);
+      }
+    }
   }
 
   // Rendered in this person's own saved order (sectionOrder) rather than a

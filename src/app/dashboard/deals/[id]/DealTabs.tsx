@@ -943,7 +943,18 @@ function SharingControl({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function persist(nextRestricted: boolean, nextSelected: Set<string>) {
+  // previous* lets a failed save put both toggles back the way they were
+  // — persist() used to only surface an error message while leaving the
+  // optimistic update on screen either way, so a rejected change (a race
+  // with someone else's edit, a network blip) left the page showing
+  // sharing settings that were never actually saved, with nothing but
+  // small error text to notice by.
+  async function persist(
+    nextRestricted: boolean,
+    nextSelected: Set<string>,
+    previousRestricted: boolean,
+    previousSelected: Set<string>
+  ) {
     setSaving(true);
     setError(null);
     try {
@@ -961,6 +972,8 @@ function SharingControl({
       }
       router.refresh();
     } catch (err) {
+      setRestricted(previousRestricted);
+      setSelected(previousSelected);
       setError(err instanceof Error ? err.message : "Couldn't save");
     } finally {
       setSaving(false);
@@ -968,16 +981,18 @@ function SharingControl({
   }
 
   function handleModeChange(nextRestricted: boolean) {
+    const previousRestricted = restricted;
     setRestricted(nextRestricted);
-    void persist(nextRestricted, selected);
+    void persist(nextRestricted, selected, previousRestricted, selected);
   }
 
   function toggleMember(userId: string) {
+    const previousSelected = selected;
     const next = new Set(selected);
     if (next.has(userId)) next.delete(userId);
     else next.add(userId);
     setSelected(next);
-    void persist(restricted, next);
+    void persist(restricted, next, restricted, previousSelected);
   }
 
   const otherTeammates = team.filter((t) => t.id !== currentUserId);
@@ -1461,6 +1476,13 @@ function PeopleAndTeam({
 
   async function handleRoleChange(field: "leadUserId" | "backupUserId", value: string) {
     const newValue = value || null;
+    // Kept so a failed save can put the dropdown back the way it was —
+    // without this, the optimistic update above stayed on screen even
+    // after the PATCH failed, so the page could permanently show a lead
+    // or backup that was never actually saved (only the small error text
+    // hinted anything was wrong, and even that clears on the next
+    // attempt or navigation).
+    const previousValue = field === "leadUserId" ? leadUserId : backupUserId;
     if (field === "leadUserId") setLeadUserId(newValue);
     else setBackupUserId(newValue);
     setSaving(field === "leadUserId" ? "lead" : "backup");
@@ -1477,6 +1499,8 @@ function PeopleAndTeam({
       }
       router.refresh();
     } catch (err) {
+      if (field === "leadUserId") setLeadUserId(previousValue);
+      else setBackupUserId(previousValue);
       setRoleError(err instanceof Error ? err.message : "Couldn't save");
     } finally {
       setSaving(null);

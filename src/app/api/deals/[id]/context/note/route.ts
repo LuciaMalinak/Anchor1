@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { deals } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { authorizeDeal } from "@/lib/dealAccess";
-import { appendDealNoteEntry } from "@/lib/dealNotes";
+import { formatDealNoteEntry, appendDealNoteSql } from "@/lib/dealNotes";
 
 const MAX_NOTE_CHARS = 5000;
 
@@ -26,8 +26,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
-  const { deal } = authorized;
-
   const body = await req.json().catch(() => ({}));
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) {
@@ -40,12 +38,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  const updatedNotes = appendDealNoteEntry(deal.notes, "Note", text);
+  const entry = formatDealNoteEntry("Note", text);
 
-  await db
+  const [updated] = await db
     .update(deals)
-    .set({ notes: updatedNotes, updatedAt: new Date() })
-    .where(eq(deals.id, dealId));
+    .set({ notes: appendDealNoteSql(entry), updatedAt: new Date() })
+    .where(eq(deals.id, dealId))
+    .returning({ notes: deals.notes });
 
-  return NextResponse.json({ notes: updatedNotes });
+  return NextResponse.json({ notes: updated?.notes ?? entry });
 }

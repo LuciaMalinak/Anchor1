@@ -48,25 +48,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // this never silently blanks a URL someone didn't mean to remove.
   if (body.linkedinUrl !== undefined) updates.linkedinUrl = linkedinUrl || null;
 
+  // Extraction failing here used to `return` immediately — before the
+  // db.update below ever ran — which silently dropped a linkedinUrl the
+  // person typed in the very same submission (already validated above),
+  // even though the error message only complained about the pasted text.
+  // Now a failed extraction is non-fatal: whatever DID validate (the URL)
+  // still gets saved, and the extraction problem comes back as a
+  // separate, non-fatal `extractionError` the client shows as a warning
+  // alongside the save succeeding, rather than losing the URL too.
+  let extractionError: string | null = null;
   if (pastedText) {
-    let extracted;
     try {
-      extracted = await extractLinkedInProfile({
+      const extracted = await extractLinkedInProfile({
         contactName: contact.name,
         pastedText,
         priorSummary: contact.relationshipSummary,
       });
+      if (extracted.company) updates.company = extracted.company;
+      if (extracted.role) updates.role = extracted.role;
+      if (extracted.summary) updates.relationshipSummary = extracted.summary;
     } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "Couldn't read that profile text" },
-        { status: 500 }
-      );
+      extractionError = err instanceof Error ? err.message : "Couldn't read that profile text";
     }
-    if (extracted.company) updates.company = extracted.company;
-    if (extracted.role) updates.role = extracted.role;
-    if (extracted.summary) updates.relationshipSummary = extracted.summary;
   }
 
   const [updated] = await db.update(contacts).set(updates).where(eq(contacts.id, contactId)).returning();
-  return NextResponse.json({ contact: updated });
+  return NextResponse.json({ contact: updated, extractionError });
 }

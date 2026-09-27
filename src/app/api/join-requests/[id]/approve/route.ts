@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { joinRequests, deals } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createInviteAndNotify } from "@/lib/team";
 import { canApproveForDeal } from "@/lib/joinRequestAccess";
 
@@ -40,15 +40,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  const { emailWarning } = await createInviteAndNotify({
-    teamId: request.teamId,
-    email: request.email,
-    invitedByUserId: session.user.id,
-    invitedByEmail: session.user.email!,
-    restrictToDealId: deal.id,
-  });
-
-  await db
+  // Compare-and-swap the status to "approved" BEFORE doing any of the
+  // invite work below, and only proceed if this request actually won —
+  // i.e. its status was still "pending" the instant this UPDATE ran.
+  // The `request.status !== "pending"` check above reads a snapshot from
+  // earlier in this request, so two approvers (the owner and a deal
+  // lead, say) clicking Approve within moments of each other could both
+  // pass that check and both reach createInviteAndNotify below, sending
+  // two invite emails and creating two teamInvites rows for one request.
+  // This UPDATE's WHERE only actually matches a row for whichever request
+  // gets here first; the loser sees zero rows affected and stops here
+  // instead of also sending an invite.
+  const [claimed] = await db
     .update(joinRequests)
     .set({
       status: "approved",
@@ -56,7 +59,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       decidedByUserId: session.user.id,
       decidedAt: new Date(),
     })
-    .where(eq(joinRequests.id, id));
+    .where(and(eq(joinRequests.id, id), eq(joinRequests.status, "pending")))
+    .returning({ id: joinRequests.id });
+
+  if (!claimed) {
+    return NextResponse.json({ error: "Already decided" }, { status: 400 });
+  }
+
+  const { emailWarning } = await createInviteAndNotify({
+    teamId: request.teamId,
+    email: request.email,
+    invitedByUserId: session.user.id,
+    invitedByEmail: session.user.email!,
+    restrictToDealId: deal.id,
+  });
 
   return NextResponse.json({ ok: true, emailWarning });
 }

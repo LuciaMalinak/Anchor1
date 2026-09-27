@@ -1,8 +1,61 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
+
+// Assistant replies come back as plain markdown-ish text (the model
+// naturally reaches for **bold** and "- " bullet lists) but were being
+// dropped straight into a <div> as a literal string — every "**" and "-"
+// showed up as literal characters in the chat bubble instead of actual
+// formatting. A real markdown library felt like overkill (and a new
+// dependency to install right before a demo) for what the model actually
+// produces here, so this is a small, dependency-free renderer for just
+// **bold** spans and "- "/"* " bullet lists — the two things worth
+// handling; anything else just renders as plain text, which is exactly
+// what it did before.
+function renderInline(text: string, keyPrefix: string): ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter((p) => p.length > 0);
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
+      <strong key={`${keyPrefix}-${i}`}>{part.slice(2, -2)}</strong>
+    ) : (
+      <span key={`${keyPrefix}-${i}`}>{part}</span>
+    )
+  );
+}
+
+function FormattedMessage({ content }: { content: string }) {
+  const blocks = content.split(/\n\n+/).filter((b) => b.trim().length > 0);
+  return (
+    <>
+      {blocks.map((block, bi) => {
+        const lines = block.split("\n").filter((l) => l.trim().length > 0);
+        const isList = lines.length > 0 && lines.every((l) => /^[-*]\s+/.test(l.trim()));
+        if (isList) {
+          return (
+            <ul key={bi} className={`list-disc space-y-0.5 pl-4 ${bi > 0 ? "mt-2" : ""}`}>
+              {lines.map((line, li) => (
+                <li key={li}>{renderInline(line.trim().replace(/^[-*]\s+/, ""), `${bi}-${li}`)}</li>
+              ))}
+            </ul>
+          );
+        }
+        const rawLines = block.split("\n");
+        return (
+          <p key={bi} className={bi > 0 ? "mt-2" : undefined}>
+            {rawLines.map((line, li) => (
+              <span key={li}>
+                {renderInline(line, `${bi}-${li}`)}
+                {li < rawLines.length - 1 && <br />}
+              </span>
+            ))}
+          </p>
+        );
+      })}
+    </>
+  );
+}
 
 // The mid-meeting "Ask Anchor" quick-question box — grounded in a deal's
 // past meetings, action items, and files via /api/deals/[id]/assist (see
@@ -84,12 +137,12 @@ export function AskAnchorPanel({ dealId }: { dealId: string }) {
                   : "self-start bg-slate-100 text-slate-800"
               }`}
             >
-              {t.content}
+              {t.role === "assistant" ? <FormattedMessage content={t.content} /> : t.content}
             </div>
           ))}
           {asking && (
             <div className="max-w-[85%] self-start rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-800">
-              {streamingAnswer || <span className="text-slate-400">Thinking…</span>}
+              {streamingAnswer ? <FormattedMessage content={streamingAnswer} /> : <span className="text-slate-400">Thinking…</span>}
             </div>
           )}
           <div ref={bottomRef} />

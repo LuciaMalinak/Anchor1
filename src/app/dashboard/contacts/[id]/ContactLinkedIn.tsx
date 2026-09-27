@@ -37,11 +37,18 @@ export function ContactLinkedIn({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Couldn't save that");
-      setNotice(
-        pastedText.trim()
-          ? "Saved — pulled their title, company, and a summary in below."
-          : "Saved."
-      );
+      if (body.extractionError) {
+        // The URL (if any) still saved fine — only reading the pasted
+        // text failed — so this is a warning, not the same red error
+        // state as a save that didn't happen at all.
+        setNotice(`Saved the URL, but couldn't read the pasted text: ${body.extractionError}`);
+      } else {
+        setNotice(
+          pastedText.trim()
+            ? "Saved — pulled their title, company, and a summary in below."
+            : "Saved."
+        );
+      }
       setPastedText("");
       setShowPaste(false);
       router.refresh();

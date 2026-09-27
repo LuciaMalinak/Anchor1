@@ -5,7 +5,7 @@ import { deals } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { transcribeAudioFile } from "@/lib/transcribe";
-import { appendDealNoteEntry } from "@/lib/dealNotes";
+import { formatDealNoteEntry, appendDealNoteSql } from "@/lib/dealNotes";
 
 // Voice notes recorded from the "Give Anchor more context" box (Before
 // tab) — transcribed and folded straight into deals.notes, the same
@@ -27,7 +27,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
-  const { deal } = authorized;
 
   const formData = await req.formData();
   const file = formData.get("file");
@@ -61,12 +60,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  const updatedNotes = appendDealNoteEntry(deal.notes, "Voice note", transcript);
+  const entry = formatDealNoteEntry("Voice note", transcript);
 
-  await db
+  const [updated] = await db
     .update(deals)
-    .set({ notes: updatedNotes, updatedAt: new Date() })
-    .where(eq(deals.id, dealId));
+    .set({ notes: appendDealNoteSql(entry), updatedAt: new Date() })
+    .where(eq(deals.id, dealId))
+    .returning({ notes: deals.notes });
 
-  return NextResponse.json({ notes: updatedNotes, transcript });
+  return NextResponse.json({ notes: updated?.notes ?? entry, transcript });
 }

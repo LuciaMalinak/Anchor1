@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 
 // Records straight from the browser's microphone — for an in-person
@@ -44,6 +44,12 @@ export function useMicRecorder({
   const [seconds, setSeconds] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // True once a recorded blob has failed to upload at least once and is
+  // still sitting in chunksRef waiting to be retried — distinct from
+  // `error`, which also covers failures (mic permission denied, couldn't
+  // start) that have nothing left in memory to retry. Drives whether the
+  // view offers "Retry upload" or a plain "Start recording".
+  const [uploadFailed, setUploadFailed] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -51,6 +57,31 @@ export function useMicRecorder({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const recognitionActiveRef = useRef(false);
+  // The meeting this recording belongs to, kept outside start()'s own
+  // closure so retryUpload() below can re-attempt the SAME upload later
+  // — chunksRef itself is never cleared after a failed upload (only
+  // start() resets it, for the NEXT recording), so the audio is still
+  // there to resend; this is just what's missing to resend it.
+  const meetingIdRef = useRef<string | null>(null);
+
+  // Closing the tab or navigating away mid-recording (or with a failed
+  // upload still waiting to retry) used to lose the whole recording with
+  // no warning at all — nothing gets uploaded until recorder.onstop
+  // fires, which only happens from an explicit Stop click. This can't
+  // make the browser actually save anything on its own (there's no
+  // reliable way to run an async upload from a beforeunload handler),
+  // but it does trigger the browser's own native "leave site? changes
+  // may not be saved" confirmation, which is the standard way to at
+  // least stop someone from losing a recording by accident.
+  useEffect(() => {
+    if (!recording && !uploadFailed) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [recording, uploadFailed]);
 
   function startLiveTranscription(meetingId: string) {
     const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -133,6 +164,8 @@ export function useMicRecorder({
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Couldn't start this recording");
       meetingId = body.meeting.id;
+      meetingIdRef.current = meetingId;
+      setUploadFailed(false);
     } catch (err) {
       focusWindow.cancel();
       stream.getTracks().forEach((t) => t.stop());
@@ -192,15 +225,42 @@ export function useMicRecorder({
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Upload failed");
       }
+      setUploadFailed(false);
       onUploaded?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      // The recorded audio in chunksRef is untouched by a failed upload —
+      // nothing here clears it — so this is genuinely retryable, unlike
+      // before, when a failed upload had no path back except re-recording
+      // the whole meeting from scratch.
+      setUploadFailed(true);
+      setError(
+        (err instanceof Error ? err.message : "Upload failed") +
+          " — your recording is still here, so it's safe to try again."
+      );
     } finally {
       setUploading(false);
     }
   }
 
-  return { recording, seconds, uploading, error, start, stop };
+  // Re-sends the SAME recorded audio still sitting in chunksRef — see
+  // upload()'s comment on why that's safe.
+  async function retryUpload() {
+    if (!meetingIdRef.current) return;
+    await upload(meetingIdRef.current);
+  }
+
+  // Explicit escape hatch for someone who doesn't want to keep retrying a
+  // failed upload and would rather just start over — otherwise the failed
+  // recording (and its beforeunload warning) would linger forever with no
+  // way to clear it short of reloading the page.
+  function discardFailedUpload() {
+    chunksRef.current = [];
+    meetingIdRef.current = null;
+    setUploadFailed(false);
+    setError(null);
+  }
+
+  return { recording, seconds, uploading, error, uploadFailed, start, stop, retryUpload, discardFailedUpload };
 }
 
 export type MicRecorderState = ReturnType<typeof useMicRecorder>;
@@ -208,7 +268,17 @@ export type MicRecorderState = ReturnType<typeof useMicRecorder>;
 // Pure presentational view — driven entirely by the state/handlers a
 // useMicRecorder() call up the tree hands down as props, so it can be
 // rendered from more than one tab without losing the recording.
-export function MicRecorderView({ recording, seconds, uploading, error, start, stop }: MicRecorderState) {
+export function MicRecorderView({
+  recording,
+  seconds,
+  uploading,
+  error,
+  uploadFailed,
+  start,
+  stop,
+  retryUpload,
+  discardFailedUpload,
+}: MicRecorderState) {
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
   const ss = String(seconds % 60).padStart(2, "0");
 
@@ -233,17 +303,7 @@ export function MicRecorderView({ recording, seconds, uploading, error, start, s
       </div>
       <div className="mt-3">
         <div className="flex items-center gap-3">
-          {!recording ? (
-            <button
-              type="button"
-              onClick={start}
-              disabled={uploading}
-              className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
-            >
-              <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-              {uploading ? "Uploading…" : "Start recording"}
-            </button>
-          ) : (
+          {recording ? (
             <>
               <button
                 type="button"
@@ -257,6 +317,35 @@ export function MicRecorderView({ recording, seconds, uploading, error, start, s
                 {mm}:{ss}
               </span>
             </>
+          ) : uploadFailed ? (
+            <>
+              <button
+                type="button"
+                onClick={retryUpload}
+                disabled={uploading}
+                className="flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-dark disabled:opacity-50"
+              >
+                {uploading ? "Retrying…" : "Retry upload"}
+              </button>
+              <button
+                type="button"
+                onClick={discardFailedUpload}
+                disabled={uploading}
+                className="text-xs font-medium text-slate-400 hover:text-slate-600 hover:underline disabled:opacity-50"
+              >
+                Discard and start over
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={start}
+              disabled={uploading}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
+            >
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+              {uploading ? "Uploading…" : "Start recording"}
+            </button>
           )}
         </div>
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
