@@ -102,7 +102,20 @@ export default function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="6. Data retention and deletion">
+        <Section title="6. How Anchor is administered">
+          <p>
+            A small number of authorized Anchor staff can access account data — including deal,
+            meeting, and transcript content — for support, security, fraud-prevention, and
+            product-improvement purposes, such as investigating a reported problem or understanding
+            how the Service is being used. This access doesn&apos;t generate a real-time notification
+            to your account, but every instance of it is logged internally (who, which account, and
+            when) and reviewed for appropriate use. This access is never used to read your data for
+            any purpose unrelated to operating, securing, or improving the Service, and is never sold
+            or shared with advertisers.
+          </p>
+        </Section>
+
+        <Section title="7. Data retention and deletion">
           <p>
             We retain your account data, recordings, and derived content for as long as your
             account is active, or as needed to provide the Service. You can delete individual
@@ -114,7 +127,7 @@ export default function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="7. Your choices">
+        <Section title="8. Your choices">
           <ul className="list-disc space-y-1 pl-5">
             <li>You can disconnect a third-party integration at any time from the Integrations page.</li>
             <li>You can delete individual meetings or contacts from within Anchor at any time.</li>
@@ -123,14 +136,14 @@ export default function PrivacyPage() {
           </ul>
         </Section>
 
-        <Section title="8. Changes to this policy">
+        <Section title="9. Changes to this policy">
           <p>
             We may update this Privacy Policy as the Service evolves. If we make material changes,
             we&apos;ll make a reasonable effort to let you know.
           </p>
         </Section>
 
-        <Section title="9. Contact">
+        <Section title="10. Contact">
           <p>
             Questions about this policy, or a data request? Reach out at{" "}
             <a href="mailto:lucia.malinak@gmail.com" className="text-brand hover:underline">

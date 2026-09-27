@@ -14,6 +14,7 @@ import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { COLOR_THEME_BY_KEY, isColorThemeKey } from "@/lib/colorThemes";
 import { LiveMeetingWatcher } from "@/components/LiveMeetingWatcher";
+import { isAppOwner } from "@/lib/appOwner";
 
 export default async function DashboardLayout({
   children,
@@ -159,6 +160,13 @@ export default async function DashboardLayout({
             <NavLink href="/dashboard/contacts">Contacts</NavLink>
             <NavLink href="/dashboard/team">Team</NavLink>
             <NavLink href="/dashboard/integrations">Integrations</NavLink>
+            {/* Only the app owner ever sees this — everyone else's
+                isAppOwner(session.user.email) check is false, so the link
+                (and everything under /dashboard/admin) simply doesn't
+                exist for them. See src/lib/adminAccess.ts. */}
+            {isAppOwner(session?.user?.email) && (
+              <NavLink href="/dashboard/admin">Admin</NavLink>
+            )}
           </nav>
           <div className="flex items-center gap-3 text-sm text-slate-500">
             <Link

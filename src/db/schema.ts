@@ -758,3 +758,30 @@ export const taskComments = pgTable("task_comment", {
   content: text("content").notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Founder/admin account access — lets an app owner (see src/lib/appOwner.ts)
+// open a read-only view of any team's dashboard, deals, meetings, and
+// transcripts (src/app/dashboard/admin/**) for support, debugging, or
+// understanding usage. Nothing here notifies the team being viewed in the
+// moment — that's the point — but every view writes a row here first, so
+// there's always an honest, permanent record of who looked at what and
+// when. See src/lib/adminAccess.ts, the only place this table is written,
+// and the "How Anchor is administered" clause on the Privacy page, which
+// discloses that this kind of access exists.
+// ---------------------------------------------------------------------------
+
+export const adminAccessLogs = pgTable("admin_access_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  adminUserId: uuid("adminUserId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  targetTeamId: uuid("targetTeamId")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  // What was viewed — e.g. "team overview", "deal:<id>", "meeting:<id>",
+  // "member:<id>" — free text rather than an enum so a new admin page
+  // never needs a schema change just to log itself.
+  view: text("view").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
