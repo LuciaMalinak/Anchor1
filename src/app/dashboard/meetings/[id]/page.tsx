@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import {
@@ -10,11 +11,12 @@ import {
   deals,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { canAccessDeal } from "@/lib/dealAccess";
+import { canAccessDeal, accessibleDealIds, dealVisibilityWhere } from "@/lib/dealAccess";
 import { MeetingStatusPoller } from "./MeetingStatusPoller";
 import { MeetingDeleteButton } from "./MeetingDeleteButton";
 import { FollowUpEmailDraft } from "./FollowUpEmailDraft";
 import { ParticipantsPanel } from "./ParticipantsPanel";
+import { MeetingDealPicker } from "./MeetingDealPicker";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 
 // Kept as a plain helper outside the component — same reasoning as
@@ -73,6 +75,34 @@ export default async function MeetingDetailPage({
   }
   if (!isOwner && !sharedViaTeam) notFound();
 
+  // Only the owner gets to reassign this meeting's deal (see the PATCH
+  // route's comment) — a teammate viewing a shared meeting gets read-only
+  // access to the current deal name below instead.
+  let currentDealName: string | null = null;
+  let dealOptions: { id: string; name: string }[] = [];
+  if (meeting.dealId) {
+    const [currentDeal] = await db.select({ name: deals.name }).from(deals).where(eq(deals.id, meeting.dealId));
+    currentDealName = currentDeal?.name ?? null;
+  }
+  if (isOwner) {
+    const access = await accessibleDealIds(session.user.id);
+    if (access) {
+      dealOptions = await db
+        .select({ id: deals.id, name: deals.name })
+        .from(deals)
+        .where(dealVisibilityWhere(access))
+        .orderBy(deals.name);
+    }
+  }
+  const dealPicker = isOwner && (
+    <MeetingDealPicker
+      meetingId={id}
+      currentDealId={meeting.dealId}
+      currentDealName={currentDealName}
+      deals={dealOptions}
+    />
+  );
+
   if (meeting.status !== "ready") {
     const { scheduledInFuture, stuckJoining, isLiveBotCall } = computeMeetingProgress(meeting);
 
@@ -94,6 +124,18 @@ export default async function MeetingDetailPage({
       <div className="flex flex-col gap-6">
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <p className="text-sm font-medium text-slate-900">{meeting.title}</p>
+          {(dealPicker || currentDealName) && (
+            <div className="mt-1.5 flex justify-center">
+              {dealPicker || (
+                <Link
+                  href={`/dashboard/deals/${meeting.dealId}`}
+                  className="text-sm font-medium text-brand hover:underline"
+                >
+                  {currentDealName}
+                </Link>
+              )}
+            </div>
+          )}
           <p className="mt-2 text-sm text-slate-500">
             {meeting.status === "failed"
               ? meeting.errorMessage || "Something went wrong processing this meeting."
@@ -173,6 +215,17 @@ export default async function MeetingDetailPage({
               day: "numeric",
             })}
           </p>
+          <div className="mt-1.5">
+            {dealPicker ||
+              (currentDealName && (
+                <Link
+                  href={`/dashboard/deals/${meeting.dealId}`}
+                  className="text-sm font-medium text-brand hover:underline"
+                >
+                  {currentDealName}
+                </Link>
+              ))}
+          </div>
         </div>
         {isOwner && <MeetingDeleteButton meetingId={id} title={meeting.title} />}
       </div>

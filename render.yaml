@@ -40,6 +40,21 @@ services:
         sync: false
       - key: LINKEDIN_CLIENT_SECRET
         sync: false
+      # "Sign in with Google" on /sign-in — a SEPARATE OAuth client from
+      # GOOGLE_INTEGRATION_CLIENT_ID/SECRET below (that pair is only for
+      # the Dashboard > Integrations Gmail/Calendar data connection). This
+      # pair was missing from this file entirely, which is exactly the
+      # kind of gap that leaves "Continue with Google" silently absent
+      # from the sign-in page in production with no error anywhere —
+      # src/auth.ts and src/app/sign-in/page.tsx both just hide that
+      # button when either of these two isn't set. Create a separate
+      # OAuth client for this at console.cloud.google.com/apis/credentials
+      # (redirect URI: {AUTH_URL}/api/auth/callback/google) and set both
+      # values here for the button to appear.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       - key: GOOGLE_INTEGRATION_CLIENT_ID
         sync: false
       - key: GOOGLE_INTEGRATION_CLIENT_SECRET

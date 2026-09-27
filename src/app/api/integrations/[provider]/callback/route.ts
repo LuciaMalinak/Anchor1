@@ -95,6 +95,22 @@ export async function GET(
     // harmless null for them.
     const instanceUrl = typeof tokenBody.instance_url === "string" ? tokenBody.instance_url : null;
 
+    // Not every re-authorization round hands back a fresh refresh_token —
+    // Google's is protected against this (src/lib/integrations/config.ts
+    // forces prompt=consent&access_type=offline on every authorize call,
+    // guaranteeing one every time), but Microsoft/Slack/Salesforce/HubSpot
+    // have no such override, so a RECONNECT (fixing scopes, re-consenting
+    // after a revoke) can come back with no refresh_token at all. Only
+    // include it in the update's SET when this round actually returned
+    // one, so reconnecting never silently overwrites a previously-good
+    // refresh token with null — that used to leave a connection looking
+    // "Connected" in the UI while quietly unable to refresh once its
+    // access token expired.
+    const refreshTokenUpdate =
+      typeof tokenBody.refresh_token === "string" && tokenBody.refresh_token
+        ? { refreshToken: tokenBody.refresh_token }
+        : {};
+
     await db
       .insert(integrationConnections)
       .values({
@@ -102,6 +118,8 @@ export async function GET(
         provider,
         externalAccountEmail: identityLabel,
         accessToken,
+        // A brand-new row has no prior refresh token to protect, so null
+        // is the correct value here when this round didn't return one.
         refreshToken: tokenBody.refresh_token || null,
         tokenExpiresAt: expiresAt,
         scope: typeof tokenBody.scope === "string" ? tokenBody.scope : cfg.scopes.join(" "),
@@ -112,7 +130,7 @@ export async function GET(
         set: {
           externalAccountEmail: identityLabel,
           accessToken,
-          refreshToken: tokenBody.refresh_token || null,
+          ...refreshTokenUpdate,
           tokenExpiresAt: expiresAt,
           scope: typeof tokenBody.scope === "string" ? tokenBody.scope : cfg.scopes.join(" "),
           instanceUrl,

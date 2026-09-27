@@ -1,6 +1,8 @@
-// Shared sender for anything Anchor emails besides the magic-link sign-in
-// (Auth.js's own Resend provider in src/auth.ts still handles that one
-// separately) — team invites and "send summary to team" recaps.
+// Shared sender for everything Anchor emails — team invites, "send
+// summary to team" recaps, AND magic-link sign-in (src/auth.ts's
+// sendVerificationRequest calls this same function too, despite that
+// provider still being imported from next-auth's "Resend" preset — see
+// its comment for why the name is misleading now).
 //
 // Uses SendGrid rather than Resend: Resend's shared sender stays in
 // "sandbox mode" (can only deliver to the account owner's own address)

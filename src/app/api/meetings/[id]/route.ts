@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { meetings, transcripts, summaries, meetingParticipants, contacts, deals } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { deleteMeetingAudio } from "@/lib/storage";
-import { canAccessDeal } from "@/lib/dealAccess";
+import { canAccessDeal, authorizeDeal } from "@/lib/dealAccess";
 
 export async function GET(
   _req: NextRequest,
@@ -64,6 +64,53 @@ export async function GET(
     .where(eq(meetingParticipants.meetingId, id));
 
   return NextResponse.json({ meeting, transcript, summary, participants });
+}
+
+// Owner-only — lets whoever recorded a meeting fix its deal assignment
+// after the fact: the desktop app's auto-match (see
+// src/app/api/desktop/deals/match-now/route.ts) is a best-effort guess
+// off the calendar, and a bot-joined call can land unassigned too if no
+// deal's known contacts matched the invite. Without this, a wrong or
+// missing guess had no fix except asking an engineer — not something
+// anyone wants to discover live in front of an investor.
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+  const { id } = await params;
+
+  const [meeting] = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.id, id), eq(meetings.userId, session.user.id)));
+  if (!meeting) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  if (!("dealId" in body)) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+  const dealId = body.dealId as string | null;
+
+  // null is always allowed (unassign). A real id has to actually be a
+  // deal this user can access — otherwise this would double as a way to
+  // attach someone else's meeting recording to a deal they can't
+  // otherwise see, leaking its transcript/summary to anyone who can see
+  // that deal.
+  if (dealId !== null) {
+    const authorized = await authorizeDeal(session.user.id, dealId);
+    if (!authorized) {
+      return NextResponse.json({ error: "That deal isn't available" }, { status: 400 });
+    }
+  }
+
+  await db.update(meetings).set({ dealId }).where(eq(meetings.id, id));
+  return NextResponse.json({ ok: true });
 }
 
 // Owner-only — a meeting shared with the rest of the team via a deal can

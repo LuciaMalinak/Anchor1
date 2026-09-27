@@ -43,6 +43,20 @@ let isQuitting = false;
 // meeting a given window's events belong to.
 const activeRecordings = new Map<string, { meetingId: string }>();
 
+// windowIds that are ACTUALLY recording right now — a plain Set, kept in
+// lockstep with recording-started/recording-ended (added/removed
+// immediately, unlike activeRecordings above, which keeps an ended
+// window's entry around for a 5s grace period for trailing transcript
+// lines). Exists so the overlay only hides when NO recording is still
+// live — see the recording-ended listener below. Someone recording two
+// meeting windows at once is rare, but not impossible (a demo call
+// itself running in Zoom/Meet while a second window is also open,
+// investors screen-sharing their own call, etc.) — this listener used to
+// hide the coaching overlay the instant ANY tracked recording ended, even
+// with a second one still genuinely live, which is exactly the kind of
+// thing to not discover for the first time live in front of investors.
+const recordingWindowIds = new Set<string>();
+
 function send(channel: string, payload: unknown) {
   mainWindow?.webContents.send(channel, payload);
 }
@@ -330,6 +344,7 @@ async function initSdk() {
       // back to local capture is one of the first things worth checking.
       log(`Window ${evt.window.id} fell back to local capture (rawMedia: false) instead of Desktop SDK Raw Media.`);
     }
+    recordingWindowIds.add(evt.window.id);
     send("recording-started", evt.window);
     const active = activeRecordings.get(evt.window.id);
     if (active) {
@@ -364,13 +379,24 @@ async function initSdk() {
       }
     }, 5000);
     send("recording-ended", evt.window);
-    // Simple for now: hides the overlay whenever ANY tracked recording
-    // ends, which is correct for the common case (one call at a time).
-    // If someone's ever recording two windows at once, the overlay would
-    // hide when the first of the two ends even though the second is
-    // still live — a known limitation, not worth the complexity of a
-    // per-window overlay for how rare that case is.
-    hideOverlay();
+    recordingWindowIds.delete(windowId);
+    if (recordingWindowIds.size === 0) {
+      hideOverlay();
+    } else {
+      // At least one other window is still genuinely recording — keep
+      // the overlay up rather than hiding it out from under a call
+      // that's still going, and re-point it at that other meeting (it
+      // may currently still show whatever meeting just ended). Only one
+      // overlay window exists, so with two calls truly simultaneous this
+      // still only ever shows one at a time — a known, accepted
+      // limitation, just no longer one that hides coaching entirely
+      // while a call is still live.
+      const otherWindowId = recordingWindowIds.values().next().value;
+      const other = otherWindowId ? activeRecordings.get(otherWindowId) : undefined;
+      if (other) {
+        showOverlay(other.meetingId);
+      }
+    }
   });
 
   // Real-time transcript events during the call — turned on by
@@ -396,32 +422,19 @@ async function initSdk() {
   // logs the raw event too, in case the real shape turns out to be
   // neither.
   //
-  // DIAGNOSTIC LOGGING: every transcript.data event's raw JSON gets
-  // logged to the Activity panel (truncated) regardless of whether text
-  // extraction below succeeds — this is temporary, until a real desktop
-  // recording has actually confirmed the payload shape matches what's
-  // parsed. Without this, a shape mismatch fails completely silently:
-  // the old code just `return`ed on empty text with no log line at all,
-  // so a live test would show nothing happening with zero clue why.
+  // DIAGNOSTIC LOGGING: the Activity panel gets one compact line per
+  // transcript.data event confirming which payload shape matched — full
+  // raw JSON is only dumped when NEITHER shape matches, since that's the
+  // one case with an actual problem to diagnose. (Earlier this dumped the
+  // full raw payload on every single event, unconditionally — useful for
+  // the first live test but noisy for anyone glancing at Activity during
+  // an ordinary call once the shape is confirmed working.)
   RecallAiSdk.addEventListener("realtime-event", (evt) => {
     const active = activeRecordings.get(evt.window.id);
     if (evt.event !== "transcript.data") {
       // Anything else (participant events, other providers' formats,
       // etc.) — just logged, not forwarded anywhere yet.
       log(`Realtime event "${evt.event}" for window ${evt.window.id}${active ? ` (meeting ${active.meetingId})` : ""}`);
-      return;
-    }
-
-    let rawJson = "";
-    try {
-      rawJson = JSON.stringify(evt.data);
-    } catch {
-      rawJson = String(evt.data);
-    }
-    log(`transcript.data raw payload: ${rawJson.slice(0, 500)}${rawJson.length > 500 ? "…" : ""}`);
-
-    if (!active) {
-      log(`(no active recording tracked for window ${evt.window.id} — dropping this transcript line)`);
       return;
     }
 
@@ -458,14 +471,32 @@ async function initSdk() {
       data = undefined;
       shape = "unrecognized";
     }
-    log(`transcript.data payload shape: ${shape}`);
+
+    if (shape === "unrecognized") {
+      let rawJson = "";
+      try {
+        rawJson = JSON.stringify(evt.data);
+      } catch {
+        rawJson = String(evt.data);
+      }
+      log(`transcript.data payload shape: unrecognized — raw payload: ${rawJson.slice(0, 500)}${rawJson.length > 500 ? "…" : ""}`);
+    } else {
+      log(`transcript.data payload shape: ${shape}`);
+    }
+
+    if (!active) {
+      log(`(no active recording tracked for window ${evt.window.id} — dropping this transcript line)`);
+      return;
+    }
 
     const text = (data?.words || [])
       .map((w) => w.text || "")
       .join(" ")
       .trim();
     if (!text) {
-      log(`Couldn't extract text from transcript.data payload (tried both evt.data.words and evt.data.data.words) — see raw payload above.`);
+      log(
+        `Couldn't extract text from transcript.data payload (shape: ${shape}, but its words array was empty or missing text).`
+      );
       return;
     }
 
