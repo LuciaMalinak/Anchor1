@@ -9,6 +9,9 @@ import { DEAL_STAGES } from "@/lib/dealStages";
 import { getCompanyLogoUrl } from "@/lib/companyLogo";
 import { HEALTH_LABEL, HEALTH_BADGE_CLASSES, HEALTH_DOT_CLASSES, type DealHealth } from "@/lib/dealHealth";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
+import { AskAnchorPanel } from "@/components/AskAnchorPanel";
+import { DealContextBox } from "@/components/DealContextBox";
+import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 
 type MeetingStatus =
   | "joining"
@@ -103,14 +106,30 @@ function TabBar({
   );
 }
 
+// The original three small forms for starting a meeting: join a live
+// Zoom/Teams/Meet call (a Recall.ai bot joins and transcribes live),
+// upload a past recording, or record straight from this device's mic
+// (also transcribed automatically, via processMeeting() on upload).
+// Shown on both Before and During — During's "nothing live yet" state
+// used to only offer the mic recorder, with no way to paste a live-call
+// link once you'd already moved off Before; both tabs now offer all
+// three the same way.
 function NewMeetingForms({
   dealId,
   mic,
   onJoinedNow,
+  recordFirst = false,
 }: {
   dealId: string;
   mic: MicRecorderState;
-  onJoinedNow: () => void;
+  // Only meaningful on Before — During is already the tab a live
+  // meeting lands you on, so there's nowhere for it to jump to.
+  onJoinedNow?: () => void;
+  // Before and During share this component but want the Record-in-
+  // person/Upload-a-recording pair in different orders: Before keeps
+  // its original Upload-then-Record order, During shows Record first.
+  // Default false matches Before's original order.
+  recordFirst?: boolean;
 }) {
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
@@ -160,6 +179,27 @@ function NewMeetingForms({
     // The <input type="datetime-local"> value has no timezone — treat it
     // as the browser's own local time, same as any calendar app would.
     const scheduledAt = scheduledAtLocal ? new Date(scheduledAtLocal).toISOString() : undefined;
+    // Opens the actual Zoom/Meet/Teams page so you join it as yourself
+    // too, not just as a name Anchor's bot brings into the room — right
+    // alongside onJoinedNow below switching this page to During (meeting
+    // mode). Only for joining right now: a scheduled-for-later meeting
+    // has no click to open that link with once the time actually
+    // arrives (browsers block a popup outside a real user gesture), so
+    // that one still waits for you to open it yourself when it starts.
+    // Opens the Focus window right now, in this same click — for an
+    // immediate join only, same as the real meeting link below (a
+    // scheduled-for-later one has nothing to open yet either way). See
+    // requestFocusWindowPending()'s comment for why this can't wait for
+    // the fetch below to come back with a meeting id first. Deliberately
+    // BEFORE window.open() below: opening the real meeting link first can
+    // shift focus to that new tab in some browsers, and Picture-in-
+    // Picture requires THIS document to still have focus/activation at
+    // the moment it's requested.
+    let focusWindow: ReturnType<typeof requestFocusWindowPending> | null = null;
+    if (!scheduledAt) {
+      focusWindow = requestFocusWindowPending();
+      window.open(meetingUrl, "_blank", "noopener,noreferrer");
+    }
     setJoining(true);
     try {
       const res = await fetch("/api/meetings/join", {
@@ -167,16 +207,19 @@ function NewMeetingForms({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingUrl, title, dealId, scheduledAt }),
       });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+        focusWindow?.cancel();
         throw new Error(body.error || "Couldn't send Anchor to that meeting");
       }
+      if (body.meeting?.id) focusWindow?.attach(body.meeting.id);
+      else focusWindow?.cancel();
       form.reset();
       router.refresh();
       // Only jump straight to During for an immediate join — a
       // scheduled-for-later one shows up as "upcoming" on Before instead,
       // and the tab switches on its own once that time arrives.
-      if (!scheduledAt) onJoinedNow();
+      if (!scheduledAt) onJoinedNow?.();
     } catch (err) {
       setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
     } finally {
@@ -185,10 +228,25 @@ function NewMeetingForms({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <form onSubmit={handleJoin} className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm">
+    // Join-a-live-meeting gets its own full-width row — it's the primary
+    // action here — and Upload/Record-in-person are grouped underneath
+    // as their own pair. That grouping is a nested flex-wrap rather than
+    // just three equal cards in one row: with three equal cards, a
+    // narrower container (this renders next to the news/research aside,
+    // so it's often narrower than the viewport suggests — see the
+    // squeezed-cards fix elsewhere in this file) can wrap two-per-row in
+    // a way that splits Upload from Record-in-person instead of keeping
+    // them next to each other. Nesting them in their own row means
+    // they either sit side by side or stack directly on top of each
+    // other, but never get separated by the Join card landing between
+    // them.
+    <div className="flex flex-col gap-4">
+      <form
+        onSubmit={handleJoin}
+        className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm"
+      >
         <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col gap-2.5">
           <input
             type="text"
             name="title"
@@ -222,34 +280,50 @@ function NewMeetingForms({
         {joinError && <p className="mt-2 text-xs text-red-600">{joinError}</p>}
       </form>
 
-      <form onSubmit={handleUpload} className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
-        <p className="text-sm font-medium text-slate-900">Upload a recording</p>
-        <div className="mt-3 flex flex-col gap-2">
-          <input
-            type="text"
-            name="title"
-            placeholder="Title (optional)"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <input
-            type="file"
-            name="file"
-            accept="audio/*,video/*"
-            required
-            className="text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
-          />
-          <button
-            type="submit"
-            disabled={uploading}
-            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-          >
-            {uploading ? "Uploading…" : "Upload"}
-          </button>
-        </div>
-        {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
-      </form>
+      <div className="flex flex-wrap gap-4">
+        {recordFirst && (
+          <div key="record" className="min-w-[260px] flex-1">
+            <MicRecorderView {...mic} />
+          </div>
+        )}
 
-      <MicRecorderView {...mic} />
+        <form
+          key="upload"
+          onSubmit={handleUpload}
+          className="min-w-[260px] flex-1 rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm"
+        >
+          <p className="text-sm font-medium text-slate-900">Upload a recording</p>
+          <div className="mt-3 flex flex-col gap-2.5">
+            <input
+              type="text"
+              name="title"
+              placeholder="Title (optional)"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+            <input
+              type="file"
+              name="file"
+              accept="audio/*,video/*"
+              required
+              className="text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            />
+            <button
+              type="submit"
+              disabled={uploading}
+              className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            >
+              {uploading ? "Uploading…" : "Upload"}
+            </button>
+          </div>
+          {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
+        </form>
+
+        {!recordFirst && (
+          <div key="record" className="min-w-[260px] flex-1">
+            <MicRecorderView {...mic} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -260,8 +334,13 @@ function BeforePanel({
   memory,
   latestReady,
   decisionBoundaries,
+  backup,
   mic,
   upcoming,
+  team,
+  currentUserId,
+  initialRestricted,
+  initialSharedWithUserIds,
   onJoinedNow,
 }: {
   dealId: string;
@@ -269,8 +348,13 @@ function BeforePanel({
   memory: string | null;
   latestReady: DealMeeting | undefined;
   decisionBoundaries: string | null;
+  backup: TeamMember | null;
   mic: MicRecorderState;
   upcoming: DealMeeting[];
+  team: TeamMember[];
+  currentUserId: string;
+  initialRestricted: boolean;
+  initialSharedWithUserIds: string[];
   onJoinedNow: () => void;
 }) {
   const goingIn = memory || latestReady?.summary?.continuityNote || null;
@@ -307,8 +391,20 @@ function BeforePanel({
           </p>
         </div>
       ))}
-      <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} />
+      <HandoffPanel dealId={dealId} dealName={dealName} initialDecisionBoundaries={decisionBoundaries} backup={backup} />
       <NewMeetingForms dealId={dealId} mic={mic} onJoinedNow={onJoinedNow} />
+      <DealContextBox dealId={dealId} />
+      {/* "Who can see this deal" is a settings control someone sets once
+          and rarely touches — it used to sit near the top of every tab;
+          now it's the very last thing on Before specifically, out of the
+          way of everything actually used day to day. */}
+      <SharingControl
+        dealId={dealId}
+        team={team}
+        currentUserId={currentUserId}
+        initialRestricted={initialRestricted}
+        initialSharedWithUserIds={initialSharedWithUserIds}
+      />
     </div>
   );
 }
@@ -317,10 +413,12 @@ function HandoffPanel({
   dealId,
   dealName,
   initialDecisionBoundaries,
+  backup,
 }: {
   dealId: string;
   dealName: string;
   initialDecisionBoundaries: string | null;
+  backup: TeamMember | null;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -333,6 +431,8 @@ function HandoffPanel({
   const [genError, setGenError] = useState<string | null>(null);
   const [briefing, setBriefing] = useState<HandoffBriefing | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sendingToSlack, setSendingToSlack] = useState(false);
+  const [slackResult, setSlackResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   async function handleSaveBoundaries() {
     setSavingBoundaries(true);
@@ -372,9 +472,12 @@ function HandoffPanel({
     }
   }
 
-  async function handleCopy() {
-    if (!briefing) return;
-    const text = `Handoff briefing — ${dealName}
+  // Shared by the clipboard copy and the Slack send below, so the two
+  // never drift into showing/sending subtly different text for the same
+  // briefing.
+  function briefingText(): string | null {
+    if (!briefing) return null;
+    return `Handoff briefing — ${dealName}
 
 WHAT'S BEEN DECIDED
 ${briefing.whatWasDecided}
@@ -390,6 +493,11 @@ ${briefing.personalTouches}
 
 WHAT THEY CAN DECIDE ON THEIR OWN
 ${boundaries || "Nothing set yet — check with the deal owner before committing to anything specific."}`;
+  }
+
+  async function handleCopy() {
+    const text = briefingText();
+    if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -397,6 +505,27 @@ ${boundaries || "Nothing set yet — check with the deal owner before committing
     } catch {
       // Clipboard access can fail depending on context — non-fatal, the
       // text is still fully visible on screen to select and copy by hand.
+    }
+  }
+
+  async function handleSendToSlack() {
+    const text = briefingText();
+    if (!text) return;
+    setSendingToSlack(true);
+    setSlackResult(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/handoff/notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't send that to Slack.");
+      setSlackResult({ ok: true, message: `Sent to ${body.sentTo} on Slack` });
+    } catch (err) {
+      setSlackResult({ ok: false, message: err instanceof Error ? err.message : "Couldn't send that to Slack." });
+    } finally {
+      setSendingToSlack(false);
     }
   }
 
@@ -525,13 +654,30 @@ ${boundaries || "Nothing set yet — check with the deal owner before committing
               {boundaries || "Nothing set yet — check with the deal owner before committing to anything specific."}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400"
-          >
-            {copied ? "Copied ✓" : "Copy to share"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400"
+            >
+              {copied ? "Copied ✓" : "Copy to share"}
+            </button>
+            {backup && (
+              <button
+                type="button"
+                onClick={handleSendToSlack}
+                disabled={sendingToSlack}
+                className="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
+              >
+                {sendingToSlack ? "Sending…" : `Send to ${backup.name || backup.email} on Slack`}
+              </button>
+            )}
+          </div>
+          {slackResult && (
+            <p className={`text-xs ${slackResult.ok ? "text-emerald-600" : "text-red-600"}`}>
+              {slackResult.message}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -554,6 +700,7 @@ type DealProfile = {
   decisionBoundaries: string | null;
   leadUserId: string | null;
   backupUserId: string | null;
+  restricted: boolean;
 };
 
 type HandoffBriefing = {
@@ -605,7 +752,6 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
   const [contactRole, setContactRole] = useState(deal.primaryContactRole || "");
   const [contactEmail, setContactEmail] = useState(deal.primaryContactEmail || "");
   const [website, setWebsite] = useState(deal.companyWebsite || "");
-  const [notes, setNotes] = useState(deal.notes || "");
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -621,7 +767,6 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
           primaryContactRole: contactRole,
           primaryContactEmail: contactEmail,
           companyWebsite: website,
-          notes,
         }),
       });
       if (!res.ok) {
@@ -697,16 +842,6 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
           />
         </div>
-        <div className="flex w-full flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">Your notes</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Anything you want Anchor to remember that didn't come from a meeting — background, context, a heads up for your team…"
-            rows={3}
-            className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-        </div>
         <div className="flex gap-2">
           <button
             type="submit"
@@ -778,11 +913,158 @@ function DealHeaderCard({ deal }: { deal: DealProfile }) {
           Edit
         </button>
       </div>
+    </div>
+  );
+}
 
-      {deal.notes && (
-        <div className="rounded-lg border border-slate-200 bg-white px-5 py-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-400">YOUR NOTES</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{deal.notes}</p>
+// Lets whoever's looking at a deal control who else on the team can see
+// it at all — "Everyone on the team" (the original, still-default
+// behavior) or "Only specific people". Whoever created the deal, its
+// lead, and its backup always keep access even if unchecked below (the
+// server enforces this — see /api/deals/[id]/route.ts); this picker is
+// for everyone ELSE.
+function SharingControl({
+  dealId,
+  team,
+  currentUserId,
+  initialRestricted,
+  initialSharedWithUserIds,
+}: {
+  dealId: string;
+  team: TeamMember[];
+  currentUserId: string;
+  initialRestricted: boolean;
+  initialSharedWithUserIds: string[];
+}) {
+  const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
+  const [restricted, setRestricted] = useState(initialRestricted);
+  const [selected, setSelected] = useState<Set<string>>(new Set(initialSharedWithUserIds));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // previous* lets a failed save put both toggles back the way they were
+  // — persist() used to only surface an error message while leaving the
+  // optimistic update on screen either way, so a rejected change (a race
+  // with someone else's edit, a network blip) left the page showing
+  // sharing settings that were never actually saved, with nothing but
+  // small error text to notice by.
+  async function persist(
+    nextRestricted: boolean,
+    nextSelected: Set<string>,
+    previousRestricted: boolean,
+    previousSelected: Set<string>
+  ) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restricted: nextRestricted,
+          sharedWithUserIds: Array.from(nextSelected),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't save");
+      }
+      router.refresh();
+    } catch (err) {
+      setRestricted(previousRestricted);
+      setSelected(previousSelected);
+      setError(err instanceof Error ? err.message : "Couldn't save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleModeChange(nextRestricted: boolean) {
+    const previousRestricted = restricted;
+    setRestricted(nextRestricted);
+    void persist(nextRestricted, selected, previousRestricted, selected);
+  }
+
+  function toggleMember(userId: string) {
+    const previousSelected = selected;
+    const next = new Set(selected);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    setSelected(next);
+    void persist(restricted, next, restricted, previousSelected);
+  }
+
+  const otherTeammates = team.filter((t) => t.id !== currentUserId);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <div>
+          <p className="text-sm font-medium text-slate-900">Who can see this deal</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {restricted
+              ? `Restricted — only ${selected.size} picked teammate${selected.size === 1 ? "" : "s"} (plus the lead/backup/creator)`
+              : "Everyone on your team"}
+          </p>
+        </div>
+        <span className="shrink-0 text-xs font-medium text-brand">{expanded ? "Close" : "Change"}</span>
+      </button>
+
+      {expanded && (
+        <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => handleModeChange(false)}
+              disabled={saving}
+              className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm ${
+                !restricted ? "border-brand bg-brand/5 font-medium text-brand" : "border-slate-300 text-slate-600"
+              }`}
+            >
+              Everyone on the team
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange(true)}
+              disabled={saving}
+              className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm ${
+                restricted ? "border-brand bg-brand/5 font-medium text-brand" : "border-slate-300 text-slate-600"
+              }`}
+            >
+              Only specific people
+            </button>
+          </div>
+
+          {restricted && (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs text-slate-500">
+                You, the deal&apos;s lead, backup, and whoever created it always keep access. Pick anyone else who
+                should see it too:
+              </p>
+              {otherTeammates.length === 0 ? (
+                <p className="text-xs text-slate-400">No other teammates yet.</p>
+              ) : (
+                otherTeammates.map((t) => (
+                  <label key={t.id} className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(t.id)}
+                      onChange={() => toggleMember(t.id)}
+                      disabled={saving}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span className="text-slate-700">{t.name || t.email}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          )}
+          {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       )}
     </div>
@@ -824,26 +1106,26 @@ function NewsSidebar({
   onResearch: () => void;
 }) {
   return (
-    <aside className="flex w-full flex-col gap-4 lg:w-80 lg:shrink-0">
+    <aside className="flex w-full flex-col gap-4 lg:w-[26rem] lg:shrink-0">
       <div className="flex items-center gap-2 px-1">
         <LiveDot />
-        <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold tracking-[0.15em] text-accent">
+        <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold tracking-[0.15em] text-accent">
           NEWS
         </span>
       </div>
 
       {newsHeadline && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-amber-700">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-4">
+          <p className="text-xs font-semibold tracking-[0.15em] text-amber-700">
             {dealName.toUpperCase()}
           </p>
-          <p className="mt-1 text-sm text-amber-900">{newsHeadline}</p>
+          <p className="mt-1.5 text-base text-amber-900">{newsHeadline}</p>
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 border-l-4 border-l-brand bg-white px-4 py-4">
+      <div className="rounded-lg border border-slate-200 border-l-4 border-l-brand bg-white px-5 py-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-brand">
+          <p className="text-xs font-semibold tracking-[0.15em] text-brand">
             {dealName.toUpperCase()}
           </p>
           <button
@@ -857,22 +1139,22 @@ function NewsSidebar({
         </div>
         {companyResearch ? (
           <>
-            <p className="mt-1 text-sm text-slate-700">{companyResearch}</p>
+            <p className="mt-2 text-[15px] leading-relaxed text-slate-700">{companyResearch}</p>
             {researchUpdatedAt && (
-              <p className="mt-1 text-[11px] text-slate-400">
+              <p className="mt-2 text-xs text-slate-400">
                 {new Date(researchUpdatedAt).toLocaleDateString()}
               </p>
             )}
           </>
         ) : (
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-slate-400">
             Have Anchor search the web for public info about this company.
           </p>
         )}
-        {researchError && <p className="mt-1 text-xs text-red-600">{researchError}</p>}
+        {researchError && <p className="mt-2 text-xs text-red-600">{researchError}</p>}
       </div>
 
-      <p className="px-1 text-[11px] text-slate-400">
+      <p className="px-1 text-xs text-slate-400">
         Updates automatically once a day, or hit Refresh any time. Ask Anchor also uses this during
         the meeting so its answers can factor in recent news.
       </p>
@@ -885,22 +1167,123 @@ type ChatMessage = {
   content: string;
   createdAt: string;
   author: { id: string; name: string | null; email: string; image: string | null };
+  recipientUserIds: string[] | null;
 };
+
+// "Whole team" (the default, and every message sent before targeting
+// existed) vs. "just these people" — picked once per message from the
+// same team list the sharing control above uses. The sender is always
+// included server-side, so they never need to pick themselves.
+function RecipientPicker({
+  team,
+  currentUserId,
+  selected,
+  onChange,
+}: {
+  team: TeamMember[];
+  currentUserId: string;
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const pickable = team.filter((t) => t.id !== currentUserId);
+  const isWholeTeam = selected.size === 0;
+
+  function toggle(userId: string) {
+    const next = new Set(selected);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    onChange(next);
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-400"
+      >
+        {isWholeTeam
+          ? "Send to: Whole team"
+          : `Send to: ${selected.size} ${selected.size === 1 ? "person" : "people"}`}
+        <span className="text-slate-400">▾</span>
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 z-10 mb-2 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              onChange(new Set());
+              setOpen(false);
+            }}
+            className={`w-full rounded-md px-2 py-1.5 text-left text-xs font-medium ${
+              isWholeTeam ? "bg-brand/10 text-brand" : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Whole team
+          </button>
+          <div className="my-1 border-t border-slate-100" />
+          {pickable.length === 0 ? (
+            <p className="px-2 py-1 text-xs text-slate-400">No other teammates yet.</p>
+          ) : (
+            pickable.map((t) => (
+              <label
+                key={t.id}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(t.id)}
+                  onChange={() => toggle(t.id)}
+                  className="h-3.5 w-3.5 rounded border-slate-300"
+                />
+                <span className="text-slate-700">{t.name || t.email}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ChatPanel({
   dealId,
   currentUserId,
+  team,
   initialMessages,
 }: {
   dealId: string;
   currentUserId: string;
+  team: TeamMember[];
   initialMessages: ChatMessage[];
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState("");
+  const [recipients, setRecipients] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const teamById = new Map(team.map((t) => [t.id, t]));
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+
+  async function handleDeleteMessage(messageId: string) {
+    if (!window.confirm("Delete this message? This can't be undone.")) return;
+    setDeletingMessageId(messageId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/messages/${messageId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't delete that message");
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't delete that message");
+    } finally {
+      setDeletingMessageId(null);
+    }
+  }
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -912,7 +1295,7 @@ function ChatPanel({
       const res = await fetch(`/api/deals/${dealId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, recipientUserIds: Array.from(recipients) }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Couldn't send that");
@@ -930,7 +1313,9 @@ function ChatPanel({
     <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div>
         <p className="text-sm font-medium text-slate-900">Team chat</p>
-        <p className="text-xs text-slate-500">Just for this deal — anyone on your team with access can read and post here.</p>
+        <p className="text-xs text-slate-500">
+          Just for this deal — send to the whole team, or pick specific people for a private note.
+        </p>
       </div>
 
       <div className="flex max-h-[28rem] min-h-[10rem] flex-col gap-3 overflow-y-auto rounded-lg bg-slate-50 p-4">
@@ -940,6 +1325,12 @@ function ChatPanel({
           messages.map((m) => {
             const isYou = m.author.id === currentUserId;
             const label = m.author.name || m.author.email;
+            const isPrivate = Boolean(m.recipientUserIds && m.recipientUserIds.length > 0);
+            const recipientLabel = isPrivate
+              ? m.recipientUserIds!
+                  .map((id) => (id === currentUserId ? "you" : teamById.get(id)?.name || teamById.get(id)?.email || "someone"))
+                  .join(", ")
+              : "";
             return (
               <div key={m.id} className={`flex flex-col ${isYou ? "items-end" : "items-start"}`}>
                 <div className="flex items-center gap-2">
@@ -967,6 +1358,25 @@ function ChatPanel({
                       minute: "2-digit",
                     })}
                   </span>
+                  {isPrivate && (
+                    <span
+                      className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                      title={`Only visible to ${recipientLabel}${isYou ? " (and you, since you sent it)" : ""}`}
+                    >
+                      Private
+                    </span>
+                  )}
+                  {isYou && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteMessage(m.id)}
+                      disabled={deletingMessageId === m.id}
+                      className="text-[11px] text-slate-400 hover:text-red-600 disabled:opacity-50"
+                      title="Delete this message"
+                    >
+                      {deletingMessageId === m.id ? "…" : "Delete"}
+                    </button>
+                  )}
                 </div>
                 <div
                   className={`mt-1 max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
@@ -982,27 +1392,35 @@ function ChatPanel({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSend} className="flex items-end gap-2">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend(e);
-            }
-          }}
-          placeholder="Message your team about this deal…"
-          rows={2}
-          className="flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-        />
-        <button
-          type="submit"
-          disabled={sending || !draft.trim()}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-        >
-          {sending ? "…" : "Send"}
-        </button>
+      <form onSubmit={handleSend} className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <RecipientPicker team={team} currentUserId={currentUserId} selected={recipients} onChange={setRecipients} />
+          {recipients.size > 0 && (
+            <span className="text-[11px] text-amber-700">Only picked people (and you) will see this message.</span>
+          )}
+        </div>
+        <div className="flex items-end gap-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend(e);
+              }
+            }}
+            placeholder="Message your team about this deal…"
+            rows={2}
+            className="flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+          <button
+            type="submit"
+            disabled={sending || !draft.trim()}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {sending ? "…" : "Send"}
+          </button>
+        </div>
       </form>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
@@ -1058,6 +1476,13 @@ function PeopleAndTeam({
 
   async function handleRoleChange(field: "leadUserId" | "backupUserId", value: string) {
     const newValue = value || null;
+    // Kept so a failed save can put the dropdown back the way it was —
+    // without this, the optimistic update above stayed on screen even
+    // after the PATCH failed, so the page could permanently show a lead
+    // or backup that was never actually saved (only the small error text
+    // hinted anything was wrong, and even that clears on the next
+    // attempt or navigation).
+    const previousValue = field === "leadUserId" ? leadUserId : backupUserId;
     if (field === "leadUserId") setLeadUserId(newValue);
     else setBackupUserId(newValue);
     setSaving(field === "leadUserId" ? "lead" : "backup");
@@ -1074,6 +1499,8 @@ function PeopleAndTeam({
       }
       router.refresh();
     } catch (err) {
+      if (field === "leadUserId") setLeadUserId(previousValue);
+      else setBackupUserId(previousValue);
       setRoleError(err instanceof Error ? err.message : "Couldn't save");
     } finally {
       setSaving(null);
@@ -1081,8 +1508,15 @@ function PeopleAndTeam({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    // flex-wrap with a min-width per card, not a grid-cols-2 keyed off
+    // viewport breakpoints — this renders in the main content column
+    // next to the news/research aside (see the squeezed-cards fix
+    // earlier in this file), so a fixed column count can end up
+    // narrower than it looks like it should be. This way each card
+    // always gets at least ~280px, wrapping to one-per-row when the
+    // column itself is narrower than two would need.
+    <div className="flex flex-wrap gap-4">
+      <div className="min-w-[280px] flex-1 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm font-medium text-slate-900">People involved</p>
         <p className="mt-0.5 text-xs text-slate-500">
           Who Anchor has recognized speaking in this deal&apos;s meetings.
@@ -1110,7 +1544,7 @@ function PeopleAndTeam({
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="min-w-[280px] flex-1 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm font-medium text-slate-900">Your team</p>
         <p className="mt-0.5 text-xs text-slate-500">Everyone with access to this deal.</p>
 
@@ -1189,183 +1623,80 @@ function PeopleAndTeam({
   );
 }
 
-type ChatTurn = { role: "user" | "assistant"; content: string };
-
-function AskAnchorPanel({ dealId }: { dealId: string }) {
-  const [turns, setTurns] = useState<ChatTurn[]>([]);
-  const [question, setQuestion] = useState("");
-  const [asking, setAsking] = useState(false);
-  // The answer as it streams in, word by word, before it's a finished
-  // turn — shown as its own bubble so the first words appear almost
-  // immediately instead of everyone staring at "Thinking…" for a few
-  // seconds while the full answer is generated.
-  const [streamingAnswer, setStreamingAnswer] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  async function handleAsk(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const q = question.trim();
-    if (!q || asking) return;
-    setError(null);
-    setQuestion("");
-    const nextTurns: ChatTurn[] = [...turns, { role: "user", content: q }];
-    setTurns(nextTurns);
-    setAsking(true);
-    setStreamingAnswer("");
-    try {
-      const res = await fetch(`/api/deals/${dealId}/assist`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, history: turns }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Anchor couldn't answer that.");
-      }
-      if (!res.body) throw new Error("Anchor couldn't answer that.");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let answer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        answer += decoder.decode(value, { stream: true });
-        setStreamingAnswer(answer);
-        requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
-      }
-      if (!answer.trim()) throw new Error("Anchor couldn't answer that.");
-      setTurns([...nextTurns, { role: "assistant", content: answer }]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Anchor couldn't answer that.");
-    } finally {
-      setAsking(false);
-      setStreamingAnswer("");
-    }
-  }
-
-  return (
-    <div className="flex flex-col rounded-lg border border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-5 py-3">
-        <p className="text-sm font-medium text-slate-900">Ask Anchor</p>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Grounded in this deal&apos;s past meetings, action items, and files — ask for a
-          quick answer or talking point mid-meeting.
-        </p>
-      </div>
-
-      {turns.length > 0 && (
-        <div className="flex max-h-80 flex-col gap-3 overflow-y-auto px-5 py-4">
-          {turns.map((t, i) => (
-            <div
-              key={i}
-              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                t.role === "user"
-                  ? "self-end bg-brand text-white"
-                  : "self-start bg-slate-100 text-slate-800"
-              }`}
-            >
-              {t.content}
-            </div>
-          ))}
-          {asking && (
-            <div className="max-w-[85%] self-start rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-800">
-              {streamingAnswer || <span className="text-slate-400">Thinking…</span>}
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-      )}
-
-      <form onSubmit={handleAsk} className="flex items-center gap-2 border-t border-slate-200 p-3">
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="e.g. What did they push back on last time?"
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-        />
-        <button
-          type="submit"
-          disabled={asking || !question.trim()}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-50"
-        >
-          Ask
-        </button>
-      </form>
-      {error && <p className="px-3 pb-3 text-xs text-red-600">{error}</p>}
-    </div>
-  );
-}
-
 function DuringPanel({
   dealId,
   inProgress,
   newsHeadline,
   files,
   mic,
+  focused,
 }: {
   dealId: string;
   inProgress: DealMeeting[];
   newsHeadline: string | null;
   files: DealFile[];
   mic: MicRecorderState;
+  // True once a meeting here is genuinely live (see inMeetingMode in
+  // DealTabs) — hides Files below, since the point of meeting mode is
+  // trimming this page down to what's actually needed mid-call.
+  focused: boolean;
 }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-      <div className="flex flex-col gap-6">
-        {newsHeadline && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-            <LiveDot />
-            <p className="text-sm text-amber-900">
-              <span className="font-semibold">In the news right now:</span> {newsHeadline}
-            </p>
-          </div>
-        )}
-        {inProgress.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            Nothing live right now — Anchor isn&apos;t in a call for this deal. If you&apos;re in
-            the room, record it from here instead:
+    // A single stacked column, not a side-by-side grid — Files used to
+    // sit in a right-hand column next to Upload a recording, which read
+    // as a stray extra column on top of the news/research aside this
+    // whole page already has. Now it's just the last thing on the page:
+    // everything you'd actually do during a meeting first, Files at the
+    // very bottom.
+    <div className="flex flex-col gap-6">
+      {newsHeadline && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <LiveDot />
+          <p className="text-sm text-amber-900">
+            <span className="font-semibold">In the news right now:</span> {newsHeadline}
           </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {inProgress.map((m) =>
-              m.status === "joining" || m.status === "recording" ? (
-                // A bot Anchor sent into a Zoom/Meet/Teams call — show the
-                // live transcript + coaching panel instead of just a link,
-                // since there's something to actually watch while it runs.
-                <LiveMeetingPanel key={m.id} meetingId={m.id} title={m.title} />
-              ) : (
-                <Link
-                  key={m.id}
-                  href={`/dashboard/meetings/${m.id}`}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                    <span className="text-sm font-medium text-slate-900">{m.title}</span>
-                  </div>
-                  <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
-                </Link>
-              )
-            )}
-          </div>
-        )}
-        {/* The mic-recording control previously lived only on the Before
-            tab, so there was no way to start an in-person recording once
-            you'd actually moved to During — the tab meant to represent
-            "a meeting is happening now". Show it here too; MicRecorderView
-            is stateless and driven by the same lifted `mic` hook, so
-            starting it here (or on Before) and switching tabs never stops
-            it, and it already shows "Stop" here if a recording (started
-            from either tab) is in progress. */}
-        <MicRecorderView {...mic} />
-        <AskAnchorPanel dealId={dealId} />
-      </div>
-      <div className="flex flex-col gap-4">
-        <FilesSection dealId={dealId} files={files} />
-      </div>
+        </div>
+      )}
+      {inProgress.length === 0 ? (
+        // Nothing live yet — offer the same three ways to start a
+        // meeting as Before, join-a-live-call included. Previously this
+        // only offered the mic recorder, with no way to paste a live
+        // call link once you'd already moved off Before. recordFirst
+        // is On here only — During shows Record in person before
+        // Upload a recording, while Before keeps its original order.
+        <NewMeetingForms dealId={dealId} mic={mic} recordFirst />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {inProgress.map((m) =>
+            m.status === "joining" || m.status === "recording" ? (
+              // A bot Anchor sent into a Zoom/Meet/Teams call — show the
+              // live transcript + coaching panel instead of just a link,
+              // since there's something to actually watch while it runs.
+              <LiveMeetingPanel key={m.id} meetingId={m.id} title={m.title} />
+            ) : (
+              <Link
+                key={m.id}
+                href={`/dashboard/meetings/${m.id}`}
+                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                  <span className="text-sm font-medium text-slate-900">{m.title}</span>
+                </div>
+                <span className="text-xs font-medium text-amber-600">{STATUS_LABEL[m.status]}</span>
+              </Link>
+            )
+          )}
+          {/* A bot's already in a call, but someone might also be
+              recording in the room alongside it (a hybrid meeting) —
+              keep the plain recorder control available here too. Once
+              nothing's live (the branch above) NewMeetingForms' own
+              mic recorder takes over instead, so this doesn't
+              duplicate that. */}
+          <MicRecorderView {...mic} />
+        </div>
+      )}
+      {!focused && <FilesSection dealId={dealId} files={files} />}
     </div>
   );
 }
@@ -1374,6 +1705,30 @@ function FilesSection({ dealId, files }: { dealId: string; files: DealFile[] }) 
   const router = useRouter();
   const [uploadingFile, setUploadingFile] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+
+  // For swapping out a file that was uploaded before it was readable by
+  // Ask Anchor (e.g. a PowerPoint attached before .pptx support existed) —
+  // delete the stale copy, then re-attach the same file so it gets
+  // extracted fresh. window.confirm is fine here: this is our own app's
+  // delete-confirmation UI, not something driving another site.
+  async function handleDeleteFile(fileId: string, fileName: string) {
+    if (!window.confirm(`Remove "${fileName}" from this deal? This can't be undone.`)) return;
+    setFileError(null);
+    setDeletingFileId(fileId);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/files/${fileId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't remove that file");
+      }
+      router.refresh();
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : "Couldn't remove that file");
+    } finally {
+      setDeletingFileId(null);
+    }
+  }
 
   async function handleFileUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1405,24 +1760,32 @@ function FilesSection({ dealId, files }: { dealId: string; files: DealFile[] }) 
     <div className="rounded-lg border border-slate-200 px-5 py-5">
       <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">FILES</p>
       <p className="mt-1 text-xs text-slate-500">
-        Text files, PDFs, and Word docs are readable by Ask Anchor — attach contracts, notes,
-        or specs and Anchor can answer questions using what&apos;s in them.
+        Text files, PDFs, Word docs, PowerPoint decks, Excel sheets, and images (screenshots,
+        photos) are readable by Ask Anchor — attach contracts, notes, decks, specs, or a photo of
+        a whiteboard and Anchor can answer questions using what&apos;s in them.
       </p>
       <ul className="mt-3 flex flex-col gap-2">
         {files.map((f) => (
-          <li key={f.id}>
+          <li key={f.id} className="flex items-center gap-1 rounded-md bg-slate-50 hover:bg-slate-100">
             <a
               href={`/api/deals/${dealId}/files/${f.id}`}
-              className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+              className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-sm text-slate-700"
             >
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate">{f.fileName}</span>
-                {f.readableByAI && (
+                {f.readableByAI ? (
                   <span
                     className="shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent"
                     title="Anchor can read this file's contents"
                   >
                     AI-readable
+                  </span>
+                ) : (
+                  <span
+                    className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
+                    title="Anchor can't read this one — if it's a format Anchor now supports, remove and re-attach it"
+                  >
+                    Not readable
                   </span>
                 )}
               </span>
@@ -1430,6 +1793,15 @@ function FilesSection({ dealId, files }: { dealId: string; files: DealFile[] }) 
                 {f.fileSize ? `${Math.round(f.fileSize / 1024)}KB` : ""}
               </span>
             </a>
+            <button
+              type="button"
+              onClick={() => handleDeleteFile(f.id, f.fileName)}
+              disabled={deletingFileId === f.id}
+              className="mr-2 shrink-0 rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              title="Remove this file from the deal"
+            >
+              {deletingFileId === f.id ? "…" : "Remove"}
+            </button>
           </li>
         ))}
         {files.length === 0 && <p className="text-sm text-slate-500">No files yet.</p>}
@@ -1547,8 +1919,10 @@ export function DealTabs({
   teamSize,
   people,
   team,
+  sharedWithUserIds,
   messages,
   currentUserId,
+  canDeleteDeal,
 }: {
   deal: DealProfile & { memory: string | null };
   meetings: DealMeeting[];
@@ -1556,8 +1930,10 @@ export function DealTabs({
   teamSize: number;
   people: DealContact[];
   team: TeamMember[];
+  sharedWithUserIds: string[];
   messages: ChatMessage[];
   currentUserId: string;
+  canDeleteDeal: boolean;
 }) {
   // "Now", as state rather than a bare Date.now() call during render —
   // starts null (so the initial/SSR render and first client render
@@ -1586,6 +1962,11 @@ export function DealTabs({
     (m) => m.status !== "ready" && m.status !== "failed" && !upcomingIds.has(m.id)
   );
   const readyMeetings = meetings.filter((m) => m.status === "ready");
+  // Resolved once here rather than inside HandoffPanel — it already has
+  // the full team list in scope, and passing the resolved person down
+  // (rather than an id it would have to look up itself) keeps HandoffPanel
+  // from needing its own copy of `team`.
+  const backup = team.find((t) => t.id === deal.backupUserId) ?? null;
   // A bot Anchor actually confirmed is in the call (as opposed to still
   // "joining") — used to show the live panel alongside whichever tab is
   // active, for when you're running late and still want prep visible.
@@ -1596,7 +1977,38 @@ export function DealTabs({
   // recording and then clicking to a different tab doesn't unmount it and
   // kill the recording — only BeforePanel/DuringPanel below get unmounted
   // when the tab changes, this component does not.
-  const mic = useMicRecorder({ dealId: deal.id, onUploaded: () => router.refresh() });
+  const mic = useMicRecorder({
+    dealId: deal.id,
+    onUploaded: () => router.refresh(),
+    onStarted: () => router.refresh(),
+  });
+
+  // Meeting mode: while something's actually happening right now (Anchor's
+  // bot confirmed in the call, or an in-person mic recording running) and
+  // you're on During, hide the prep/admin stuff (deal header, sharing,
+  // people & team, files) so this page shows only what's needed mid-call —
+  // same idea as the Focus window, just applied to this page itself
+  // instead of a separate popped-out one. `forceFullView` is the escape
+  // hatch ("Show everything") for anyone who wants the full page back
+  // mid-meeting; it resets on its own once nothing's live anymore, so the
+  // next meeting starts simplified again rather than remembering a stale
+  // override.
+  const isLiveNow = liveMeetings.length > 0 || mic.recording;
+  const [forceFullView, setForceFullView] = useState(false);
+  // Resets the override the moment nothing's live anymore, so the NEXT
+  // meeting starts simplified again instead of remembering a stale "show
+  // everything" choice from the last one. This is React's own documented
+  // pattern for adjusting state during render off a prop/derived-value
+  // change (react.dev/reference/react/useState#storing-information-from-previous-renders)
+  // — a plain useState comparison, not a ref or a useEffect, both of
+  // which this project's lint rules (react-hooks/refs,
+  // react-hooks/set-state-in-effect) specifically disallow here.
+  const [wasLive, setWasLive] = useState(isLiveNow);
+  if (isLiveNow !== wasLive) {
+    setWasLive(isLiveNow);
+    if (!isLiveNow && forceFullView) setForceFullView(false);
+  }
+  const inMeetingMode = tab === "during" && isLiveNow && !forceFullView;
 
   // Ticks nowMs (so a scheduled meeting's card and inProgress status stay
   // current) and drives the deal onto the tab that actually matches
@@ -1651,6 +2063,49 @@ export function DealTabs({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meetings.map((m) => `${m.id}:${m.status}:${m.scheduledAt}`).join(",")]);
 
+  // The tick effect above only reacts to `meetings` changing — but
+  // nothing was actually re-fetching it, so a meeting ending (Stop, or
+  // the call just finishing on its own) never made it back to this page
+  // on its own: the live panel and meeting-mode view just kept showing
+  // it as live until something else happened to reload the page. This
+  // polls every in-progress meeting's own status directly (same endpoint
+  // MeetingStatusPoller uses on the standalone meeting page) and
+  // refreshes the page — feeding tick() the fresh `meetings` it needs —
+  // the moment any of them actually changes, instead of only noticing
+  // long after the fact.
+  const inProgressIds = meetings.filter((m) => m.status !== "ready" && m.status !== "failed").map((m) => m.id);
+  useEffect(() => {
+    if (inProgressIds.length === 0) return;
+    const knownStatus = new Map(meetings.map((m) => [m.id, m.status]));
+    let stopped = false;
+    async function poll() {
+      if (stopped) return;
+      try {
+        const results = await Promise.all(
+          inProgressIds.map((id) =>
+            fetch(`/api/meetings/${id}`)
+              .then((res) => (res.ok ? res.json() : null))
+              .catch(() => null)
+          )
+        );
+        const changed = results.some(
+          (r) => r?.meeting && r.meeting.status !== knownStatus.get(r.meeting.id)
+        );
+        if (changed && !stopped) router.refresh();
+      } catch {
+        // Best-effort — a missed check just tries again next tick.
+      }
+      if (!stopped) timer = setTimeout(poll, 3_000);
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    timer = setTimeout(poll, 3_000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inProgressIds.join(",")]);
+
   // Company research + news lives here (not inside DealHeaderCard) so both
   // the News tab's badge and its content can share it.
   const [researching, setResearching] = useState(false);
@@ -1691,6 +2146,32 @@ export function DealTabs({
     };
   }, [companyResearch, deal.id]);
 
+  const [deletingDeal, setDeletingDeal] = useState(false);
+  const [deleteDealError, setDeleteDealError] = useState<string | null>(null);
+  async function handleDeleteDeal() {
+    if (
+      !window.confirm(
+        `Permanently delete "${deal.name}"? This removes the deal and everything on it — every meeting recording, transcript, and summary, every attached file, and the chat. This can't be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingDeal(true);
+    setDeleteDealError(null);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't delete this deal");
+      }
+      router.push("/dashboard/deals");
+      router.refresh();
+    } catch (err) {
+      setDeletingDeal(false);
+      setDeleteDealError(err instanceof Error ? err.message : "Couldn't delete this deal");
+    }
+  }
+
   async function handleResearch() {
     setResearching(true);
     setResearchError(null);
@@ -1712,18 +2193,86 @@ export function DealTabs({
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h1 className="text-2xl font-semibold text-brand">{deal.name}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-semibold text-brand">{deal.name}</h1>
+            {canDeleteDeal && (
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  onClick={handleDeleteDeal}
+                  disabled={deletingDeal}
+                  className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                >
+                  {deletingDeal ? "Deleting…" : "Delete deal"}
+                </button>
+                {deleteDealError && <p className="text-xs text-red-600">{deleteDealError}</p>}
+              </div>
+            )}
+          </div>
           <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
         </div>
         <RecordingBanner {...mic} />
-        <DealHeaderCard deal={deal} />
-        <PeopleAndTeam
-          dealId={deal.id}
-          people={people}
-          team={team}
-          leadUserId={deal.leadUserId}
-          backupUserId={deal.backupUserId}
-        />
+        {inMeetingMode ? (
+          <>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
+              <span className="flex items-center gap-2">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                Meeting mode — showing just what you need for the call.
+              </span>
+              <button
+                type="button"
+                onClick={() => setForceFullView(true)}
+                className="shrink-0 font-medium underline hover:no-underline"
+              >
+                Show everything
+              </button>
+            </div>
+            {/* Whoever's actually running this call may not be the usual
+                deal lead (a backup stepping in) — surfacing this here,
+                front and center during the live call itself, matters
+                more for them than for the lead who already knows it by
+                heart. Same wording as the Focus window's "Key facts"
+                widget. */}
+            {deal.decisionBoundaries && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+                <span className="font-semibold">Can decide on your own: </span>
+                {deal.decisionBoundaries}
+              </div>
+            )}
+            {/* Ask Anchor stays reachable in meeting mode too now — no
+                reason a live question should mean leaving the compact
+                view and losing everything meeting mode was hiding. */}
+            <AskAnchorPanel dealId={deal.id} />
+          </>
+        ) : (
+          <>
+            <DealHeaderCard deal={deal} />
+            {/* Ask Anchor gets the full column width now (rather than
+                sharing a row) so its answers and question box have real
+                room to breathe — it's also available on every tab now
+                instead of only during a live meeting. "Who can see this
+                deal" moved out of here entirely — it's now the very last
+                thing on the Before tab (see BeforePanel below), not
+                something every tab shows near the top. */}
+            <AskAnchorPanel dealId={deal.id} />
+            <PeopleAndTeam
+              dealId={deal.id}
+              people={people}
+              team={team}
+              leadUserId={deal.leadUserId}
+              backupUserId={deal.backupUserId}
+            />
+            {isLiveNow && tab === "during" && (
+              <button
+                type="button"
+                onClick={() => setForceFullView(false)}
+                className="self-start rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:border-emerald-400"
+              >
+                Back to meeting mode
+              </button>
+            )}
+          </>
+        )}
         {/* Running late and still on Before (or After/Chat)? Don't make
             switching tabs the only way to see a call that's already
             live — show it right here too. */}
@@ -1736,8 +2285,13 @@ export function DealTabs({
             memory={deal.memory}
             latestReady={readyMeetings[0]}
             decisionBoundaries={deal.decisionBoundaries}
+            backup={backup}
             mic={mic}
             upcoming={upcoming}
+            team={team}
+            currentUserId={currentUserId}
+            initialRestricted={deal.restricted}
+            initialSharedWithUserIds={sharedWithUserIds}
             onJoinedNow={() => {
               router.refresh();
               setTab("during");
@@ -1751,13 +2305,14 @@ export function DealTabs({
             newsHeadline={newsHeadline}
             files={files}
             mic={mic}
+            focused={inMeetingMode}
           />
         )}
         {tab === "after" && (
           <AfterPanel dealId={deal.id} readyMeetings={readyMeetings} files={files} teamSize={teamSize} />
         )}
         {tab === "chat" && (
-          <ChatPanel dealId={deal.id} currentUserId={currentUserId} initialMessages={messages} />
+          <ChatPanel dealId={deal.id} currentUserId={currentUserId} team={team} initialMessages={messages} />
         )}
       </div>
       {/* Always visible — including during a live meeting — so whoever's

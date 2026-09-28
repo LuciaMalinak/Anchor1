@@ -178,7 +178,7 @@ export default async function Home() {
         <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-7 text-center">
           <span className="enter-fade enter-1 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] font-semibold tracking-[0.18em] text-slate-200">
             <span className="live-dot h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
-            MEETING INTELLIGENCE FOR SALES TEAMS
+            MEETING INTELLIGENCE FOR EVERY TEAM
           </span>
           <div className="enter-fade enter-2 relative">
             <div
@@ -194,8 +194,8 @@ export default async function Home() {
             Your knowledge in the room. Without you in the room.
           </p>
           <p className="enter-fade enter-5 max-w-lg text-base leading-relaxed text-slate-400">
-            Meeting intelligence for teams that sell — Anchor joins the call, remembers what
-            matters, and keeps every deal covered.
+            Meeting intelligence for teams — Anchor joins the call, remembers what matters, and
+            keeps every deal covered.
           </p>
           <div className="enter-fade enter-6 mt-4 flex flex-wrap items-center justify-center gap-4">
             <Link
@@ -451,7 +451,20 @@ export default async function Home() {
       <footer className="border-t border-slate-200 px-6 py-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <Logo size="sm" />
+            <div className="flex items-center gap-3">
+              <Logo size="sm" />
+              <a
+                href="https://www.linkedin.com/company/143888744/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Anchor on LinkedIn"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-[#0A66C2]"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.15 1.45-2.15 2.94v5.67H9.34V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13zM7.11 20.45H3.56V9h3.55v11.45z" />
+                </svg>
+              </a>
+            </div>
             <p className="text-xs text-slate-400">
               © {new Date().getFullYear()} Anchor. All rights reserved.
             </p>

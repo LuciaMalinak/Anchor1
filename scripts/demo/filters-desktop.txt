@@ -1,0 +1,13 @@
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Anchor Desktop runs quietly in the background,
+watching for Zoom, Teams, and Google Meet calls.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,0.6,2.8)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='The moment a call starts, Anchor sees it and begins
+recording automatically — no bot joins the call.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,3.6,7.0)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Live coaching now shows up right in the app —
+nudges, a checklist, and the one question still unanswered.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,7.8,11.3)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Ask Anchor anything about the deal, mid-call —
+the same grounded answers as the web app.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,12.1,16.4)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Check off open tasks for this deal without ever
+switching to a browser tab.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,16.8,19.8)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='When the call ends, processing starts right away.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,21.0,24.0)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Moments later, the recap is ready —
+already linked to the right deal.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,24.6,28.6)'

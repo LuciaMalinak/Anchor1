@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Anchor Desktop</title>
+    <style>
+      /* Same brand tokens as the website (src/app/globals.css): navy
+         primary, copper accent, clean white surfaces. Keeping the
+         desktop app's own colors in sync with these by hand (no shared
+         CSS between the two apps) — update both places if the brand
+         colors ever change. */
+      :root {
+        --brand: #12294a;
+        --brand-dark: #0b1930;
+        --copper: #b4531f;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 20px;
+        color: #1e293b;
+        background: #f8fafc;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .brand h1 {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin: 0;
+        color: var(--brand);
+      }
+      p.sub {
+        color: #64748b;
+        font-size: 12px;
+        margin: 0 0 16px;
+      }
+      section {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+      button {
+        background: var(--brand);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        background: var(--brand-dark);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      button.stop {
+        background: #dc2626;
+      }
+      button.stop:hover:not(:disabled) {
+        background: #b91c1c;
+      }
+      .meeting {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 12px;
+      }
+      .meeting:last-child {
+        border-bottom: none;
+      }
+      #log {
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        color: #475569;
+        max-height: 160px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+      }
+      #status {
+        font-size: 11px;
+        color: #64748b;
+        margin-bottom: 8px;
+      }
+      .meeting-block {
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .meeting-block:last-child {
+        border-bottom: none;
+      }
+      .meeting-block .meeting {
+        border-bottom: none;
+      }
+      .deal-panel {
+        padding: 4px 0 10px;
+      }
+      .panel-section {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed #e2e8f0;
+      }
+      .panel-section strong {
+        font-size: 11px;
+        color: var(--brand);
+        display: block;
+        margin-bottom: 6px;
+      }
+      .hint {
+        font-size: 11px;
+        color: #94a3b8;
+        margin: 0;
+      }
+      .nudges,
+      .checklist {
+        margin: 0 0 6px;
+        padding-left: 16px;
+        font-size: 12px;
+      }
+      .nudges li,
+      .checklist li {
+        margin-bottom: 4px;
+      }
+      .checklist li.covered {
+        color: #16a34a;
+      }
+      .live-question {
+        background: #fef3e7;
+        border: 1px solid #f4d9b8;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+      .suggested-answer {
+        margin-top: 4px;
+        color: #475569;
+      }
+      .task-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 12px;
+        padding: 4px 0;
+        cursor: pointer;
+      }
+      .task-row input {
+        width: auto;
+        margin: 2px 0 0;
+      }
+      .task-row em {
+        color: #94a3b8;
+        font-style: normal;
+      }
+      .ask-row {
+        display: flex;
+        gap: 6px;
+      }
+      .ask-row input {
+        margin-bottom: 0;
+      }
+      .ask-row button {
+        flex-shrink: 0;
+      }
+      .ask-answer {
+        font-size: 12px;
+        color: #334155;
+        margin-top: 8px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="brand">
+      <!-- Same anchor glyph as the website's Logo.tsx / icon.svg — keep the
+           path data in sync if either changes. -->
+      <svg width="22" height="22" viewBox="0 0 32 32" fill="none" stroke="#12294a" stroke-width="1.9"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="16" cy="7.5" r="2.25" />
+        <path d="M16 9.75V24.5" />
+        <path d="M11 13.5H21" />
+        <path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5" />
+        <path d="M8 18.5L6 15.8M8 18.5L10.3 17" />
+        <path d="M24 18.5L26 15.8M24 18.5L21.7 17" />
+      </svg>
+      <h1>Anchor Desktop</h1>
+    </div>
+    <p class="sub">Records Zoom, Teams, and Meet calls straight from your computer — no bot joins the call.</p>
+    <p class="sub" style="margin-top: -12px">
+      Closing this window keeps Anchor running quietly in your menu bar, watching for calls. Look for the anchor
+      icon near your clock to reopen it or quit.
+    </p>
+
+    <section id="token-section">
+      <div id="status">Not connected</div>
+      <input id="token-input" type="password" placeholder="Paste your desktop token from Anchor's Integrations page" />
+      <button id="save-token">Save token</button>
+    </section>
+
+    <section>
+      <strong style="font-size: 12px">Detected meetings</strong>
+      <div id="meetings" style="margin-top: 8px">
+        <p style="font-size: 12px; color: #94a3b8">Open a Zoom, Teams, or Meet call — it'll show up here.</p>
+      </div>
+    </section>
+
+    <section>
+      <strong style="font-size: 12px">Activity</strong>
+      <div id="log" style="margin-top: 8px"></div>
+    </section>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -8,7 +8,7 @@
 // so a single Azure AD app registration (one client ID/secret) covers
 // both with different scopes. Presenting them as two separate "connect"
 // buttons would just mean asking for the same credentials twice.
-export type ProviderKey = "google" | "microsoft" | "slack" | "salesforce";
+export type ProviderKey = "google" | "microsoft" | "slack" | "salesforce" | "hubspot";
 
 export type ProviderConfig = {
   key: ProviderKey;
@@ -57,8 +57,12 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     key: "slack",
     name: "Slack",
     description:
-      "Read the channels you point Anchor at for deal-related context, and post updates back.",
-    scopes: ["channels:history", "chat:write", "users:read"],
+      "Read the channels you point Anchor at for deal-related context, and post updates back — like DMing a handoff briefing straight to whoever's covering a deal.",
+    // users:read.email is separate from users:read and specifically what
+    // users.lookupByEmail (src/lib/integrations/slack.ts) needs to find a
+    // teammate by their Anchor email — without it that lookup 404s even
+    // though users:read alone looks like it should cover it.
+    scopes: ["channels:history", "chat:write", "users:read", "users:read.email"],
     authorizeUrl: "https://slack.com/oauth/v2/authorize",
     tokenUrl: "https://slack.com/api/oauth.v2.access",
     clientIdEnv: "SLACK_INTEGRATION_CLIENT_ID",
@@ -81,6 +85,22 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     tokenUrl: "https://login.salesforce.com/services/oauth2/token",
     clientIdEnv: "SALESFORCE_INTEGRATION_CLIENT_ID",
     clientSecretEnv: "SALESFORCE_INTEGRATION_CLIENT_SECRET",
+  },
+  hubspot: {
+    key: "hubspot",
+    name: "HubSpot",
+    description:
+      "Pull your HubSpot contacts and deals into Anchor, enriched with meeting intelligence — same idea as Salesforce, for teams that run HubSpot instead.",
+    // HubSpot's newer, more granular scope names for read-only CRM access.
+    // "oauth" is required on every HubSpot app to get a refresh token back.
+    scopes: ["oauth", "crm.objects.contacts.read", "crm.objects.deals.read"],
+    authorizeUrl: "https://app.hubspot.com/oauth/authorize",
+    // Unlike Salesforce/Google/Microsoft, HubSpot uses this SAME endpoint
+    // for both the initial code exchange and later refresh-token calls
+    // (see refreshAccessToken in hubspot.ts) — one token URL covers both.
+    tokenUrl: "https://api.hubapi.com/oauth/v1/token",
+    clientIdEnv: "HUBSPOT_INTEGRATION_CLIENT_ID",
+    clientSecretEnv: "HUBSPOT_INTEGRATION_CLIENT_SECRET",
   },
 };
 

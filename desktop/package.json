@@ -1,0 +1,62 @@
+{
+  "name": "anchor-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Anchor Desktop — records Zoom/Teams/Meet calls locally with no bot joining, using Recall.ai's Desktop Recording SDK.",
+  "author": "Anchor",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --dev",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "@recallai/desktop-sdk": "^2.0.32"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  },
+  "build": {
+    "appId": "com.anchor.desktop",
+    "productName": "Anchor Desktop",
+    "directories": {
+      "output": "release"
+    },
+    "publish": null,
+    "files": ["dist/**/*", "src/renderer/**/*", "package.json"],
+    "protocols": {
+      "name": "Anchor Desktop Connect",
+      "schemes": ["anchor-desktop"]
+    },
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Anchor Desktop records your microphone during a call you choose to record.",
+        "NSAudioCaptureUsageDescription": "Anchor Desktop captures other participants' audio from your call so it can transcribe the conversation."
+      }
+    },
+    "afterSign": "build/afterSign.js",
+    "dmg": {
+      "sign": false
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

@@ -1,11 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, meetingLiveSegments, deals, summaries } from "@/db/schema";
-import { and, desc, eq, ne, asc } from "drizzle-orm";
+import { meetings, meetingLiveSegments, deals, summaries, dealFiles } from "@/db/schema";
+import { and, desc, eq, ne, asc, isNull } from "drizzle-orm";
 import { generateLiveCoaching } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
+import { summarizeDealFiles } from "@/lib/dealFilesContext";
+import { authenticateBearer } from "@/lib/apiToken";
 
 // How often live coaching (nudges + checklist) is allowed to regenerate.
 // The During tab polls this route every couple of seconds (see
@@ -27,9 +29,15 @@ const TRANSCRIPT_WINDOW_CHARS = 6_000;
 // regenerates far more often (every ~8s) during a live call.
 const PAST_MEETINGS_LIMIT = 3;
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (!session?.user?.id) {
+  // Also accepts the desktop app's bearer token — its floating overlay
+  // (see desktop/src/main.ts's showOverlay) loads the Focus window
+  // instead of a browser tab, and that window polls this same route for
+  // its live transcript + coaching the same way the During tab does.
+  const bearerUserId = session?.user?.id ? null : await authenticateBearer(req);
+  const userId = session?.user?.id ?? bearerUserId;
+  if (!userId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
@@ -39,25 +47,45 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
 
-  const isOwner = meeting.userId === session.user.id;
+  const isOwner = meeting.userId === userId;
   const dealRows = meeting.dealId
     ? await db.select().from(deals).where(eq(deals.id, meeting.dealId))
     : [];
-  const deal = dealRows[0] ?? null;
+  let deal: typeof deals.$inferSelect | null = dealRows[0] ?? null;
 
-  let sharedViaTeam = false;
-  if (!isOwner && deal) {
-    sharedViaTeam = await canAccessDeal(session.user.id, deal.id, deal.teamId);
-  }
-  if (!isOwner && !sharedViaTeam) {
+  // A meeting's dealId isn't guaranteed to be one this user actually has
+  // access to (see the root-cause note in meetings/route.ts) — this used
+  // to only get checked for a non-owner, so the owner's own meeting could
+  // pull another team's deal memory/notes/decision boundaries/email and
+  // calendar context straight into live coaching with no check at all.
+  const canUseDeal = Boolean(deal && (await canAccessDeal(userId, deal.id, deal.teamId, deal)));
+  if (!isOwner && !canUseDeal) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
+  if (!canUseDeal) {
+    deal = null;
+  }
 
-  const segments = await db
+  const rawSegments = await db
     .select()
     .from(meetingLiveSegments)
     .where(eq(meetingLiveSegments.meetingId, id))
     .orderBy(asc(meetingLiveSegments.createdAt));
+  // Segments are written from two independent, network-dependent paths
+  // (Recall's webhook for bot calls, the desktop app's live-transcript
+  // push for desktop recordings) that don't guarantee arrival order
+  // matches speech order — a retried delivery can land after a later
+  // line. relativeSeconds reflects true call-relative timing when it's
+  // present, so re-sort by that where both sides have it; segments
+  // missing it (or being compared to one that is) keep the createdAt
+  // (arrival) order the query above already gave them, via a stable
+  // sort's guarantee that a `0` comparison leaves relative order intact.
+  const segments = [...rawSegments].sort((a, b) => {
+    if (a.relativeSeconds != null && b.relativeSeconds != null) {
+      return a.relativeSeconds - b.relativeSeconds;
+    }
+    return 0;
+  });
 
   let liveSuggestions = meeting.liveSuggestions;
 
@@ -65,27 +93,56 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const transcriptText = segments
     .map((s) => (s.speakerName ? `${s.speakerName}: ${s.text}` : s.text))
     .join("\n");
+  // No longer gated on the transcript having anything in it yet — nudges
+  // used to stay blank ("Nudges show up here once the conversation gets
+  // going") until the first words were transcribed, which could be a
+  // real gap right at the start of a call when there's nothing urgent to
+  // react to live but plenty already known about the deal (prep notes,
+  // decision boundaries, what happened last meeting). Coaching now keeps
+  // regenerating on the same debounced cadence the whole time the
+  // meeting is live, transcript or not — see generateLiveCoaching's
+  // instruction to always ground nudges in known facts when the live
+  // conversation hasn't given it anything new yet, rather than going
+  // quiet.
   const dueForRefresh =
     isLive &&
-    transcriptText.length > 0 &&
     (!meeting.liveSuggestionsUpdatedAt ||
       Date.now() - meeting.liveSuggestionsUpdatedAt.getTime() > COACHING_REFRESH_MS);
 
   if (dueForRefresh) {
     // Soft lock: stamp the timestamp before the (slow) AI call so a
     // second poll landing a moment later doesn't kick off a duplicate
-    // generation for the same window.
-    await db
+    // generation for the same window. This has to be a compare-and-swap
+    // (only update if liveSuggestionsUpdatedAt still matches what THIS
+    // request read) rather than an unconditional update — the During tab
+    // and the Focus window/overlay both poll this route independently on
+    // similar cadences, and an unconditional update let two requests that
+    // both read the same stale timestamp both "win" the lock and both
+    // fire a full generateLiveCoaching call. The .returning() row is only
+    // present if this request's WHERE actually matched, i.e. actually won.
+    const [wonLock] = await db
       .update(meetings)
       .set({ liveSuggestionsUpdatedAt: new Date() })
-      .where(eq(meetings.id, id));
+      .where(
+        and(
+          eq(meetings.id, id),
+          meeting.liveSuggestionsUpdatedAt
+            ? eq(meetings.liveSuggestionsUpdatedAt, meeting.liveSuggestionsUpdatedAt)
+            : isNull(meetings.liveSuggestionsUpdatedAt)
+        )
+      )
+      .returning({ id: meetings.id });
 
-    try {
+    // !wonLock means another concurrent poll already claimed this refresh
+    // cycle — skip regenerating and fall through to the same response
+    // below with the not-yet-refreshed liveSuggestions; that other
+    // request's result is what the next poll will see.
+    if (wonLock) try {
       // Never rebuilt synchronously here — this route is polled every
       // few seconds during a live call, so it reads whatever style
       // profile already exists (possibly a day stale) rather than ever
       // waiting on a rebuild.
-      const [leadStyle, pastMeetingRows] = await Promise.all([
+      const [leadStyle, pastMeetingRows, fileRows] = await Promise.all([
         getDealLeadStyle(deal?.leadUserId ?? null, { allowSynchronousRebuild: false }),
         deal
           ? db
@@ -102,6 +159,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
               .orderBy(desc(meetings.occurredAt))
               .limit(PAST_MEETINGS_LIMIT)
           : Promise.resolve([]),
+        // Files/voice notes attached from the Before tab's "Give Anchor
+        // more context" box (see DealContextBox.tsx) — a bounded digest,
+        // not the full text (see dealFilesContext.ts for why).
+        deal
+          ? db.select().from(dealFiles).where(eq(dealFiles.dealId, deal.id))
+          : Promise.resolve([]),
       ]);
       const coaching = await generateLiveCoaching({
         dealName: deal?.name || null,
@@ -117,6 +180,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         // had this; live coaching was blind to Gmail/Calendar until now.
         emailContext: deal?.emailContext || null,
         calendarContext: deal?.calendarContext || null,
+        attachedFiles: summarizeDealFiles(fileRows),
         pastMeetings: pastMeetingRows.map((r) => ({
           title: r.meeting.title,
           occurredAt: r.meeting.occurredAt.toLocaleDateString(),
@@ -141,6 +205,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({
     status: meeting.status,
     isLive,
+    // Whether this is a Zoom/Teams call Anchor's bot actually joined
+    // (recallBotId set) vs. an in-person recording — the Stop button
+    // only makes sense for the former (it tells Recall's bot to leave a
+    // call; there's no such thing to tell an in-person recording, which
+    // stops from its own Record-in-person control instead). See
+    // LiveMeetingPanel.tsx and FocusWindow.tsx.
+    hasBot: Boolean(meeting.recallBotId),
     segments: segments.map((s) => ({
       id: s.id,
       speakerName: s.speakerName,

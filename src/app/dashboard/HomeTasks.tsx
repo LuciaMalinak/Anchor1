@@ -135,6 +135,15 @@ export function HomeTasks({
 
   async function handleComplete(id: string) {
     setCompleting(id);
+    // Kept so a failed request can put back just THIS task, in
+    // (approximately) its original spot — resetting to the page-load
+    // `initialTasks` snapshot instead (the old behavior) meant completing
+    // task A successfully, then failing to complete task B, brought task
+    // A back too (it was never removed from that stale snapshot), and
+    // discarded anything else that changed in the list since the page
+    // loaded (e.g. a task added in the meantime).
+    const originalIndex = tasks.findIndex((t) => t.id === id);
+    const removedTask = originalIndex === -1 ? null : tasks[originalIndex];
     // Optimistic — it's a to-do list, the whole point is that checking
     // something off feels instant.
     setTasks((prev) => prev.filter((t) => t.id !== id));
@@ -146,8 +155,14 @@ export function HomeTasks({
       });
       if (!res.ok) throw new Error("Couldn't check that off");
     } catch {
-      // Put it back if the request failed.
-      setTasks(initialTasks);
+      if (removedTask) {
+        setTasks((prev) => {
+          if (prev.some((t) => t.id === removedTask.id)) return prev;
+          const next = [...prev];
+          next.splice(Math.min(originalIndex, next.length), 0, removedTask);
+          return next;
+        });
+      }
     } finally {
       setCompleting(null);
     }

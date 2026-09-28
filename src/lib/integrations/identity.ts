@@ -41,6 +41,16 @@ export async function fetchIdentityLabel(
       const body = await res.json();
       return typeof body.email === "string" ? body.email : null;
     }
+    if (key === "hubspot") {
+      // HubSpot's one-call way to identify a token: no separate
+      // "userinfo" endpoint, just this lookup by the token itself, which
+      // hands back the connecting user's email and the HubSpot account
+      // ("hub") domain.
+      const res = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${accessToken}`);
+      if (!res.ok) return null;
+      const body = await res.json();
+      return typeof body.user === "string" ? body.user : (body.hub_domain ?? null);
+    }
   } catch (err) {
     console.error(`Couldn't fetch ${key} identity label:`, err);
   }

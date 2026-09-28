@@ -1,0 +1,58 @@
+[
+  {
+    "label": "landing",
+    "atMs": 1168
+  },
+  {
+    "label": "sign-up",
+    "atMs": 9882
+  },
+  {
+    "label": "signed-up",
+    "atMs": 15080
+  },
+  {
+    "label": "dashboard-home",
+    "atMs": 16071
+  },
+  {
+    "label": "deals-list",
+    "atMs": 24895
+  },
+  {
+    "label": "deal-detail",
+    "atMs": 27899
+  },
+  {
+    "label": "after-tab-history",
+    "atMs": 34462
+  },
+  {
+    "label": "meeting-detail",
+    "atMs": 44291
+  },
+  {
+    "label": "ask-anchor-open",
+    "atMs": 55454
+  },
+  {
+    "label": "ask-anchor-submit",
+    "atMs": 59473
+  },
+  {
+    "label": "ask-anchor-answered",
+    "atMs": 63148
+  },
+  {
+    "label": "contacts",
+    "atMs": 69079
+  },
+  {
+    "label": "dashboard-outro",
+    "atMs": 73480
+  },
+  {
+    "label": "end",
+    "atMs": 75881
+  }
+]

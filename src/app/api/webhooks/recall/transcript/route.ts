@@ -16,7 +16,10 @@ import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
 // that already re-summarizes every ~20s.
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret");
-  if (secret !== RECALL_WEBHOOK_SECRET) {
+  // See the matching comment in ../route.ts — RECALL_WEBHOOK_SECRET is
+  // null when the env var isn't set, and a request with no ?secret= at
+  // all would otherwise also read as null and incorrectly pass.
+  if (!RECALL_WEBHOOK_SECRET || secret !== RECALL_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

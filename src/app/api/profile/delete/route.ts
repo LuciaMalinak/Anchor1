@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, sessions, accounts, teams } from "@/db/schema";
+import { users, sessions, accounts, teams, deals } from "@/db/schema";
 import { eq, and, ne } from "drizzle-orm";
 import { sessionCookieName, secureCookiesEnabled } from "@/lib/auth/password";
 
@@ -49,6 +49,22 @@ export async function POST() {
       // nobody else is relying on that data.
       await db.delete(teams).where(eq(teams.id, team.id));
     }
+  }
+
+  // Same cleanup src/app/api/team/members/[id]/route.ts already does when
+  // an OWNER removes someone — needed here too for the non-owner
+  // self-delete path just above (the sole-owner path already deleted
+  // every one of this team's deals along with the team row, so this is
+  // a harmless no-op there). Without it, a deal's leadUserId/backupUserId
+  // kept pointing at this now-anonymized "deleted-...@anchor.invalid"
+  // row: the deal page would just quietly stop showing a lead/backup at
+  // all (that user id no longer resolves to anyone on the team roster),
+  // while anything that looks the user up directly by id — like the
+  // handoff-briefing Slack notify route — would still find the
+  // anonymized row and report success sending to an address nobody reads.
+  if (user.teamId) {
+    await db.update(deals).set({ leadUserId: null }).where(and(eq(deals.teamId, user.teamId), eq(deals.leadUserId, userId)));
+    await db.update(deals).set({ backupUserId: null }).where(and(eq(deals.teamId, user.teamId), eq(deals.backupUserId, userId)));
   }
 
   await db.delete(sessions).where(eq(sessions.userId, userId));

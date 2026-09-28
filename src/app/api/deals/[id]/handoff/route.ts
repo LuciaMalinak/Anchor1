@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, summaries, meetingParticipants, contacts } from "@/db/schema";
+import { meetings, summaries, meetingParticipants, contacts, dealFiles } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { generateHandoffBriefing } from "@/lib/handoffBriefing";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
+import { summarizeDealFiles } from "@/lib/dealFilesContext";
 
 // Generates a point-in-time briefing for a teammate stepping in to run
 // this deal's next meeting — not persisted, since it should always
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { deal } = authorized;
 
   // Independent queries — run together rather than one after another.
-  const [recentReady, dealContactRows, leadStyle] = await Promise.all([
+  const [recentReady, dealContactRows, leadStyle, fileRows] = await Promise.all([
     db
       .select({ meeting: meetings, summary: summaries })
       .from(meetings)
@@ -52,6 +53,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // it's worth the extra beat to rebuild a stale profile first rather
     // than hand back yesterday's read on how the lead operates.
     getDealLeadStyle(deal.leadUserId, { allowSynchronousRebuild: true }),
+    // Files/voice notes attached from the Before tab's "Give Anchor more
+    // context" box (see DealContextBox.tsx) — a bounded digest, not the
+    // full text (see dealFilesContext.ts for why).
+    db.select().from(dealFiles).where(eq(dealFiles.dealId, dealId)),
   ]);
 
   try {
@@ -71,6 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       leadStyle,
       emailContext: deal.emailContext,
       calendarContext: deal.calendarContext,
+      attachedFiles: summarizeDealFiles(fileRows),
     });
     return NextResponse.json({ briefing });
   } catch (err) {

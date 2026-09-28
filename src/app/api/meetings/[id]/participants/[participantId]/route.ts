@@ -33,7 +33,7 @@ export async function PATCH(
   let canEdit = isOwner;
   if (!canEdit && meeting.dealId) {
     const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
-    canEdit = Boolean(deal && (await canAccessDeal(session.user.id, meeting.dealId, deal.teamId)));
+    canEdit = Boolean(deal && (await canAccessDeal(session.user.id, meeting.dealId, deal.teamId, deal)));
   }
   if (!canEdit) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

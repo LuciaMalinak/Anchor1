@@ -11,7 +11,17 @@ import type { TickerItem } from "@/lib/industryTicker";
 // Polling, not a live socket: there's no market-data feed wired in, so
 // "live" means "refreshes on its own every few minutes," not tick-by-tick
 // prices — see globals.css's .ticker-track for the scroll animation.
+//
+// Once populated, every 5 minutes is plenty (the underlying cache only
+// changes every 20 minutes anyway — see isTickerStale).
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
+
+// While there's nothing to show yet — most notably right after a team
+// switches industry (this component remounts empty; see the `key` on
+// GeneralNewsSidebar in layout.tsx) — poll much faster so the new
+// sector's ticker appears within seconds instead of sitting blank for up
+// to 5 minutes. Same idea as GeneralNewsSidebar's briefing poll.
+const EMPTY_POLL_INTERVAL_MS = 10 * 1000;
 
 // A small colored arrow/dot next to each line — green up, red down, a
 // neutral dot for headlines with no directional number (an approval, an
@@ -34,6 +44,7 @@ export function IndustryTicker({
   industryLabel: string | null;
 }) {
   const [items, setItems] = useState(initialItems);
+  const isEmpty = items.length === 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -53,14 +64,45 @@ export function IndustryTicker({
       }
     }
 
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    // Check right away rather than waiting for the first interval tick —
+    // matters most right after an industry switch, when the background
+    // refresh for the new sector (kicked off by this same GET route) is
+    // already in flight and often lands within seconds.
+    poll();
+    const interval = setInterval(poll, isEmpty ? EMPTY_POLL_INTERVAL_MS : POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+    // Re-running this effect when isEmpty flips from true to false is the
+    // point: it swings from fast polling (nothing to show yet) to the
+    // slower steady-state cadence the moment real items land.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEmpty]);
 
-  if (items.length === 0) return null;
+  if (isEmpty) {
+    // A brief, expected gap — right after signup or an industry switch,
+    // before the first background fetch for this sector lands (seconds,
+    // not minutes, thanks to the fast polling above). Showing this
+    // instead of nothing keeps the layout stable and makes clear the
+    // ticker is actively catching up to the new sector, not broken.
+    return (
+      <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+        <div className="flex items-center gap-2 border-b border-white/10 px-3 py-1.5">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          </span>
+          <span className="text-[10px] font-semibold tracking-[0.15em] text-slate-300">
+            {industryLabel ? `${industryLabel.toUpperCase()} · LIVE` : "MARKETS · LIVE"}
+          </span>
+        </div>
+        <div className="px-3 py-2 text-xs font-medium text-slate-400">
+          Pulling today&apos;s {industryLabel ? industryLabel.toLowerCase() : "market"} headlines…
+        </div>
+      </div>
+    );
+  }
 
   // Duplicated once so the CSS animation can scroll from 0 to exactly
   // -50% and loop with no visible seam or snap-back.

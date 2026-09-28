@@ -1,0 +1,34 @@
+[
+  {
+    "label": "idle",
+    "atMs": 418
+  },
+  {
+    "label": "detected",
+    "atMs": 3420
+  },
+  {
+    "label": "suggestions-updated",
+    "atMs": 7621
+  },
+  {
+    "label": "ask-anchor-typed",
+    "atMs": 11922
+  },
+  {
+    "label": "task-completed",
+    "atMs": 19924
+  },
+  {
+    "label": "call-ended",
+    "atMs": 23226
+  },
+  {
+    "label": "summary-ready",
+    "atMs": 26228
+  },
+  {
+    "label": "end",
+    "atMs": 29430
+  }
+]

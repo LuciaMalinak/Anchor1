@@ -5,6 +5,7 @@ import { meetings } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { saveMeetingAudio } from "@/lib/storage";
 import { processMeeting } from "@/lib/processMeeting";
+import { authorizeDeal } from "@/lib/dealAccess";
 
 export async function GET() {
   const session = await auth();
@@ -35,6 +36,16 @@ export async function POST(req: NextRequest) {
   const title = typeof titleField === "string" ? titleField.trim() : "";
   const dealIdField = formData.get("dealId");
   const dealId = typeof dealIdField === "string" && dealIdField ? dealIdField : null;
+
+  // A meeting's dealId used to be trusted with no check at all — anyone
+  // could attach their own meeting to ANY team's deal by UUID, and
+  // several other routes (follow-up drafts, live coaching, the home
+  // page task/feed lists) then trusted that dealId and leaked the real
+  // deal's data back out. Verifying it belongs to a deal this user can
+  // actually see closes that off at the one place it needs to happen.
+  if (dealId && !(await authorizeDeal(session.user.id, dealId))) {
+    return NextResponse.json({ error: "That deal wasn't found" }, { status: 400 });
+  }
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });

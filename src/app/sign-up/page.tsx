@@ -7,6 +7,7 @@ const SIGN_UP_ERROR_COPY: Record<string, string> = {
   short: "Use at least 8 characters for your password.",
   mismatch: "Those passwords didn't match — try again.",
   exists: "An account already exists for that email — sign in instead.",
+  ack: "Please check the box confirming you've read the prototype notice before creating an account.",
 };
 
 export default async function SignUpPage({
@@ -75,6 +76,31 @@ export default async function SignUpPage({
           placeholder="Confirm password"
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
         />
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <label className="flex items-start gap-2 text-[11px] leading-relaxed text-amber-900">
+            <input
+              type="checkbox"
+              name="acknowledgePrototype"
+              value="1"
+              required
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-amber-300"
+            />
+            <span>
+              I understand Anchor is an early-stage prototype provided &quot;as is,&quot; and I
+              won&apos;t upload my most confidential, sensitive, or regulated information — I&apos;ll
+              test it with meetings and documents I&apos;d be comfortable with if something leaked.
+              I&apos;ve read the{" "}
+              <Link href="/terms" className="font-medium underline underline-offset-2">
+                Terms
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy#prototype-disclaimer" className="font-medium underline underline-offset-2">
+                prototype disclaimer
+              </Link>
+              .
+            </span>
+          </label>
+        </div>
         <button
           type="submit"
           className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800"
@@ -88,18 +114,6 @@ export default async function SignUpPage({
         <Link href={signInHref} className="font-medium text-brand hover:underline">
           Sign in
         </Link>
-      </p>
-
-      <p className="text-center text-[11px] text-slate-400">
-        By creating an account, you agree to Anchor&apos;s{" "}
-        <Link href="/terms" className="hover:text-slate-600 hover:underline">
-          Terms
-        </Link>{" "}
-        and{" "}
-        <Link href="/privacy" className="hover:text-slate-600 hover:underline">
-          Privacy Policy
-        </Link>
-        .
       </p>
     </main>
   );

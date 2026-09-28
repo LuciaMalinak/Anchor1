@@ -37,6 +37,12 @@ export async function POST(req: NextRequest) {
   const confirmPassword = String(form.get("confirmPassword") ?? "");
   const industryRaw = String(form.get("industry") ?? "");
   const industry = isIndustryKey(industryRaw) ? industryRaw : null;
+  // The prototype-disclaimer checkbox on the sign-up form — required
+  // client-side too, but re-checked here since a form's `required`
+  // attribute is only ever a client-side nicety. See the privacy page's
+  // "Prototype / beta-testing disclaimer" section for what this refers
+  // to (#prototype-disclaimer).
+  const acknowledgedPrototype = form.get("acknowledgePrototype") === "1";
 
   if (!email || !password) {
     return backToSignUp(req, "missing", industry);
@@ -46,6 +52,9 @@ export async function POST(req: NextRequest) {
   }
   if (password !== confirmPassword) {
     return backToSignUp(req, "mismatch", industry);
+  }
+  if (!acknowledgedPrototype) {
+    return backToSignUp(req, "ack", industry);
   }
 
   const [existing] = await db

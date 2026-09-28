@@ -29,15 +29,24 @@ function SectionIcon({ path, className }: { path: string; className: string }) {
 export function InsightsClient({
   initialInsights,
   initialDealCount,
+  initialLoadFailed = false,
+  restricted = false,
 }: {
   initialInsights: Insights | null;
   initialDealCount: number;
+  // Set only when the server-side fetch actually threw — distinct from
+  // `restricted`, where initialInsights is null on purpose and nothing
+  // failed. Conflating the two used to show a false "Couldn't load
+  // insights" error to every restricted teammate on first load. See the
+  // comment in page.tsx.
+  initialLoadFailed?: boolean;
+  restricted?: boolean;
 }) {
   const [insights, setInsights] = useState<Insights | null>(initialInsights);
   const [dealCount, setDealCount] = useState(initialDealCount);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(
-    initialInsights === null ? "Couldn't load insights — try refreshing." : null
+    initialLoadFailed ? "Couldn't load insights — try refreshing." : null
   );
 
   async function handleRefresh() {
@@ -82,7 +91,15 @@ export function InsightsClient({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {insights && !hasAnything && (
+      {restricted && !error && (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center">
+          <p className="text-sm text-slate-500">
+            Pipeline-wide insights are available to team members with full deal access.
+          </p>
+        </div>
+      )}
+
+      {!restricted && insights && !hasAnything && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center">
           <p className="text-sm text-slate-500">
             Not enough finished meetings yet for Anchor to spot patterns — this fills in as deals

@@ -1,0 +1,19 @@
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Anchor turns every call into a recap,
+an action list, and a growing account memory.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,1.6,8.5)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Sign up with just an email and password,
+nothing to confirm.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,9.6,13.4)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Every account you work with shows up here —
+tasks, updates, and everything that has happened.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,14.7,21.9)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Every deal your team is running, at a glance.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,23.1,25.0)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Open one deal and Anchor already remembers it —
+this account goes back seven months.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,26.3,31.7)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Every past meeting becomes part of the record —
+kickoff, security review, quarterly check-in, and beyond.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,32.8,41.7)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Open any one for the full recap, action items,
+and transcript — automatically labeled by speaker.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,43.3,52.8)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Ask Anchor anything about the account...':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,54.5,56.9)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='...and get an answer grounded in the entire relationship,
+not just the last call.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,58.3,66.7)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='Every contact, and how that relationship has
+grown over time.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,69.0,71.7)',
+drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:text='That is Anchor, on the web.':fontcolor=white:fontsize=28:line_spacing=8:box=1:boxcolor=0x12294a@0.88:boxborderw=18:x=(w-text_w)/2:y=h-th-70:enable='between(t,73.3,74.9)'

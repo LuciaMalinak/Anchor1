@@ -10,12 +10,14 @@ import {
   meetingParticipants,
   deals,
   tasks,
+  dealFiles,
 } from "@/db/schema";
 import { transcribeAudioFile } from "./transcribe";
 import { summarizeMeeting, mergeContactMemory, mergeDealMemory } from "./summarize";
 import { readStoredFile } from "./storage";
 import { getOrCreateTeamId } from "./team";
 import { withRetry } from "./retry";
+import { summarizeDealFiles } from "./dealFilesContext";
 
 // Every Nth memory update re-derives the summary from actual raw history
 // instead of just trusting the current (possibly drifted) summary text —
@@ -53,6 +55,13 @@ export async function processMeeting(meetingId: string): Promise<void> {
       throw new Error("The audio file for this meeting is missing from storage.");
     }
 
+    // Fetched once, up front, so it's available both to ground today's
+    // summary/action items (below) and, later, to update the deal's own
+    // rolling memory — avoids a second identical query for the same row.
+    const deal = meeting.dealId
+      ? (await db.select().from(deals).where(eq(deals.id, meeting.dealId)))[0]
+      : undefined;
+
     const { fullText, utterances } = await withRetry(
       () => transcribeAudioFile(audioBuffer),
       { label: `transcribe ${meetingId}` }
@@ -77,11 +86,37 @@ export async function processMeeting(meetingId: string): Promise<void> {
       .where(eq(meetings.id, meetingId));
 
     const result = await withRetry(
-      () => summarizeMeeting(utterances),
+      () =>
+        summarizeMeeting(
+          utterances,
+          deal ? { memory: deal.memory, emailContext: deal.emailContext } : null
+        ),
       { label: `summarize ${meetingId}` }
     );
 
     const continuityLines: string[] = [];
+
+    // The model is only asked to echo back "one entry per distinct
+    // speaker label present in the transcript" — nothing forces it to
+    // reproduce AssemblyAI's exact string ("Speaker A"), and it has
+    // drifted in practice (case, whitespace, or a shortened form). The
+    // transcript view (page.tsx) looks up each line's real name by an
+    // EXACT match against meetingParticipants.speakerLabel, so any
+    // drift here silently broke that lookup while the "People in this
+    // meeting" summary — which doesn't need to match anything, it just
+    // displays whatever's in this table — looked fine. Resolving
+    // against the canonical labels actually present in the utterances
+    // (case/whitespace-insensitive) before storing keeps the two in
+    // sync regardless of what the model echoes back.
+    const canonicalSpeakerLabels = Array.from(
+      new Set(utterances.map((u) => u.speakerLabel))
+    );
+    function resolveSpeakerLabel(raw: string): string {
+      const normalize = (s: string) => s.trim().toLowerCase();
+      return (
+        canonicalSpeakerLabels.find((c) => normalize(c) === normalize(raw)) || raw
+      );
+    }
 
     for (const speaker of result.speakers) {
       let contactId: string | null = null;
@@ -188,7 +223,7 @@ export async function processMeeting(meetingId: string): Promise<void> {
       await db.insert(meetingParticipants).values({
         meetingId,
         contactId,
-        speakerLabel: speaker.speakerLabel,
+        speakerLabel: resolveSpeakerLabel(speaker.speakerLabel),
         displayName: speaker.inferredName,
       });
     }
@@ -239,7 +274,6 @@ export async function processMeeting(meetingId: string): Promise<void> {
     // here shouldn't flip an otherwise-successful meeting to "failed".
     if (meeting.dealId) {
       try {
-        const [deal] = await db.select().from(deals).where(eq(deals.id, meeting.dealId));
         if (deal) {
           // How many meetings on this deal have a summary so far
           // (including the one just inserted above) — decides whether
@@ -270,6 +304,14 @@ export async function processMeeting(meetingId: string): Promise<void> {
               .limit(RESYNTHESIS_HISTORY_LIMIT);
           }
 
+          // Files/voice notes attached from the Before tab's "Give Anchor
+          // more context" box (see DealContextBox.tsx) — a bounded digest,
+          // not the full text (see dealFilesContext.ts for why).
+          const dealFileRows = await db
+            .select()
+            .from(dealFiles)
+            .where(eq(dealFiles.dealId, deal.id));
+
           const { updatedMemory, keyChanges } = await withRetry(
             () =>
               mergeDealMemory({
@@ -283,6 +325,8 @@ export async function processMeeting(meetingId: string): Promise<void> {
                 manualNotes: deal.notes,
                 resynthesize: shouldResynthesize,
                 recentMeetings,
+                attachedFiles: summarizeDealFiles(dealFileRows),
+                emailContext: deal.emailContext,
               }),
             { label: `deal memory ${deal.id}` }
           );

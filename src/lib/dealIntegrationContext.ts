@@ -14,6 +14,7 @@ import { db } from "@/db";
 import { deals, meetingParticipants, meetings, contacts } from "@/db/schema";
 import { fetchRelevantEmails } from "./integrations/gmail";
 import { fetchRelevantEvents } from "./integrations/calendar";
+import { extractDealEmailDigest, formatDealEmailDigest } from "./dealEmailDigest";
 
 // Same rhythm as companyResearch's STALE_AFTER_MS — frequent enough that
 // a new email or an upcoming meeting shows up the same day, not so
@@ -47,6 +48,7 @@ export type IntegrationContextResult = { emailContext: string | null; calendarCo
 // with no resolved contacts doesn't overwrite anything with emptiness.
 export async function refreshDealIntegrationContext(deal: {
   id: string;
+  name: string;
   leadUserId: string | null;
   createdByUserId: string;
   primaryContactEmail: string | null;
@@ -68,9 +70,21 @@ export async function refreshDealIntegrationContext(deal: {
       }),
     ]);
 
-    const emailContext = emails.length
-      ? emails.map((e) => `— ${e.subject} (from ${e.from}, ${e.date})\n${e.snippet}`).join("\n\n")
-      : null;
+    // Smart-extract the emails into a digest (commitments/facts/open
+    // questions) rather than just concatenating subjects and bodies — see
+    // dealEmailDigest.ts. Falls back to a plain flat join of the raw
+    // emails if the AI extraction fails, so a model hiccup doesn't drop
+    // email context entirely.
+    let emailContext: string | null = null;
+    if (emails.length > 0) {
+      const digest = await extractDealEmailDigest(deal.name, emails).catch((err) => {
+        console.error(`[dealIntegrationContext] email digest failed for deal ${deal.id}:`, err);
+        return null;
+      });
+      emailContext = digest
+        ? formatDealEmailDigest(digest)
+        : emails.map((e) => `— ${e.subject} (from ${e.from}, ${e.date})\n${e.body.slice(0, 500)}`).join("\n\n");
+    }
     const calendarContext = events.length
       ? events
           .map((e) => `— ${e.summary} (${e.start})${e.attendees.length ? ` — attendees: ${e.attendees.join(", ")}` : ""}`)

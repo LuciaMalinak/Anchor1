@@ -1,0 +1,379 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --brand: #12294a;
+    --brand-dark: #0b1930;
+    --accent: #b4531f;
+    --accent-dark: #904218;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 1440px; height: 900px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+  body {
+    background:
+      radial-gradient(1100px 700px at 18% -10%, #1c3a63 0%, transparent 60%),
+      radial-gradient(900px 600px at 100% 110%, #6a2a10 0%, transparent 55%),
+      linear-gradient(160deg, var(--brand-dark) 0%, var(--brand) 55%, #1a3555 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .window {
+    width: 700px;
+    height: 800px;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 40px 90px -20px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .titlebar {
+    height: 40px;
+    flex: 0 0 auto;
+    background: #f4f5f7;
+    border-bottom: 1px solid #e6e8eb;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    position: relative;
+  }
+  .dots { display: flex; gap: 8px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.red { background: #ff5f57; }
+  .dot.yellow { background: #febc2e; }
+  .dot.green { background: #28c840; }
+  .titlebar .title {
+    position: absolute; left: 0; right: 0; text-align: center;
+    font-size: 13px; font-weight: 600; color: #3a3f47;
+  }
+  .body { padding: 22px 28px 24px; overflow: hidden; flex: 1 1 auto; }
+  .brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .anchor-badge {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: radial-gradient(circle at 35% 30%, #f3d9c8, #edc4a3 60%, #dba36f);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: var(--brand-dark);
+  }
+  h1 { font-size: 17px; margin: 0; color: #0f1b2d; }
+  .desc { font-size: 12px; line-height: 1.4; color: #5b6472; margin: 0 0 2px; }
+  .card {
+    border: 1px solid #e7e9ed; border-radius: 12px; padding: 14px 16px;
+    margin-top: 12px; background: #fff;
+  }
+  .connected-label { font-size: 11px; color: #7c8593; margin-bottom: 8px; }
+  .token-row { display: flex; gap: 10px; }
+  .token-input {
+    flex: 1; border: 1px solid #dde1e6; border-radius: 8px; padding: 7px 12px;
+    font-size: 12px; color: #aab1bb; background: #fafbfc;
+  }
+  .btn {
+    border: none; border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 600;
+    background: var(--brand-dark); color: white; cursor: default;
+  }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: #1a2433; }
+  .meeting-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 3px 0;
+    min-height: 22px;
+  }
+  .meeting-empty { font-size: 12px; color: #9aa2ad; }
+  .meeting-title { font-size: 13px; font-weight: 600; color: #1a2433; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+    letter-spacing: 0.2px;
+  }
+  .status-pill.recording { background: #fdeceb; color: #c23c2f; }
+  .status-pill.processing { background: #fff4e2; color: #a9660c; }
+  .status-pill.ready { background: #e9f7ee; color: #1c8a4b; }
+  .rec-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #e0392b;
+    animation: pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .elapsed { font-variant-numeric: tabular-nums; color: #7c8593; font-size: 11px; margin-left: 6px; }
+  .view-link {
+    font-size: 11px; font-weight: 700; color: var(--accent);
+  }
+
+  /* --- The three deal-scoped panels, styled to match the real desktop
+     renderer's house style (see desktop/src/renderer/index.html) --- */
+  .deal-panel { display: none; }
+  .deal-panel.show { display: block; animation: panelIn 0.35s ease-out; }
+  @keyframes panelIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .panel-section {
+    margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0;
+  }
+  .panel-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .panel-section strong {
+    font-size: 11px; color: var(--brand); display: block; margin-bottom: 6px;
+  }
+  .hint { font-size: 11px; color: #94a3b8; margin: 0; }
+  .nudges, .checklist { margin: 0 0 6px; padding-left: 16px; font-size: 12px; }
+  .nudges li, .checklist li { margin-bottom: 4px; }
+  .checklist li.covered { color: #16a34a; }
+  .live-question {
+    background: #fef3e7; border: 1px solid #f4d9b8; border-radius: 8px;
+    padding: 7px 10px; font-size: 12px; margin-bottom: 8px;
+  }
+  .suggested-answer { margin-top: 3px; color: #475569; }
+  .task-row {
+    display: flex; align-items: flex-start; gap: 7px; font-size: 12px; padding: 4px 0;
+    transition: opacity 0.3s ease;
+  }
+  .task-row.fading { opacity: 0; }
+  .task-check {
+    width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid #cbd5e1;
+    margin-top: 1px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  }
+  .task-check.checked { background: var(--brand); border-color: var(--brand); color: white; font-size: 10px; }
+  .task-row em { color: #94a3b8; font-style: normal; }
+  .ask-row { display: flex; gap: 6px; }
+  .ask-input {
+    flex: 1; border: 1px solid #dde1e6; border-radius: 8px; padding: 7px 10px;
+    font-size: 12px; color: #1e293b; background: #fafbfc;
+  }
+  .ask-btn { flex-shrink: 0; }
+  .ask-answer { font-size: 12px; color: #334155; margin-top: 8px; white-space: pre-wrap; min-height: 14px; }
+  .cursor { display: inline-block; width: 6px; height: 12px; background: #334155; margin-left: 1px; animation: blink 0.8s step-end infinite; vertical-align: -2px; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .activity-log {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px; color: #4a5261; line-height: 1.7;
+    height: 78px; overflow: hidden;
+  }
+  .activity-log div { opacity: 0; transform: translateY(4px); animation: fadeIn 0.4s ease forwards; }
+  @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+  .ts { color: #9aa2ad; margin-right: 8px; }
+</style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+      <div class="title">Anchor Desktop</div>
+    </div>
+    <div class="body">
+      <div class="brand-row">
+        <div class="anchor-badge">&#9875;</div>
+        <h1>Anchor Desktop</h1>
+      </div>
+      <p class="desc">Records Zoom, Teams, and Meet calls straight from your computer — no bot joins the call.</p>
+
+      <div class="card" id="connectCard">
+        <div class="connected-label">Connected to https://anchor-be6o.onrender.com</div>
+        <div class="token-row">
+          <div class="token-input">••••••••••••••••••••••••••••</div>
+          <button class="btn">Save token</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Detected meetings</h2>
+        <div id="meetingRow" class="meeting-row">
+          <span class="meeting-empty">Open a Zoom, Teams, or Meet call — it'll show up here.</span>
+        </div>
+
+        <div id="dealPanel" class="deal-panel">
+          <div class="panel-section">
+            <strong>Live suggestions</strong>
+            <div id="suggestions"><p class="hint">Live suggestions will show up here once Anchor has enough of the call to work with.</p></div>
+          </div>
+          <div class="panel-section">
+            <strong>To do for this deal</strong>
+            <div id="tasks"></div>
+          </div>
+          <div class="panel-section">
+            <strong>Ask Anchor</strong>
+            <div class="ask-row">
+              <div class="ask-input" id="askInput">&nbsp;</div>
+              <button class="btn ask-btn">Ask</button>
+            </div>
+            <div id="askAnswer" class="ask-answer"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Activity</h2>
+        <div id="activityLog" class="activity-log"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function ts() {
+      const d = new Date();
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    }
+    function logLine(text) {
+      const el = document.getElementById('activityLog');
+      const row = document.createElement('div');
+      row.innerHTML = '<span class="ts">' + ts() + '</span>' + text;
+      el.appendChild(row);
+      while (el.children.length > 3) el.removeChild(el.firstChild);
+    }
+    function setMeetingRow(html) {
+      document.getElementById('meetingRow').innerHTML = html;
+    }
+
+    logLine('Connected to your Anchor account from the website.');
+
+    let elapsedSeconds = 0;
+    let timerHandle = null;
+    function fmtElapsed(s) {
+      const m = String(Math.floor(s / 60)).padStart(2, '0');
+      const sec = String(s % 60).padStart(2, '0');
+      return m + ':' + sec;
+    }
+
+    const TASKS = [
+      { id: 't1', text: 'Send EMEA expansion pricing quote (10 seats)', ownerLabel: 'Sam Rivera' },
+      { id: 't2', text: 'Confirm Slack integration roadmap timing for Acme Robotics', ownerLabel: 'Sam Rivera' },
+    ];
+
+    function renderTasks() {
+      const el = document.getElementById('tasks');
+      if (TASKS.length === 0) {
+        el.innerHTML = '<p class="hint">No open tasks for this deal.</p>';
+        return;
+      }
+      el.innerHTML = TASKS.map((t) =>
+        '<label class="task-row" id="task-' + t.id + '">' +
+          '<span class="task-check"></span>' +
+          '<span>' + t.text + ' <em>(' + t.ownerLabel + ')</em></span>' +
+        '</label>'
+      ).join('');
+    }
+
+    function completeTask(id) {
+      const row = document.getElementById('task-' + id);
+      const idx = TASKS.findIndex((t) => t.id === id);
+      if (!row || idx === -1) return;
+      row.querySelector('.task-check').classList.add('checked');
+      row.querySelector('.task-check').textContent = '✓';
+      row.classList.add('fading');
+      setTimeout(() => {
+        TASKS.splice(idx, 1);
+        renderTasks();
+      }, 350);
+    }
+
+    // Types a question into the Ask Anchor box, character by character —
+    // mirrors the real app's input, just driven by a script instead of a
+    // real keystroke.
+    function typeQuestion(text, cb) {
+      const el = document.getElementById('askInput');
+      let i = 0;
+      el.innerHTML = '';
+      const handle = setInterval(() => {
+        i++;
+        el.textContent = text.slice(0, i);
+        if (i >= text.length) {
+          clearInterval(handle);
+          if (cb) cb();
+        }
+      }, 28);
+    }
+
+    // Reveals the answer word by word, matching the real streamed-chunk
+    // rendering (AnchorApi.askAnchor's onChunk gets the full answer-so-far
+    // each time, same as here).
+    function streamAnswer(text, cb) {
+      const el = document.getElementById('askAnswer');
+      const words = text.split(' ');
+      let i = 0;
+      el.innerHTML = 'Thinking<span class="cursor"></span>';
+      setTimeout(() => {
+        const handle = setInterval(() => {
+          i++;
+          el.textContent = words.slice(0, i).join(' ');
+          if (i >= words.length) {
+            clearInterval(handle);
+            if (cb) cb();
+          }
+        }, 55);
+      }, 700);
+    }
+
+    renderTasks();
+
+    // Sequenced state machine — timings chosen to match the caption track
+    // (see scripts/demo/filters-desktop.txt).
+    setTimeout(() => {
+      setMeetingRow(
+        '<span class="meeting-title">Acme Robotics — EMEA Expansion Discussion</span>' +
+        '<span><span class="status-pill recording"><span class="rec-dot"></span>Recording</span>' +
+        '<span class="elapsed" id="elapsed">00:00</span></span>'
+      );
+      document.getElementById('dealPanel').classList.add('show');
+      logLine('Matched this call to "Acme Robotics — Platform Rollout" — recording will be added there automatically.');
+      logLine('Meeting detected — recording started automatically.');
+      timerHandle = setInterval(() => {
+        elapsedSeconds += 1;
+        const elEl = document.getElementById('elapsed');
+        if (elEl) elEl.textContent = fmtElapsed(elapsedSeconds);
+      }, 1000);
+    }, 3000);
+
+    // Live suggestions "arrive" a few seconds in, same ~8s cadence the
+    // real app polls at.
+    setTimeout(() => {
+      document.getElementById('suggestions').innerHTML =
+        '<ul class="nudges"><li>Priya has asked twice about EU data residency — worth a firm answer this call.</li></ul>' +
+        '<ul class="checklist">' +
+          '<li class="covered">&#10003; Confirmed 10-seat EMEA headcount</li>' +
+          '<li>&#9675; Slack integration timeline</li>' +
+        '</ul>' +
+        '<div class="live-question"><strong>Unanswered:</strong> Does EU call data stay in-region?' +
+          '<div class="suggested-answer">Today everything processes in the US under the existing SOC 2 boundary — offer to confirm a definitive answer rather than guessing.</div></div>';
+      logLine('Live suggestions updated.');
+    }, 7200);
+
+    // Ask Anchor — typed question, then a streamed answer, right inside
+    // the app instead of switching to a browser tab.
+    setTimeout(() => {
+      typeQuestion('What did we already tell them about data residency?', () => {
+        setTimeout(() => {
+          logLine('Asked Anchor about data residency.');
+          streamAnswer(
+            'On the last call, Priya asked the same thing. Today all call data is processed in the US under the existing SOC 2 boundary — nothing region-specific yet. You told her you\'d confirm a definitive answer on EU data residency rather than guess.'
+          );
+        }, 500);
+      });
+    }, 11500);
+
+    // Check off one of the open tasks live, from the desktop app itself.
+    setTimeout(() => {
+      completeTask('t1');
+      logLine('Marked done: Send EMEA expansion pricing quote (10 seats).');
+    }, 19500);
+
+    setTimeout(() => {
+      if (timerHandle) clearInterval(timerHandle);
+      document.getElementById('dealPanel').classList.remove('show');
+      setMeetingRow(
+        '<span class="meeting-title">Acme Robotics — EMEA Expansion Discussion</span>' +
+        '<span class="status-pill processing">Processing…</span>'
+      );
+      logLine('Meeting ended. Uploading and processing the recording…');
+    }, 22800);
+
+    setTimeout(() => {
+      setMeetingRow(
+        '<span class="meeting-title">Acme Robotics — EMEA Expansion Discussion</span>' +
+        '<span><span class="status-pill ready">Summary ready</span> <span class="view-link">View recap →</span></span>'
+      );
+      logLine('Summary ready — view it in Anchor.');
+    }, 25800);
+  </script>
+</body>
+</html>

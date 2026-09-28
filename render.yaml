@@ -21,9 +21,14 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: RESEND_API_KEY
+      # All outbound email — invites, recaps, and now the magic-link
+      # sign-in email too (see src/auth.ts) — goes through SendGrid via
+      # src/lib/email.ts. These were already set directly in the Render
+      # dashboard from when invites/recaps were switched over; adding
+      # them here too just so this file matches what's actually live.
+      - key: SENDGRID_API_KEY
         sync: false
-      - key: EMAIL_FROM
+      - key: SENDGRID_FROM_EMAIL
         sync: false
       - key: RECALL_API_KEY
         sync: false
@@ -35,6 +40,21 @@ services:
         sync: false
       - key: LINKEDIN_CLIENT_SECRET
         sync: false
+      # "Sign in with Google" on /sign-in — a SEPARATE OAuth client from
+      # GOOGLE_INTEGRATION_CLIENT_ID/SECRET below (that pair is only for
+      # the Dashboard > Integrations Gmail/Calendar data connection). This
+      # pair was missing from this file entirely, which is exactly the
+      # kind of gap that leaves "Continue with Google" silently absent
+      # from the sign-in page in production with no error anywhere —
+      # src/auth.ts and src/app/sign-in/page.tsx both just hide that
+      # button when either of these two isn't set. Create a separate
+      # OAuth client for this at console.cloud.google.com/apis/credentials
+      # (redirect URI: {AUTH_URL}/api/auth/callback/google) and set both
+      # values here for the button to appear.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       - key: GOOGLE_INTEGRATION_CLIENT_ID
         sync: false
       - key: GOOGLE_INTEGRATION_CLIENT_SECRET
@@ -43,6 +63,12 @@ services:
         sync: false
       - key: MICROSOFT_INTEGRATION_CLIENT_SECRET
         sync: false
+      # Slack — create an app at api.slack.com/apps ("From scratch"), add
+      # https://<your-app>.onrender.com/api/integrations/slack/callback as
+      # a redirect URL under OAuth & Permissions, and add the Bot Token
+      # Scopes channels:history, chat:write, users:read, users:read.email
+      # (see src/lib/integrations/config.ts). Lets a teammate DM a handoff
+      # briefing straight to whoever's covering their deal.
       - key: SLACK_INTEGRATION_CLIENT_ID
         sync: false
       - key: SLACK_INTEGRATION_CLIENT_SECRET
@@ -51,6 +77,15 @@ services:
         sync: false
       - key: SALESFORCE_INTEGRATION_CLIENT_SECRET
         sync: false
+      # HubSpot — same idea as Salesforce above, for teams that run
+      # HubSpot instead. Create an app at developers.hubspot.com, add
+      # https://<your-app>.onrender.com/api/integrations/hubspot/callback
+      # as a redirect URL, and grant the crm.objects.contacts.read /
+      # crm.objects.deals.read scopes (see src/lib/integrations/config.ts).
+      - key: HUBSPOT_INTEGRATION_CLIENT_ID
+        sync: false
+      - key: HUBSPOT_INTEGRATION_CLIENT_SECRET
+        sync: false
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID
@@ -58,6 +93,23 @@ services:
       - key: R2_SECRET_ACCESS_KEY
         sync: false
       - key: R2_BUCKET_NAME
+        sync: false
+      # Daily 9am text digest (deal activity + leadership announcements)
+      # — see src/app/api/cron/daily-digest/route.ts. CRON_SECRET is the
+      # ?key= this endpoint requires (make up any long random string);
+      # the TWILIO_* three are from a Twilio account, and until all four
+      # are set here the endpoint safely no-ops instead of texting
+      # anyone. Something outside this app still has to actually HIT
+      # that URL once a day — Render's own Cron Job service, or a free
+      # external scheduler like cron-job.org, pointed at
+      # https://<your-app>.onrender.com/api/cron/daily-digest?key=...
+      - key: CRON_SECRET
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
         sync: false
 # Note: no persistent disk here — Render's free tier doesn't support one.
 # Uploaded files (profile photos, meeting recordings, deal files) go to

@@ -59,6 +59,35 @@ export const users = pgTable("user", {
   // the Team page) — they can only see deals they have a `dealMembers`
   // row for, checked via src/lib/dealAccess.ts.
   restrictedToDeals: boolean("restrictedToDeals").notNull().default(false),
+  // Explicit consent to receive the daily 9am text digest (deal activity
+  // + leadership announcements) at `phone` above — off by default even
+  // once a phone number is on file, so filling in a phone for, say, the
+  // team directory doesn't silently start texting someone. See
+  // src/lib/dailyDigest.ts and src/lib/sms.ts.
+  dailyDigestOptIn: boolean("dailyDigestOptIn").notNull().default(false),
+  // Personal dashboard customization — deliberately per-USER, not
+  // per-team, so one person rearranging their own view never changes
+  // what a teammate sees. Both null/empty means "use the defaults."
+  // colorTheme is a key into src/lib/colorThemes.ts (a small curated
+  // palette, not a free color picker, so nobody accidentally picks
+  // something illegible) and — where set — overrides the team's
+  // industry-derived accent color from src/lib/industries.ts for this
+  // person only; dashboardLayout is the home dashboard's section keys
+  // (see DASHBOARD_SECTIONS in src/lib/dashboardSections.ts)
+  // in the order this person wants them, reordered via that "Customize"
+  // panel rather than drag-and-drop, so it works the same on touch as on
+  // desktop and can't leave a section stuck mid-drag.
+  colorTheme: text("colorTheme"),
+  dashboardLayout: jsonb("dashboardLayout").$type<string[]>(),
+  // Which widgets this person's focus-mode window (src/app/focus/[meetingId],
+  // opened from the "Focus window" button on a live meeting) shows —
+  // see src/lib/focusWidgets.ts for the key list. Null means "use the
+  // default set." Also per-user, same reasoning as colorTheme/
+  // dashboardLayout above: the whole point of focus mode is trimming a
+  // live call down to what ONE person finds useful, so one person's
+  // choice here should never affect what a teammate's own focus window
+  // shows for the same meeting.
+  focusWidgets: jsonb("focusWidgets").$type<string[]>(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -137,6 +166,15 @@ export const meetings = pgTable("meeting", {
   // flow rather than a file upload — lets the webhook find its way back
   // to the right meeting row when Recall.ai says the recording is ready.
   recallBotId: text("recallBotId"),
+  // Set when this meeting came from the desktop app instead (Recall.ai's
+  // Desktop Recording SDK — no bot joins the call, recording happens
+  // locally on the person's computer). A separate column from
+  // recallBotId rather than reusing it: a desktop recording isn't a
+  // "bot" Recall can be told to leave a call (leaveCall in recall.ts
+  // doesn't apply here), so keeping the id spaces distinct avoids code
+  // that assumes recallBotId means "there's a bot" ever seeing one that
+  // isn't. See src/app/api/desktop/meetings/start/route.ts.
+  recallRecordingId: text("recallRecordingId"),
   // Set when "Send Anchor to a live meeting" was scheduled for a future
   // time rather than joined immediately — Recall.ai's own infra (via
   // join_at on bot creation) handles the actual joining reliably even if
@@ -157,6 +195,12 @@ export const meetings = pgTable("meeting", {
   liveSuggestions: jsonb("liveSuggestions").$type<{
     nudges: string[];
     checklist: { label: string; covered: boolean }[];
+    // The most recent question the other side asked that still looks
+    // unanswered, plus a grounded suggested answer — an "interview AI"
+    // style prompt, kept visible until the transcript shows the rep
+    // actually addressed it (see generateLiveCoaching in liveCoaching.ts).
+    // Null whenever nothing's currently hanging.
+    liveQuestion: { question: string; suggestedAnswer: string } | null;
   }>(),
   liveSuggestionsUpdatedAt: timestamp("liveSuggestionsUpdatedAt", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
@@ -179,6 +223,25 @@ export const meetingLiveSegments = pgTable("meeting_live_segment", {
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
+// A long-lived credential for Anchor's desktop app (see /desktop) to act
+// as this user without a browser session cookie — generated once from
+// the Integrations page (src/app/api/profile/desktop-token/route.ts),
+// pasted into the app, and checked on every request the app makes (see
+// src/lib/apiToken.ts). Only the SHA-256 hash is stored, same reasoning
+// as a password: the raw token is shown to the person exactly once, at
+// creation, and can't be recovered afterward — only revoked and
+// replaced with a new one.
+export const apiTokens = pgTable("api_token", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("tokenHash").notNull().unique(),
+  label: text("label").notNull(),
+  lastUsedAt: timestamp("lastUsedAt", { mode: "date" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
 // A person Anchor has learned about, scoped to the account that owns the
 // relationship. This is what carries context between meetings.
 export const contacts = pgTable("contact", {
@@ -190,8 +253,17 @@ export const contacts = pgTable("contact", {
   email: text("email"),
   company: text("company"),
   role: text("role"),
+  // Filled in by hand, or set automatically when someone pastes profile
+  // text in (see /api/contacts/[id]/linkedin) — LinkedIn's own API won't
+  // let an app like this pull another person's profile data (it's both
+  // technically restricted to the signed-in user and against LinkedIn's
+  // terms for CRM-style enrichment), so this is deliberately just a link
+  // plus whatever a teammate pastes in themselves, never an automated pull.
+  linkedinUrl: text("linkedinUrl"),
   // Rolling, AI-maintained summary of who this person is and what matters
-  // to them, updated after every meeting they appear in.
+  // to them, updated after every meeting they appear in. Also seeded/
+  // merged from a pasted LinkedIn profile (see the linkedin route above) —
+  // the same rolling-memory mechanism processMeeting.ts uses for meetings.
   relationshipSummary: text("relationshipSummary"),
   // What you've typed in directly about this person — kept separate from
   // relationshipSummary so a manual note is never overwritten by the
@@ -201,6 +273,10 @@ export const contacts = pgTable("contact", {
   // — lets a re-sync update the same row instead of creating a duplicate.
   // Null for every contact that only ever came from a meeting.
   salesforceContactId: text("salesforceContactId"),
+  // Same idea, for a HubSpot sync (see src/lib/integrations/hubspot.ts).
+  // A contact can in principle be matched from either CRM (or neither) —
+  // the two ids are independent, not mutually exclusive.
+  hubspotContactId: text("hubspotContactId"),
   firstMetAt: timestamp("firstMetAt", { mode: "date" }).defaultNow().notNull(),
   lastMeetingAt: timestamp("lastMeetingAt", { mode: "date" }),
   meetingCount: integer("meetingCount").default(0).notNull(),
@@ -451,6 +527,8 @@ export const deals = pgTable("deal", {
   // Opportunity — lets a re-sync update the same row instead of creating
   // a duplicate. Null for every deal that only ever lived in Anchor.
   salesforceOpportunityId: text("salesforceOpportunityId"),
+  // Same idea, for a synced HubSpot Deal (see src/lib/integrations/hubspot.ts).
+  hubspotDealId: text("hubspotDealId"),
   // Standing ownership on the deal, separate from the point-in-time
   // handoff briefing above: who's driving it day to day, and who's
   // designated to step in if the lead is out. Both nullable and both any
@@ -460,6 +538,16 @@ export const deals = pgTable("deal", {
   createdByUserId: uuid("createdByUserId")
     .notNull()
     .references(() => users.id),
+  // False (the default, and true for every existing deal) means every
+  // unrestricted teammate on the team sees this deal — same as always.
+  // True means only the deal's creator/lead/backup and whoever has a
+  // `dealMembers` row for it can see it, regardless of whether those
+  // people are individually restrictedToDeals or not. This is a
+  // per-deal opt-in lock ("only certain people at my company should see
+  // this client"), separate from users.restrictedToDeals, which is a
+  // per-PERSON lock applying to every deal. See src/lib/dealAccess.ts,
+  // which is the only place both are read together.
+  restricted: boolean("restricted").notNull().default(false),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
@@ -552,6 +640,31 @@ export const dealMessages = pgTable("deal_message", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
+  // Null (the default, and every message sent before this existed) means
+  // visible to the whole team, same as always. A non-null array limits
+  // this message to just those user ids, plus the sender themselves —
+  // enforced in /api/deals/[id]/messages/route.ts, which is the only
+  // place messages are read or written. Not a foreign key (a jsonb array
+  // can't be one) — ids are validated against the team at send time.
+  recipientUserIds: jsonb("recipientUserIds").$type<string[]>(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// A team-wide note from leadership — not scoped to any one deal, unlike
+// dealMessages above. Posting is restricted to the team owner (see
+// POST /api/announcements) — the same "leadership" bar used everywhere
+// else in this app (removing a teammate, deleting a whole deal). Reading
+// is everyone on the team, surfaced on the Home dashboard and folded
+// into the daily digest (src/lib/dailyDigest.ts).
+export const announcements = pgTable("announcement", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  teamId: uuid("teamId")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  authorUserId: uuid("authorUserId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -568,6 +681,7 @@ export const integrationProviderEnum = pgEnum("integration_provider", [
   "microsoft",
   "slack",
   "salesforce",
+  "hubspot",
 ]);
 
 export const integrationConnections = pgTable(
@@ -642,5 +756,32 @@ export const taskComments = pgTable("task_comment", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// Founder/admin account access — lets an app owner (see src/lib/appOwner.ts)
+// open a read-only view of any team's dashboard, deals, meetings, and
+// transcripts (src/app/dashboard/admin/**) for support, debugging, or
+// understanding usage. Nothing here notifies the team being viewed in the
+// moment — that's the point — but every view writes a row here first, so
+// there's always an honest, permanent record of who looked at what and
+// when. See src/lib/adminAccess.ts, the only place this table is written,
+// and the "How Anchor is administered" clause on the Privacy page, which
+// discloses that this kind of access exists.
+// ---------------------------------------------------------------------------
+
+export const adminAccessLogs = pgTable("admin_access_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  adminUserId: uuid("adminUserId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  targetTeamId: uuid("targetTeamId")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  // What was viewed — e.g. "team overview", "deal:<id>", "meeting:<id>",
+  // "member:<id>" — free text rather than an enum so a new admin page
+  // never needs a schema change just to log itself.
+  view: text("view").notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });

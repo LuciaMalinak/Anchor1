@@ -5,13 +5,16 @@ import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { PageFade } from "@/components/PageFade";
 import { NavLink } from "@/components/NavLink";
 import { db } from "@/db";
-import { teams } from "@/db/schema";
+import { teams, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
 import { getIndustryTicker, isTickerStale, normalizeTickerItems, type TickerItem } from "@/lib/industryTicker";
 import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
+import { COLOR_THEME_BY_KEY, isColorThemeKey } from "@/lib/colorThemes";
+import { LiveMeetingWatcher } from "@/components/LiveMeetingWatcher";
+import { isAppOwner } from "@/lib/appOwner";
 
 export default async function DashboardLayout({
   children,
@@ -92,6 +95,16 @@ export default async function DashboardLayout({
         const ind = INDUSTRY_BY_KEY[teamIndustry];
         accentStyle = { "--accent": ind.accent, "--accent-dark": ind.accentDark } as React.CSSProperties;
       }
+      // This person's own accent color (Customize dashboard, on the home
+      // page) wins over the team's industry color set just above — it's a
+      // personal preference, not a shared one, so it only ever changes
+      // what THIS person sees. "default" (or nothing saved) just falls
+      // through to whatever accentStyle already resolved to above.
+      const [me] = await db.select().from(users).where(eq(users.id, session.user.id));
+      if (me?.colorTheme && isColorThemeKey(me.colorTheme) && me.colorTheme !== "default") {
+        const theme = COLOR_THEME_BY_KEY[me.colorTheme];
+        accentStyle = { "--accent": theme.accent, "--accent-dark": theme.accentDark } as React.CSSProperties;
+      }
     } catch (err) {
       console.error("Couldn't load team daily briefing:", err);
     }
@@ -133,39 +146,60 @@ export default async function DashboardLayout({
               phone-width screen (it used to just run off the right edge,
               unreachable, since the row itself never wrapped); overflow-x
               here is a second safety net in case even its own row is still
-              too narrow for every item on a very small phone. */}
-          <nav className="order-3 flex w-full items-center gap-5 overflow-x-auto text-sm font-medium lg:order-none lg:w-auto lg:overflow-visible">
+              too narrow for every item on a very small phone.
+
+              The nav itself sits in a soft rounded "track" (bg-slate-100/70)
+              so each NavLink's active state reads as a filled pill inside
+              a segmented control, instead of floating text with an
+              underline — a small change that makes the whole header feel
+              more like a deliberate piece of UI and less like a plain
+              list of links. */}
+          <nav className="order-3 flex w-full items-center gap-1 overflow-x-auto rounded-full bg-slate-100/70 p-1 text-sm font-medium lg:order-none lg:w-auto lg:overflow-visible">
             <NavLink href="/dashboard/deals">Deals</NavLink>
             <NavLink href="/dashboard/insights">Insights</NavLink>
             <NavLink href="/dashboard/contacts">Contacts</NavLink>
             <NavLink href="/dashboard/team">Team</NavLink>
             <NavLink href="/dashboard/integrations">Integrations</NavLink>
+            {/* Only the app owner ever sees this — everyone else's
+                isAppOwner(session.user.email) check is false, so the link
+                (and everything under /dashboard/admin) simply doesn't
+                exist for them. See src/lib/adminAccess.ts. */}
+            {isAppOwner(session?.user?.email) && (
+              <NavLink href="/dashboard/admin">Admin</NavLink>
+            )}
           </nav>
           <div className="flex items-center gap-3 text-sm text-slate-500">
-            <Link href="/dashboard/profile" className="flex items-center gap-2 hover:text-brand">
+            <Link
+              href="/dashboard/profile"
+              className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-slate-100 hover:text-brand"
+            >
               {session?.user?.image ? (
                 <Image
                   src={session.user.image}
                   alt=""
-                  width={24}
-                  height={24}
+                  width={28}
+                  height={28}
                   unoptimized
-                  className="h-6 w-6 rounded-full object-cover"
+                  className="h-7 w-7 rounded-full object-cover ring-2 ring-white"
                 />
               ) : (
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-[10px] font-semibold text-white">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white ring-2 ring-white">
                   {(session?.user?.name || session?.user?.email || "?")[0]?.toUpperCase()}
                 </span>
               )}
-              <span>{session?.user?.name || session?.user?.email}</span>
+              <span className="font-medium text-slate-700">{session?.user?.name || session?.user?.email}</span>
             </Link>
+            <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
             <form
               action={async () => {
                 "use server";
                 await signOut({ redirectTo: "/" });
               }}
             >
-              <button type="submit" className="hover:text-slate-900">
+              <button
+                type="submit"
+                className="rounded-full px-3 py-1.5 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              >
                 Sign out
               </button>
             </form>
@@ -177,6 +211,20 @@ export default async function DashboardLayout({
           <PageFade>{children}</PageFade>
         </div>
         <GeneralNewsSidebar
+          // Keyed by industry so switching sectors (Team page -> Change)
+          // fully remounts this instead of quietly keeping the OLD
+          // sector's briefing/ticker text sitting in this component's own
+          // React state. Without this key, changing team.industry clears
+          // the cache server-side (see PATCH /api/team) and this component
+          // gets fresh, empty `initial*` props on the next render — but a
+          // client component's useState only reads its initial prop once,
+          // on mount, so it would keep showing the previous sector's
+          // already-loaded news indefinitely instead of picking up the
+          // new one. Remounting resets that local state and restarts the
+          // polling effects below from scratch, matching a subscriber's
+          // actual expectation: they signed up for one specific sector,
+          // and switching it should swap the news, not blend or freeze it.
+          key={industryLabel ?? "general"}
           initialDailyBriefing={dailyBriefing}
           initialBriefingUpdatedAt={dailyBriefingUpdatedAt}
           initialTickerItems={tickerItems}
@@ -195,8 +243,24 @@ export default async function DashboardLayout({
         ·{" "}
         <Link href="/privacy" className="hover:text-slate-600 hover:underline">
           Privacy
-        </Link>
+        </Link>{" "}
+        ·{" "}
+        <a
+          href="https://www.linkedin.com/company/143888744/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-slate-600 hover:underline"
+        >
+          LinkedIn
+        </a>
       </footer>
+      {/* Notices when one of this person's own scheduled meetings goes
+          live and offers a one-click way to open the Focus window (see
+          src/components/LiveMeetingWatcher.tsx) — mounted here, in the
+          shared dashboard shell, so it fires no matter which page they're
+          on, not just when they happen to be sitting on that deal's
+          During tab. */}
+      {session?.user?.id && <LiveMeetingWatcher />}
     </div>
   );
 }

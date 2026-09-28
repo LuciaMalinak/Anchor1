@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --brand: #12294a;
+    --brand-dark: #0b1930;
+    --accent: #b4531f;
+    --accent-dark: #904218;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 1440px; height: 900px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+  body {
+    background:
+      radial-gradient(1100px 700px at 18% -10%, #1c3a63 0%, transparent 60%),
+      radial-gradient(900px 600px at 100% 110%, #6a2a10 0%, transparent 55%),
+      linear-gradient(160deg, var(--brand-dark) 0%, var(--brand) 55%, #1a3555 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* Soft ambient glow that slowly breathes behind everything, so the
+     card doesn't feel static even before anything else moves. */
+  .glow {
+    position: absolute;
+    width: 900px; height: 900px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(180, 83, 31, 0.28) 0%, rgba(180, 83, 31, 0) 65%);
+    opacity: 0;
+    animation: glowIn 2.4s ease-out 0.1s forwards;
+  }
+  @keyframes glowIn {
+    0% { opacity: 0; transform: scale(0.85); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  .stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  /* A thin ring that scales outward once, like a single sonar ping,
+     timed just behind the logo's own pop-in for a bit of showmanship
+     without turning into a busy animated logo. */
+  .ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 140px; height: 140px;
+    margin-top: -186px; margin-left: -70px;
+    border: 1.5px solid rgba(244, 217, 184, 0.55);
+    border-radius: 50%;
+    opacity: 0;
+    animation: ringPing 1.6s cubic-bezier(0.2, 0.7, 0.3, 1) 0.55s forwards;
+  }
+  @keyframes ringPing {
+    0% { opacity: 0.9; transform: scale(0.4); }
+    100% { opacity: 0; transform: scale(2.6); }
+  }
+
+  .logo-mark {
+    width: 132px; height: 132px;
+    border-radius: 32px;
+    background: radial-gradient(circle at 35% 30%, #f6e2cf, #edc4a3 55%, #d69a68 100%);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 30px 70px -15px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.08);
+    opacity: 0;
+    transform: scale(0.35) translateY(10px);
+    animation: logoPop 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.5s forwards;
+  }
+  @keyframes logoPop {
+    0% { opacity: 0; transform: scale(0.35) translateY(10px); }
+    65% { opacity: 1; transform: scale(1.08) translateY(0); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .logo-mark svg { width: 74px; height: 74px; }
+
+  .wordmark {
+    margin-top: 30px;
+    font-size: 58px;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    color: #ffffff;
+    opacity: 0;
+  }
+  .wordmark span {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(14px);
+    animation: letterUp 0.5s ease-out forwards;
+  }
+
+  .tagline {
+    margin-top: 26px;
+    font-size: 22px;
+    font-weight: 500;
+    color: #cdd8e6;
+    opacity: 0;
+    animation: fadeUp 0.7s ease-out 2.05s forwards;
+  }
+  .tagline-2 {
+    margin-top: 8px;
+    font-size: 22px;
+    font-weight: 500;
+    color: #cdd8e6;
+    opacity: 0;
+    animation: fadeUp 0.7s ease-out 2.85s forwards;
+  }
+  .tagline-2 strong { color: #f0c9a0; font-weight: 700; }
+
+  @keyframes fadeUp {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes letterUp {
+    0% { opacity: 0; transform: translateY(14px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="stage">
+    <div class="ring"></div>
+    <div class="logo-mark">
+      <svg viewBox="0 0 32 32" fill="none" stroke="#0b1930" stroke-width="1.9"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="16" cy="7.5" r="2.25" />
+        <path d="M16 9.75V24.5" />
+        <path d="M11 13.5H21" />
+        <path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5" />
+        <path d="M8 18.5L6 15.8M8 18.5L10.3 17" />
+        <path d="M24 18.5L26 15.8M24 18.5L21.7 17" />
+      </svg>
+    </div>
+    <div class="wordmark" id="wordmark"></div>
+    <div class="tagline">Meeting intelligence for every team.</div>
+    <div class="tagline-2">On the web, <strong>and on your desktop.</strong></div>
+  </div>
+
+  <script>
+    // Staggered per-letter rise for the wordmark, timed to land right
+    // after the logo mark finishes popping in (logoPop ends ~1.35s).
+    const word = "ANCHOR";
+    const el = document.getElementById("wordmark");
+    el.style.opacity = "1";
+    const startDelay = 1.35;
+    const perLetter = 0.055;
+    [...word].forEach((ch, i) => {
+      const span = document.createElement("span");
+      span.textContent = ch;
+      span.style.animationDelay = (startDelay + i * perLetter) + "s";
+      el.appendChild(span);
+    });
+  </script>
+</body>
+</html>

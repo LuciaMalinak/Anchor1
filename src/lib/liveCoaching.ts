@@ -18,6 +18,11 @@ function client() {
 export type LiveCoaching = {
   nudges: string[];
   checklist: { label: string; covered: boolean }[];
+  // The most recent still-open question from the other side, with a
+  // grounded suggested answer — null when nothing's currently hanging.
+  // See sanitizeLiveQuestion below for how this gets derived from the
+  // tool call's flat fields.
+  liveQuestion: { question: string; suggestedAnswer: string } | null;
 };
 
 const LIVE_COACHING_TOOL = {
@@ -31,7 +36,7 @@ const LIVE_COACHING_TOOL = {
         type: "array",
         items: { type: "string" },
         description:
-          "1-3 short, specific, actionable talking points or things to watch for, based on what's actually been said so far plus what's known about this deal (prep notes, decision boundaries, past meetings) — e.g. 'They haven't mentioned budget yet — worth asking directly' or 'They just raised a concern about integration time — address it before moving on' or 'Last meeting they asked about our SOC 2 status — worth confirming it came up.' Never generic sales advice ('build rapport', 'listen actively'). If something clearly needs addressing but you don't have enough to say anything concrete about it (no prep, no past-meeting record, and this is a live call so there's no time to research it), phrase the nudge as flagging that gap plainly and that it's worth circling back on next meeting — never invent a fact, number, or commitment to fill it. If nothing notable stands out yet, return an empty array rather than padding with filler.",
+          "1-3 short, specific, actionable talking points or things to watch for. This should almost never be empty: when the live transcript has something to react to, ground nudges in that first ('They just raised a concern about integration time — address it before moving on'); when it hasn't (early in the call, a quiet stretch, or nothing transcribed yet), fall back to what's already known about this deal — prep notes, decision boundaries, what happened last meeting — and turn THAT into a concrete nudge instead of waiting for something to happen live (e.g. 'They haven't mentioned budget yet — worth asking directly,' 'Last meeting they asked about our SOC 2 status — worth confirming it comes up,' 'Notes say to lead with the integration story — bring it up early'). Only return an empty array when there is truly nothing to go on at all — no transcript yet AND no prep notes, decision boundaries, or past meetings for this deal. Never generic sales advice ('build rapport', 'listen actively'), and never invent a fact, number, or commitment to fill a real gap — if something needs addressing but you genuinely don't have anything concrete to say about it, phrase the nudge as flagging that gap plainly and that it's worth circling back on next meeting.",
       },
       checklist: {
         type: "array",
@@ -46,10 +51,40 @@ const LIVE_COACHING_TOOL = {
         description:
           "The full talking-point checklist for this call (keep the same items across updates whenever possible, just flip 'covered' as topics come up) — a handful of concrete things this call should cover given the deal's prep notes and decision boundaries, each marked covered:true only if the transcript shows it was actually discussed.",
       },
+      questionAsked: {
+        type: "boolean",
+        description:
+          "True if the OTHER side (never the rep) has asked something in the transcript that still looks unanswered as of the very end of the transcript — a real question needing a real answer, not a rhetorical one or small talk. Stays true across updates for the same still-open question even if it was asked a little earlier in the window, as long as the rep hasn't visibly addressed it yet. Flip to false the moment the transcript shows the rep answered it (even roughly) or a newer open question replaces it.",
+      },
+      question: {
+        type: "string",
+        description:
+          "The other side's exact (or lightly cleaned-up) question, verbatim-ish — empty string when questionAsked is false.",
+      },
+      suggestedAnswer: {
+        type: "string",
+        description:
+          "A short, concrete, ready-to-say answer to that question, grounded only in what's known about this deal (memory, notes, decision boundaries, past meetings, attached files) — written like a talking point the rep could say almost as-is, not a summary. If the real answer isn't something you actually know, say so plainly ('Anchor doesn't have pricing for that tier — worth saying you'll follow up') rather than inventing a number, date, or commitment. Never suggest committing to anything outside the deal's decision boundaries — if the question asks for exactly that, the suggested answer should say to note it and follow up rather than decide it live. Empty string when questionAsked is false.",
+      },
     },
-    required: ["nudges", "checklist"],
+    required: ["nudges", "checklist", "questionAsked", "question", "suggestedAnswer"],
   },
 };
+
+// The tool call gives flat fields (easier for the model to fill in
+// reliably than a nested optional object); this turns them into the
+// nullable shape everything downstream actually wants to store/render.
+function sanitizeLiveQuestion(raw: {
+  questionAsked?: unknown;
+  question?: unknown;
+  suggestedAnswer?: unknown;
+}): { question: string; suggestedAnswer: string } | null {
+  const asked = raw.questionAsked === true;
+  const question = typeof raw.question === "string" ? raw.question.trim() : "";
+  const suggestedAnswer = typeof raw.suggestedAnswer === "string" ? raw.suggestedAnswer.trim() : "";
+  if (!asked || !question || !suggestedAnswer) return null;
+  return { question, suggestedAnswer };
+}
 
 // Regenerates live coaching (nudges + checklist) for a meeting that's
 // actively in progress, from the transcript captured so far. Called on
@@ -94,6 +129,11 @@ export async function generateLiveCoaching(params: {
   // there's no connection or nothing matched — never invented.
   emailContext?: string | null;
   calendarContext?: string | null;
+  // A short digest of files/voice notes attached to this deal (see
+  // src/lib/dealFilesContext.ts) — background material the rep uploaded
+  // ahead of time (a contract, a prior proposal, a voice memo), not
+  // something said in this call.
+  attachedFiles?: string | null;
 }): Promise<LiveCoaching> {
   const priorChecklistText = params.priorChecklist?.length
     ? `\n\nChecklist from the last update (keep these labels, just update covered status, unless the conversation clearly calls for a different item):\n${params.priorChecklist
@@ -122,12 +162,15 @@ export async function generateLiveCoaching(params: {
   const calendarContextText = params.calendarContext
     ? `\n\nRecent and upcoming calendar meetings with people on this deal: ${params.calendarContext}`
     : "";
+  const attachedFilesText = params.attachedFiles
+    ? `\n\nFiles/voice notes attached to this deal ahead of the call:\n${params.attachedFiles}`
+    : "";
 
   const message = await client().messages.create({
     model: MODEL,
     max_tokens: 512,
     system:
-      "You are a live sales-call coach watching a transcript stream in during a real meeting. Give sharp, specific, non-generic guidance grounded only in what's actually been said, plus what's known about this deal from its prep notes, decision boundaries, and past meetings — never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for. If the transcript so far doesn't support a checklist item being covered, mark it not covered.",
+      "You are a live sales-call coach watching a transcript stream in during a real meeting, and this runs on a repeating timer for as long as the call lasts — the rep should always have something current to look at, not a panel that goes blank the moment the live conversation itself doesn't hand you something new. Give sharp, specific, non-generic guidance: ground it in what's actually been said when there's something to react to, and otherwise ground it in what's already known about this deal from its prep notes, decision boundaries, and past meetings — never leave nudges empty just because the last few seconds of transcript were quiet. Never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for — if there's truly nothing to go on yet (no transcript, no prep, no history), say so plainly rather than inventing something. If the transcript so far doesn't support a checklist item being covered, mark it not covered. You're also watching for a specific kind of moment: the other side asking something that needs answering right now, like a live interview-assist tool would — when that happens, surface it and a ready-to-say answer separately from the general nudges above (see questionAsked/question/suggestedAnswer), grounded the same way, and respecting decision boundaries the same way.",
     tools: [LIVE_COACHING_TOOL],
     tool_choice: { type: "tool", name: LIVE_COACHING_TOOL.name },
     messages: [
@@ -137,7 +180,7 @@ export async function generateLiveCoaching(params: {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${pastMeetingsText}${emailContextText}${calendarContextText}
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}
 ${priorChecklistText}
 
 Transcript so far (most recent portion of an in-progress call):
@@ -151,5 +194,22 @@ ${params.recentTranscript || "(nothing transcribed yet)"}`,
     throw new Error("Model did not return structured live coaching.");
   }
 
-  return toolUse.input as LiveCoaching;
+  const raw = toolUse.input as {
+    nudges?: unknown;
+    checklist?: unknown;
+    questionAsked?: unknown;
+    question?: unknown;
+    suggestedAnswer?: unknown;
+  };
+
+  return {
+    nudges: Array.isArray(raw.nudges) ? raw.nudges.filter((n): n is string => typeof n === "string") : [],
+    checklist: Array.isArray(raw.checklist)
+      ? raw.checklist.filter(
+          (c): c is { label: string; covered: boolean } =>
+            Boolean(c) && typeof c === "object" && typeof (c as { label?: unknown }).label === "string"
+        )
+      : [],
+    liveQuestion: sanitizeLiveQuestion(raw),
+  };
 }

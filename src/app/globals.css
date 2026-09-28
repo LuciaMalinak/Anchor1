@@ -35,7 +35,7 @@ body {
    snapping instantly, and .card-hover is a light opt-in for clickable
    card-style rows (deal/contact/meeting list items) that adds a
    couple of pixels of lift plus a deeper shadow on hover, on top of
-   whatever hover:border-*/hover:shadow-* that row already sets.
+   whatever hover:border-* / hover:shadow-* that row already sets.
    Deliberately small (150–200ms, ~2px) — this is meant to be felt on
    interaction, not seen as an effect in its own right. */
 button,

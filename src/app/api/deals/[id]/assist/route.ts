@@ -1,22 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { dealFiles, meetings, summaries, meetingParticipants, contacts } from "@/db/schema";
-import { and, desc, eq } from "drizzle-orm";
-import { askAnchorStream, type DealContext } from "@/lib/liveAssist";
+import { dealFiles, meetings, summaries, meetingParticipants, contacts, meetingLiveSegments } from "@/db/schema";
+import { and, asc, desc, eq, or } from "drizzle-orm";
+import { askAnchorStream, type DealContext, type AnchorImage } from "@/lib/liveAssist";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
+import { isImageFile, imageMediaType } from "@/lib/extractText";
+import { readStoredFile } from "@/lib/storage";
+import { authenticateBearer } from "@/lib/apiToken";
 
 const MAX_HISTORY_TURNS = 6;
 
+// Vision costs real latency and tokens on every single question, on a
+// model picked specifically for speed (see liveAssist.ts) — so unlike
+// text excerpts (cheap, always included), images are capped hard. A
+// handful of screenshots of a deck is exactly the case this is for; a
+// deal with dozens of photos attached should not turn every question
+// into a slow, expensive one.
+const MAX_IMAGES_PER_QUESTION = 4;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+// How much of THIS call's own live transcript (from the end) to hand the
+// model, in characters — same idea as TRANSCRIPT_WINDOW_CHARS in the live
+// coaching route, just smaller since Ask Anchor's prompt already carries
+// a lot else (files, past meetings, email/calendar context) and speed
+// matters most here.
+const LIVE_TRANSCRIPT_WINDOW_CHARS = 4_000;
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (!session?.user?.id) {
+  // Also accepts the desktop app's bearer token — Ask Anchor is one of
+  // the Focus window's default widgets, which the desktop overlay loads
+  // without a browser session (see desktop/src/main.ts's showOverlay).
+  const bearerUserId = session?.user?.id ? null : await authenticateBearer(req);
+  const userId = session?.user?.id ?? bearerUserId;
+  if (!userId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
   const { id: dealId } = await params;
-  const authorized = await authorizeDeal(session.user.id, dealId);
+  const authorized = await authorizeDeal(userId, dealId);
   if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
@@ -40,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Independent queries — run together instead of one after another.
   // Doesn't change what's asked of the model, just how long someone
   // waits before the first token of the answer even starts generating.
-  const [recentReady, files, dealContactRows, dealLeadStyle] = await Promise.all([
+  const [recentReady, files, dealContactRows, dealLeadStyle, liveMeetingRows] = await Promise.all([
     db
       .select({ meeting: meetings, summary: summaries })
       .from(meetings)
@@ -48,7 +71,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .where(and(eq(meetings.dealId, dealId), eq(meetings.status, "ready")))
       .orderBy(desc(meetings.occurredAt))
       .limit(5),
-    db.select().from(dealFiles).where(eq(dealFiles.dealId, dealId)),
+    // Most recent first — when there are more images than the vision cap
+    // below can afford, the ones someone just attached (almost certainly
+    // what "look at this" refers to) win over older ones.
+    db.select().from(dealFiles).where(eq(dealFiles.dealId, dealId)).orderBy(desc(dealFiles.createdAt)),
     // Same "people Anchor has resolved on this deal" query the handoff
     // briefing uses — includes anyone synced in from a connected CRM
     // (e.g. Salesforce) once they've appeared in a meeting on this deal.
@@ -68,7 +94,52 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // style profile is a fine trade for not adding a beat to a real-time
     // answer.
     getDealLeadStyle(deal.leadUserId, { allowSynchronousRebuild: false }),
+    // Is a meeting on this deal actually live right now? If so, Ask
+    // Anchor should be able to answer "what did they just say" from
+    // THIS call, not just from past, finished ones (see liveTranscript
+    // on DealContext below).
+    db
+      .select({ id: meetings.id })
+      .from(meetings)
+      .where(
+        and(eq(meetings.dealId, dealId), or(eq(meetings.status, "joining"), eq(meetings.status, "recording")))
+      )
+      .orderBy(desc(meetings.occurredAt))
+      .limit(1),
   ]);
+
+  let liveTranscript: string | null = null;
+  const liveMeetingId = liveMeetingRows[0]?.id;
+  if (liveMeetingId) {
+    const segments = await db
+      .select({ speakerName: meetingLiveSegments.speakerName, text: meetingLiveSegments.text })
+      .from(meetingLiveSegments)
+      .where(eq(meetingLiveSegments.meetingId, liveMeetingId))
+      .orderBy(asc(meetingLiveSegments.createdAt));
+    const transcriptText = segments
+      .map((s) => (s.speakerName ? `${s.speakerName}: ${s.text}` : s.text))
+      .join("\n");
+    liveTranscript = transcriptText ? transcriptText.slice(-LIVE_TRANSCRIPT_WINDOW_CHARS) : null;
+  }
+
+  // Read the raw bytes for a capped, size-bounded set of the deal's image
+  // files so Ask Anchor can actually look at them (screenshots of a deck,
+  // a photo of a whiteboard) — see MAX_IMAGES_PER_QUESTION above for why
+  // this is capped instead of sending every image every time. Best-effort:
+  // a storage read failure just means that one image gets skipped, same
+  // as a text file that fails to parse.
+  const imageCandidates = files.filter((f) => isImageFile(f.fileName) && (f.fileSize ?? 0) <= MAX_IMAGE_BYTES);
+  const images: AnchorImage[] = (
+    await Promise.all(
+      imageCandidates.slice(0, MAX_IMAGES_PER_QUESTION).map(async (f) => {
+        const mediaType = imageMediaType(f.fileName);
+        if (!mediaType) return null;
+        const data = await readStoredFile(f.storagePath).catch(() => null);
+        if (!data) return null;
+        return { fileName: f.fileName, mediaType, base64: data.toString("base64") };
+      })
+    )
+  ).filter((img): img is AnchorImage => img !== null);
 
   const context: DealContext = {
     dealName: deal.name,
@@ -78,6 +149,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     continuityNote: recentReady[0]?.summary.continuityNote ?? null,
     notes: deal.notes,
     decisionBoundaries: deal.decisionBoundaries,
+    liveTranscript,
     people: dealContactRows,
     recentMeetings: recentReady.map((r) => ({
       title: r.meeting.title,
@@ -87,7 +159,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       actionItems: r.summary.actionItems,
       dealSignals: r.summary.dealSignals,
     })),
-    files: files.map((f) => ({ fileName: f.fileName, excerpt: f.extractedText })),
+    files: files.map((f) => ({ fileName: f.fileName, excerpt: f.extractedText, isImage: isImageFile(f.fileName) })),
     companyResearch: deal.companyResearch,
     newsHeadline: deal.newsHeadline,
     // Already cached on the deal row (refreshed at most every 6h when the
@@ -105,7 +177,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const chunk of askAnchorStream({ context, question, history })) {
+        for await (const chunk of askAnchorStream({ context, question, history, images })) {
           controller.enqueue(encoder.encode(chunk));
         }
       } catch (err) {

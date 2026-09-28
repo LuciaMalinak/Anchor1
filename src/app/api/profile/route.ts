@@ -41,6 +41,10 @@ export async function PATCH(req: NextRequest) {
   if (typeof otherInfo === "string") {
     updates.otherInfo = otherInfo.trim() || null;
   }
+  const dailyDigestOptIn = formData.get("dailyDigestOptIn");
+  if (typeof dailyDigestOptIn === "string") {
+    updates.dailyDigestOptIn = dailyDigestOptIn === "true";
+  }
 
   const photo = formData.get("photo");
   if (photo instanceof File && photo.size > 0) {
@@ -78,6 +82,7 @@ export async function PATCH(req: NextRequest) {
       linkedin: updated.linkedin,
       department: updated.department,
       otherInfo: updated.otherInfo,
+      dailyDigestOptIn: updated.dailyDigestOptIn,
     },
   });
 }

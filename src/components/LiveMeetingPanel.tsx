@@ -1,75 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-
-type LiveSegment = {
-  id: string;
-  speakerName: string | null;
-  text: string;
-  relativeSeconds: number | null;
-};
-
-type LiveSuggestions = {
-  nudges: string[];
-  checklist: { label: string; covered: boolean }[];
-} | null;
-
-// Was 4000ms — the actual transcript segments aren't behind any
-// server-side debounce (see the live route's GET handler: it reads
-// meetingLiveSegments fresh on every call), so this interval alone was
-// the biggest lever on how quickly new words show up on screen.
-// Tightened for a snappier "it's really listening" feel; the coaching
-// nudges have their own separate, longer server-side debounce (see
-// COACHING_REFRESH_MS in the live route) so this doesn't multiply AI
-// call volume.
-const POLL_MS = 1500;
+import { useEffect, useRef } from "react";
+import { useLiveMeeting } from "@/lib/useLiveMeeting";
+import { requestFocusWindow } from "@/lib/focusWindowBus";
+import { StopMeetingButton } from "@/components/StopMeetingButton";
 
 // Live transcript + AI coaching for a meeting Anchor is actively sitting
-// in on (bot status "joining"/"recording") — polls /api/meetings/[id]/live,
-// which itself debounces the actual coaching regeneration server-side
-// (see that route), so polling here just needs to feel responsive.
+// in on (bot status "joining"/"recording"). The actual polling now lives
+// in useLiveMeeting (src/lib/useLiveMeeting.ts) — pulled out so the
+// focus-mode pop-out window (src/app/focus) can share it instead of
+// running a second, independent poll of the same endpoint.
 export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; title: string }) {
-  const [segments, setSegments] = useState<LiveSegment[]>([]);
-  const [suggestions, setSuggestions] = useState<LiveSuggestions>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { segments, suggestions, status, hasBot, error } = useLiveMeeting(meetingId);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const stoppedRef = useRef(false);
-
-  useEffect(() => {
-    stoppedRef.current = false;
-
-    async function poll() {
-      if (stoppedRef.current) return;
-      try {
-        const res = await fetch(`/api/meetings/${meetingId}/live`);
-        if (!res.ok) throw new Error("Couldn't load live updates");
-        const body = await res.json();
-        setSegments(body.segments || []);
-        setSuggestions(body.liveSuggestions || null);
-        setStatus(body.status);
-        setError(null);
-        // Stop polling once the meeting's left the live states — the
-        // panel's parent will stop rendering it on the next refresh.
-        if (body.status !== "joining" && body.status !== "recording") {
-          stoppedRef.current = true;
-          return;
-        }
-      } catch {
-        setError("Couldn't reach the live feed — retrying…");
-      }
-      if (!stoppedRef.current) {
-        timer = setTimeout(poll, POLL_MS);
-      }
-    }
-
-    let timer: ReturnType<typeof setTimeout>;
-    poll();
-    return () => {
-      stoppedRef.current = true;
-      clearTimeout(timer);
-    };
-  }, [meetingId]);
 
   useEffect(() => {
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -77,14 +20,36 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center justify-between rounded-t-lg bg-brand px-5 py-3 text-white">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-lg bg-brand px-5 py-3 text-white">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
           <span className="text-sm font-semibold">{title}</span>
         </div>
-        <span className="text-xs text-slate-200">
-          {status === "joining" ? "Joining…" : "Live"}
-        </span>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Pops the same live data into its own small window — a real
+              always-on-top window (Picture-in-Picture) where the browser
+              supports it, an ordinary popup otherwise. See
+              useFocusWindow.ts for why the actual window/session is owned
+              by a single instance mounted in the dashboard layout
+              (LiveMeetingWatcher) rather than here — this just asks for
+              it via the bus so a PiP session survives navigating off this
+              page, the same way the old plain popup always did. */}
+          <button
+            type="button"
+            onClick={() => requestFocusWindow(meetingId)}
+            className="rounded-md bg-white/15 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-white/25"
+            title="Open a small always-on-top focus window with just the live coaching and Ask Anchor — good for keeping next to Zoom or Teams"
+          >
+            Focus window ⛶
+          </button>
+          {/* Ends Anchor's bot early instead of waiting for the call to
+              end on its own — see StopMeetingButton's comment for why
+              this doesn't hang up the call for anyone else. Only for a
+              Zoom/Teams call Anchor's bot actually joined — an in-person
+              recording stops from its own Record-in-person control. */}
+          {hasBot && <StopMeetingButton meetingId={meetingId} variant="light" />}
+          <span className="text-xs text-slate-200">{status === "joining" ? "Joining…" : "Live"}</span>
+        </div>
       </div>
 
       <div className="grid gap-0 sm:grid-cols-[1.3fr_1fr]">
@@ -113,15 +78,30 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
         </div>
 
         <div className="flex flex-col gap-4 px-5 py-4">
+          {suggestions?.liveQuestion && (
+            <div className="rounded-lg border border-brand/30 bg-brand/5 px-3 py-3">
+              <p className="mb-1 text-[11px] font-semibold tracking-[0.15em] text-brand">
+                THEY JUST ASKED
+              </p>
+              <p className="text-xs italic text-slate-500">
+                &ldquo;{suggestions.liveQuestion.question}&rdquo;
+              </p>
+              <p className="mt-1.5 text-sm font-medium text-slate-900">
+                {suggestions.liveQuestion.suggestedAnswer}
+              </p>
+            </div>
+          )}
+
           <div>
             <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
               SUGGESTIONS
             </p>
-            {!suggestions || suggestions.nudges.length === 0 ? (
+            {!suggestions ? (
+              <p className="text-sm text-slate-500">Preparing suggestions…</p>
+            ) : suggestions.nudges.length === 0 ? (
               <p className="text-sm text-slate-500">
-                {segments.length === 0
-                  ? "Nudges show up here once the conversation gets going."
-                  : "Nothing urgent right now."}
+                Nothing to go on yet for this deal — no prep notes, history, or conversation so
+                far. This fills in the moment any of those show up.
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
