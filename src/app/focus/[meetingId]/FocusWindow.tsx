@@ -49,6 +49,20 @@ export function FocusWindow({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [closeCancelled, setCloseCancelled] = useState(false);
 
+  // "This call didn't match any deal — want to create one?" — shown
+  // right in this same end-of-meeting banner, since a desktop-detected
+  // call that /api/desktop/deals/match-now couldn't place against an
+  // existing deal (see that route's comment) would otherwise land
+  // unassigned with nobody noticing until someone happens to spot it on
+  // the dashboard later. Pre-filled with the meeting's own title (often
+  // the Zoom/Teams window title — a real name to start from, not a
+  // blank field) but fully editable before creating anything.
+  const [draftDealName, setDraftDealName] = useState(meetingTitle);
+  const [creatingDeal, setCreatingDeal] = useState(false);
+  const [dealCreateError, setDealCreateError] = useState<string | null>(null);
+  const [createdDeal, setCreatedDeal] = useState<{ id: string; name: string } | null>(null);
+  const [skipDealPrompt, setSkipDealPrompt] = useState(false);
+
   const stillLive = status === "joining" || status === "recording" || status === null;
   const failed = status === "failed";
   // Fully derived from status, rather than tracked in its own state: the
@@ -60,6 +74,11 @@ export function FocusWindow({
   // nothing left to do, so it closes itself a few seconds later (below)
   // instead of sitting there indefinitely.
   const autoClosing = Boolean(status) && !stillLive && !closeCancelled;
+  // Don't let the window vanish out from under someone mid-decision on
+  // whether to create a deal — same idea as closeCancelled, just entered
+  // automatically instead of needing a click, and exited by either
+  // creating the deal or explicitly skipping.
+  const needsDealDecision = autoClosing && !dealId && !createdDeal && !skipDealPrompt;
 
   const closeRef = useRef(onClose);
   useEffect(() => {
@@ -67,10 +86,34 @@ export function FocusWindow({
   }, [onClose]);
 
   useEffect(() => {
-    if (!autoClosing) return;
+    if (!autoClosing || needsDealDecision) return;
     const t = setTimeout(() => (closeRef.current ?? (() => window.close()))(), AUTO_CLOSE_MS);
     return () => clearTimeout(t);
-  }, [autoClosing]);
+  }, [autoClosing, needsDealDecision]);
+
+  async function handleCreateDeal() {
+    const trimmed = draftDealName.trim();
+    if (!trimmed) {
+      setDealCreateError("Give the deal a name first.");
+      return;
+    }
+    setCreatingDeal(true);
+    setDealCreateError(null);
+    try {
+      const res = await fetch(`/api/meetings/${meetingId}/create-deal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't create that deal.");
+      setCreatedDeal(body.deal);
+    } catch (err) {
+      setDealCreateError(err instanceof Error ? err.message : "Couldn't create that deal.");
+    } finally {
+      setCreatingDeal(false);
+    }
+  }
 
   function openCustomize() {
     setDraft(new Set(widgets));
@@ -208,6 +251,62 @@ export function FocusWindow({
             >
               Keep this window open
             </button>
+
+            {!dealId && !createdDeal && (
+              <div className="mt-3 border-t border-emerald-200 pt-3">
+                <p className="text-sm font-medium text-emerald-900">
+                  No deal matched this call — create one?
+                </p>
+                <p className="mt-0.5 text-xs text-emerald-700">
+                  The recording and transcript will move over automatically once it&apos;s created.
+                </p>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    type="text"
+                    value={draftDealName}
+                    onChange={(e) => setDraftDealName(e.target.value)}
+                    disabled={creatingDeal}
+                    placeholder="Deal name"
+                    className="min-w-0 flex-1 rounded-md border border-emerald-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-accent focus:ring-4 focus:ring-accent/10"
+                  />
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCreateDeal}
+                      disabled={creatingDeal}
+                      className="rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+                    >
+                      {creatingDeal ? "Creating…" : "Create deal"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSkipDealPrompt(true)}
+                      disabled={creatingDeal}
+                      className="rounded-md border border-emerald-300 bg-white px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                </div>
+                {dealCreateError && <p className="mt-1.5 text-xs text-red-600">{dealCreateError}</p>}
+              </div>
+            )}
+
+            {createdDeal && (
+              <div className="mt-3 border-t border-emerald-200 pt-3">
+                <p className="text-sm font-medium text-emerald-900">
+                  Created &ldquo;{createdDeal.name}&rdquo; — this recording is attached to it.
+                </p>
+                <a
+                  href={`/dashboard/deals/${createdDeal.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-xs font-medium text-emerald-800 underline hover:text-emerald-900"
+                >
+                  Open the deal
+                </a>
+              </div>
+            )}
           </div>
         )}
 
@@ -301,8 +400,8 @@ export function FocusWindow({
         )}
 
         {widgets.has("askAnchor") &&
-          (dealId ? (
-            <AskAnchorPanel dealId={dealId} />
+          (dealId || createdDeal ? (
+            <AskAnchorPanel dealId={(dealId ?? createdDeal?.id) as string} />
           ) : (
             <section className="rounded-lg border border-slate-200 bg-white p-3">
               <p className="text-xs text-slate-500">
