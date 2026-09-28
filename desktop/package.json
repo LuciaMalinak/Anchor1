@@ -1,6 +1,6 @@
 {
   "name": "anchor-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Anchor Desktop — records Zoom/Teams/Meet calls locally with no bot joining, using Recall.ai's Desktop Recording SDK.",
   "author": "Anchor",
@@ -13,7 +13,8 @@
     "dist:win": "npm run build && electron-builder --win"
   },
   "dependencies": {
-    "@recallai/desktop-sdk": "^2.0.32"
+    "@recallai/desktop-sdk": "^2.0.32",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -27,7 +28,11 @@
     "directories": {
       "output": "release"
     },
-    "publish": null,
+    "publish": {
+      "provider": "generic",
+      "url": "https://anchor-be6o.onrender.com/api/desktop-app/updates",
+      "channel": "latest"
+    },
     "files": ["dist/**/*", "src/renderer/**/*", "package.json"],
     "protocols": {
       "name": "Anchor Desktop Connect",
@@ -37,6 +42,7 @@
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
       "target": ["dmg", "zip"],
+      "artifactName": "Anchor-Desktop-mac.${ext}",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -52,7 +58,8 @@
     },
     "win": {
       "icon": "build/icon.ico",
-      "target": ["nsis"]
+      "target": ["nsis"],
+      "artifactName": "Anchor-Desktop-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,

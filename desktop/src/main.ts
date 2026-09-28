@@ -22,6 +22,7 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, session as electronSession } from "electron";
 import * as path from "path";
 import RecallAiSdk from "@recallai/desktop-sdk";
+import { autoUpdater } from "electron-updater";
 import { loadConfig, saveConfig, DEFAULT_API_BASE } from "./config";
 import { AnchorApi } from "./anchorApi";
 
@@ -70,6 +71,46 @@ function send(channel: string, payload: unknown) {
 function log(message: string) {
   console.log(`[anchor-desktop] ${message}`);
   send("log", message);
+}
+
+// Fully silent background updates: checks periodically, downloads
+// automatically the instant a newer version is found, and applies it on
+// the next NATURAL quit — never a forced restart, never a prompt. Reads
+// its feed URL from app-update.yml, which electron-builder bakes into
+// the packaged app from package.json's "publish" config — see
+// src/app/api/desktop-app/updates/[file]/route.ts in the main repo for
+// what serves that feed. Someone who quits mid-recording was already
+// ending that recording regardless of any update sitting ready, so this
+// introduces no new risk there — it only ever acts on a quit the user
+// already chose themselves.
+//
+// Only meaningful in a built, signed app (electron-builder writes
+// app-update.yml at package time) — running unpacked via `npm start`
+// has no feed to check, so every call here just fails and gets logged,
+// exactly like a real network hiccup would. Best-effort by design, same
+// as matchDealNow(): a failed check just means try again next interval.
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // every 4 hours
+
+function initAutoUpdate() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on("error", (err) => {
+    log(`Auto-update check failed (will retry later): ${err instanceof Error ? err.message : err}`);
+  });
+  autoUpdater.on("update-downloaded", (info) => {
+    log(`Anchor Desktop ${info.version} downloaded — will install next time the app quits.`);
+  });
+
+  const check = () => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      log(`Auto-update check failed (will retry later): ${err instanceof Error ? err.message : err}`);
+    });
+  };
+  // A short delay so this doesn't compete with startup (SDK init,
+  // window creation) for network/CPU, then on a recurring interval for
+  // as long as the app stays running.
+  setTimeout(check, 15_000);
+  setInterval(check, UPDATE_CHECK_INTERVAL_MS);
 }
 
 // Allow-list for handleDeepLink's apiBase — see the comment there. The
@@ -886,6 +927,7 @@ if (!gotSingleInstanceLock) {
     }
 
     startLiveSuggestionsPolling();
+    initAutoUpdate();
 
     try {
       await initSdk();

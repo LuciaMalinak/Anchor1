@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDesktopAppUploadSecret } from "@/lib/desktopAppUploadSecret";
 import { r2PresignedPutUrl, isR2Configured } from "@/lib/r2";
-import { DESKTOP_APP_PLATFORMS, isDesktopAppPlatform } from "@/lib/desktopAppPlatforms";
+import {
+  DESKTOP_APP_PLATFORMS,
+  isDesktopAppPlatform,
+  DESKTOP_APP_UPDATE_FEEDS,
+  isDesktopAppUpdateFeed,
+} from "@/lib/desktopAppPlatforms";
 
 // Issues a short-lived, direct-to-R2 upload URL for a new Anchor Desktop
 // build — the actual installer bytes go straight from whoever calls this
@@ -26,9 +31,30 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
+
+  // Either the installer itself (platform: "mac" | "win") or, once
+  // electron-builder has generated it alongside the installer, the small
+  // update-feed YAML electron-updater polls (file: "latest-mac.yml" |
+  // "latest.yml") — same secret, same presign-and-PUT flow either way.
+  const file = body.file;
+  if (typeof file === "string") {
+    if (!isDesktopAppUpdateFeed(file)) {
+      return NextResponse.json(
+        { error: 'file must be "latest-mac.yml" or "latest.yml"' },
+        { status: 400 }
+      );
+    }
+    const target = DESKTOP_APP_UPDATE_FEEDS[file];
+    const uploadUrl = await r2PresignedPutUrl(target.key, target.contentType, 600);
+    return NextResponse.json({ uploadUrl, key: target.key, expiresInSeconds: 600 });
+  }
+
   const platform = body.platform;
   if (typeof platform !== "string" || !isDesktopAppPlatform(platform)) {
-    return NextResponse.json({ error: 'platform must be "mac" or "win"' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'platform must be "mac" or "win" (or pass "file" for an update-feed upload)' },
+      { status: 400 }
+    );
   }
   const target = DESKTOP_APP_PLATFORMS[platform];
 
