@@ -1,8 +1,11 @@
 // Shared wordmark + anchor mark, matched to the investor deck: a thin
 // line-art anchor glyph (no filled badge) in the deck's navy/copper, plus
-// the "Anchor" wordmark. Same glyph as src/app/icon.svg (the favicon,
-// which keeps a small filled backing for legibility at 16px) — keep the
-// path data in sync if either changes.
+// the "Anchor" wordmark. The browser tab icon (src/app/icon.png,
+// favicon.ico, apple-icon.png) uses the bolder filled version of this
+// same mark instead — Lucia's official logo, also used for the desktop
+// app icon (desktop/build/icon.icns) — since a thin stroke doesn't read
+// well at favicon sizes. Keep colors (navy #12294A / copper #B4531F) in
+// sync if either changes.
 //
 // `tone="dark"` (default) is navy-on-light, for headers and white
 // backgrounds. `tone="light"` is white-on-navy, for the hero section.
