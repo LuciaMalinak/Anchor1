@@ -870,10 +870,21 @@ app.setAsDefaultProtocolClient("anchor-desktop");
 // macOS delivers a custom-protocol link via this event — including to an
 // app that isn't running yet, in which case it can fire before
 // whenReady, so this listener is registered immediately rather than
-// nested inside app.whenReady().
+// nested inside app.whenReady(). handleDeepLink ends in showWindow(),
+// which creates a BrowserWindow if one doesn't exist yet — and Electron
+// throws (crashing the whole main process, the "Cannot create
+// BrowserWindow before app is ready" dialog) if that happens before
+// startup has actually finished. A cold launch via this exact link is
+// the common case that hits it, not a rare edge case, so stash the URL
+// instead and let the whenReady handler below process it once it's safe.
+let pendingOpenUrlDeepLink: string | null = null;
 app.on("open-url", (event, url) => {
   event.preventDefault();
-  handleDeepLink(url);
+  if (app.isReady()) {
+    handleDeepLink(url);
+  } else {
+    pendingOpenUrlDeepLink = url;
+  }
 });
 
 // A menu-bar app that's meant to always be running invites exactly the
@@ -911,8 +922,12 @@ if (!gotSingleInstanceLock) {
     // above, but for a COLD start — i.e. this app wasn't running yet
     // when the link was clicked, so there's no second instance to
     // redirect; the link instead shows up as this very first launch's
-    // own argv.
-    const coldStartDeepLink = process.argv.find((arg) => arg.startsWith("anchor-desktop://"));
+    // own argv. On macOS the equivalent cold-start case arrives via
+    // "open-url" instead (see pendingOpenUrlDeepLink above) — it's now
+    // safe to handle since the app is ready by this point.
+    const coldStartDeepLink =
+      pendingOpenUrlDeepLink || process.argv.find((arg) => arg.startsWith("anchor-desktop://"));
+    pendingOpenUrlDeepLink = null;
     if (coldStartDeepLink) handleDeepLink(coldStartDeepLink);
 
     // Turn "launch at login" on by default the first time this app ever
