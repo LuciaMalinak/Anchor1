@@ -53,7 +53,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ fil
 
   const installerKey = INSTALLER_KEYS[file];
   if (installerKey) {
-    const url = await r2PresignedGetUrl(installerKey, 120);
+    // Same reasoning as the public download route: this is an 80-150MB
+    // file, so give electron-updater's own download plenty of headroom
+    // rather than the 120 seconds this used to be.
+    const url = await r2PresignedGetUrl(installerKey, 1800);
     return NextResponse.redirect(url);
   }
 

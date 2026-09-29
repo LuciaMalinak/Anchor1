@@ -140,6 +140,13 @@ export function DesktopTokenPanel() {
           >
             Download for Mac
           </a>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- see the Mac link above */}
+          <a
+            href="/api/download/desktop-app/win"
+            className="rounded-lg border border-brand px-3 py-1.5 text-xs font-medium text-brand shadow-sm transition hover:bg-brand/5"
+          >
+            Download for Windows
+          </a>
           <span className="text-[11px] text-slate-400">Open it once after installing.</span>
         </li>
         <li className="flex items-center gap-2">
@@ -199,9 +206,8 @@ export function DesktopTokenPanel() {
         {showManual && (
           <div className="mt-2 flex flex-col gap-2">
             <p className="text-[11px] text-slate-500">
-              If the automatic connect button doesn&apos;t work (for example on Windows, which isn&apos;t
-              available yet), generate a token here and paste it into the app&apos;s &quot;Paste your desktop
-              token&quot; box instead.
+              If the automatic connect button doesn&apos;t work, generate a token here and paste it into
+              the app&apos;s &quot;Paste your desktop token&quot; box instead.
             </p>
             {freshToken && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">

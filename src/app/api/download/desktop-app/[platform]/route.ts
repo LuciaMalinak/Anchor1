@@ -61,6 +61,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pla
     );
   }
 
-  const url = await r2PresignedGetUrl(target.key, 120, target.downloadFilename);
+  // The installer itself is 80-150MB — on anything slower than a fast,
+  // uninterrupted connection, downloading it can easily take longer than
+  // a couple of minutes, and a paused/resumed browser download re-requests
+  // the same URL. A short-lived signed URL (this used to be 120 seconds)
+  // means that retry lands after expiry and R2 returns 403 — which is
+  // exactly what "the download just fails" looks like from the browser's
+  // side. 30 minutes comfortably covers even a slow connection while
+  // still not leaving a link usable for long after someone clicks it.
+  const url = await r2PresignedGetUrl(target.key, 1800, target.downloadFilename);
   return NextResponse.redirect(url);
 }
