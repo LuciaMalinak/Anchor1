@@ -6,3 +6,5 @@ screenshots
 .env.local
 desktop/dist
 desktop/release
+next-env.d.ts
+tsconfig.tsbuildinfo
