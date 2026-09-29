@@ -37,10 +37,16 @@ fi
 
 cd "$(dirname "$0")/.."  # desktop/
 
-ZIP_PATH=$(ls release/*-mac.zip 2>/dev/null | head -1)
-if [ -z "$ZIP_PATH" ]; then
-  echo "No .../release/*-mac.zip found. Build it first:"
+ZIP_PATH="release/Anchor-Desktop-mac.zip"
+if [ ! -f "$ZIP_PATH" ]; then
+  echo "No $ZIP_PATH found. Build it first:"
   echo "  npm run dist:mac"
+  echo ""
+  echo "(Using the exact artifactName from package.json rather than a *-mac.zip"
+  echo "glob on purpose — a leftover build from an older version, e.g."
+  echo "'Anchor Desktop-0.1.0-arm64-mac.zip', can also match that glob and sort"
+  echo "before the real one, silently uploading the wrong build. Delete any old"
+  echo "files under release/ before rebuilding if you're not sure which is current.)"
   exit 1
 fi
 
