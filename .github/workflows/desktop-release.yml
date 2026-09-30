@@ -19,7 +19,7 @@ name: Desktop app release
 on:
   push:
     branches: [main]
-    paths: ["desktop/**"]
+    paths: ["desktop/**", ".github/workflows/desktop-release.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -52,18 +52,33 @@ jobs:
           fi
           KEYCHAIN="$RUNNER_TEMP/anchor-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
-          echo "$MAC_SIGNING_CERT_P12" | base64 --decode > "$RUNNER_TEMP/anchor.p12"
+          printf '%s' "$MAC_SIGNING_CERT_P12" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/anchor.p12"
+          echo "Decoded certificate: $(wc -c < "$RUNNER_TEMP/anchor.p12" | tr -d ' ') bytes"
+          # Keychain Access on recent macOS exports .p12 files with AES
+          # encryption that `security import` on this older build machine
+          # can't read ("Unknown format in import"). Unpack it and re-pack
+          # it with the classic 3DES/SHA1 scheme `security` always reads.
+          # (Retried with -legacy in case it's the older RC2 format instead,
+          # which OpenSSL 3 only reads with that flag.)
+          openssl pkcs12 -in "$RUNNER_TEMP/anchor.p12" -passin "pass:$MAC_SIGNING_CERT_PASSWORD" -nodes -out "$RUNNER_TEMP/anchor-both.pem" ||
+          openssl pkcs12 -legacy -in "$RUNNER_TEMP/anchor.p12" -passin "pass:$MAC_SIGNING_CERT_PASSWORD" -nodes -out "$RUNNER_TEMP/anchor-both.pem" || {
+            echo "::error::Couldn't open MAC_SIGNING_CERT_P12 with MAC_SIGNING_CERT_PASSWORD. Re-paste the certificate secret and check the password matches the one chosen when exporting it."
+            exit 1
+          }
+          openssl pkcs12 -export -in "$RUNNER_TEMP/anchor-both.pem" -out "$RUNNER_TEMP/anchor-legacy.p12" \
+            -passout "pass:$MAC_SIGNING_CERT_PASSWORD" -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1
+          openssl x509 -in "$RUNNER_TEMP/anchor-both.pem" -out "$RUNNER_TEMP/anchor.pem"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security import "$RUNNER_TEMP/anchor.p12" -k "$KEYCHAIN" -P "$MAC_SIGNING_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security import "$RUNNER_TEMP/anchor-legacy.p12" -k "$KEYCHAIN" -f pkcs12 -P "$MAC_SIGNING_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           # It's self-signed, so mark it trusted for code signing, as
           # create-local-signing-cert.sh does on a Mac; afterSign.js only
           # uses certificates macOS reports as valid.
-          security find-certificate -c "Anchor Desktop Local Signing" -p "$KEYCHAIN" > "$RUNNER_TEMP/anchor.pem"
           sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/anchor.pem"
+          rm -f "$RUNNER_TEMP/anchor-both.pem" "$RUNNER_TEMP/anchor-legacy.p12"
           rm -f "$RUNNER_TEMP/anchor.p12"
           security find-identity -v -p codesigning | grep -q "Anchor Desktop Local Signing" || {
             echo "::error::The imported certificate isn't usable for code signing."
