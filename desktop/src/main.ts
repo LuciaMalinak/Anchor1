@@ -102,7 +102,27 @@ function log(message: string) {
 // has no feed to check, so every call here just fails and gets logged,
 // exactly like a real network hiccup would. Best-effort by design, same
 // as matchDealNow(): a failed check just means try again next interval.
-const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // every 4 hours
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000; // every hour
+
+// How often to look again for a quiet moment to install a downloaded update.
+const INSTALL_RETRY_INTERVAL_MS = 60_000;
+let downloadedUpdateVersion: string | null = null;
+
+// Installs a downloaded update right away, as long as nothing is being
+// recorded, instead of waiting for the app to quit: it lives in the menu
+// bar and launches at login, so for most people it almost never quits and
+// updates would otherwise sit unused for days. The app restarts itself on
+// the new version; if a call is recording, this waits and tries again.
+function installUpdateWhenIdle() {
+  if (!downloadedUpdateVersion) return;
+  if (activeRecordings.size > 0 || startsInFlight.size > 0) return;
+  log(`Restarting to finish updating to Anchor Desktop ${downloadedUpdateVersion} …`);
+  const windowWasVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
+  saveConfig({ ...loadConfig(), restartedForUpdate: { windowWasVisible } });
+  isQuitting = true;
+  // isSilent, isForceRunAfter: no installer UI, and relaunch afterwards.
+  autoUpdater.quitAndInstall(true, true);
+}
 
 function initAutoUpdate() {
   autoUpdater.autoDownload = true;
@@ -111,8 +131,11 @@ function initAutoUpdate() {
     log(`Auto-update check failed (will retry later): ${err instanceof Error ? err.message : err}`);
   });
   autoUpdater.on("update-downloaded", (info) => {
-    log(`Anchor Desktop ${info.version} downloaded — will install next time the app quits.`);
+    downloadedUpdateVersion = info.version;
+    log(`Anchor Desktop ${info.version} downloaded — installing as soon as no call is being recorded.`);
+    installUpdateWhenIdle();
   });
+  setInterval(installUpdateWhenIdle, INSTALL_RETRY_INTERVAL_MS);
 
   const check = () => {
     autoUpdater.checkForUpdates().catch((err) => {
@@ -879,10 +902,14 @@ function registerIpcHandlers() {
   });
 }
 
-function createWindow() {
+function createWindow(show = true) {
   mainWindow = new BrowserWindow({
-    width: 480,
-    height: 640,
+    width: 500,
+    height: 720,
+    minWidth: 420,
+    minHeight: 520,
+    backgroundColor: "#f4f5f8",
+    show,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -1006,7 +1033,14 @@ if (!gotSingleInstanceLock) {
 
   app.whenReady().then(async () => {
     registerIpcHandlers();
-    createWindow();
+    // After restarting itself to install an update, come back the way it
+    // was: in the menu bar only, unless the window was open.
+    const updateRestart = loadConfig().restartedForUpdate;
+    if (updateRestart) {
+      saveConfig({ ...loadConfig(), restartedForUpdate: null });
+      log(`Updated to Anchor Desktop ${app.getVersion()}.`);
+    }
+    createWindow(!updateRestart || updateRestart.windowWasVisible);
     createTray();
 
     // Same Windows/Linux deep-link case as the second-instance handler

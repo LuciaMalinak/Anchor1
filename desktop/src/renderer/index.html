@@ -4,65 +4,160 @@
     <meta charset="utf-8" />
     <title>Anchor Desktop</title>
     <style>
-      /* Same brand tokens as the website (src/app/globals.css): navy
-         primary, copper accent, clean white surfaces. Keeping the
-         desktop app's own colors in sync with these by hand (no shared
-         CSS between the two apps) — update both places if the brand
-         colors ever change. */
+      /* Brand tokens shared with the website (src/app/globals.css): navy,
+         copper, a soft off-white canvas with white cards, serif headings
+         and small mono labels in wide caps. Kept in sync by hand (no shared
+         CSS between the two apps). Uses macOS's built-in serif (New York)
+         and mono (SF Mono), so it needs no web fonts and works offline. */
       :root {
         --brand: #12294a;
         --brand-dark: #0b1930;
         --copper: #b4531f;
+        --copper-dark: #904218;
+        --canvas: #f4f5f8;
+        --line: #e5e7ee;
+        --ink: #16223a;
+        --muted: #64748b;
+        --faint: #94a3b8;
+        --serif: "New York", ui-serif, "Iowan Old Style", Georgia, serif;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+      }
+      * {
+        box-sizing: border-box;
       }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         margin: 0;
-        padding: 20px;
-        color: #1e293b;
-        background: #f8fafc;
+        font-family: var(--sans);
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--canvas);
+        -webkit-font-smoothing: antialiased;
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      /* Top bar: logo, and a status pill (connected / recording). */
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        background: white;
+        border-bottom: 1px solid var(--line);
       }
       .brand {
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-bottom: 4px;
       }
       .brand h1 {
-        font-size: 16px;
-        font-weight: 600;
-        letter-spacing: -0.01em;
         margin: 0;
+        font-family: var(--serif);
+        font-weight: 500;
+        font-size: 20px;
+        letter-spacing: -0.01em;
         color: var(--brand);
       }
-      p.sub {
-        color: #64748b;
-        font-size: 12px;
-        margin: 0 0 16px;
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 500;
+        background: #f1f5f9;
+        color: var(--muted);
       }
+      .pill .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .pill.connected {
+        background: #ecfdf5;
+        color: #047857;
+      }
+      .pill.recording {
+        background: #fef2f2;
+        color: #dc2626;
+      }
+      .pill.recording .dot {
+        animation: blink 1.4s ease-in-out infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0.25;
+        }
+      }
+      .subline {
+        margin: 0;
+        padding: 8px 18px;
+        font-family: var(--mono);
+        font-size: 9.5px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--faint);
+        background: white;
+        border-bottom: 1px solid var(--line);
+      }
+      main {
+        padding: 16px 18px 24px;
+      }
+
+      /* Cards and labels */
       section {
         background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        padding: 14px;
-        margin-bottom: 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       }
-      input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 8px;
-        border: 1px solid #cbd5e1;
-        border-radius: 6px;
+      .eyebrow,
+      .panel-section strong {
+        display: block;
+        margin: 0 0 8px;
+        font-family: var(--mono);
+        font-size: 9.5px;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .eyebrow.copper {
+        color: var(--copper);
+      }
+      h2 {
+        margin: 0;
+        font-family: var(--serif);
+        font-weight: 500;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+      }
+      .hint {
+        margin: 0;
         font-size: 12px;
-        margin-bottom: 8px;
+        line-height: 1.5;
+        color: var(--muted);
       }
+
+      /* Controls */
       button {
-        background: var(--brand);
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 8px 12px;
+        font: inherit;
         font-size: 12px;
+        font-weight: 500;
+        color: white;
+        background: var(--brand);
+        border: none;
+        border-radius: 7px;
+        padding: 8px 14px;
         cursor: pointer;
+        transition: background 150ms ease;
       }
       button:hover:not(:disabled) {
         background: var(--brand-dark);
@@ -71,59 +166,23 @@
         opacity: 0.5;
         cursor: default;
       }
+      button.primary,
+      .ask-row button {
+        background: var(--copper);
+      }
+      button.primary:hover:not(:disabled),
+      .ask-row button:hover:not(:disabled) {
+        background: var(--copper-dark);
+      }
       button.stop {
         background: #dc2626;
       }
       button.stop:hover:not(:disabled) {
         background: #b91c1c;
       }
-      .meeting {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 0;
-        border-bottom: 1px solid #f1f5f9;
-        font-size: 12px;
-      }
-      .meeting:last-child {
-        border-bottom: none;
-      }
-      #log {
-        font-family: ui-monospace, monospace;
-        font-size: 11px;
-        color: #475569;
-        max-height: 160px;
-        overflow-y: auto;
-        white-space: pre-wrap;
-      }
-      #status {
-        font-size: 11px;
-        color: #64748b;
-        margin-bottom: 8px;
-      }
-      #signed-out .hint {
-        font-size: 12px;
-        color: #64748b;
-        margin: 0 0 10px;
-      }
-      #sign-in {
-        width: 100%;
-        padding: 10px 12px;
-        font-size: 13px;
-        font-weight: 600;
-      }
-      #token-fallback {
-        margin-top: 10px;
-        font-size: 11px;
-        color: #64748b;
-      }
-      #token-fallback summary {
-        cursor: pointer;
-        margin-bottom: 8px;
-      }
       button.link {
         background: none;
-        color: #64748b;
+        color: var(--muted);
         padding: 0;
         font-size: 11px;
         text-decoration: underline;
@@ -132,68 +191,148 @@
         background: none;
         color: var(--brand);
       }
-      [hidden] {
-        display: none !important;
+      input {
+        width: 100%;
+        font: inherit;
+        font-size: 12px;
+        padding: 8px 10px;
+        border: 1px solid #d8dce5;
+        border-radius: 7px;
+        margin-bottom: 8px;
       }
+      input:focus {
+        outline: none;
+        border-color: var(--brand);
+      }
+
+      /* Account */
+      #signed-out h2 {
+        font-size: 21px;
+      }
+      #signed-out .hint {
+        margin: 6px 0 14px;
+      }
+      #sign-in {
+        width: 100%;
+        padding: 11px 14px;
+        font-size: 13px;
+      }
+      #token-fallback {
+        margin-top: 12px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      #token-fallback summary {
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      .account-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      #account-email {
+        font-family: var(--serif);
+        font-size: 15px;
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* Detected meetings */
       .meeting-block {
-        border-bottom: 1px solid #f1f5f9;
+        border-top: 1px solid #f1f5f9;
       }
-      .meeting-block:last-child {
-        border-bottom: none;
+      .meeting-block:first-child {
+        border-top: none;
       }
-      .meeting-block .meeting {
-        border-bottom: none;
+      .meeting {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 0;
       }
+      .meeting-title {
+        font-family: var(--serif);
+        font-size: 15px;
+        color: var(--ink);
+      }
+      .meeting-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 3px;
+      }
+      .empty {
+        padding: 18px 0 6px;
+        text-align: center;
+      }
+
+      /* Live panel while recording */
       .deal-panel {
-        padding: 4px 0 10px;
+        padding: 2px 0 12px;
       }
       .panel-section {
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px dashed #e2e8f0;
+        margin-top: 12px;
       }
-      .panel-section strong {
-        font-size: 11px;
-        color: var(--brand);
-        display: block;
-        margin-bottom: 6px;
+      .suggestion {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        background: white;
       }
-      .hint {
-        font-size: 11px;
-        color: #94a3b8;
-        margin: 0;
+      .suggestion.question {
+        border-color: #e8c9ae;
+        background: #fffaf5;
       }
-      .nudges,
+      .tag {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: var(--mono);
+        font-size: 8.5px;
+        letter-spacing: 0.14em;
+        color: white;
+        background: var(--brand);
+      }
+      .suggestion.question .tag {
+        background: var(--copper);
+      }
+      .suggestion-text {
+        margin-top: 6px;
+        font-family: var(--serif);
+        font-size: 14.5px;
+        line-height: 1.35;
+        color: var(--ink);
+      }
+      .suggested-answer {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
       .checklist {
-        margin: 0 0 6px;
-        padding-left: 16px;
+        list-style: none;
+        margin: 4px 0 0;
+        padding: 0;
         font-size: 12px;
       }
-      .nudges li,
       .checklist li {
-        margin-bottom: 4px;
+        padding: 3px 0;
+        color: var(--muted);
       }
       .checklist li.covered {
         color: #16a34a;
       }
-      .live-question {
-        background: #fef3e7;
-        border: 1px solid #f4d9b8;
-        border-radius: 8px;
-        padding: 8px 10px;
-        font-size: 12px;
-        margin-bottom: 8px;
-      }
-      .suggested-answer {
-        margin-top: 4px;
-        color: #475569;
-      }
       .task-row {
         display: flex;
         align-items: flex-start;
-        gap: 6px;
+        gap: 8px;
         font-size: 12px;
-        padding: 4px 0;
+        padding: 5px 0;
         cursor: pointer;
       }
       .task-row input {
@@ -201,7 +340,7 @@
         margin: 2px 0 0;
       }
       .task-row em {
-        color: #94a3b8;
+        color: var(--faint);
         font-style: normal;
       }
       .ask-row {
@@ -213,147 +352,109 @@
       }
       .ask-row button {
         flex-shrink: 0;
+        padding: 8px 16px;
       }
       .ask-answer {
-        font-size: 12px;
-        color: #334155;
         margin-top: 8px;
+        font-size: 12px;
+        line-height: 1.5;
         white-space: pre-wrap;
       }
 
-      /* ---------------------------------------------------------------
-         Design refresh, matching the website (src/app/globals.css): soft
-         off-white canvas, white cards, serif headings, small mono labels
-         in wide caps, copper for the main actions. Uses macOS's built-in
-         serif (New York) and mono (SF Mono), so it needs no web fonts and
-         works offline.
-         --------------------------------------------------------------- */
-      :root {
-        --canvas: #f4f5f8;
-        --serif: "Newsreader", "New York", ui-serif, "Iowan Old Style", Georgia, serif;
-        --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+      /* Activity log, tucked away */
+      details.activity summary {
+        cursor: pointer;
+        list-style: none;
       }
-      body {
-        background: var(--canvas);
-        color: #16223a;
+      details.activity summary::-webkit-details-marker {
+        display: none;
       }
-      .brand h1 {
-        font-family: var(--serif);
-        font-weight: 500;
-        font-size: 19px;
-        letter-spacing: -0.01em;
-      }
-      p.sub {
-        font-size: 12px;
-        line-height: 1.5;
-      }
-      section {
-        border-color: #e5e7ee;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-      }
-      /* Section titles ("Detected meetings", "Activity") and panel labels
-         read as the design's mono eyebrows. */
-      section > strong,
-      .panel-section strong {
-        font-family: var(--mono);
-        font-size: 10px !important;
-        font-weight: 500;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: #94a3b8;
-      }
-      #status {
-        font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--copper);
-      }
-      #sign-in,
-      .ask-row button {
-        background: var(--copper);
-      }
-      #sign-in:hover:not(:disabled),
-      .ask-row button:hover:not(:disabled) {
-        background: #904218;
-      }
-      button {
-        border-radius: 7px;
-        font-weight: 500;
-      }
-      input {
-        border-color: #d8dce5;
-        border-radius: 7px;
-      }
-      input:focus {
-        outline: none;
-        border-color: var(--brand);
-      }
-      .meeting {
-        font-size: 13px;
-      }
-      .live-question {
-        background: #fff;
-        border: 1px solid #e8c9ae;
-        border-left: 3px solid var(--copper);
-        border-radius: 8px;
+      details.activity summary .eyebrow {
+        display: inline;
       }
       #log {
+        margin-top: 10px;
         font-family: var(--mono);
+        font-size: 10.5px;
+        color: #475569;
+        max-height: 160px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+      }
+      .foot {
+        margin: 4px 2px 0;
+        font-size: 11px;
+        color: var(--faint);
+        line-height: 1.5;
       }
     </style>
   </head>
   <body>
-    <div class="brand">
-      <!-- Same anchor glyph as the website's Logo.tsx / icon.svg — keep the
-           path data in sync if either changes. -->
-      <svg width="22" height="22" viewBox="0 0 32 32" fill="none" stroke="#12294a" stroke-width="1.9"
-        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="16" cy="7.5" r="2.25" />
-        <path d="M16 9.75V24.5" />
-        <path d="M11 13.5H21" />
-        <path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5" />
-        <path d="M8 18.5L6 15.8M8 18.5L10.3 17" />
-        <path d="M24 18.5L26 15.8M24 18.5L21.7 17" />
-      </svg>
-      <h1>Anchor Desktop</h1>
-    </div>
-    <p class="sub">Records Zoom, Teams, and Meet calls straight from your computer — no bot joins the call.</p>
-    <p class="sub" style="margin-top: -12px">
-      Closing this window keeps Anchor running quietly in your menu bar, watching for calls. Look for the anchor
-      icon near your clock to reopen it or quit.
-    </p>
+    <header class="topbar">
+      <div class="brand">
+        <!-- Same anchor glyph as the website's Logo.tsx / icon.svg — keep the
+             path data in sync if either changes. -->
+        <svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="#12294a" stroke-width="1.9"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="16" cy="7.5" r="2.25" />
+          <path d="M16 9.75V24.5" />
+          <path d="M11 13.5H21" />
+          <path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5" />
+          <path d="M8 18.5L6 15.8M8 18.5L10.3 17" />
+          <path d="M24 18.5L26 15.8M24 18.5L21.7 17" />
+        </svg>
+        <h1>Anchor</h1>
+      </div>
+      <span id="status" class="pill"><span class="dot"></span><span id="status-text">Not connected</span></span>
+    </header>
+    <p class="subline">Listening on this device · not a participant in the call</p>
 
-    <section id="token-section">
-      <div id="status">Not connected</div>
-      <div id="signed-out" hidden>
-        <p class="hint">
-          Sign in with your Anchor account. Your browser opens; once you&rsquo;ve signed in there, this app connects
-          on its own.
-        </p>
-        <button id="sign-in">Sign in to Anchor</button>
-        <details id="token-fallback">
-          <summary>Have a desktop token? Paste it instead</summary>
-          <input id="token-input" type="password" placeholder="Paste your desktop token from Anchor's Integrations page" />
-          <button id="save-token">Save token</button>
+    <main>
+      <section id="token-section">
+        <div id="signed-out" hidden>
+          <p class="eyebrow copper">Welcome to Anchor Desktop</p>
+          <h2>Sign in to start recording</h2>
+          <p class="hint">
+            Your browser opens Anchor&rsquo;s sign-in. Once you&rsquo;re in, this app connects on its own.
+          </p>
+          <button id="sign-in" class="primary">Sign in to Anchor</button>
+          <details id="token-fallback">
+            <summary>Have a desktop token? Paste it instead</summary>
+            <input id="token-input" type="password" placeholder="Paste your desktop token from Anchor's Integrations page" />
+            <button id="save-token">Save token</button>
+          </details>
+        </div>
+        <div id="signed-in" hidden>
+          <p class="eyebrow">Recording into</p>
+          <div class="account-row">
+            <span id="account-email"></span>
+            <button id="switch-account" class="link">Switch account</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <p class="eyebrow">Your calls</p>
+        <div id="meetings">
+          <div class="empty">
+            <h2>No call open</h2>
+            <p class="hint">Open a Zoom, Teams or Meet call and it shows up here. Anchor starts recording on its own.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <details class="activity">
+          <summary><span class="eyebrow">Activity ▸</span></summary>
+          <div id="log"></div>
         </details>
-      </div>
-      <div id="signed-in" hidden>
-        <button id="switch-account" class="link">Sign in with a different account</button>
-      </div>
-    </section>
+      </section>
 
-    <section>
-      <strong style="font-size: 12px">Detected meetings</strong>
-      <div id="meetings" style="margin-top: 8px">
-        <p style="font-size: 12px; color: #94a3b8">Open a Zoom, Teams, or Meet call — it'll show up here.</p>
-      </div>
-    </section>
-
-    <section>
-      <strong style="font-size: 12px">Activity</strong>
-      <div id="log" style="margin-top: 8px"></div>
-    </section>
+      <p class="foot">
+        Closing this window keeps Anchor running in your menu bar, watching for calls. Look for the anchor icon near
+        your clock to reopen it or quit.
+      </p>
+    </main>
 
     <script src="renderer.js"></script>
   </body>

@@ -58,3 +58,9 @@ To make that warning go away entirely — the actual "download it, double-click 
 2. **A Windows code-signing certificate** (from a certificate authority like DigiCert or SSL.com, typically $100–400/year) — same idea for the Windows installer. Optional if your team's all on Mac.
 
 Until then, the unsigned `.dmg`/`.exe` from the commands above is the realistic "easy enough for the team" option — genuinely easier than Terminal, just not zero-click.
+
+## Releasing updates (automatic)
+
+Pushing any change under `desktop/` to `main` makes GitHub build, sign and publish a new version (`.github/workflows/desktop-release.yml`); you can also start it by hand from GitHub → Actions → "Desktop app release" → Run workflow. Installed apps check every hour, download it, and restart themselves onto it as soon as no call is being recorded. Nobody needs to run `npm run dist:mac` or the upload script any more. The version number is set automatically (major.minor from `package.json`, the patch from the workflow's run number).
+
+One-time setup for that workflow, in the GitHub repo under Settings → Secrets and variables → Actions: `DESKTOP_APP_UPLOAD_SECRET` (same value as in Render), `MAC_SIGNING_CERT_P12` (the "Anchor Desktop Local Signing" certificate exported from Keychain Access as a .p12, then base64-encoded) and `MAC_SIGNING_CERT_PASSWORD` (the password chosen when exporting it).

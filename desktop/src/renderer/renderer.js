@@ -4,6 +4,8 @@
 // Electron APIs directly.
 
 const statusEl = document.getElementById("status");
+const statusTextEl = document.getElementById("status-text");
+const accountEmailEl = document.getElementById("account-email");
 const tokenInput = document.getElementById("token-input");
 const saveTokenBtn = document.getElementById("save-token");
 const signInBtn = document.getElementById("sign-in");
@@ -46,16 +48,26 @@ function appendLog(message) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
+// Live suggestions as cards, like the website's: an unanswered question
+// first (copper "ASK" tag), then each nudge ("SUGGESTED"), then the
+// call's checklist.
 function renderSuggestionsHtml(suggestions) {
   if (!suggestions) {
-    return '<p class="hint">Live suggestions will show up here once Anchor has enough of the call to work with.</p>';
+    return '<p class="hint">Suggestions show up here once Anchor has enough of the call to work with.</p>';
   }
   let html = "";
   if (suggestions.liveQuestion) {
-    html += `<div class="live-question"><strong>Unanswered:</strong> ${escapeHtml(suggestions.liveQuestion.question)}<div class="suggested-answer">${escapeHtml(suggestions.liveQuestion.suggestedAnswer)}</div></div>`;
+    html += `<div class="suggestion question"><span class="tag">ASK</span><div class="suggestion-text">${escapeHtml(
+      suggestions.liveQuestion.question
+    )}</div><div class="suggested-answer">${escapeHtml(suggestions.liveQuestion.suggestedAnswer)}</div></div>`;
   }
   if (suggestions.nudges && suggestions.nudges.length) {
-    html += `<ul class="nudges">${suggestions.nudges.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
+    html += suggestions.nudges
+      .map(
+        (n) =>
+          `<div class="suggestion"><span class="tag">SUGGESTED</span><div class="suggestion-text">${escapeHtml(n)}</div></div>`
+      )
+      .join("");
   }
   if (suggestions.checklist && suggestions.checklist.length) {
     html += `<ul class="checklist">${suggestions.checklist
@@ -184,7 +196,7 @@ function renderDealPanel(windowId, m) {
 
   const suggestionsSection = document.createElement("div");
   suggestionsSection.className = "panel-section";
-  suggestionsSection.innerHTML = `<strong>Live suggestions</strong><div id="suggestions-${windowId}">${renderSuggestionsHtml(m.suggestions)}</div>`;
+  suggestionsSection.innerHTML = `<strong>Suggestions · from all your context</strong><div id="suggestions-${windowId}">${renderSuggestionsHtml(m.suggestions)}</div>`;
   panel.appendChild(suggestionsSection);
 
   const tasksSection = document.createElement("div");
@@ -198,7 +210,7 @@ function renderDealPanel(windowId, m) {
   askSection.innerHTML = `
     <strong>Ask Anchor</strong>
     <div class="ask-row">
-      <input type="text" class="ask-input" placeholder="Ask about this deal…" />
+      <input type="text" class="ask-input" placeholder="Ask Anchor anything…" />
       <button class="ask-btn">Ask</button>
     </div>
     <div id="ask-answer-${windowId}" class="ask-answer">${escapeHtml(m.askAnswer)}</div>
@@ -220,7 +232,9 @@ function renderDealPanel(windowId, m) {
 
 function renderMeetings() {
   if (meetings.size === 0) {
-    meetingsEl.innerHTML = '<p style="font-size:12px;color:#94a3b8">Open a Zoom, Teams, or Meet call — it\'ll show up here.</p>';
+    meetingsEl.innerHTML =
+      '<div class="empty"><h2>No call open</h2><p class="hint">Open a Zoom, Teams or Meet call and it shows up here. Anchor starts recording on its own.</p></div>';
+    updateStatusPill();
     return;
   }
   meetingsEl.innerHTML = "";
@@ -230,11 +244,20 @@ function renderMeetings() {
 
     const row = document.createElement("div");
     row.className = "meeting";
-    const label = document.createElement("span");
-    label.textContent = m.title || windowId;
+    const label = document.createElement("div");
+    const titleEl = document.createElement("div");
+    titleEl.className = "meeting-title";
+    titleEl.textContent = m.title || windowId;
+    const meta = document.createElement("div");
+    meta.className = "meeting-meta";
+    meta.innerHTML = m.recording
+      ? '<span class="pill recording"><span class="dot"></span>Recording</span>'
+      : '<span class="pill">Detected</span>';
+    label.appendChild(titleEl);
+    label.appendChild(meta);
     const btn = document.createElement("button");
     btn.textContent = m.recording ? "Stop" : "Record";
-    btn.className = m.recording ? "stop" : "";
+    btn.className = m.recording ? "stop" : "primary";
     btn.onclick = async () => {
       btn.disabled = true;
       try {
@@ -264,15 +287,25 @@ function renderMeetings() {
 
     meetingsEl.appendChild(block);
   }
+  updateStatusPill();
+}
+
+let isConnected = false;
+
+// Top-right pill: Recording (any call) > Connected > Not connected.
+function updateStatusPill() {
+  const recording = [...meetings.values()].some((m) => m.recording);
+  statusEl.className = `pill${recording ? " recording" : isConnected ? " connected" : ""}`;
+  statusTextEl.textContent = recording ? "Recording" : isConnected ? "Connected" : "Not connected";
 }
 
 async function refreshStatus() {
   const config = await window.anchor.getConfig();
-  statusEl.textContent = config.hasToken
-    ? `Connected as ${config.accountEmail || config.apiBase}`
-    : "Not connected";
+  isConnected = config.hasToken;
+  accountEmailEl.textContent = config.accountEmail || config.apiBase;
   signedOutEl.hidden = config.hasToken;
   signedInEl.hidden = !config.hasToken;
+  updateStatusPill();
 }
 
 // Opens Anchor's sign-in in the browser; the app connects itself when the

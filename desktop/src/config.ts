@@ -27,6 +27,10 @@ type Config = {
   // accepted without asking; kept on disk so it survives the app being
   // relaunched by the link itself.
   pendingSignIn?: { state: string; createdAt: number } | null;
+  // Set just before the app restarts itself to install an update (see
+  // installUpdateWhenIdle in main.ts), so the relaunch can stay in the
+  // menu bar instead of popping its window open when it wasn't open before.
+  restartedForUpdate?: { windowWasVisible: boolean } | null;
 };
 
 function configPath(): string {
@@ -47,6 +51,10 @@ export function loadConfig(): Config {
         typeof parsed.pendingSignIn.state === "string" &&
         typeof parsed.pendingSignIn.createdAt === "number"
           ? { state: parsed.pendingSignIn.state, createdAt: parsed.pendingSignIn.createdAt }
+          : null,
+      restartedForUpdate:
+        parsed.restartedForUpdate && typeof parsed.restartedForUpdate.windowWasVisible === "boolean"
+          ? { windowWasVisible: parsed.restartedForUpdate.windowWasVisible }
           : null,
     };
   } catch {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
-import { AnimatedLogo } from "@/components/AnimatedLogo";
+import { Logo } from "@/components/Logo";
 import { PageFade } from "@/components/PageFade";
 import { NavLink } from "@/components/NavLink";
 import { db } from "@/db";
@@ -130,16 +130,15 @@ export default async function DashboardLayout({
       {/* White header on the soft canvas, plain text nav with the current
           section underlined, and a small initials avatar — the product
           design's header, kept to the same links as before. */}
-      <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/95 backdrop-blur">
-        <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-2 px-6 py-3 lg:flex-nowrap lg:px-10 2xl:px-16">
-          <Link href="/dashboard" className="shrink-0">
-            <AnimatedLogo size="md" />
+      {/* Logo left, tabs centred, profile right. The tabs sit on the
+          header's bottom edge with an accent bar under the current one; on
+          narrower screens they move to a second, scrollable row. */}
+      <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur">
+        <div className="flex h-[76px] items-center justify-between gap-6 px-6 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:px-10 2xl:px-16">
+          <Link href="/dashboard" className="justify-self-start" aria-label="Anchor home">
+            <Logo size="lg" />
           </Link>
-          {/* flex-wrap on the row above keeps this from being clipped on a
-              phone-width screen; overflow-x here is a second safety net in
-              case even its own row is still too narrow on a very small
-              phone. */}
-          <nav className="order-3 flex w-full items-center gap-5 overflow-x-auto text-[13px] font-medium lg:order-none lg:ml-auto lg:w-auto lg:overflow-visible">
+          <nav className="hidden h-full items-stretch gap-8 lg:flex">
             <NavLink href="/dashboard/deals">Deals</NavLink>
             <NavLink href="/dashboard/insights">Insights</NavLink>
             <NavLink href="/dashboard/contacts">Contacts</NavLink>
@@ -149,34 +148,33 @@ export default async function DashboardLayout({
                 isAppOwner(session.user.email) check is false, so the link
                 (and everything under /dashboard/admin) simply doesn't
                 exist for them. See src/lib/adminAccess.ts. */}
-            {isAppOwner(session?.user?.email) && (
-              <NavLink href="/dashboard/admin">Admin</NavLink>
-            )}
+            {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
           </nav>
-          <div className="flex items-center gap-2 text-[13px] text-slate-500">
+          <div className="flex items-center gap-1 justify-self-end text-sm text-slate-500">
             <Link
               href="/dashboard/profile"
               title={session?.user?.name || session?.user?.email || "Profile"}
-              className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-slate-100"
             >
               {session?.user?.image ? (
                 <Image
                   src={session.user.image}
                   alt=""
-                  width={28}
-                  height={28}
+                  width={36}
+                  height={36}
                   unoptimized
-                  className="h-7 w-7 rounded-full object-cover"
+                  className="h-9 w-9 rounded-full object-cover ring-1 ring-slate-200"
                 />
               ) : (
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white">
                   {initials(session?.user?.name || session?.user?.email || "?")}
                 </span>
               )}
-              <span className="hidden font-medium text-slate-700 sm:inline">
+              <span className="hidden font-medium text-slate-800 sm:inline">
                 {session?.user?.name || session?.user?.email}
               </span>
             </Link>
+            <span className="mx-1 h-6 w-px bg-slate-200" aria-hidden="true" />
             <form
               action={async () => {
                 "use server";
@@ -185,13 +183,25 @@ export default async function DashboardLayout({
             >
               <button
                 type="submit"
-                className="rounded-full px-2.5 py-1.5 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                className="rounded-full px-3 py-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
               >
                 Sign out
               </button>
             </form>
           </div>
         </div>
+        <nav className="flex h-12 items-stretch gap-6 overflow-x-auto border-t border-slate-100 px-6 lg:hidden">
+          <NavLink href="/dashboard/deals">Deals</NavLink>
+          <NavLink href="/dashboard/insights">Insights</NavLink>
+          <NavLink href="/dashboard/contacts">Contacts</NavLink>
+          <NavLink href="/dashboard/team">Team</NavLink>
+          <NavLink href="/dashboard/integrations">Integrations</NavLink>
+          {/* Only the app owner ever sees this — everyone else's
+              isAppOwner(session.user.email) check is false, so the link
+              (and everything under /dashboard/admin) simply doesn't
+              exist for them. See src/lib/adminAccess.ts. */}
+          {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
+        </nav>
       </header>
       <main className="flex w-full flex-1 flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
         <div className="min-w-0 flex-1">
