@@ -53,18 +53,21 @@ jobs:
           KEYCHAIN="$RUNNER_TEMP/anchor-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
           printf '%s' "$MAC_SIGNING_CERT_P12" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/anchor.p12"
-          echo "Decoded certificate: $(wc -c < "$RUNNER_TEMP/anchor.p12" | tr -d ' ') bytes"
+          # Non-secret facts about what the secrets contain, shown in the
+          # run's public annotations so a bad paste is easy to spot.
+          echo "::notice::Certificate secret: $(printf '%s' "$MAC_SIGNING_CERT_P12" | tr -d '[:space:]' | wc -c | tr -d ' ') base64 characters, $(wc -c < "$RUNNER_TEMP/anchor.p12" | tr -d ' ') bytes decoded, starts with $(xxd -p -l 2 "$RUNNER_TEMP/anchor.p12"). Password: ${#MAC_SIGNING_CERT_PASSWORD} characters. $(openssl version)"
           # Keychain Access on recent macOS exports .p12 files with AES
           # encryption that `security import` on this older build machine
           # can't read ("Unknown format in import"). Unpack it and re-pack
           # it with the classic 3DES/SHA1 scheme `security` always reads.
           # (Retried with -legacy in case it's the older RC2 format instead,
           # which OpenSSL 3 only reads with that flag.)
-          openssl pkcs12 -in "$RUNNER_TEMP/anchor.p12" -passin "pass:$MAC_SIGNING_CERT_PASSWORD" -nodes -out "$RUNNER_TEMP/anchor-both.pem" ||
-          openssl pkcs12 -legacy -in "$RUNNER_TEMP/anchor.p12" -passin "pass:$MAC_SIGNING_CERT_PASSWORD" -nodes -out "$RUNNER_TEMP/anchor-both.pem" || {
-            echo "::error::Couldn't open MAC_SIGNING_CERT_P12 with MAC_SIGNING_CERT_PASSWORD. Re-paste the certificate secret and check the password matches the one chosen when exporting it."
-            exit 1
-          }
+          if ! OPENSSL_ERR=$(openssl pkcs12 -in "$RUNNER_TEMP/anchor.p12" -passin "pass:$MAC_SIGNING_CERT_PASSWORD" -nodes -out "$RUNNER_TEMP/anchor-both.pem" 2>&1); then
+            if ! LEGACY_ERR=$(openssl pkcs12 -legacy -in "$RUNNER_TEMP/anchor.p12" -passin "pass:$MAC_SIGNING_CERT_PASSWORD" -nodes -out "$RUNNER_TEMP/anchor-both.pem" 2>&1); then
+              echo "::error::Couldn't open MAC_SIGNING_CERT_P12 with MAC_SIGNING_CERT_PASSWORD. openssl said: $(printf '%s' "$OPENSSL_ERR" | head -3 | tr '\n' ' ') / with -legacy: $(printf '%s' "$LEGACY_ERR" | head -2 | tr '\n' ' ')"
+              exit 1
+            fi
+          fi
           openssl pkcs12 -export -in "$RUNNER_TEMP/anchor-both.pem" -out "$RUNNER_TEMP/anchor-legacy.p12" \
             -passout "pass:$MAC_SIGNING_CERT_PASSWORD" -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1
           openssl x509 -in "$RUNNER_TEMP/anchor-both.pem" -out "$RUNNER_TEMP/anchor.pem"
