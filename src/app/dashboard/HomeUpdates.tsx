@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { HomeUpdate } from "@/lib/homeFeed";
-import { IconTile } from "@/components/IconTile";
 
 const KIND_LABEL: Record<HomeUpdate["kind"], string> = {
   team: "Team",
@@ -30,7 +29,7 @@ function timeAgo(iso: string): string {
 export function HomeUpdates({ updates }: { updates: HomeUpdate[] }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="flex items-center gap-2.5"><IconTile kind="pulse" />Latest updates</h2>
+      <h2>Latest updates</h2>
       <p className="text-xs text-slate-500">What&apos;s happened across your team and deals.</p>
 
       <div className="mt-4 flex flex-col gap-3">

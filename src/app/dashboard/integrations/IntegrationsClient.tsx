@@ -30,29 +30,6 @@ function BadgeDot({ color }: { color: string }) {
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
 }
 
-// Brand-coloured tile for each source, like the design's Sources page.
-const PROVIDER_TILES: Record<string, { bg: string; label: string }> = {
-  google: { bg: "#d4583a", label: "G" },
-  microsoft: { bg: "#2f6fd6", label: "M" },
-  slack: { bg: "#6b3fa0", label: "S" },
-  salesforce: { bg: "#1b96d3", label: "SF" },
-  hubspot: { bg: "#ff7a59", label: "H" },
-  desktop: { bg: "#12294a", label: "⚓" },
-};
-
-function ProviderTile({ provider }: { provider: string }) {
-  const tile = PROVIDER_TILES[provider] ?? { bg: "#64748b", label: provider[0]?.toUpperCase() ?? "?" };
-  return (
-    <span
-      aria-hidden="true"
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-serif text-[15px] font-medium text-white"
-      style={{ background: tile.bg }}
-    >
-      {tile.label}
-    </span>
-  );
-}
-
 export function IntegrationsClient({ providers }: { providers: Provider[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -140,9 +117,8 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
             key={p.key}
             className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5"
           >
-            {/* Source tile + name + status pill, as on the design's Sources page. */}
+            {/* Name + status pill, as on the design's Sources page. */}
             <div className="flex items-start gap-3">
-              <ProviderTile provider={p.key} />
               <div className="min-w-0">
                 <p className="font-serif text-lg leading-tight text-slate-900">{p.name}</p>
                 <div className="mt-1">
@@ -210,7 +186,7 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
       </p>
 
       <div>
-        <h2 className="flex items-center gap-2.5"><ProviderTile provider="desktop" />Anchor Desktop</h2>
+        <h2>Anchor Desktop</h2>
         <p className="mt-1 text-xs text-slate-500">Early access — recording without a bot joining the call.</p>
         <div className="mt-3 max-w-xl">
           <DesktopTokenPanel />

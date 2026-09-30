@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { IconTile } from "@/components/IconTile";
 
 type Suggestion = {
   title: string;
@@ -86,7 +85,7 @@ export function SuggestedInvites({ meetingId }: { meetingId: string }) {
     <section className="rounded-xl border border-slate-200 bg-white p-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="flex items-center gap-2.5"><IconTile kind="calendar" />Suggested invites</h2>
+          <h2>Suggested invites</h2>
           <p className="mt-1 text-xs text-slate-500">
             Follow-up meetings people agreed to in this call. Nothing is added to your calendar until
             you click.

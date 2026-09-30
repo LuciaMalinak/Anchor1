@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { IconTile } from "@/components/IconTile";
 
 // googleConfigured: the server has Google credentials set, so "Save to
 // Gmail drafts" can work (it asks for Gmail permission on first use).
@@ -85,7 +84,7 @@ export function FollowUpEmailDraft({
     <section className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="flex items-center gap-2.5"><IconTile kind="mail" />Follow-up email</h2>
+          <h2>Follow-up email</h2>
           <p className="mt-1 text-xs text-slate-500">
             A draft Anchor writes from this meeting&apos;s summary — review it before sending; nothing
             goes out on its own.

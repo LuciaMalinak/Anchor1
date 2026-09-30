@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { HEALTH_LABEL, HEALTH_DOT_CLASSES, type DealHealth } from "@/lib/dealHealth";
-import { IconTile } from "@/components/IconTile";
 
 type HomeTask = {
   id: string;
@@ -213,7 +212,7 @@ export function HomeTasks({
     <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="flex items-center gap-2.5"><IconTile kind="check" />To do</h2>
+          <h2>To do</h2>
           <p className="text-xs text-slate-500">
             Pulled from every meeting&apos;s action items, ranked by which deal needs attention most.
           </p>

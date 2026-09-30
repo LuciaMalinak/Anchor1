@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { IconTile } from "@/components/IconTile";
 
 type Participant = {
   id: string;
@@ -61,7 +60,7 @@ export function ParticipantsPanel({
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-6">
-      <h2 className="flex items-center gap-2.5"><IconTile kind="pulse" />People in this meeting</h2>
+      <h2>People in this meeting</h2>
       <div className="mt-3 flex flex-col gap-3">
         {participants.map((p) => (
           <div key={p.id} className="rounded-lg bg-slate-50 px-4 py-3">

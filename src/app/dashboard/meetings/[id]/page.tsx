@@ -20,7 +20,6 @@ import { isProviderConfigured } from "@/lib/integrations/config";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { MeetingDealPicker } from "./MeetingDealPicker";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
-import { IconTile } from "@/components/IconTile";
 
 // Kept as a plain helper outside the component — same reasoning as
 // isResearchStale() in companyResearch.ts: reading Date.now() directly
@@ -258,7 +257,7 @@ export default async function MeetingDetailPage({
 
       {summary && (
         <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="flex items-center gap-2.5"><IconTile kind="list" />Overview</h2>
+          <h2>Overview</h2>
           <p className="mt-2 text-sm text-slate-700">{summary.overview}</p>
 
           {summary.continuityNote && (
@@ -279,9 +278,11 @@ export default async function MeetingDetailPage({
               <li key={i} className="flex items-start gap-3 rounded-lg border border-slate-200 px-3.5 py-2.5">
                 <span
                   aria-hidden="true"
-                  className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand text-[9px] text-white"
+                  className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand"
                 >
-                  ✓
+                  <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2.5 6.2l2.3 2.3 4.7-5" />
+                  </svg>
                 </span>
                 <span className="font-serif text-[15px] leading-snug text-slate-900">{point}</span>
               </li>
@@ -351,7 +352,7 @@ export default async function MeetingDetailPage({
 
       {transcript && (
         <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="flex items-center gap-2.5"><IconTile kind="mic" />Full transcript</h2>
+          <h2>Full transcript</h2>
           <div className="mt-3 flex flex-col gap-3">
             {transcript.utterances?.map((u, i) => (
               <div key={i} className="text-sm">

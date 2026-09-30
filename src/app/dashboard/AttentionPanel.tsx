@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getAttentionItems } from "@/lib/attention";
 import { HEALTH_LABEL, HEALTH_DOT_CLASSES } from "@/lib/dealHealth";
-import { IconTile } from "@/components/IconTile";
 
 // Everything here is read-only and computed on the fly (see
 // lib/attention.ts) — no notifications table, nothing to mark as read.
@@ -16,7 +15,7 @@ export async function AttentionPanel({ teamId, userId }: { teamId: string; userI
 
   return (
     <section className="rounded-xl border border-slate-200 border-l-4 border-l-amber-400 bg-white p-6 shadow-sm">
-      <h2 className="flex items-center gap-2.5"><IconTile kind="alert" />Needs attention</h2>
+      <h2>Needs attention</h2>
       <div className="mt-3 flex flex-col gap-2">
         {stuckMeetings.map((m) => (
           <Link

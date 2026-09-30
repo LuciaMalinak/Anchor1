@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useMicRecorder, MicRecorderView } from "@/components/MicRecorder";
 import { TodayMeetings } from "@/components/TodayMeetings";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
-import { IconTile } from "@/components/IconTile";
 
 type Meeting = {
   id: string;
@@ -205,7 +204,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm lg:col-span-2">
-          <h2 className="flex items-center gap-2.5"><IconTile kind="video" />Send Anchor to a live meeting</h2>
+          <h2>Send Anchor to a live meeting</h2>
           <p className="mt-1 text-sm text-slate-500">
             Paste a Zoom, Google Meet, or Teams link and Anchor will join automatically,
             record it, and process it the same way as an upload — no need to record it
@@ -243,7 +242,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
       </div>
 
       <section className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
-        <h2 className="flex items-center gap-2.5"><IconTile kind="upload" />Upload a meeting recording</h2>
+        <h2>Upload a meeting recording</h2>
         <p className="mt-1 text-sm text-slate-500">
           Audio or video, up to 500MB. Anchor will transcribe it, summarize it, and
           remember the people in it for next time.
@@ -278,7 +277,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
       </section>
 
       <section>
-        <h2 className="mb-3 flex items-center gap-2.5"><IconTile kind="list" />Your meetings</h2>
+        <h2 className="mb-3">Your meetings</h2>
         {meetings.length === 0 ? (
           <p className="text-sm text-slate-500">Nothing uploaded yet.</p>
         ) : (
