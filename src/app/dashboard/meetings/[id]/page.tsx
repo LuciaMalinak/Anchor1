@@ -248,7 +248,7 @@ export default async function MeetingDetailPage({
             },
           ].map((tile) => (
             <div key={tile.label} className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <p className={`font-serif text-3xl leading-none ${tile.tone}`}>{tile.n}</p>
+              <p className={`font-semibold text-3xl leading-none ${tile.tone}`}>{tile.n}</p>
               <p className="mt-2 text-xs text-slate-500">{tile.label}</p>
             </div>
           ))}
@@ -284,7 +284,7 @@ export default async function MeetingDetailPage({
                     <path d="M2.5 6.2l2.3 2.3 4.7-5" />
                   </svg>
                 </span>
-                <span className="font-serif text-[15px] leading-snug text-slate-900">{point}</span>
+                <span className="text-sm leading-snug text-slate-800">{point}</span>
               </li>
             ))}
           </ul>

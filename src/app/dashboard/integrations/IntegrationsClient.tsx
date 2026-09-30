@@ -120,7 +120,7 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
             {/* Name + status pill, as on the design's Sources page. */}
             <div className="flex items-start gap-3">
               <div className="min-w-0">
-                <p className="font-serif text-lg leading-tight text-slate-900">{p.name}</p>
+                <p className="font-semibold text-lg leading-tight text-slate-900">{p.name}</p>
                 <div className="mt-1">
                   {p.connected ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">

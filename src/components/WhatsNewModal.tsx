@@ -82,13 +82,13 @@ export function WhatsNewModal() {
               <span className="h-2 w-2 rounded-full bg-[#ec6a5e]" />
               <span className="h-2 w-2 rounded-full bg-[#f4bf4f]" />
               <span className="h-2 w-2 rounded-full bg-[#61c554]" />
-              <span className="flex items-center gap-1.5 pl-3 font-serif text-[12px] text-slate-700">
+              <span className="flex items-center gap-1.5 pl-3 font-semibold text-[12px] text-slate-700">
                 <AnchorMark size={13} /> Anchor
               </span>
             </div>
             <div className="px-4 pb-4 pt-3">
               <p className="eyebrow !text-[9px]">Recap · ready after the call</p>
-              <p className="mt-1 font-serif text-[17px] text-slate-900">Investor sync — Northbridge</p>
+              <p className="mt-1 font-semibold text-[17px] text-slate-900">Investor sync — Northbridge</p>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {[
                   ["3", "Key points", "text-slate-900"],
@@ -96,13 +96,13 @@ export function WhatsNewModal() {
                   ["1", "Open risk", "text-accent"],
                 ].map(([n, label, tone]) => (
                   <div key={label} className="rounded-lg border border-slate-200 px-2.5 py-2">
-                    <p className={`font-serif text-xl leading-none ${tone}`}>{n}</p>
+                    <p className={`font-semibold text-xl leading-none ${tone}`}>{n}</p>
                     <p className="mt-1 text-[10px] text-slate-500">{label}</p>
                   </div>
                 ))}
               </div>
               <div className="mt-2 flex items-center justify-between rounded-lg border border-slate-200 px-2.5 py-2">
-                <span className="font-serif text-[13px] text-slate-900">Follow-up email</span>
+                <span className="font-semibold text-[13px] text-slate-900">Follow-up email</span>
                 <span className="rounded-md bg-accent px-2 py-0.5 text-[10px] font-medium text-white">
                   Save to Gmail drafts
                 </span>

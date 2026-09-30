@@ -24,11 +24,12 @@
   --color-brand-dark: var(--brand-dark);
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
-  /* Loaded from Google Fonts in src/app/layout.tsx; each falls back to a
-     close system font if that request is slow or blocked. */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-serif: "Newsreader", "Iowan Old Style", ui-serif, Georgia, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Anchor uses the system font throughout (San Francisco on a Mac).
+     --font-serif points at the same stack, so anything still marked
+     font-serif renders in it too. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 body {
@@ -37,31 +38,27 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Editorial type: every heading is set in the serif, as in the design.
-   In the base layer so a page's own utility classes (size, weight,
-   colour) still win. */
+/* Headings: the system font, semibold and slightly tightened. In the base
+   layer so a page's own utility classes (size, weight, colour) still win. */
 @layer base {
   h1,
   h2,
   h3 {
-    font-family: var(--font-serif);
-    font-weight: 500;
-    letter-spacing: -0.012em;
+    font-weight: 600;
+    letter-spacing: -0.015em;
   }
 }
 
-/* Small uppercase labels ("MEET ANCHOR", "01 · CONNECT", "KEY POINTS")
-   are set in the mono face with wide tracking, wherever a page marks one
-   up as uppercase + tracking-*. Unlayered on purpose so the wider
-   tracking wins over the old tracking-wide utilities. */
+/* Small uppercase labels ("MEET ANCHOR", "01 · CONNECT", "KEY POINTS"):
+   wide tracking wherever a page marks one up as uppercase + tracking-*.
+   Unlayered on purpose so it wins over the old tracking-wide utilities. */
 .uppercase[class*="tracking-"],
 .eyebrow {
-  font-family: var(--font-mono);
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
 }
 .eyebrow {
-  font-size: 10.5px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -403,7 +400,7 @@ a {
 .app-shell h1 {
   font-size: 2.25rem;
   line-height: 1.12;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--brand);
 }
@@ -413,7 +410,7 @@ a {
   line-height: 1.3;
 }
 .app-shell h2 {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--foreground);
 }
 .app-shell .border-l-4 {

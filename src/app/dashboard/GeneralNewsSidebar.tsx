@@ -121,7 +121,7 @@ export function GeneralNewsSidebar({
         </div>
         {dailyBriefing ? (
           <>
-            <p className="mt-2 font-serif text-[15px] leading-relaxed text-slate-800">{dailyBriefing}</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-700">{dailyBriefing}</p>
             {briefingUpdatedAt && (
               <p className="mt-2 text-[11px] text-slate-400">
                 Updated {new Date(briefingUpdatedAt).toLocaleDateString()}
@@ -129,7 +129,7 @@ export function GeneralNewsSidebar({
             )}
           </>
         ) : (
-          <p className="mt-2 font-serif text-[15px] leading-relaxed text-slate-500">
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">
             A roundup of today&apos;s business news, shared across your team.
           </p>
         )}

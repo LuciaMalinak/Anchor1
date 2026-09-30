@@ -162,13 +162,13 @@ function StepMock({ n }: { n: string }) {
     return (
       <WindowFrame title="Anchor — Sources">
         <p className="eyebrow">Context sources</p>
-        <p className="mt-1 font-serif text-lg text-slate-900">Everything you know, in one place.</p>
+        <p className="mt-1 font-semibold text-lg text-slate-900">Everything you know, in one place.</p>
         <div className="mt-4 grid grid-cols-2 gap-2.5">
           {sources.map((src) => (
             <div key={src.name} className="flex items-center gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5">
               <span className="h-6 w-6 shrink-0 rounded-md" style={{ background: src.color }} aria-hidden="true" />
               <div className="min-w-0">
-                <p className="truncate font-serif text-[13px] text-slate-900">{src.name}</p>
+                <p className="truncate font-semibold text-[13px] text-slate-900">{src.name}</p>
                 <p className="flex items-center gap-1 text-[10px] text-emerald-600">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Connected
                 </p>
@@ -201,7 +201,7 @@ function StepMock({ n }: { n: string }) {
           </div>
           <div className="live-chip live-delay-2 rounded-lg border border-slate-200 p-3.5">
             <span className="rounded bg-brand px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] text-white">SUGGESTED</span>
-            <p className="mt-2 font-serif text-base text-slate-900">Hold at $9M — it&apos;s the floor.</p>
+            <p className="mt-2 font-semibold text-base text-slate-900">Hold at $9M — it&apos;s the floor.</p>
             <p className="mt-1 text-[12px] text-slate-500">Agreed at the Feb 4 board. Chen accepted it by email two days later.</p>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               <SourceTag>Meeting · Feb 4</SourceTag>
@@ -220,7 +220,7 @@ function StepMock({ n }: { n: string }) {
     return (
       <WindowFrame title="Anchor — Recap">
         <p className="eyebrow">Recap · ready 2 minutes after the call</p>
-        <p className="mt-1 font-serif text-lg text-slate-900">Investor sync — Northbridge</p>
+        <p className="mt-1 font-semibold text-lg text-slate-900">Investor sync — Northbridge</p>
         <div className="mt-4 grid grid-cols-3 gap-2.5">
           {[
             ["3", "Decisions", "text-slate-900"],
@@ -228,7 +228,7 @@ function StepMock({ n }: { n: string }) {
             ["1", "Open question", "text-accent"],
           ].map(([num, label, tone]) => (
             <div key={label} className="rounded-lg border border-slate-200 px-3 py-2.5">
-              <p className={`font-serif text-2xl leading-none ${tone}`}>{num}</p>
+              <p className={`font-semibold text-2xl leading-none ${tone}`}>{num}</p>
               <p className="mt-1.5 text-[11px] text-slate-500">{label}</p>
             </div>
           ))}
@@ -237,7 +237,7 @@ function StepMock({ n }: { n: string }) {
           {["Valuation held at $9M", "Reporting stays quarterly"].map((line) => (
             <div key={line} className="flex items-center gap-2.5 rounded-lg border border-slate-200 px-3 py-2 text-[13px]">
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand text-[9px] text-white">✓</span>
-              <span className="font-serif text-slate-900">{line}</span>
+              <span className="font-semibold text-slate-900">{line}</span>
             </div>
           ))}
           <div className="flex items-center gap-2.5 rounded-lg bg-brand px-3 py-2 text-[12px] text-white">
@@ -250,9 +250,9 @@ function StepMock({ n }: { n: string }) {
   return (
     <WindowFrame title="Anchor — Next steps">
       <p className="eyebrow">Suggested next steps · from this call</p>
-      <p className="mt-1 font-serif text-lg text-slate-900">Ready when you are.</p>
+      <p className="mt-1 font-semibold text-lg text-slate-900">Ready when you are.</p>
       <div className="mt-4 rounded-lg border border-slate-200 p-3.5">
-        <p className="font-serif text-[15px] text-slate-900">Follow-up email</p>
+        <p className="font-semibold text-[15px] text-slate-900">Follow-up email</p>
         <p className="mt-1.5 text-[12px] text-slate-500">To Chen Wu, Dana Ruiz · Northbridge — next steps</p>
         <p className="mt-2 text-[12px] leading-relaxed text-slate-600">
           Hi Chen, Dana — thanks for today. Confirming the valuation holds at $9M and reporting stays quarterly…
@@ -263,7 +263,7 @@ function StepMock({ n }: { n: string }) {
         </div>
       </div>
       <div className="mt-2.5 rounded-lg border border-slate-200 p-3.5">
-        <p className="font-serif text-[15px] text-slate-900">Churn cohort review — Northbridge</p>
+        <p className="font-semibold text-[15px] text-slate-900">Churn cohort review — Northbridge</p>
         <p className="mt-1 text-[12px] text-slate-500">Fri, Oct 2 · 10:00–10:30</p>
         <div className="mt-2.5 flex items-center justify-between">
           <SourceTag>Promised in the call</SourceTag>
@@ -341,22 +341,22 @@ export default async function Home() {
               <div key={card.tag} className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <AnchorMark size={22} />
                 <p className="eyebrow mt-4 !text-slate-400">{card.tag}</p>
-                <p className="mt-1 font-serif text-lg text-slate-900">{card.title}</p>
+                <p className="mt-1 font-semibold text-lg text-slate-900">{card.title}</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{card.body}</p>
               </div>
             ))}
           </div>
           <div className="mt-3 rounded-xl bg-brand px-6 py-5">
-            <p className="font-serif text-lg text-slate-300">Everyone else optimises the meetings you attend.</p>
-            <p className="font-serif text-lg text-white">Anchor is built for the meeting you can&apos;t.</p>
+            <p className="text-lg font-medium text-slate-300">Everyone else optimises the meetings you attend.</p>
+            <p className="text-lg font-medium text-white">Anchor is built for the meeting you can&apos;t.</p>
           </div>
         </div>
       </section>
 
       {/* Statement */}
       <section className="bg-brand px-6 py-24 text-center">
-        <p className="font-serif text-4xl text-white sm:text-5xl">You can&apos;t be in every meeting.</p>
-        <p className="mt-3 font-serif text-4xl text-[#d98a5a] sm:text-5xl">Your context can.</p>
+        <p className="font-semibold text-4xl text-white sm:text-5xl">You can&apos;t be in every meeting.</p>
+        <p className="mt-3 font-semibold text-4xl text-[#d98a5a] sm:text-5xl">Your context can.</p>
         <span className="mx-auto mt-8 block h-px w-10 bg-accent" aria-hidden="true" />
       </section>
 
@@ -400,7 +400,7 @@ export default async function Home() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-canvas text-brand transition group-hover:text-accent">
                   <f.icon className="h-5 w-5" />
                 </div>
-                <p className="mt-4 font-serif text-lg text-slate-900">{f.title}</p>
+                <p className="mt-4 font-semibold text-lg text-slate-900">{f.title}</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{f.body}</p>
               </div>
             ))}
@@ -428,7 +428,7 @@ export default async function Home() {
                 className="reveal group block rounded-xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-16px_rgba(18,41,74,0.3)]"
               >
                 <span className="block h-1 w-8 rounded-full" style={{ background: ind.accent }} aria-hidden="true" />
-                <p className="mt-4 font-serif text-lg text-slate-900">Anchor for {ind.label}</p>
+                <p className="mt-4 font-semibold text-lg text-slate-900">Anchor for {ind.label}</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{ind.blurb}</p>
                 <span className="mt-3 inline-block text-xs font-medium text-accent">Get started →</span>
               </Link>
@@ -440,8 +440,8 @@ export default async function Home() {
       {/* Closing */}
       <section className="flex flex-col items-center gap-5 bg-brand px-6 py-24 text-center">
         <AnchorMark size={44} tone="light" />
-        <p className="font-serif text-5xl text-white">Anchor</p>
-        <p className="font-serif text-xl text-slate-300">Built for the meeting you can&apos;t attend.</p>
+        <p className="font-semibold text-5xl text-white">Anchor</p>
+        <p className="text-xl text-slate-300">Built for the meeting you can&apos;t attend.</p>
         <Link
           href="/sign-up"
           className="mt-3 rounded-md bg-accent px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-accent-dark"
