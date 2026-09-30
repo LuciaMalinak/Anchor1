@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld("anchor", {
     ipcRenderer.on("recording-ended", (_evt, window) => cb(window)),
   onLog: (cb: (message: string) => void) => ipcRenderer.on("log", (_evt, message) => cb(message)),
   onSdkError: (cb: (evt: unknown) => void) => ipcRenderer.on("sdk-error", (_evt, evt) => cb(evt)),
+  onTranscriptLine: (cb: (payload: { windowId: string; speaker: string | null; text: string }) => void) =>
+    ipcRenderer.on("transcript-line", (_evt, payload) => cb(payload)),
   onTokenConnected: (cb: (payload: { apiBase: string; accountEmail?: string }) => void) =>
     ipcRenderer.on("token-connected", (_evt, payload) => cb(payload)),
 

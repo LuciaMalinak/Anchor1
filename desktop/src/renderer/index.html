@@ -118,7 +118,8 @@
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       }
       .eyebrow,
-      .panel-section strong {
+      .panel-section strong,
+      .live-col > strong {
         display: block;
         margin: 0 0 8px;
         font-family: var(--mono);
@@ -386,6 +387,68 @@
         font-size: 11px;
         color: var(--faint);
         line-height: 1.5;
+      }
+
+      /* Live view while recording: transcript | suggestions, then the Ask
+         bar, like the product design's desktop window. */
+      .live-grid {
+        display: grid;
+        grid-template-columns: 1fr 1.4fr;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-top: 4px;
+      }
+      .live-col {
+        padding: 12px 14px;
+        min-width: 0;
+      }
+      .transcript-col {
+        border-right: 1px solid var(--line);
+        background: #fbfbfd;
+      }
+      .transcript {
+        max-height: 340px;
+        overflow-y: auto;
+      }
+      .transcript .line {
+        margin-bottom: 10px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--ink);
+      }
+      .transcript .speaker {
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--faint);
+        margin-bottom: 2px;
+      }
+      .ask-section {
+        margin-top: 12px;
+      }
+      .ask-row input {
+        padding: 11px 12px;
+        font-size: 13px;
+        background: #fbfbfd;
+      }
+      .ask-row button {
+        padding: 10px 22px;
+        font-size: 13px;
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+      @media (max-width: 640px) {
+        .live-grid {
+          grid-template-columns: 1fr;
+        }
+        .transcript-col {
+          border-right: none;
+          border-bottom: 1px solid var(--line);
+        }
       }
     </style>
   </head>

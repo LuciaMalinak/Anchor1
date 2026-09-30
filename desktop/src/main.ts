@@ -621,6 +621,10 @@ async function initSdk() {
       return;
     }
 
+    // Shown live in this app's own window too (the "Live transcript"
+    // column, see renderer.js), not only sent to Anchor.
+    send("transcript-line", { windowId: evt.window.id, speaker: data?.participant?.name ?? null, text });
+
     const relativeSeconds = data?.words?.[0]?.start_timestamp?.relative;
     try {
       getApi()
@@ -904,9 +908,9 @@ function registerIpcHandlers() {
 
 function createWindow(show = true) {
   mainWindow = new BrowserWindow({
-    width: 500,
+    width: 860,
     height: 720,
-    minWidth: 420,
+    minWidth: 440,
     minHeight: 520,
     backgroundColor: "#f4f5f8",
     show,

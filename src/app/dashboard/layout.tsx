@@ -126,7 +126,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas" style={accentStyle}>
+    <div className="app-shell flex min-h-screen flex-col bg-white" style={accentStyle}>
       {/* White header on the soft canvas, plain text nav with the current
           section underlined, and a small initials avatar — the product
           design's header, kept to the same links as before. */}
@@ -134,7 +134,7 @@ export default async function DashboardLayout({
           header's bottom edge with an accent bar under the current one; on
           narrower screens they move to a second, scrollable row. */}
       <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur">
-        <div className="flex h-[76px] items-center justify-between gap-6 px-6 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:px-10 2xl:px-16">
+        <div className="mx-auto flex h-[76px] w-full max-w-[1400px] items-center justify-between gap-6 px-6 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:px-10 2xl:px-16">
           <Link href="/dashboard" className="justify-self-start" aria-label="Anchor home">
             <Logo size="lg" />
           </Link>
@@ -203,7 +203,7 @@ export default async function DashboardLayout({
           {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
         </nav>
       </header>
-      <main className="flex w-full flex-1 flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
+      <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-10 px-6 py-10 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
         <div className="min-w-0 flex-1">
           <PageFade>{children}</PageFade>
         </div>

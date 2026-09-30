@@ -39,7 +39,8 @@ export function DealsClient({ initialDeals }: { initialDeals: Deal[] }) {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-xl font-semibold text-brand">Deals</h1>
+        <p className="eyebrow">Pipeline</p>
+        <h1 className="mt-1.5">Deals</h1>
         <p className="text-sm text-slate-500">
           Group meetings by client or account — prep, live status, and recaps in one place.
         </p>

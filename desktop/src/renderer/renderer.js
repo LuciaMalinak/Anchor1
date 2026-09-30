@@ -184,49 +184,88 @@ async function handleAskAnchor(windowId, btn) {
   }
 }
 
+const MAX_TRANSCRIPT_LINES = 60;
+
+function renderTranscriptHtml(m) {
+  if (!m.transcript || m.transcript.length === 0) {
+    return '<p class="hint">Listening… lines appear here as people speak.</p>';
+  }
+  return m.transcript
+    .map(
+      (l) =>
+        `<div class="line"><div class="speaker">${escapeHtml(l.speaker || "Speaker")}</div><div>${escapeHtml(l.text)}</div></div>`
+    )
+    .join("");
+}
+
+function updateTranscriptPanel(windowId) {
+  const m = meetings.get(windowId);
+  const container = document.getElementById(`transcript-${windowId}`);
+  if (!m || !container) return;
+  const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 40;
+  container.innerHTML = renderTranscriptHtml(m);
+  if (atBottom) container.scrollTop = container.scrollHeight;
+}
+
+// The live view while a call records, laid out like the product design:
+// the transcript on the left, suggestions (and this deal's to-dos) on the
+// right, and an "Ask Anchor" bar along the bottom.
 function renderDealPanel(windowId, m) {
   const panel = document.createElement("div");
   panel.className = "deal-panel";
 
+  const grid = document.createElement("div");
+  grid.className = "live-grid";
+
+  const transcriptCol = document.createElement("div");
+  transcriptCol.className = "live-col transcript-col";
+  transcriptCol.innerHTML = `<strong>Live transcript</strong><div id="transcript-${windowId}" class="transcript">${renderTranscriptHtml(m)}</div>`;
+  grid.appendChild(transcriptCol);
+
+  const sideCol = document.createElement("div");
+  sideCol.className = "live-col";
   if (!m.dealId) {
-    panel.innerHTML =
-      '<p class="hint">Not linked to a deal yet — link this call from Anchor\'s web app to see live suggestions and tasks here.</p>';
-    return panel;
+    sideCol.innerHTML =
+      '<strong>Suggestions · from all your context</strong><p class="hint">Not linked to a deal yet. Link this call from Anchor\'s web app to see live suggestions and tasks here.</p>';
+  } else {
+    sideCol.innerHTML = `<strong>Suggestions · from all your context</strong><div id="suggestions-${windowId}">${renderSuggestionsHtml(
+      m.suggestions
+    )}</div><div class="panel-section"><strong>To do for this deal</strong><div id="tasks-${windowId}">${renderTasksHtml(
+      m
+    )}</div></div>`;
+    attachTaskHandlers(windowId, sideCol);
+  }
+  grid.appendChild(sideCol);
+  panel.appendChild(grid);
+
+  if (m.dealId) {
+    const askSection = document.createElement("div");
+    askSection.className = "ask-section";
+    askSection.innerHTML = `
+      <div class="ask-row">
+        <input type="text" class="ask-input" placeholder="Ask Anchor anything…" />
+        <button class="ask-btn">Ask</button>
+      </div>
+      <div id="ask-answer-${windowId}" class="ask-answer">${escapeHtml(m.askAnswer)}</div>
+    `;
+    panel.appendChild(askSection);
+    const askInput = askSection.querySelector(".ask-input");
+    const askBtn = askSection.querySelector(".ask-btn");
+    askInput.value = m.askQuestion || "";
+    askInput.oninput = () => {
+      m.askQuestion = askInput.value;
+    };
+    askInput.onkeydown = (e) => {
+      if (e.key === "Enter") askBtn.click();
+    };
+    askBtn.onclick = () => handleAskAnchor(windowId, askBtn);
   }
 
-  const suggestionsSection = document.createElement("div");
-  suggestionsSection.className = "panel-section";
-  suggestionsSection.innerHTML = `<strong>Suggestions · from all your context</strong><div id="suggestions-${windowId}">${renderSuggestionsHtml(m.suggestions)}</div>`;
-  panel.appendChild(suggestionsSection);
-
-  const tasksSection = document.createElement("div");
-  tasksSection.className = "panel-section";
-  tasksSection.innerHTML = `<strong>To do for this deal</strong><div id="tasks-${windowId}">${renderTasksHtml(m)}</div>`;
-  panel.appendChild(tasksSection);
-  attachTaskHandlers(windowId, tasksSection);
-
-  const askSection = document.createElement("div");
-  askSection.className = "panel-section";
-  askSection.innerHTML = `
-    <strong>Ask Anchor</strong>
-    <div class="ask-row">
-      <input type="text" class="ask-input" placeholder="Ask Anchor anything…" />
-      <button class="ask-btn">Ask</button>
-    </div>
-    <div id="ask-answer-${windowId}" class="ask-answer">${escapeHtml(m.askAnswer)}</div>
-  `;
-  panel.appendChild(askSection);
-  const askInput = askSection.querySelector(".ask-input");
-  const askBtn = askSection.querySelector(".ask-btn");
-  askInput.value = m.askQuestion || "";
-  askInput.oninput = () => {
-    m.askQuestion = askInput.value;
-  };
-  askInput.onkeydown = (e) => {
-    if (e.key === "Enter") askBtn.click();
-  };
-  askBtn.onclick = () => handleAskAnchor(windowId, askBtn);
-
+  // Keep the newest transcript line in view.
+  requestAnimationFrame(() => {
+    const t = document.getElementById(`transcript-${windowId}`);
+    if (t) t.scrollTop = t.scrollHeight;
+  });
   return panel;
 }
 
@@ -268,6 +307,7 @@ function renderMeetings() {
           m.meetingId = meeting.id;
           m.dealId = meeting.dealId || null;
           m.recording = true;
+          m.startedAt = m.startedAt || Date.now();
           renderMeetings();
           if (m.dealId) loadDealTasks(windowId);
         }
@@ -293,11 +333,26 @@ function renderMeetings() {
 let isConnected = false;
 
 // Top-right pill: Recording (any call) > Connected > Not connected.
-function updateStatusPill() {
-  const recording = [...meetings.values()].some((m) => m.recording);
-  statusEl.className = `pill${recording ? " recording" : isConnected ? " connected" : ""}`;
-  statusTextEl.textContent = recording ? "Recording" : isConnected ? "Connected" : "Not connected";
+function formatElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
 }
+
+function updateStatusPill() {
+  const recordingStarts = [...meetings.values()].filter((m) => m.recording).map((m) => m.startedAt || Date.now());
+  const recording = recordingStarts.length > 0;
+  statusEl.className = `pill${recording ? " recording" : isConnected ? " connected" : ""}`;
+  statusTextEl.textContent = recording
+    ? `Recording ${formatElapsed(Date.now() - Math.min(...recordingStarts))}`
+    : isConnected
+      ? "Connected"
+      : "Not connected";
+}
+// Ticks the recording timer.
+setInterval(() => {
+  if ([...meetings.values()].some((m) => m.recording)) updateStatusPill();
+}, 1000);
 
 async function refreshStatus() {
   const config = await window.anchor.getConfig();
@@ -348,6 +403,8 @@ window.anchor.onMeetingDetected((win) => {
     tasks: [],
     tasksLoading: false,
     suggestions: null,
+    transcript: [],
+    startedAt: null,
     askQuestion: "",
     askAnswer: "",
     askLoading: false,
@@ -364,6 +421,7 @@ window.anchor.onRecordingStarted((win) => {
   const m = meetings.get(win.id);
   if (m) {
     m.recording = true;
+    m.startedAt = m.startedAt || Date.now();
     if (win.meetingId) m.meetingId = win.meetingId;
     if (win.dealId !== undefined) m.dealId = win.dealId;
     renderMeetings();
@@ -371,10 +429,19 @@ window.anchor.onRecordingStarted((win) => {
   }
 });
 
+window.anchor.onTranscriptLine((line) => {
+  const m = meetings.get(line.windowId);
+  if (!m) return;
+  m.transcript.push({ speaker: line.speaker, text: line.text });
+  if (m.transcript.length > MAX_TRANSCRIPT_LINES) m.transcript.splice(0, m.transcript.length - MAX_TRANSCRIPT_LINES);
+  updateTranscriptPanel(line.windowId);
+});
+
 window.anchor.onRecordingEnded((win) => {
   const m = meetings.get(win.id);
   if (m) {
     m.recording = false;
+    m.startedAt = null;
     renderMeetings();
   }
 });

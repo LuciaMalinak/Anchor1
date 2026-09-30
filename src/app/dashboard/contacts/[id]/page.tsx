@@ -52,7 +52,8 @@ export default async function ContactDetailPage({
       <div className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <InitialsAvatar label={contact.name} />
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{contact.name}</h1>
+          <p className="eyebrow">Contact</p>
+          <h1 className="mt-1.5">{contact.name}</h1>
           <p className="text-sm text-slate-500">
             {[contact.role, contact.company].filter(Boolean).join(" · ") || "No role or company on file"}
           </p>

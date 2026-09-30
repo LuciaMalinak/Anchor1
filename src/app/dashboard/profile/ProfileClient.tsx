@@ -108,7 +108,8 @@ export function ProfileClient({ profile }: { profile: Profile }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Your profile</h1>
+        <p className="eyebrow">Account</p>
+        <h1 className="mt-1.5">Your profile</h1>
         <p className="text-sm text-slate-500">
           Shown to your teammates on shared deals and the team page.
         </p>

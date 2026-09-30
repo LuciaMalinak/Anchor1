@@ -98,52 +98,43 @@ export function GeneralNewsSidebar({
   }
 
   return (
-    <aside className="flex w-full flex-col gap-4 lg:w-80 lg:shrink-0">
+    <aside className="flex w-full flex-col gap-3 lg:w-80 lg:shrink-0">
       <div className="flex items-center gap-2 px-1">
         <LiveDot />
-        <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold tracking-[0.15em] text-accent">
-          NEWS
-        </span>
+        <span className="eyebrow">News for your team</span>
       </div>
 
       <IndustryTicker initialItems={initialTickerItems} industryLabel={industryLabel} />
 
-      <div className="rounded-lg border border-slate-200 border-l-4 border-l-brand bg-white px-4 py-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-brand">
-            TODAY&apos;S BRIEFING
-          </p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">Today&apos;s briefing</p>
           <button
             type="button"
             onClick={handleRefresh}
             disabled={loading}
-            className="shrink-0 text-xs font-medium text-brand hover:underline disabled:opacity-50"
+            title="Refresh the briefing"
+            className="shrink-0 text-xs font-medium text-slate-500 hover:text-slate-900 disabled:opacity-50"
           >
-            {loading ? "…" : "Refresh"}
+            {loading ? "Refreshing…" : "Refresh"}
           </button>
         </div>
         {dailyBriefing ? (
           <>
-            <p className="mt-1 text-sm text-slate-700">{dailyBriefing}</p>
+            <p className="mt-2 font-serif text-[15px] leading-relaxed text-slate-800">{dailyBriefing}</p>
             {briefingUpdatedAt && (
-              <p className="mt-1 text-[11px] text-slate-400">
-                {new Date(briefingUpdatedAt).toLocaleDateString()}
+              <p className="mt-2 text-[11px] text-slate-400">
+                Updated {new Date(briefingUpdatedAt).toLocaleDateString()}
               </p>
             )}
           </>
         ) : (
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-2 font-serif text-[15px] leading-relaxed text-slate-500">
             A roundup of today&apos;s business news, shared across your team.
           </p>
         )}
-        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
-
-      <p className="px-1 text-[11px] text-slate-400">
-        The ticker above refreshes itself every few minutes; the briefing below updates automatically
-        through the day, or hit Refresh any time. Open a deal to see news specific to that company
-        instead.
-      </p>
     </aside>
   );
 }

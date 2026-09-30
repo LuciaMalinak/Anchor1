@@ -30,6 +30,29 @@ function BadgeDot({ color }: { color: string }) {
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
 }
 
+// Brand-coloured tile for each source, like the design's Sources page.
+const PROVIDER_TILES: Record<string, { bg: string; label: string }> = {
+  google: { bg: "#d4583a", label: "G" },
+  microsoft: { bg: "#2f6fd6", label: "M" },
+  slack: { bg: "#6b3fa0", label: "S" },
+  salesforce: { bg: "#1b96d3", label: "SF" },
+  hubspot: { bg: "#ff7a59", label: "H" },
+  desktop: { bg: "#12294a", label: "⚓" },
+};
+
+function ProviderTile({ provider }: { provider: string }) {
+  const tile = PROVIDER_TILES[provider] ?? { bg: "#64748b", label: provider[0]?.toUpperCase() ?? "?" };
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-serif text-[15px] font-medium text-white"
+      style={{ background: tile.bg }}
+    >
+      {tile.label}
+    </span>
+  );
+}
+
 export function IntegrationsClient({ providers }: { providers: Provider[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -86,9 +109,10 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-xl font-semibold text-brand">Integrations</h1>
-        <p className="text-sm text-slate-500">
-          Connect the tools your team already uses so Anchor sees more than just recorded meetings.
+        <p className="eyebrow">Integrations · context sources</p>
+        <h1 className="mt-1.5">Everything you know, in one place.</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-slate-500">
+          Connect the tools your team already uses, so every suggestion Anchor makes comes with a source.
         </p>
       </div>
 
@@ -114,33 +138,34 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
         {providers.map((p) => (
           <div
             key={p.key}
-            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5"
           >
-            <div>
-              <p className="text-sm font-medium text-slate-900">{p.name}</p>
-              <p className="mt-1 text-xs text-slate-500">{p.description}</p>
+            {/* Source tile + name + status pill, as on the design's Sources page. */}
+            <div className="flex items-start gap-3">
+              <ProviderTile provider={p.key} />
+              <div className="min-w-0">
+                <p className="font-serif text-lg leading-tight text-slate-900">{p.name}</p>
+                <div className="mt-1">
+                  {p.connected ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                      <BadgeDot color="bg-emerald-500" />
+                      Connected{p.connectedLabel ? ` · ${p.connectedLabel}` : ""}
+                    </span>
+                  ) : p.configured ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                      <BadgeDot color="bg-slate-300" />
+                      Not connected
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                      <BadgeDot color="bg-amber-400" />
+                      Needs setup
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-
-            <div className="flex items-center gap-2 text-xs">
-              {p.connected ? (
-                <>
-                  <BadgeDot color="bg-emerald-500" />
-                  <span className="text-emerald-700">
-                    Connected{p.connectedLabel ? ` as ${p.connectedLabel}` : ""}
-                  </span>
-                </>
-              ) : p.configured ? (
-                <>
-                  <BadgeDot color="bg-slate-300" />
-                  <span className="text-slate-500">Not connected</span>
-                </>
-              ) : (
-                <>
-                  <BadgeDot color="bg-amber-400" />
-                  <span className="text-amber-700">Needs setup</span>
-                </>
-              )}
-            </div>
+            <p className="text-sm leading-relaxed text-slate-500">{p.description}</p>
 
             {p.connected ? (
               <div className="mt-1 flex flex-wrap gap-2">
@@ -185,7 +210,7 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
       </p>
 
       <div>
-        <h2 className="text-sm font-semibold text-brand">Desktop app</h2>
+        <h2 className="flex items-center gap-2.5"><ProviderTile provider="desktop" />Anchor Desktop</h2>
         <p className="mt-1 text-xs text-slate-500">Early access — recording without a bot joining the call.</p>
         <div className="mt-3 max-w-xl">
           <DesktopTokenPanel />

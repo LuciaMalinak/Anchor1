@@ -392,3 +392,44 @@ a {
     }
   }
 }
+
+/* =========================================================================
+   Signed-in app (the dashboard shell adds .app-shell): the product design's
+   calm, editorial look, applied across every page at once. White page, thin
+   grey card borders with no coloured side stripes, serif page and card
+   titles, copper main buttons. Unlayered on purpose so it wins over the
+   individual pages' older Tailwind classes.
+   ========================================================================= */
+.app-shell h1 {
+  font-size: 2.25rem;
+  line-height: 1.12;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--brand);
+}
+/* Card and section titles; a page can still ask for a bigger one. */
+.app-shell h2:not([class*="text-2xl"]):not([class*="text-3xl"]) {
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+.app-shell h2 {
+  font-weight: 500;
+  color: var(--foreground);
+}
+.app-shell .border-l-4 {
+  border-left-width: 1px;
+  border-left-color: #e6e8ee;
+}
+.app-shell .rounded-xl.border,
+.app-shell .rounded-2xl.border {
+  border-color: #e6e8ee;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.app-shell button.bg-brand,
+.app-shell a.bg-brand {
+  background-color: var(--accent);
+}
+.app-shell button.bg-brand:hover:not(:disabled),
+.app-shell a.bg-brand:hover {
+  background-color: var(--accent-dark);
+}
