@@ -1,0 +1,92 @@
+# Builds Anchor Desktop for Mac and publishes it whenever desktop/ changes
+# on main, so nobody has to run `npm run dist:mac` and
+# build/upload-mac-build.sh by hand. Installed apps then pick it up on
+# their own (see initAutoUpdate in desktop/src/main.ts).
+#
+# Needs three repository secrets (Settings -> Secrets and variables ->
+# Actions):
+#   DESKTOP_APP_UPLOAD_SECRET   same value as in Render's environment
+#   MAC_SIGNING_CERT_P12        base64 of the "Anchor Desktop Local Signing"
+#                               certificate exported from Keychain Access
+#   MAC_SIGNING_CERT_PASSWORD   the password chosen when exporting it
+#
+# Signing with that same certificate matters: macOS only accepts an update
+# signed like the installed app, and keeps microphone/screen-recording
+# permissions only while the signature stays the same (see
+# desktop/build/afterSign.js).
+name: Desktop app release
+
+on:
+  push:
+    branches: [main]
+    paths: ["desktop/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  mac:
+    runs-on: macos-14 # Apple silicon, same as the builds made so far
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Import the signing certificate
+        env:
+          MAC_SIGNING_CERT_P12: ${{ secrets.MAC_SIGNING_CERT_P12 }}
+          MAC_SIGNING_CERT_PASSWORD: ${{ secrets.MAC_SIGNING_CERT_PASSWORD }}
+        run: |
+          if [ -z "$MAC_SIGNING_CERT_P12" ]; then
+            echo "::error::MAC_SIGNING_CERT_P12 isn't set. Without it this build would be signed differently from the installed app, so updates would be rejected."
+            exit 1
+          fi
+          KEYCHAIN="$RUNNER_TEMP/anchor-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          echo "$MAC_SIGNING_CERT_P12" | base64 --decode > "$RUNNER_TEMP/anchor.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/anchor.p12" -k "$KEYCHAIN" -P "$MAC_SIGNING_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          # It's self-signed, so mark it trusted for code signing, as
+          # create-local-signing-cert.sh does on a Mac; afterSign.js only
+          # uses certificates macOS reports as valid.
+          security find-certificate -c "Anchor Desktop Local Signing" -p "$KEYCHAIN" > "$RUNNER_TEMP/anchor.pem"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/anchor.pem"
+          rm -f "$RUNNER_TEMP/anchor.p12"
+          security find-identity -v -p codesigning | grep -q "Anchor Desktop Local Signing" || {
+            echo "::error::The imported certificate isn't usable for code signing."
+            security find-identity -v -p codesigning
+            exit 1
+          }
+
+      - run: npm ci
+
+      # Every published build needs a higher version than the last one, or
+      # installed apps won't treat it as an update. Keep package.json's
+      # major.minor and use this workflow's run number for the patch, so
+      # nobody has to remember to bump it.
+      - name: Set the version
+        run: |
+          BASE="$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")"
+          VERSION="$BASE.$((100 + GITHUB_RUN_NUMBER))"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "Building Anchor Desktop $VERSION"
+
+      - run: npm run dist:mac
+
+      - name: Publish the download and update feed
+        env:
+          DESKTOP_APP_UPLOAD_SECRET: ${{ secrets.DESKTOP_APP_UPLOAD_SECRET }}
+        run: bash build/upload-mac-build.sh
