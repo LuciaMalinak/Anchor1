@@ -40,7 +40,9 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     clientSecretEnv: "GOOGLE_INTEGRATION_CLIENT_SECRET",
     // Ask for a refresh token every time and force the consent screen, so
     // reconnecting after a revoke doesn't silently reuse a stale grant.
-    extraAuthorizeParams: { access_type: "offline", prompt: "consent" },
+    // include_granted_scopes keeps any GOOGLE_EXTRA_SCOPES granted earlier
+    // when someone reconnects from the Integrations page.
+    extraAuthorizeParams: { access_type: "offline", prompt: "consent", include_granted_scopes: "true" },
   },
   microsoft: {
     key: "microsoft",
@@ -103,6 +105,21 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     clientSecretEnv: "HUBSPOT_INTEGRATION_CLIENT_SECRET",
   },
 };
+
+// Write access for the meeting page's "Save to Gmail drafts" and "Add to
+// calendar" buttons. Deliberately NOT in the default Google scopes above:
+// connecting Google from the Integrations page stays read-only, and each
+// of these is asked for only the first time someone uses that button, via
+// /api/integrations/google/connect?add=<key>.
+export const GOOGLE_EXTRA_SCOPES = {
+  gmail_compose: "https://www.googleapis.com/auth/gmail.compose",
+  calendar_events: "https://www.googleapis.com/auth/calendar.events",
+} as const;
+export type GoogleExtraScopeKey = keyof typeof GOOGLE_EXTRA_SCOPES;
+
+export function isGoogleExtraScopeKey(value: string | null): value is GoogleExtraScopeKey {
+  return value !== null && value in GOOGLE_EXTRA_SCOPES;
+}
 
 export function isProviderConfigured(key: ProviderKey): boolean {
   const cfg = PROVIDERS[key];

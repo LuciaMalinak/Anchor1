@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { integrationConnections } from "@/db/schema";
 import { PROVIDERS, isProviderKey } from "@/lib/integrations/config";
 import { fetchIdentityLabel } from "@/lib/integrations/identity";
+import { safeReturnTo } from "@/lib/integrations/returnTo";
 
 function baseUrl(req: NextRequest): string {
   return process.env.AUTH_URL || req.nextUrl.origin;
@@ -47,7 +48,7 @@ export async function GET(
     return redirectWith(req, { error: "missing_code", provider });
   }
 
-  let decodedState: { userId: string } | null = null;
+  let decodedState: { userId: string; returnTo?: string | null } | null = null;
   try {
     decodedState = JSON.parse(Buffer.from(state, "base64url").toString());
   } catch {
@@ -138,6 +139,8 @@ export async function GET(
         },
       });
 
+    const returnTo = safeReturnTo(decodedState.returnTo ?? null);
+    if (returnTo) return NextResponse.redirect(new URL(returnTo, req.url));
     return redirectWith(req, { connected: provider });
   } catch (err) {
     console.error(`${provider} OAuth callback failed:`, err);

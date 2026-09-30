@@ -7,6 +7,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { integrationConnections } from "@/db/schema";
+import { GOOGLE_EXTRA_SCOPES, type GoogleExtraScopeKey } from "./config";
 
 type Connection = typeof integrationConnections.$inferSelect;
 
@@ -70,4 +71,52 @@ export async function googleGet(
   }
   const json = await res.json();
   return { json, accessToken: token };
+}
+
+// Thrown when the user hasn't connected Google, or connected it without
+// the write permission an action needs. The route turns this into a link
+// to /api/integrations/google/connect?add=<scopeKey> so they can grant it.
+export class NeedsGooglePermissionError extends Error {
+  constructor(public scopeKey: GoogleExtraScopeKey) {
+    super(`Google permission needed: ${scopeKey}`);
+  }
+}
+
+// Returns the user's Google connection only if it includes this extra
+// permission. The stored scope is Google's space-separated list of
+// everything granted, so an older read-only connection fails the check.
+export async function requireGoogleScope(
+  userId: string,
+  scopeKey: GoogleExtraScopeKey
+): Promise<Connection> {
+  const connection = await getGoogleConnection(userId);
+  const granted = (connection?.scope ?? "").split(/\s+/);
+  if (!connection || !granted.includes(GOOGLE_EXTRA_SCOPES[scopeKey])) {
+    throw new NeedsGooglePermissionError(scopeKey);
+  }
+  return connection;
+}
+
+// POSTs JSON to a Google API URL, with the same refresh-and-retry-once on
+// a 401 as googleGet.
+export async function googlePost(
+  connection: Connection,
+  url: string,
+  body: unknown
+): Promise<Record<string, unknown>> {
+  const send = (token: string) =>
+    fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  let res = await send(connection.accessToken);
+  if (res.status === 401) {
+    res = await send(await refreshGoogleAccessToken(connection));
+  }
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "");
+    throw new Error(`Google API request failed (${res.status}): ${bodyText.slice(0, 300)}`);
+  }
+  return res.json();
 }

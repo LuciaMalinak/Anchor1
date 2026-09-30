@@ -15,6 +15,8 @@ import { canAccessDeal, accessibleDealIds, dealVisibilityWhere } from "@/lib/dea
 import { MeetingStatusPoller } from "./MeetingStatusPoller";
 import { MeetingDeleteButton } from "./MeetingDeleteButton";
 import { FollowUpEmailDraft } from "./FollowUpEmailDraft";
+import { SuggestedInvites } from "./SuggestedInvites";
+import { isProviderConfigured } from "@/lib/integrations/config";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { MeetingDealPicker } from "./MeetingDealPicker";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
@@ -74,6 +76,8 @@ export default async function MeetingDetailPage({
     );
   }
   if (!isOwner && !sharedViaTeam) notFound();
+
+  const googleConfigured = isProviderConfigured("google");
 
   // Only the owner gets to reassign this meeting's deal (see the PATCH
   // route's comment) — a teammate viewing a shared meeting gets read-only
@@ -306,7 +310,9 @@ export default async function MeetingDetailPage({
         </section>
       )}
 
-      {summary && <FollowUpEmailDraft meetingId={id} />}
+      {summary && <FollowUpEmailDraft meetingId={id} googleConfigured={googleConfigured} />}
+
+      {summary && transcript && googleConfigured && <SuggestedInvites meetingId={id} />}
 
       {participants.length > 0 && (
         <ParticipantsPanel meetingId={id} participants={participants} canEdit={isOwner || sharedViaTeam} />

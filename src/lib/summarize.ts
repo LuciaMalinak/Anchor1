@@ -322,6 +322,21 @@ export async function draftFollowUpEmail(params: {
   return toolUse.input as FollowUpEmailDraft;
 }
 
+// Raw model reply for suggestInvites.ts, which builds the prompt and
+// parses/validates the JSON itself so its guardrails can be tested with a
+// fake model (scripts/test-next-steps.ts).
+export async function findFollowUpMeetingsText(prompt: string): Promise<string> {
+  const message = await client().messages.create({
+    model: MODEL,
+    max_tokens: 1200,
+    messages: [{ role: "user", content: prompt }],
+  });
+  return message.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+}
+
 const DEAL_MEMORY_TOOL = {
   name: "record_deal_memory_update",
   description:
