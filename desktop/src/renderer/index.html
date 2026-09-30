@@ -101,6 +101,40 @@
         color: #64748b;
         margin-bottom: 8px;
       }
+      #signed-out .hint {
+        font-size: 12px;
+        color: #64748b;
+        margin: 0 0 10px;
+      }
+      #sign-in {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      #token-fallback {
+        margin-top: 10px;
+        font-size: 11px;
+        color: #64748b;
+      }
+      #token-fallback summary {
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      button.link {
+        background: none;
+        color: #64748b;
+        padding: 0;
+        font-size: 11px;
+        text-decoration: underline;
+      }
+      button.link:hover:not(:disabled) {
+        background: none;
+        color: var(--brand);
+      }
+      [hidden] {
+        display: none !important;
+      }
       .meeting-block {
         border-bottom: 1px solid #f1f5f9;
       }
@@ -211,8 +245,21 @@
 
     <section id="token-section">
       <div id="status">Not connected</div>
-      <input id="token-input" type="password" placeholder="Paste your desktop token from Anchor's Integrations page" />
-      <button id="save-token">Save token</button>
+      <div id="signed-out" hidden>
+        <p class="hint">
+          Sign in with your Anchor account. Your browser opens; once you&rsquo;ve signed in there, this app connects
+          on its own.
+        </p>
+        <button id="sign-in">Sign in to Anchor</button>
+        <details id="token-fallback">
+          <summary>Have a desktop token? Paste it instead</summary>
+          <input id="token-input" type="password" placeholder="Paste your desktop token from Anchor's Integrations page" />
+          <button id="save-token">Save token</button>
+        </details>
+      </div>
+      <div id="signed-in" hidden>
+        <button id="switch-account" class="link">Sign in with a different account</button>
+      </div>
     </section>
 
     <section>

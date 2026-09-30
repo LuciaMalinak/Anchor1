@@ -19,6 +19,14 @@ type Config = {
   // the tray menu) doesn't get overridden back to on next launch — see
   // main.ts's tray setup.
   launchAtLoginDefaultApplied?: boolean;
+  // Email of the Anchor account the token belongs to, shown as
+  // "Connected as …". Fetched from /api/desktop/me when connecting.
+  accountEmail?: string | null;
+  // The one-time value sent with the last "Sign in to Anchor" click (see
+  // startSignIn in main.ts). A connect link carrying the same value is
+  // accepted without asking; kept on disk so it survives the app being
+  // relaunched by the link itself.
+  pendingSignIn?: { state: string; createdAt: number } | null;
 };
 
 function configPath(): string {
@@ -33,6 +41,13 @@ export function loadConfig(): Config {
       apiBase: typeof parsed.apiBase === "string" && parsed.apiBase ? parsed.apiBase : DEFAULT_API_BASE,
       token: typeof parsed.token === "string" ? parsed.token : null,
       launchAtLoginDefaultApplied: Boolean(parsed.launchAtLoginDefaultApplied),
+      accountEmail: typeof parsed.accountEmail === "string" ? parsed.accountEmail : null,
+      pendingSignIn:
+        parsed.pendingSignIn &&
+        typeof parsed.pendingSignIn.state === "string" &&
+        typeof parsed.pendingSignIn.createdAt === "number"
+          ? { state: parsed.pendingSignIn.state, createdAt: parsed.pendingSignIn.createdAt }
+          : null,
     };
   } catch {
     return { apiBase: DEFAULT_API_BASE, token: null };

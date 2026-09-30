@@ -3,6 +3,7 @@ import { signIn } from "@/auth";
 import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { SignInMethods } from "./SignInMethods";
+import { safeReturnTo } from "@/lib/integrations/returnTo";
 
 const linkedInConfigured = Boolean(
   process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET
@@ -29,15 +30,20 @@ const SIGN_IN_ERROR_COPY: Record<string, string> = {
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; industry?: string }>;
+  searchParams: Promise<{ error?: string; industry?: string; next?: string }>;
 }) {
-  const { error, industry } = await searchParams;
+  const { error, industry, next } = await searchParams;
   // Someone who clicked an industry link on the homepage — carry it
   // through sign-in so a brand-new account lands with that industry
   // already set (see /dashboard/page.tsx, which applies it once, only
   // for a fresh team that has no industry of its own yet).
   const industryKey = industry && isIndustryKey(industry) ? industry : null;
-  const dashboardRedirect = industryKey ? `/dashboard?setIndustry=${industryKey}` : "/dashboard";
+  // `next`: where to land after signing in instead of the dashboard —
+  // e.g. /desktop/connect when the desktop app sent them here. Local
+  // paths only, so this can't become an open redirect.
+  const nextPath = safeReturnTo(next ?? null);
+  const dashboardRedirect =
+    nextPath ?? (industryKey ? `/dashboard?setIndustry=${industryKey}` : "/dashboard");
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 py-12">
@@ -101,6 +107,7 @@ export default async function SignInPage({
                 acknowledgment) — so it's deliberately left outside
                 SignInMethods's checkbox gate. See the comment there. */}
             <form action="/api/auth/password-sign-in" method="POST" className="flex flex-col gap-3">
+              {nextPath && <input type="hidden" name="next" value={nextPath} />}
               <input
                 type="email"
                 name="email"
@@ -132,7 +139,12 @@ export default async function SignInPage({
         <p className="text-center text-sm text-slate-500">
           New to Anchor?{" "}
           <Link
-            href={industryKey ? `/sign-up?industry=${industryKey}` : "/sign-up"}
+            href={(() => {
+              const params = new URLSearchParams();
+              if (industryKey) params.set("industry", industryKey);
+              if (nextPath) params.set("next", nextPath);
+              return params.size ? `/sign-up?${params}` : "/sign-up";
+            })()}
             className="font-medium text-brand hover:underline"
           >
             Create an account

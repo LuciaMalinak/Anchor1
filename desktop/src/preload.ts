@@ -6,6 +6,7 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("anchor", {
   getConfig: () => ipcRenderer.invoke("get-config"),
   setToken: (token: string, apiBase?: string) => ipcRenderer.invoke("set-token", token, apiBase),
+  startSignIn: () => ipcRenderer.invoke("start-sign-in"),
   startRecording: (windowId: string, title: string) => ipcRenderer.invoke("start-recording", windowId, title),
   stopRecording: (windowId: string) => ipcRenderer.invoke("stop-recording", windowId),
 
@@ -19,7 +20,7 @@ contextBridge.exposeInMainWorld("anchor", {
     ipcRenderer.on("recording-ended", (_evt, window) => cb(window)),
   onLog: (cb: (message: string) => void) => ipcRenderer.on("log", (_evt, message) => cb(message)),
   onSdkError: (cb: (evt: unknown) => void) => ipcRenderer.on("sdk-error", (_evt, evt) => cb(evt)),
-  onTokenConnected: (cb: (payload: { apiBase: string }) => void) =>
+  onTokenConnected: (cb: (payload: { apiBase: string; accountEmail?: string }) => void) =>
     ipcRenderer.on("token-connected", (_evt, payload) => cb(payload)),
 
   // Ask Anchor / live suggestions / to-do — the same deal-scoped panels

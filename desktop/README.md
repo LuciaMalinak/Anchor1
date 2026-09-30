@@ -21,13 +21,12 @@ Recall's SDK doesn't support Intel Macs or Linux.
    ```
    npm run build
    ```
-4. In the Anchor web app, go to **Integrations → Anchor Desktop → Generate desktop token**. Copy the token shown (you only get to see it once).
-5. Start the app:
+4. Start the app:
    ```
    npm start
    ```
-6. Paste the token into the app's "Paste your desktop token" box and click **Save token**.
-7. **macOS only:** the first time it runs, macOS will ask you to grant Accessibility, Screen Recording, and Microphone permissions — say yes to all three (System Settings → Privacy & Security if you miss the prompt). Without these, Recall's SDK can't see or capture anything.
+5. Click **Sign in to Anchor**. Your browser opens Anchor's sign-in page (email link, Google, LinkedIn or password); once you're signed in, the browser hands the app a desktop token and it connects on its own. No token to copy. (Still works the old way too: **Integrations → Anchor Desktop → Generate desktop token**, then "Have a desktop token? Paste it instead" in the app.)
+6. **macOS only:** the first time it runs, macOS will ask you to grant Accessibility, Screen Recording, and Microphone permissions — say yes to all three (System Settings → Privacy & Security if you miss the prompt). Without these, Recall's SDK can't see or capture anything.
 
 ## Using it
 

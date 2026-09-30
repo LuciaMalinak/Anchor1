@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth/password";
 import { assignTeamForNewUser } from "@/lib/onboardUser";
 import { isIndustryKey } from "@/lib/industries";
+import { safeReturnTo } from "@/lib/integrations/returnTo";
 
 // Creates an account directly with an email + password — no email has to
 // be sent or received. This exists specifically so anyone (an investor
@@ -22,10 +23,11 @@ import { isIndustryKey } from "@/lib/industries";
 // and configured those apps. This route has no such dependency.
 const SESSION_DAYS = 90;
 
-function backToSignUp(req: NextRequest, error: string, industry: string | null) {
+function backToSignUp(req: NextRequest, error: string, industry: string | null, next: string | null) {
   const url = absoluteUrl("/sign-up", req);
   url.searchParams.set("error", error);
   if (industry) url.searchParams.set("industry", industry);
+  if (next) url.searchParams.set("next", next);
   return NextResponse.redirect(url, { status: 303 });
 }
 
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest) {
   const confirmPassword = String(form.get("confirmPassword") ?? "");
   const industryRaw = String(form.get("industry") ?? "");
   const industry = isIndustryKey(industryRaw) ? industryRaw : null;
+  const next = safeReturnTo(typeof form.get("next") === "string" ? String(form.get("next")) : null);
   // The prototype-disclaimer checkbox on the sign-up form — required
   // client-side too, but re-checked here since a form's `required`
   // attribute is only ever a client-side nicety. See the privacy page's
@@ -45,16 +48,16 @@ export async function POST(req: NextRequest) {
   const acknowledgedPrototype = form.get("acknowledgePrototype") === "1";
 
   if (!email || !password) {
-    return backToSignUp(req, "missing", industry);
+    return backToSignUp(req, "missing", industry, next);
   }
   if (password.length < 8) {
-    return backToSignUp(req, "short", industry);
+    return backToSignUp(req, "short", industry, next);
   }
   if (password !== confirmPassword) {
-    return backToSignUp(req, "mismatch", industry);
+    return backToSignUp(req, "mismatch", industry, next);
   }
   if (!acknowledgedPrototype) {
-    return backToSignUp(req, "ack", industry);
+    return backToSignUp(req, "ack", industry, next);
   }
 
   const [existing] = await db
@@ -73,7 +76,7 @@ export async function POST(req: NextRequest) {
     // before. If it already has a password, this is a returning user who
     // should sign in instead, not create a second account.
     if (existing.passwordHash) {
-      return backToSignUp(req, "exists", industry);
+      return backToSignUp(req, "exists", industry, next);
     }
     await db
       .update(users)
@@ -99,7 +102,7 @@ export async function POST(req: NextRequest) {
   // choice from a homepage link through to the dashboard — see
   // /dashboard's setIndustry handling, which only applies it for a fresh
   // team this user owns.
-  const dashboardPath = industry ? `/dashboard?setIndustry=${industry}` : "/dashboard";
+  const dashboardPath = next ?? (industry ? `/dashboard?setIndustry=${industry}` : "/dashboard");
   const res = NextResponse.redirect(absoluteUrl(dashboardPath, req), { status: 303 });
   res.cookies.set({
     name: sessionCookieName(),

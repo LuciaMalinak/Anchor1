@@ -6,6 +6,10 @@
 const statusEl = document.getElementById("status");
 const tokenInput = document.getElementById("token-input");
 const saveTokenBtn = document.getElementById("save-token");
+const signInBtn = document.getElementById("sign-in");
+const switchAccountBtn = document.getElementById("switch-account");
+const signedOutEl = document.getElementById("signed-out");
+const signedInEl = document.getElementById("signed-in");
 const meetingsEl = document.getElementById("meetings");
 const logEl = document.getElementById("log");
 
@@ -264,15 +268,41 @@ function renderMeetings() {
 
 async function refreshStatus() {
   const config = await window.anchor.getConfig();
-  statusEl.textContent = config.hasToken ? `Connected to ${config.apiBase}` : "Not connected — paste a token below";
+  statusEl.textContent = config.hasToken
+    ? `Connected as ${config.accountEmail || config.apiBase}`
+    : "Not connected";
+  signedOutEl.hidden = config.hasToken;
+  signedInEl.hidden = !config.hasToken;
 }
+
+// Opens Anchor's sign-in in the browser; the app connects itself when the
+// browser hands the token back (see startSignIn / handleDeepLink in
+// main.ts, and onTokenConnected below).
+async function beginSignIn() {
+  signInBtn.disabled = true;
+  signInBtn.textContent = "Waiting for you to sign in in your browser…";
+  try {
+    await window.anchor.startSignIn();
+  } catch (err) {
+    appendLog(`Couldn't open your browser: ${err && err.message ? err.message : err}`);
+  } finally {
+    // Re-enable after a moment so they can try again if they closed the tab.
+    setTimeout(() => {
+      signInBtn.disabled = false;
+      signInBtn.textContent = "Sign in to Anchor";
+    }, 5000);
+  }
+}
+
+signInBtn.onclick = beginSignIn;
+switchAccountBtn.onclick = beginSignIn;
 
 saveTokenBtn.onclick = async () => {
   const token = tokenInput.value.trim();
   if (!token) return;
-  await window.anchor.setToken(token);
+  const result = await window.anchor.setToken(token);
   tokenInput.value = "";
-  appendLog("Desktop token saved.");
+  appendLog(result && result.accountEmail ? `Connected as ${result.accountEmail}.` : "Desktop token saved.");
   refreshStatus();
 };
 

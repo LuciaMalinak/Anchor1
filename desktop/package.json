@@ -1,6 +1,6 @@
 {
   "name": "anchor-desktop",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "Anchor Desktop — records Zoom/Teams/Meet calls locally with no bot joining, using Recall.ai's Desktop Recording SDK.",
   "author": "Anchor",

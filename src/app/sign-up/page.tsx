@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
+import { safeReturnTo } from "@/lib/integrations/returnTo";
 
 const SIGN_UP_ERROR_COPY: Record<string, string> = {
   missing: "Enter an email and password.",
@@ -13,11 +14,17 @@ const SIGN_UP_ERROR_COPY: Record<string, string> = {
 export default async function SignUpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; industry?: string }>;
+  searchParams: Promise<{ error?: string; industry?: string; next?: string }>;
 }) {
-  const { error, industry } = await searchParams;
+  const { error, industry, next } = await searchParams;
   const industryKey = industry && isIndustryKey(industry) ? industry : null;
-  const signInHref = industryKey ? `/sign-in?industry=${industryKey}` : "/sign-in";
+  // Where to land after creating the account (e.g. /desktop/connect), same
+  // as the sign-in page's `next`.
+  const nextPath = safeReturnTo(next ?? null);
+  const signInParams = new URLSearchParams();
+  if (industryKey) signInParams.set("industry", industryKey);
+  if (nextPath) signInParams.set("next", nextPath);
+  const signInHref = signInParams.size ? `/sign-in?${signInParams}` : "/sign-in";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
@@ -46,6 +53,7 @@ export default async function SignUpPage({
 
       <form action="/api/auth/password-sign-up" method="POST" className="flex flex-col gap-3">
         {industryKey && <input type="hidden" name="industry" value={industryKey} />}
+        {nextPath && <input type="hidden" name="next" value={nextPath} />}
         <input
           type="text"
           name="name"

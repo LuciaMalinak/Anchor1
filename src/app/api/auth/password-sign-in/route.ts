@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users, sessions } from "@/db/schema";
 import { sql } from "drizzle-orm";
 import { verifyPassword, sessionCookieName, secureCookiesEnabled, absoluteUrl } from "@/lib/auth/password";
+import { safeReturnTo } from "@/lib/integrations/returnTo";
 
 // How long the underlying session row (and, when "stay signed in" is
 // checked, the cookie itself) stays valid. Unchecked still gets a real
@@ -12,9 +13,10 @@ import { verifyPassword, sessionCookieName, secureCookiesEnabled, absoluteUrl } 
 const REMEMBER_ME_DAYS = 90;
 const DEFAULT_SESSION_DAYS = 1;
 
-function backToSignIn(req: NextRequest, error: string) {
+function backToSignIn(req: NextRequest, error: string, next: string | null) {
   const url = absoluteUrl("/sign-in", req);
   url.searchParams.set("error", error);
+  if (next) url.searchParams.set("next", next);
   return NextResponse.redirect(url, { status: 303 });
 }
 
@@ -23,9 +25,12 @@ export async function POST(req: NextRequest) {
   const email = String(form.get("email") ?? "").trim();
   const password = String(form.get("password") ?? "");
   const rememberMe = form.get("rememberMe") != null;
+  // Set by the sign-in page when it was opened with ?next= (e.g. from the
+  // desktop app's "Sign in to Anchor"), so a wrong password doesn't lose it.
+  const next = safeReturnTo(typeof form.get("next") === "string" ? String(form.get("next")) : null);
 
   if (!email || !password) {
-    return backToSignIn(req, "missing");
+    return backToSignIn(req, "missing", next);
   }
 
   const [user] = await db
@@ -37,12 +42,12 @@ export async function POST(req: NextRequest) {
   // Same generic error either way — don't reveal whether the email exists
   // or whether it just doesn't have a password set yet.
   if (!user || !user.passwordHash) {
-    return backToSignIn(req, "invalid");
+    return backToSignIn(req, "invalid", next);
   }
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
-    return backToSignIn(req, "invalid");
+    return backToSignIn(req, "invalid", next);
   }
 
   const days = rememberMe ? REMEMBER_ME_DAYS : DEFAULT_SESSION_DAYS;
@@ -50,7 +55,7 @@ export async function POST(req: NextRequest) {
   const expires = new Date(Date.now() + days * 86_400_000);
   await db.insert(sessions).values({ sessionToken: token, userId: user.id, expires });
 
-  const res = NextResponse.redirect(absoluteUrl("/dashboard", req), { status: 303 });
+  const res = NextResponse.redirect(absoluteUrl(next ?? "/dashboard", req), { status: 303 });
   res.cookies.set({
     name: sessionCookieName(),
     value: token,

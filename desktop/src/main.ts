@@ -19,8 +19,21 @@
 // here has to run on the actual target machine (an Apple Silicon Mac or
 // Windows; Intel Macs aren't supported per Recall's docs), not in a
 // Linux dev sandbox. See desktop/README.md.
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, session as electronSession } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Tray,
+  Menu,
+  nativeImage,
+  screen,
+  shell,
+  session as electronSession,
+} from "electron";
 import * as path from "path";
+import * as os from "os";
+import { randomBytes } from "crypto";
 import RecallAiSdk from "@recallai/desktop-sdk";
 import { autoUpdater } from "electron-updater";
 import { loadConfig, saveConfig, DEFAULT_API_BASE } from "./config";
@@ -670,19 +683,56 @@ async function initSdk() {
   }
 }
 
-// The "super easy" connect flow: instead of a member copying a token off
-// the website and pasting it into this app by hand, the website's
-// "Connect Anchor Desktop" button mints a token the same way the manual
-// flow always has (POST /api/profile/desktop-token) and then navigates
-// the browser straight to anchor-desktop://connect?token=...&apiBase=...
-// — macOS/Windows hand that URL to whichever app registered the
-// "anchor-desktop" scheme (see setAsDefaultProtocolClient below), which
-// is this app, so it arrives here as either an "open-url" event (macOS)
-// or an argv entry on a second-instance launch / cold start (Windows —
-// see the second-instance handler and the process.argv check in
-// whenReady below). Same saveConfig call the manual "Save token" button
-// already used; a member never has to see or copy the token itself.
-function handleDeepLink(url: string) {
+// How long a "Sign in to Anchor" click stays valid — long enough to wait
+// for a sign-in email and click it, short enough that an old one doesn't
+// linger.
+const SIGN_IN_WINDOW_MS = 30 * 60_000;
+
+// The "Sign in to Anchor" button: opens the browser on Anchor's
+// /desktop/connect page (src/app/desktop/connect/page.tsx), which sends
+// the person through the normal sign-in page if needed, then creates a
+// token and hands it back to this app through an anchor-desktop://connect
+// link (handleDeepLink below). `state` is a one-time random value; the
+// link only connects silently when it carries the same one back.
+async function startSignIn() {
+  const config = loadConfig();
+  const state = randomBytes(24).toString("base64url");
+  saveConfig({ ...config, pendingSignIn: { state, createdAt: Date.now() } });
+  const url = new URL("/desktop/connect", config.apiBase || DEFAULT_API_BASE);
+  url.searchParams.set("state", state);
+  url.searchParams.set("device", os.hostname().replace(/\.local$/i, ""));
+  await shell.openExternal(url.toString());
+  log("Opened Anchor in your browser — sign in there and this app connects automatically.");
+}
+
+// Which Anchor account a token belongs to (src/app/api/desktop/me), or
+// null if the token doesn't work against that server.
+async function fetchAccountEmail(apiBase: string, token: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${apiBase}/api/desktop/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => ({}));
+    return typeof body.email === "string" ? body.email : null;
+  } catch {
+    return null;
+  }
+}
+
+// Handles anchor-desktop://connect?token=...&apiBase=...&state=... links,
+// which arrive as an "open-url" event (macOS) or an argv entry on a
+// second-instance launch / cold start (Windows — see the second-instance
+// handler and the process.argv check in whenReady below). Two sources:
+//
+// - This app's own "Sign in to Anchor" (startSignIn above): `state`
+//   matches, so it connects without asking.
+// - The website's "Connect Anchor Desktop" button on the Integrations page
+//   (src/components/DesktopTokenPanel.tsx), or anything else: no matching
+//   state, so it asks "Connect to <email>?" first. anchor-desktop:// is a
+//   SYSTEM-WIDE protocol handler, so any website can send a link here;
+//   without that question, a link carrying someone else's token would
+//   silently switch this app to their account and send every future
+//   recording to them.
+async function handleDeepLink(url: string) {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -697,37 +747,78 @@ function handleDeepLink(url: string) {
     log("Opened an Anchor Desktop link, but it didn't include a token.");
     return;
   }
-  // anchor-desktop:// is registered as a SYSTEM-WIDE protocol handler
-  // (see setAsDefaultProtocolClient below) — any link with this scheme,
-  // from any source (not just Anchor's own "Connect" button), reaches
-  // this function. Without validating apiBase against a known host, a
-  // malicious "anchor-desktop://connect?token=x&apiBase=evil.example"
-  // link would silently repoint every future request this app makes —
-  // meeting start, deal matching, live-transcript push, and the overlay
-  // window's own page load — at an attacker's server. Only accept the
-  // real Anchor host or a local dev server; anything else falls back to
-  // DEFAULT_API_BASE instead of being trusted.
+  // Without validating apiBase against a known host, a malicious
+  // "anchor-desktop://connect?token=x&apiBase=evil.example" link would
+  // repoint every future request this app makes — meeting start, deal
+  // matching, live-transcript push, and the overlay window's own page
+  // load — at an attacker's server. Only accept the real Anchor host or a
+  // local dev server; anything else falls back to DEFAULT_API_BASE.
   const requestedApiBase = parsed.searchParams.get("apiBase");
   const apiBase = requestedApiBase && isAllowedApiBase(requestedApiBase) ? requestedApiBase : DEFAULT_API_BASE;
   if (requestedApiBase && requestedApiBase !== apiBase) {
     log(`Ignoring untrusted apiBase in connect link ("${requestedApiBase}") — using the default Anchor server instead.`);
   }
-  saveConfig({ ...loadConfig(), apiBase, token });
-  log("Connected to your Anchor account from the website.");
-  send("token-connected", { apiBase });
+
+  const config = loadConfig();
+  const pending = config.pendingSignIn;
+  const state = parsed.searchParams.get("state");
+  const startedHere = Boolean(
+    pending && state && pending.state === state && Date.now() - pending.createdAt < SIGN_IN_WINDOW_MS
+  );
+
+  const email = await fetchAccountEmail(apiBase, token);
+  if (!email) {
+    log("That connect link didn't work — its token was rejected by Anchor. Try signing in again.");
+    showWindow();
+    return;
+  }
+
+  if (!startedHere) {
+    showWindow();
+    const choice = await dialog.showMessageBox({
+      type: "question",
+      buttons: ["Connect", "Cancel"],
+      defaultId: 0,
+      cancelId: 1,
+      message: `Connect Anchor Desktop to ${email}?`,
+      detail: config.token
+        ? `This replaces the account it's connected to now${config.accountEmail ? ` (${config.accountEmail})` : ""}. Your calls will be recorded into ${email}.`
+        : `Your calls will be recorded into ${email}.`,
+    });
+    if (choice.response !== 0) {
+      log("Connect link cancelled — nothing changed.");
+      return;
+    }
+  }
+
+  saveConfig({ ...loadConfig(), apiBase, token, accountEmail: email, pendingSignIn: null });
+  log(`Connected as ${email}.`);
+  send("token-connected", { apiBase, accountEmail: email });
   showWindow();
+}
+
+// Deep links arrive from raw Electron event listeners, where an uncaught
+// rejection would take down the main process over one failed connect.
+function handleDeepLinkSafely(url: string) {
+  handleDeepLink(url).catch((err) => {
+    log(`Couldn't connect from that link: ${err instanceof Error ? err.message : err}`);
+  });
 }
 
 function registerIpcHandlers() {
   ipcMain.handle("get-config", () => {
     const config = loadConfig();
-    return { apiBase: config.apiBase, hasToken: Boolean(config.token) };
+    return { apiBase: config.apiBase, hasToken: Boolean(config.token), accountEmail: config.accountEmail ?? null };
   });
 
-  ipcMain.handle("set-token", (_evt, token: string, apiBase?: string) => {
-    saveConfig({ ...loadConfig(), apiBase: apiBase || DEFAULT_API_BASE, token });
-    return { ok: true };
+  ipcMain.handle("set-token", async (_evt, token: string, apiBase?: string) => {
+    const base = apiBase || DEFAULT_API_BASE;
+    const accountEmail = await fetchAccountEmail(base, token);
+    saveConfig({ ...loadConfig(), apiBase: base, token, accountEmail });
+    return { ok: true, accountEmail };
   });
+
+  ipcMain.handle("start-sign-in", () => startSignIn());
 
   // Manual fallback — recording normally already started automatically
   // the moment the meeting was detected (see the meeting-detected
@@ -881,7 +972,7 @@ let pendingOpenUrlDeepLink: string | null = null;
 app.on("open-url", (event, url) => {
   event.preventDefault();
   if (app.isReady()) {
-    handleDeepLink(url);
+    handleDeepLinkSafely(url);
   } else {
     pendingOpenUrlDeepLink = url;
   }
@@ -909,7 +1000,7 @@ if (!gotSingleInstanceLock) {
     // second copy actually start. macOS never takes this path (it uses
     // "open-url" above instead), but this is harmless there too.
     const deepLink = commandLine.find((arg) => arg.startsWith("anchor-desktop://"));
-    if (deepLink) handleDeepLink(deepLink);
+    if (deepLink) handleDeepLinkSafely(deepLink);
     showWindow();
   });
 
@@ -928,7 +1019,7 @@ if (!gotSingleInstanceLock) {
     const coldStartDeepLink =
       pendingOpenUrlDeepLink || process.argv.find((arg) => arg.startsWith("anchor-desktop://"));
     pendingOpenUrlDeepLink = null;
-    if (coldStartDeepLink) handleDeepLink(coldStartDeepLink);
+    if (coldStartDeepLink) handleDeepLinkSafely(coldStartDeepLink);
 
     // Turn "launch at login" on by default the first time this app ever
     // runs on this machine, so installing it is the only setup step anyone
