@@ -56,7 +56,7 @@ export function Logo({
     <span className="inline-flex items-center gap-2">
       <AnchorMark size={dims} tone={tone} />
       <span
-        className={`${text} font-semibold tracking-tight ${
+        className={`${text} font-serif font-medium tracking-[-0.01em] ${
           tone === "light" ? "text-white" : "text-slate-900"
         }`}
       >

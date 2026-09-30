@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Soft off-white canvas with white cards on top, as in the product
+     design video; pure white is kept for surfaces. */
+  --background: #f4f5f8;
+  --surface: #ffffff;
+  --foreground: #16223a;
   /* Brand: matches the investor deck exactly — deep navy + a copper accent.
      Sampled directly from the deck so the product and the pitch look like
      the same company. */
@@ -15,19 +18,52 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-canvas: var(--background);
+  --color-surface: var(--surface);
   --color-brand: var(--brand);
   --color-brand-dark: var(--brand-dark);
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Loaded from Google Fonts in src/app/layout.tsx; each falls back to a
+     close system font if that request is slow or blocked. */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: "Newsreader", "Iowan Old Style", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
+  font-family: var(--font-sans);
+}
+
+/* Editorial type: every heading is set in the serif, as in the design.
+   In the base layer so a page's own utility classes (size, weight,
+   colour) still win. */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.012em;
+  }
+}
+
+/* Small uppercase labels ("MEET ANCHOR", "01 · CONNECT", "KEY POINTS")
+   are set in the mono face with wide tracking, wherever a page marks one
+   up as uppercase + tracking-*. Unlayered on purpose so the wider
+   tracking wins over the old tracking-wide utilities. */
+.uppercase[class*="tracking-"],
+.eyebrow {
+  font-family: var(--font-mono);
+  letter-spacing: 0.16em;
+}
+.eyebrow {
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
 /* A small, global "it responds to you" polish for the signed-in app —

@@ -220,6 +220,87 @@
         margin-top: 8px;
         white-space: pre-wrap;
       }
+
+      /* ---------------------------------------------------------------
+         Design refresh, matching the website (src/app/globals.css): soft
+         off-white canvas, white cards, serif headings, small mono labels
+         in wide caps, copper for the main actions. Uses macOS's built-in
+         serif (New York) and mono (SF Mono), so it needs no web fonts and
+         works offline.
+         --------------------------------------------------------------- */
+      :root {
+        --canvas: #f4f5f8;
+        --serif: "Newsreader", "New York", ui-serif, "Iowan Old Style", Georgia, serif;
+        --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+      }
+      body {
+        background: var(--canvas);
+        color: #16223a;
+      }
+      .brand h1 {
+        font-family: var(--serif);
+        font-weight: 500;
+        font-size: 19px;
+        letter-spacing: -0.01em;
+      }
+      p.sub {
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      section {
+        border-color: #e5e7ee;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      }
+      /* Section titles ("Detected meetings", "Activity") and panel labels
+         read as the design's mono eyebrows. */
+      section > strong,
+      .panel-section strong {
+        font-family: var(--mono);
+        font-size: 10px !important;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #94a3b8;
+      }
+      #status {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--copper);
+      }
+      #sign-in,
+      .ask-row button {
+        background: var(--copper);
+      }
+      #sign-in:hover:not(:disabled),
+      .ask-row button:hover:not(:disabled) {
+        background: #904218;
+      }
+      button {
+        border-radius: 7px;
+        font-weight: 500;
+      }
+      input {
+        border-color: #d8dce5;
+        border-radius: 7px;
+      }
+      input:focus {
+        outline: none;
+        border-color: var(--brand);
+      }
+      .meeting {
+        font-size: 13px;
+      }
+      .live-question {
+        background: #fff;
+        border: 1px solid #e8c9ae;
+        border-left: 3px solid var(--copper);
+        border-radius: 8px;
+      }
+      #log {
+        font-family: var(--mono);
+      }
     </style>
   </head>
   <body>

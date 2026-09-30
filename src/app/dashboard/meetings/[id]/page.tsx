@@ -211,8 +211,9 @@ export default async function MeetingDetailPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{meeting.title}</h1>
-          <p className="text-sm text-slate-500">
+          <p className="eyebrow">{summary ? "Recap · ready after the call" : "Meeting"}</p>
+          <h1 className="mt-1.5 text-3xl text-slate-900">{meeting.title}</h1>
+          <p className="mt-1 text-sm text-slate-500">
             {meeting.occurredAt.toLocaleDateString(undefined, {
               year: "numeric",
               month: "long",
@@ -235,8 +236,28 @@ export default async function MeetingDetailPage({
       </div>
 
       {summary && (
+        // At-a-glance tiles, as in the product design's recap screen.
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { n: summary.keyPoints.length, label: "Key points", tone: "text-slate-900" },
+            { n: summary.actionItems.length, label: "Action items", tone: "text-slate-900" },
+            {
+              n: (summary.dealSignals ?? []).filter((d) => d.type !== "buying_signal").length,
+              label: "Open risks",
+              tone: "text-accent",
+            },
+          ].map((tile) => (
+            <div key={tile.label} className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+              <p className={`font-serif text-3xl leading-none ${tile.tone}`}>{tile.n}</p>
+              <p className="mt-2 text-xs text-slate-500">{tile.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {summary && (
         <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="text-sm font-medium text-slate-900">Overview</h2>
+          <h2 className="text-base text-slate-900">Overview</h2>
           <p className="mt-2 text-sm text-slate-700">{summary.overview}</p>
 
           {summary.continuityNote && (

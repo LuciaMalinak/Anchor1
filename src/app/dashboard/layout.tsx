@@ -15,6 +15,19 @@ import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { COLOR_THEME_BY_KEY, isColorThemeKey } from "@/lib/colorThemes";
 import { LiveMeetingWatcher } from "@/components/LiveMeetingWatcher";
 import { isAppOwner } from "@/lib/appOwner";
+import { WhatsNewModal } from "@/components/WhatsNewModal";
+
+// Members whose account existed before this date see the one-time "welcome
+// back to the new Anchor" popup (WhatsNewModal). Newer accounts get the
+// first-visit WelcomeSplash instead, so they never see both.
+const WHATS_NEW_CUTOFF = new Date("2026-10-01T00:00:00Z");
+
+// "Sam Patel" -> "SP", "sam@x.com" -> "S".
+function initials(nameOrEmail: string): string {
+  const words = nameOrEmail.split("@")[0].split(/[\s._-]+/).filter(Boolean);
+  const letters = words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0]?.[0] ?? "?");
+  return letters.toUpperCase();
+}
 
 export default async function DashboardLayout({
   children,
@@ -44,6 +57,7 @@ export default async function DashboardLayout({
   // (see globals.css's `@theme inline` block). Null/unrecognized just
   // falls through to the default brand accent, same as always.
   let accentStyle: React.CSSProperties | undefined;
+  let showWhatsNew = false;
   if (session?.user?.id) {
     try {
       const teamId = await getOrCreateTeamId(session.user.id);
@@ -101,6 +115,7 @@ export default async function DashboardLayout({
       // what THIS person sees. "default" (or nothing saved) just falls
       // through to whatever accentStyle already resolved to above.
       const [me] = await db.select().from(users).where(eq(users.id, session.user.id));
+      showWhatsNew = Boolean(me?.welcomeSeen && me.createdAt < WHATS_NEW_CUTOFF);
       if (me?.colorTheme && isColorThemeKey(me.colorTheme) && me.colorTheme !== "default") {
         const theme = COLOR_THEME_BY_KEY[me.colorTheme];
         accentStyle = { "--accent": theme.accent, "--accent-dark": theme.accentDark } as React.CSSProperties;
@@ -111,50 +126,20 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50" style={accentStyle}>
-      {/* A fixed backdrop tinted by the team's --accent (set above from
-          src/lib/industries.ts) — one soft, wide, blurred wash in the top
-          corner, nothing else. Reads the CSS variable rather than
-          hardcoding a color per industry, so every sector's dashboard has
-          a subtly different color temperature for free. Deliberately
-          restrained this time: no dot grid, no hard edge, low enough
-          opacity that it reads as "premium ambient light" rather than a
-          pattern or a stripe — the loud version of this (visible dots,
-          35% opacity) is exactly what got called out as unprofessional.
-          Fixed + negative z-index + pointer-events-none, so it never
-          intercepts clicks or competes with real content. */}
-      <div
-        aria-hidden="true"
-        className="drift-bg pointer-events-none fixed inset-0 -z-10"
-        style={{
-          backgroundImage:
-            "radial-gradient(ellipse 55% 38% at 82% -8%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%)",
-        }}
-      />
-      {/* Plain white header, neutral border — no colored stripe. The bright
-          solid accent bar this used to have (linear-gradient, 3px, full
-          width) is exactly what read as a garish "bar/glow" rather than
-          professional branding; the accent now shows up only in small,
-          deliberate touches (the signed-in avatar, hover states, buttons)
-          instead of a loud band across the top of every page. */}
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 px-6 py-4 lg:flex-nowrap lg:px-10 2xl:px-16">
-          <Link href="/dashboard">
-            <AnimatedLogo size="lg" />
+    <div className="flex min-h-screen flex-col bg-canvas" style={accentStyle}>
+      {/* White header on the soft canvas, plain text nav with the current
+          section underlined, and a small initials avatar — the product
+          design's header, kept to the same links as before. */}
+      <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-2 px-6 py-3 lg:flex-nowrap lg:px-10 2xl:px-16">
+          <Link href="/dashboard" className="shrink-0">
+            <AnimatedLogo size="md" />
           </Link>
           {/* flex-wrap on the row above keeps this from being clipped on a
-              phone-width screen (it used to just run off the right edge,
-              unreachable, since the row itself never wrapped); overflow-x
-              here is a second safety net in case even its own row is still
-              too narrow for every item on a very small phone.
-
-              The nav itself sits in a soft rounded "track" (bg-slate-100/70)
-              so each NavLink's active state reads as a filled pill inside
-              a segmented control, instead of floating text with an
-              underline — a small change that makes the whole header feel
-              more like a deliberate piece of UI and less like a plain
-              list of links. */}
-          <nav className="order-3 flex w-full items-center gap-1 overflow-x-auto rounded-full bg-slate-100/70 p-1 text-sm font-medium lg:order-none lg:w-auto lg:overflow-visible">
+              phone-width screen; overflow-x here is a second safety net in
+              case even its own row is still too narrow on a very small
+              phone. */}
+          <nav className="order-3 flex w-full items-center gap-5 overflow-x-auto text-[13px] font-medium lg:order-none lg:ml-auto lg:w-auto lg:overflow-visible">
             <NavLink href="/dashboard/deals">Deals</NavLink>
             <NavLink href="/dashboard/insights">Insights</NavLink>
             <NavLink href="/dashboard/contacts">Contacts</NavLink>
@@ -168,10 +153,11 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/admin">Admin</NavLink>
             )}
           </nav>
-          <div className="flex items-center gap-3 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-[13px] text-slate-500">
             <Link
               href="/dashboard/profile"
-              className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-slate-100 hover:text-brand"
+              title={session?.user?.name || session?.user?.email || "Profile"}
+              className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 transition-colors hover:bg-slate-100 hover:text-slate-900"
             >
               {session?.user?.image ? (
                 <Image
@@ -180,16 +166,17 @@ export default async function DashboardLayout({
                   width={28}
                   height={28}
                   unoptimized
-                  className="h-7 w-7 rounded-full object-cover ring-2 ring-white"
+                  className="h-7 w-7 rounded-full object-cover"
                 />
               ) : (
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white ring-2 ring-white">
-                  {(session?.user?.name || session?.user?.email || "?")[0]?.toUpperCase()}
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                  {initials(session?.user?.name || session?.user?.email || "?")}
                 </span>
               )}
-              <span className="font-medium text-slate-700">{session?.user?.name || session?.user?.email}</span>
+              <span className="hidden font-medium text-slate-700 sm:inline">
+                {session?.user?.name || session?.user?.email}
+              </span>
             </Link>
-            <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
             <form
               action={async () => {
                 "use server";
@@ -198,7 +185,7 @@ export default async function DashboardLayout({
             >
               <button
                 type="submit"
-                className="rounded-full px-3 py-1.5 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                className="rounded-full px-2.5 py-1.5 transition-colors hover:bg-slate-100 hover:text-slate-900"
               >
                 Sign out
               </button>
@@ -261,6 +248,7 @@ export default async function DashboardLayout({
           on, not just when they happen to be sitting on that deal's
           During tab. */}
       {session?.user?.id && <LiveMeetingWatcher />}
+      {showWhatsNew && <WhatsNewModal />}
     </div>
   );
 }
