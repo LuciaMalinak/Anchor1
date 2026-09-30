@@ -52,22 +52,41 @@ fi
 
 echo "Found build: $ZIP_PATH ($(du -h "$ZIP_PATH" | cut -f1))"
 
+# Asks the website for a short-lived upload URL (body: JSON naming the
+# file). Retries for a few minutes if the site is briefly unavailable, e.g.
+# restarting for a deploy pushed at the same moment as this build; stops
+# straight away on a real refusal like a wrong upload secret. Prints the
+# URL, or nothing if it never got one (the last response goes to stderr).
+request_upload_url() {
+  local body="$1" response url attempt
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    response=$(curl -sS -m 60 -X POST "$ANCHOR_WEB_BASE/api/admin/desktop-app/upload-url" \
+      -H "Content-Type: application/json" \
+      -H "x-upload-secret: $DESKTOP_APP_UPLOAD_SECRET" \
+      -d "$body" 2>&1 || true)
+    url=$(echo "$response" | python3 -c "import sys, json; d = json.load(sys.stdin); print(d.get('uploadUrl', ''))" 2>/dev/null || echo "")
+    if [ -n "$url" ]; then
+      echo "$url"
+      return 0
+    fi
+    if echo "$response" | grep -qi "not authorized"; then
+      break
+    fi
+    echo "  Anchor didn't answer with an upload URL (attempt $attempt of 10) — retrying in 30s …" >&2
+    sleep 30
+  done
+  echo "Didn't get an upload URL back. Last response was: $response" >&2
+  if [ -n "$GITHUB_ACTIONS" ]; then
+    echo "::error::Upload URL request failed. Last response: $(echo "$response" | head -c 300 | tr '\n' ' ')" >&2
+  fi
+  return 1
+}
+
 echo "Asking $ANCHOR_WEB_BASE for an upload URL …"
-RESPONSE=$(curl -sS -X POST "$ANCHOR_WEB_BASE/api/admin/desktop-app/upload-url" \
-  -H "Content-Type: application/json" \
-  -H "x-upload-secret: $DESKTOP_APP_UPLOAD_SECRET" \
-  -d '{"platform":"mac"}')
-
-UPLOAD_URL=$(echo "$RESPONSE" | python3 -c "import sys, json; d = json.load(sys.stdin); print(d.get('uploadUrl', ''))" 2>/dev/null || echo "")
-
-if [ -z "$UPLOAD_URL" ]; then
-  echo "Didn't get an upload URL back. Response was:"
-  echo "$RESPONSE"
-  exit 1
-fi
+UPLOAD_URL=$(request_upload_url '{"platform":"mac"}') || exit 1
 
 echo "Uploading to R2 …"
-curl -sS -X PUT "$UPLOAD_URL" \
+curl -sS --fail --retry 3 -X PUT "$UPLOAD_URL" \
   -H "Content-Type: application/zip" \
   --data-binary "@$ZIP_PATH" \
   --progress-bar
@@ -85,17 +104,8 @@ YML_PATH="release/latest-mac.yml"
 if [ -f "$YML_PATH" ]; then
   echo ""
   echo "Publishing update feed ($YML_PATH) …"
-  YML_RESPONSE=$(curl -sS -X POST "$ANCHOR_WEB_BASE/api/admin/desktop-app/upload-url" \
-    -H "Content-Type: application/json" \
-    -H "x-upload-secret: $DESKTOP_APP_UPLOAD_SECRET" \
-    -d '{"file":"latest-mac.yml"}')
-  YML_UPLOAD_URL=$(echo "$YML_RESPONSE" | python3 -c "import sys, json; d = json.load(sys.stdin); print(d.get('uploadUrl', ''))" 2>/dev/null || echo "")
-  if [ -z "$YML_UPLOAD_URL" ]; then
-    echo "Didn't get an upload URL for the update feed. Response was:"
-    echo "$YML_RESPONSE"
-    exit 1
-  fi
-  curl -sS -X PUT "$YML_UPLOAD_URL" \
+  YML_UPLOAD_URL=$(request_upload_url '{"file":"latest-mac.yml"}') || exit 1
+  curl -sS --fail --retry 3 -X PUT "$YML_UPLOAD_URL" \
     -H "Content-Type: text/yaml" \
     --data-binary "@$YML_PATH" \
     --progress-bar
