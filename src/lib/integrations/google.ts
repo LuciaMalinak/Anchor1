@@ -73,6 +73,26 @@ export async function googleGet(
   return { json, accessToken: token };
 }
 
+// Same as googleGet, but returns the raw response body (a file download or
+// export), for Drive documents that need text extraction.
+export async function googleGetBytes(
+  connection: Connection,
+  accessToken: string,
+  url: string
+): Promise<{ data: Buffer; accessToken: string }> {
+  let token = accessToken;
+  let res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401) {
+    token = await refreshGoogleAccessToken(connection);
+    res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  }
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "");
+    throw new Error(`Google API request failed (${res.status}): ${bodyText.slice(0, 300)}`);
+  }
+  return { data: Buffer.from(await res.arrayBuffer()), accessToken: token };
+}
+
 // Thrown when the user hasn't connected Google, or connected it without
 // the write permission an action needs. The route turns this into a link
 // to /api/integrations/google/connect?add=<scopeKey> so they can grant it.

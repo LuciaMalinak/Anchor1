@@ -81,6 +81,7 @@ export async function generateHandoffBriefing(params: {
   // connection or nothing matched.
   emailContext?: string | null;
   calendarContext?: string | null;
+  documentContext?: string | null;
   // A short digest of files/voice notes attached to this deal (see
   // src/lib/dealFilesContext.ts).
   attachedFiles?: string | null;
@@ -112,6 +113,9 @@ export async function generateHandoffBriefing(params: {
     ? `\n\nHow the deal lead actually operates — write focusAreas and whatToPushOn to match this, not generic sales advice:\n${params.leadStyle}`
     : "";
   const emailBlock = params.emailContext ? `\n\nRecent emails with people on this deal:\n${params.emailContext}` : "";
+  const documentBlock = params.documentContext
+    ? `\n\nDocuments about this deal from Google Drive / Dropbox (newest first):\n${params.documentContext}`
+    : "";
   const calendarBlock = params.calendarContext
     ? `\n\nRecent and upcoming calendar meetings with people on this deal:\n${params.calendarContext}`
     : "";
@@ -141,7 +145,7 @@ People on the other side:
 ${peopleBlock}
 
 Recent meetings:
-${meetingsBlock}${emailBlock}${calendarBlock}${attachedFilesBlock}${leadStyleBlock}
+${meetingsBlock}${emailBlock}${calendarBlock}${documentBlock}${attachedFilesBlock}${leadStyleBlock}
 
 Produce a handoff briefing for someone else running the next meeting on this deal.`,
       },

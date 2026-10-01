@@ -71,6 +71,7 @@ export async function buildDealToolContext(deal: typeof deals.$inferSelect): Pro
   }
   if (deal.emailContext) parts.push(`Recent emails: ${clip(deal.emailContext, 1200)}`);
   if (deal.calendarContext) parts.push(`Calendar: ${clip(deal.calendarContext, 600)}`);
+  if (deal.documentContext) parts.push(`Documents (Drive/Dropbox): ${clip(deal.documentContext, 1200)}`);
   if (deal.newsHeadline) parts.push(`Company news: ${clip(deal.newsHeadline, 300)}`);
   if (deal.companyResearch) parts.push(`Company research: ${clip(deal.companyResearch, 800)}`);
 

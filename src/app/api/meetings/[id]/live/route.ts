@@ -180,6 +180,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         // had this; live coaching was blind to Gmail/Calendar until now.
         emailContext: deal?.emailContext || null,
         calendarContext: deal?.calendarContext || null,
+        documentContext: deal?.documentContext || null,
         attachedFiles: summarizeDealFiles(fileRows),
         pastMeetings: pastMeetingRows.map((r) => ({
           title: r.meeting.title,

@@ -7,13 +7,19 @@ import { DesktopTokenPanel } from "@/components/DesktopTokenPanel";
 const SYNCABLE_PROVIDERS = new Set(["salesforce", "hubspot"]);
 
 type Provider = {
-  key: "google" | "microsoft" | "slack" | "salesforce" | "hubspot";
+  key: string;
   name: string;
   description: string;
   configured: boolean;
   connected: boolean;
   connectedLabel: string | null;
   connectedAt: string | null;
+  // For cards that don't map one-to-one onto a connection (Google Drive is
+  // an extra permission on the Google connection): where Connect goes, and
+  // whether there's a separate Disconnect.
+  connectHref?: string;
+  disconnectable?: boolean;
+  connectedNote?: string;
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -154,18 +160,22 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
                     {syncing === p.key ? "Syncing…" : "Sync now"}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => handleDisconnect(p.key, p.name)}
-                  disabled={disconnecting === p.key}
-                  className="self-start rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                >
-                  {disconnecting === p.key ? "Disconnecting…" : "Disconnect"}
-                </button>
+                {p.disconnectable === false ? (
+                  p.connectedNote && <p className="text-[11px] text-slate-400">{p.connectedNote}</p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleDisconnect(p.key, p.name)}
+                    disabled={disconnecting === p.key}
+                    className="self-start rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {disconnecting === p.key ? "Disconnecting…" : "Disconnect"}
+                  </button>
+                )}
               </div>
             ) : p.configured ? (
               <a
-                href={`/api/integrations/${p.key}/connect`}
+                href={p.connectHref ?? `/api/integrations/${p.key}/connect`}
                 className="mt-1 self-start rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-brand-dark"
               >
                 Connect

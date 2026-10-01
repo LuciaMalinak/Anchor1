@@ -72,8 +72,9 @@ export default async function DealDetailPage({
     if (refreshed) {
       deal = {
         ...deal,
-        emailContext: refreshed.emailContext,
-        calendarContext: refreshed.calendarContext,
+        emailContext: refreshed.emailContext ?? deal.emailContext,
+        calendarContext: refreshed.calendarContext ?? deal.calendarContext,
+        documentContext: refreshed.documentContext,
         integrationContextUpdatedAt: new Date(),
       };
     }

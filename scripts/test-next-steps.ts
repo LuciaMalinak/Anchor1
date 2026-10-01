@@ -64,3 +64,14 @@ import("@/lib/integrations/crmValidate").then(({ validateChanges, isRealDate }) 
   const ok = validateChanges(snap, { stage: "Negotiation", nextStep: "x".repeat(300) });
   assert(typeof ok === "object" && ok.stage === "Negotiation" && ok.nextStep?.length === 255, "valid update kept, next step capped at 255");
 }).catch((err) => { console.error("FAIL crmWrite tests", err); process.exit(1); });
+import("@/lib/integrations/documentSearch").then(({ dealSearchTerm, formatDocumentContext, trimExcerpt, MAX_EXCERPT_CHARS }) => {
+  assert(dealSearchTerm("Northbridge — Series B") === "Northbridge", "deal search term: company before an em dash");
+  assert(dealSearchTerm("Acme - Renewal 2027") === "Acme", "deal search term: company before a hyphen");
+  assert(dealSearchTerm("Globex: pilot") === "Globex", "deal search term: company before a colon");
+  assert(dealSearchTerm("HP — expansion") === "HP — expansion", "deal search term: too-short company falls back to the full name");
+  assert(trimExcerpt("a  b\n\nc") === "a b c", "excerpt whitespace collapsed");
+  assert(trimExcerpt("x".repeat(MAX_EXCERPT_CHARS + 50)).length === MAX_EXCERPT_CHARS + 1, "long excerpt trimmed with an ellipsis");
+  assert(formatDocumentContext([]) === null, "no documents -> no document context");
+  const ctx = formatDocumentContext([{ source: "Dropbox", name: "deck.pdf", modified: "2026-09-30T10:00:00Z", link: null, excerpt: "hello" }]);
+  assert(ctx === "— deck.pdf (Dropbox, updated 2026-09-30)\nhello", "document context formatted with source and date");
+}).catch((err) => { console.error("FAIL documentSearch tests", err); process.exit(1); });

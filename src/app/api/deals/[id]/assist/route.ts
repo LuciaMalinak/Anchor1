@@ -185,6 +185,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // adds zero extra latency to a live answer.
     emailContext: deal.emailContext,
     calendarContext: deal.calendarContext,
+    documentContext: deal.documentContext,
     dealLeadStyle,
     dealLeadName: leadRows[0] ? leadRows[0].name || leadRows[0].email : null,
     relevantPassages: passages.length ? formatPassages(passages) : null,

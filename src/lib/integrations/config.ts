@@ -8,7 +8,7 @@
 // so a single Azure AD app registration (one client ID/secret) covers
 // both with different scopes. Presenting them as two separate "connect"
 // buttons would just mean asking for the same credentials twice.
-export type ProviderKey = "google" | "microsoft" | "slack" | "salesforce" | "hubspot";
+export type ProviderKey = "google" | "microsoft" | "slack" | "salesforce" | "hubspot" | "dropbox";
 
 export type ProviderConfig = {
   key: ProviderKey;
@@ -104,6 +104,22 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     clientIdEnv: "HUBSPOT_INTEGRATION_CLIENT_ID",
     clientSecretEnv: "HUBSPOT_INTEGRATION_CLIENT_SECRET",
   },
+  dropbox: {
+    key: "dropbox",
+    name: "Dropbox",
+    description:
+      "Find the decks, proposals and notes about a deal in your Dropbox, so Ask Anchor and briefings can draw on them.",
+    // Read-only: list/search files and read their contents, plus the
+    // account email shown on this card.
+    scopes: ["account_info.read", "files.metadata.read", "files.content.read"],
+    authorizeUrl: "https://www.dropbox.com/oauth2/authorize",
+    tokenUrl: "https://api.dropboxapi.com/oauth2/token",
+    clientIdEnv: "DROPBOX_INTEGRATION_CLIENT_ID",
+    clientSecretEnv: "DROPBOX_INTEGRATION_CLIENT_SECRET",
+    // Dropbox access tokens expire after a few hours; "offline" asks for a
+    // refresh token so the connection keeps working (see dropbox.ts).
+    extraAuthorizeParams: { token_access_type: "offline" },
+  },
 };
 
 // Write access for the meeting page's "Save to Gmail drafts" and "Add to
@@ -114,6 +130,9 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
 export const GOOGLE_EXTRA_SCOPES = {
   gmail_compose: "https://www.googleapis.com/auth/gmail.compose",
   calendar_events: "https://www.googleapis.com/auth/calendar.events",
+  // Google Drive, read-only: the "Google Drive" card on the Integrations
+  // page adds it to the existing Google connection (see drive.ts).
+  drive_read: "https://www.googleapis.com/auth/drive.readonly",
 } as const;
 export type GoogleExtraScopeKey = keyof typeof GOOGLE_EXTRA_SCOPES;
 

@@ -516,6 +516,10 @@ export const deals = pgTable("deal", {
   // companyResearch above.
   emailContext: text("emailContext"),
   calendarContext: text("calendarContext"),
+  // Excerpts of documents about this deal found in the lead's Google Drive
+  // and Dropbox (see dealIntegrationContext.ts). Refreshed alongside the
+  // email/calendar context above.
+  documentContext: text("documentContext"),
   integrationContextUpdatedAt: timestamp("integrationContextUpdatedAt", { mode: "date" }),
   // What a teammate covering this deal's meeting is allowed to decide on
   // their own (e.g. "can offer up to 10% discount, can't commit to custom
@@ -682,6 +686,7 @@ export const integrationProviderEnum = pgEnum("integration_provider", [
   "slack",
   "salesforce",
   "hubspot",
+  "dropbox",
 ]);
 
 export const integrationConnections = pgTable(

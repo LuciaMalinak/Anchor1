@@ -76,6 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       leadStyle,
       emailContext: deal.emailContext,
       calendarContext: deal.calendarContext,
+      documentContext: deal.documentContext,
       attachedFiles: summarizeDealFiles(fileRows),
     });
     return NextResponse.json({ briefing });

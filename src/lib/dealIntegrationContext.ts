@@ -15,6 +15,9 @@ import { deals, meetingParticipants, meetings, contacts } from "@/db/schema";
 import { fetchRelevantEmails } from "./integrations/gmail";
 import { fetchRelevantEvents } from "./integrations/calendar";
 import { extractDealEmailDigest, formatDealEmailDigest } from "./dealEmailDigest";
+import { fetchRelevantDriveDocuments } from "./integrations/drive";
+import { fetchRelevantDropboxDocuments } from "./integrations/dropbox";
+import { dealSearchTerm, formatDocumentContext } from "./integrations/documentSearch";
 
 // Same rhythm as companyResearch's STALE_AFTER_MS — frequent enough that
 // a new email or an upcoming meeting shows up the same day, not so
@@ -39,7 +42,30 @@ async function getDealParticipantEmails(dealId: string, primaryContactEmail: str
   return Array.from(new Set(emails));
 }
 
-export type IntegrationContextResult = { emailContext: string | null; calendarContext: string | null };
+export type IntegrationContextResult = {
+  emailContext: string | null;
+  calendarContext: string | null;
+  documentContext: string | null;
+};
+
+// Documents about the deal's company in the lead's Google Drive and
+// Dropbox (whichever are connected), newest first. Matched by the company
+// part of the deal name, since documents rarely mention people's emails.
+async function fetchDealDocuments(userId: string, dealName: string): Promise<string | null> {
+  const term = dealSearchTerm(dealName);
+  const [drive, dropbox] = await Promise.all([
+    fetchRelevantDriveDocuments(userId, term).catch((err) => {
+      console.error(`[dealIntegrationContext] drive search failed for "${term}":`, err);
+      return [];
+    }),
+    fetchRelevantDropboxDocuments(userId, term).catch((err) => {
+      console.error(`[dealIntegrationContext] dropbox search failed for "${term}":`, err);
+      return [];
+    }),
+  ]);
+  const all = [...drive, ...dropbox].sort((a, b) => b.modified.localeCompare(a.modified));
+  return formatDocumentContext(all);
+}
 
 // Best-effort, never throws: a missing connection, a revoked token, or an
 // API hiccup just means the deal goes on without this layer, exactly as
@@ -57,7 +83,16 @@ export async function refreshDealIntegrationContext(deal: {
 
   try {
     const participantEmails = await getDealParticipantEmails(deal.id, deal.primaryContactEmail);
-    if (participantEmails.length === 0) return null;
+    const documentContext = await fetchDealDocuments(candidateUserId, deal.name);
+    if (participantEmails.length === 0) {
+      // No contacts to match emails or invites against yet, but documents
+      // only need the deal's name, so keep those current.
+      await db
+        .update(deals)
+        .set({ documentContext, integrationContextUpdatedAt: new Date() })
+        .where(eq(deals.id, deal.id));
+      return { emailContext: null, calendarContext: null, documentContext };
+    }
 
     const [emails, events] = await Promise.all([
       fetchRelevantEmails(candidateUserId, participantEmails).catch((err) => {
@@ -93,10 +128,10 @@ export async function refreshDealIntegrationContext(deal: {
 
     await db
       .update(deals)
-      .set({ emailContext, calendarContext, integrationContextUpdatedAt: new Date() })
+      .set({ emailContext, calendarContext, documentContext, integrationContextUpdatedAt: new Date() })
       .where(eq(deals.id, deal.id));
 
-    return { emailContext, calendarContext };
+    return { emailContext, calendarContext, documentContext };
   } catch (err) {
     console.error(`[dealIntegrationContext] refresh failed for deal ${deal.id}:`, err);
     return null;

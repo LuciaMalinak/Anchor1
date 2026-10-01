@@ -11,6 +11,15 @@ export async function fetchIdentityLabel(
   tokenResponseBody: Record<string, unknown>
 ): Promise<string | null> {
   try {
+    if (key === "dropbox") {
+      const res = await fetch("https://api.dropboxapi.com/2/users/get_current_account", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return null;
+      const body = await res.json();
+      return typeof body.email === "string" ? body.email : null;
+    }
     if (key === "google") {
       const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
         headers: { Authorization: `Bearer ${accessToken}` },

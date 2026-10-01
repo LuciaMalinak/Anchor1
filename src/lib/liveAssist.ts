@@ -67,6 +67,7 @@ export type DealContext = {
   // Null whenever there's no connection or nothing matched — never invented.
   emailContext: string | null;
   calendarContext: string | null;
+  documentContext?: string | null;
   // How the deal's actual lead tends to negotiate, decide, and
   // communicate (see src/lib/styleProfile.ts) — null if no lead is set,
   // or there isn't enough of their own material yet to say anything real.
@@ -185,6 +186,9 @@ function buildContextBlock(ctx: DealContext): string {
     parts.push(`\nRecent emails with people on this deal:\n${ctx.emailContext}`);
   }
 
+  if (ctx.documentContext) {
+    parts.push(`\nDocuments about this deal from Google Drive / Dropbox (newest first):\n${ctx.documentContext}`);
+  }
   if (ctx.calendarContext) {
     parts.push(`\nRecent and upcoming calendar meetings with people on this deal:\n${ctx.calendarContext}`);
   }

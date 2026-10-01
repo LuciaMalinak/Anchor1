@@ -129,6 +129,7 @@ export async function generateLiveCoaching(params: {
   // there's no connection or nothing matched — never invented.
   emailContext?: string | null;
   calendarContext?: string | null;
+  documentContext?: string | null;
   // A short digest of files/voice notes attached to this deal (see
   // src/lib/dealFilesContext.ts) — background material the rep uploaded
   // ahead of time (a contract, a prior proposal, a voice memo), not
@@ -159,6 +160,9 @@ export async function generateLiveCoaching(params: {
   const emailContextText = params.emailContext
     ? `\n\nRecent emails with people on this deal: ${params.emailContext}`
     : "";
+  const documentContextText = params.documentContext
+    ? `\n\nDocuments about this deal from Google Drive / Dropbox: ${params.documentContext.slice(0, 3000)}`
+    : "";
   const calendarContextText = params.calendarContext
     ? `\n\nRecent and upcoming calendar meetings with people on this deal: ${params.calendarContext}`
     : "";
@@ -180,7 +184,7 @@ export async function generateLiveCoaching(params: {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}
 ${priorChecklistText}
 
 Transcript so far (most recent portion of an in-progress call):
