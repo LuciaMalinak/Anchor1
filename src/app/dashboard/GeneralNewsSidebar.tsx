@@ -11,22 +11,11 @@ import type { TickerItem } from "@/lib/industryTicker";
 // this never runs once a briefing has loaded.
 const BRIEFING_POLL_MS = 20 * 1000;
 
-// Deal detail pages (/dashboard/deals/<id>) already show their own
-// deal-specific news sidebar inside DealTabs — this general, team-wide
-// briefing only makes sense everywhere else ("the main site"), so it
-// hides itself there rather than doubling up two news panels.
-function isDealDetailPath(pathname: string | null): boolean {
-  if (!pathname) return false;
-  return /^\/dashboard\/deals\/[^/]+$/.test(pathname);
-}
-
-function LiveDot() {
-  return (
-    <span className="relative flex h-2 w-2">
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-    </span>
-  );
+// Team-wide news (the industry ticker and today's briefing) now lives on
+// the Home page only; the right-hand column on every page belongs to Ask
+// Anchor (see AskAnchorDock.tsx). Deal pages show their own company news.
+function isHomePath(pathname: string | null): boolean {
+  return pathname === "/dashboard";
 }
 
 export function GeneralNewsSidebar({
@@ -79,7 +68,7 @@ export function GeneralNewsSidebar({
     };
   }, [dailyBriefing]);
 
-  if (isDealDetailPath(pathname)) return null;
+  if (!isHomePath(pathname)) return null;
 
   async function handleRefresh() {
     setLoading(true);
@@ -98,33 +87,24 @@ export function GeneralNewsSidebar({
   }
 
   return (
-    <aside className="flex w-full flex-col gap-4 lg:w-80 lg:shrink-0">
-      <div className="flex items-center gap-2 px-1">
-        <LiveDot />
-        <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold tracking-[0.15em] text-accent">
-          NEWS
-        </span>
-      </div>
-
+    <section aria-label="News" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <IndustryTicker initialItems={initialTickerItems} industryLabel={industryLabel} />
 
-      <div className="rounded-lg border border-slate-200 border-l-4 border-l-brand bg-white px-4 py-4">
+      <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-brand">
-            TODAY&apos;S BRIEFING
-          </p>
+          <h2 className="text-sm font-semibold text-brand">Today&apos;s briefing</h2>
           <button
             type="button"
             onClick={handleRefresh}
             disabled={loading}
             className="shrink-0 text-xs font-medium text-brand hover:underline disabled:opacity-50"
           >
-            {loading ? "…" : "Refresh"}
+            {loading ? "Refreshing…" : "Refresh"}
           </button>
         </div>
         {dailyBriefing ? (
           <>
-            <p className="mt-1 text-sm text-slate-700">{dailyBriefing}</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{dailyBriefing}</p>
             {briefingUpdatedAt && (
               <p className="mt-1 text-[11px] text-slate-400">
                 {new Date(briefingUpdatedAt).toLocaleDateString()}
@@ -132,18 +112,12 @@ export function GeneralNewsSidebar({
             )}
           </>
         ) : (
-          <p className="mt-1 text-sm text-slate-400">
-            A roundup of today&apos;s business news, shared across your team.
+          <p className="mt-1.5 text-sm text-slate-400">
+            A roundup of today&apos;s business news for your industry, shared across your team.
           </p>
         )}
         {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
       </div>
-
-      <p className="px-1 text-[11px] text-slate-400">
-        The ticker above refreshes itself every few minutes; the briefing below updates automatically
-        through the day, or hit Refresh any time. Open a deal to see news specific to that company
-        instead.
-      </p>
-    </aside>
+    </section>
   );
 }

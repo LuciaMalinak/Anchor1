@@ -301,3 +301,52 @@ export async function* askAnchorStream(params: {
   // plain `for await` over content_block_delta events alone would swallow.
   await stream.finalMessage();
 }
+
+// The app-wide Ask Anchor panel (see /api/ask and AskAnchorDock.tsx) —
+// same model and streaming shape as askAnchorStream, but grounded in a
+// whole workspace (every visible deal, recent meetings, tasks, people) or
+// in one meeting's recap, instead of a single deal mid-call.
+function buildWorkspaceSystemPrompt(scope: "workspace" | "meeting", contextBlock: string): string {
+  const what =
+    scope === "meeting"
+      ? "one meeting this person is looking at right now: its summary, action items, signals and full transcript (lines are prefixed with [minutes:seconds] timestamps)"
+      : "this person's whole Anchor workspace: their deals, recent meetings, upcoming calls, open tasks, and the people they've met";
+  return `You are Anchor, an assistant built into a meeting-intelligence app for sales and client teams. The person is asking you a question from inside the app. You can see ${what}.
+
+Answer from the context below first. Be specific: name the deal, meeting, person or date your answer comes from, and when quoting a meeting say when (date, or the transcript timestamp). If the context doesn't contain the answer, say plainly that Anchor doesn't have that yet — never invent facts, numbers, names, dates or commitments. You can use web search for public company or industry news, never to look up private individuals.
+
+Facts about Anchor itself, for questions about the app:
+- Google (Gmail + Calendar) connects read-only by default, to keep each deal's email and calendar history current. Anchor only asks for permission to create Gmail drafts or calendar events the first time someone clicks "Save to Gmail drafts" or "Add to calendar", and it never sends an email by itself.
+- Slack is used to send deal handoff briefings to a teammate. Salesforce and HubSpot sync contacts and deals into Anchor, and Anchor can suggest field updates after a call that are only written back when the person approves them.
+- Anchor Desktop records Zoom and Teams calls on a Mac without a bot joining.
+
+Keep answers short and scannable: a sentence or two, or a short "- " list when listing several things. Use **bold** sparingly for names of deals or people. No headings.
+
+--- Context ---
+${contextBlock}`;
+}
+
+export async function* askWorkspaceStream(params: {
+  scope: "workspace" | "meeting";
+  contextBlock: string;
+  question: string;
+  history: { role: "user" | "assistant"; content: string }[];
+}): AsyncGenerator<string> {
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 1200,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
+    system: buildWorkspaceSystemPrompt(params.scope, params.contextBlock),
+    messages: [
+      ...params.history.map((h) => ({ role: h.role, content: h.content })),
+      { role: "user" as const, content: params.question },
+    ],
+  });
+
+  for await (const event of stream) {
+    if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+      yield event.delta.text;
+    }
+  }
+  await stream.finalMessage();
+}

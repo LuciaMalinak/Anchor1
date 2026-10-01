@@ -9,7 +9,7 @@ import { DEAL_STAGES } from "@/lib/dealStages";
 import { getCompanyLogoUrl } from "@/lib/companyLogo";
 import { HEALTH_LABEL, HEALTH_BADGE_CLASSES, HEALTH_DOT_CLASSES, type DealHealth } from "@/lib/dealHealth";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
-import { AskAnchorPanel } from "@/components/AskAnchorPanel";
+import { AskAnchorScope } from "@/components/AskAnchorDock";
 import { DealContextBox } from "@/components/DealContextBox";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 
@@ -1106,7 +1106,7 @@ function NewsSidebar({
   onResearch: () => void;
 }) {
   return (
-    <aside className="flex w-full flex-col gap-4 lg:w-[26rem] lg:shrink-0">
+    <aside className="flex w-full flex-col gap-4 2xl:w-[22rem] 2xl:shrink-0">
       <div className="flex items-center gap-2 px-1">
         <LiveDot />
         <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold tracking-[0.15em] text-accent">
@@ -2190,7 +2190,9 @@ export function DealTabs({
   }
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-start">
+      {/* Ask Anchor (docked on the right of every page) answers about this deal here. */}
+      <AskAnchorScope label={deal.name} />
       <div className="flex min-w-0 flex-1 flex-col gap-6">
         <div className="flex flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
@@ -2239,22 +2241,10 @@ export function DealTabs({
                 {deal.decisionBoundaries}
               </div>
             )}
-            {/* Ask Anchor stays reachable in meeting mode too now — no
-                reason a live question should mean leaving the compact
-                view and losing everything meeting mode was hiding. */}
-            <AskAnchorPanel dealId={deal.id} />
           </>
         ) : (
           <>
             <DealHeaderCard deal={deal} />
-            {/* Ask Anchor gets the full column width now (rather than
-                sharing a row) so its answers and question box have real
-                room to breathe — it's also available on every tab now
-                instead of only during a live meeting. "Who can see this
-                deal" moved out of here entirely — it's now the very last
-                thing on the Before tab (see BeforePanel below), not
-                something every tab shows near the top. */}
-            <AskAnchorPanel dealId={deal.id} />
             <PeopleAndTeam
               dealId={deal.id}
               people={people}

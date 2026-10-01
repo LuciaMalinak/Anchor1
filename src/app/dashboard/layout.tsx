@@ -1,7 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
-import { AnimatedLogo } from "@/components/AnimatedLogo";
+import { Logo } from "@/components/Logo";
+import { AskAnchorProvider } from "@/components/AskAnchorDock";
 import { PageFade } from "@/components/PageFade";
 import { NavLink } from "@/components/NavLink";
 import { db } from "@/db";
@@ -119,85 +120,52 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50" style={accentStyle}>
-      {/* A fixed backdrop tinted by the team's --accent (set above from
-          src/lib/industries.ts) — one soft, wide, blurred wash in the top
-          corner, nothing else. Reads the CSS variable rather than
-          hardcoding a color per industry, so every sector's dashboard has
-          a subtly different color temperature for free. Deliberately
-          restrained this time: no dot grid, no hard edge, low enough
-          opacity that it reads as "premium ambient light" rather than a
-          pattern or a stripe — the loud version of this (visible dots,
-          35% opacity) is exactly what got called out as unprofessional.
-          Fixed + negative z-index + pointer-events-none, so it never
-          intercepts clicks or competes with real content. */}
-      <div
-        aria-hidden="true"
-        className="drift-bg pointer-events-none fixed inset-0 -z-10"
-        style={{
-          backgroundImage:
-            "radial-gradient(ellipse 55% 38% at 82% -8%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%)",
-        }}
-      />
-      {/* Plain white header, neutral border — no colored stripe. The bright
-          solid accent bar this used to have (linear-gradient, 3px, full
-          width) is exactly what read as a garish "bar/glow" rather than
-          professional branding; the accent now shows up only in small,
-          deliberate touches (the signed-in avatar, hover states, buttons)
-          instead of a loud band across the top of every page. */}
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 px-6 py-4 lg:flex-nowrap lg:px-10 2xl:px-16">
-          <Link href="/dashboard">
-            <AnimatedLogo size="lg" />
-          </Link>
-          {/* flex-wrap on the row above keeps this from being clipped on a
-              phone-width screen (it used to just run off the right edge,
-              unreachable, since the row itself never wrapped); overflow-x
-              here is a second safety net in case even its own row is still
-              too narrow for every item on a very small phone.
-
-              The nav itself sits in a soft rounded "track" (bg-slate-100/70)
-              so each NavLink's active state reads as a filled pill inside
-              a segmented control, instead of floating text with an
-              underline — a small change that makes the whole header feel
-              more like a deliberate piece of UI and less like a plain
-              list of links. */}
-          <nav className="order-3 flex w-full items-center gap-1 overflow-x-auto rounded-full bg-slate-100/70 p-1 text-sm font-medium lg:order-none lg:w-auto lg:overflow-visible">
-            <NavLink href="/dashboard/deals">Deals</NavLink>
-            <NavLink href="/dashboard/insights">Insights</NavLink>
-            <NavLink href="/dashboard/contacts">Contacts</NavLink>
-            <NavLink href="/dashboard/team">Team</NavLink>
-            <NavLink href="/dashboard/integrations">Integrations</NavLink>
-            {/* Only the app owner ever sees this — everyone else's
-                isAppOwner(session.user.email) check is false, so the link
-                (and everything under /dashboard/admin) simply doesn't
-                exist for them. See src/lib/adminAccess.ts. */}
-            {isAppOwner(session?.user?.email) && (
-              <NavLink href="/dashboard/admin">Admin</NavLink>
-            )}
-          </nav>
-          <div className="flex items-center gap-3 text-sm text-slate-500">
+    <div className="flex min-h-screen flex-col bg-[#f4f6f9]" style={accentStyle}>
+      {/* Navy header, as on the original site and the public homepage. */}
+      <header className="sticky top-0 z-20 bg-brand text-white">
+        <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-6 lg:gap-8">
+            <Link href="/dashboard" aria-label="Anchor home" className="shrink-0">
+              <Logo size="md" tone="light" />
+            </Link>
+            <nav className="hidden items-center gap-1 text-sm font-medium md:flex">
+              <NavLink href="/dashboard" exact>
+                Home
+              </NavLink>
+              <NavLink href="/dashboard/deals">Deals</NavLink>
+              <NavLink href="/dashboard/insights">Insights</NavLink>
+              <NavLink href="/dashboard/contacts">Contacts</NavLink>
+              <NavLink href="/dashboard/team">Team</NavLink>
+              <NavLink href="/dashboard/integrations">Integrations</NavLink>
+              {/* Only the app owner ever sees this — everyone else's
+                  isAppOwner(session.user.email) check is false, so the link
+                  (and everything under /dashboard/admin) simply doesn't
+                  exist for them. See src/lib/adminAccess.ts. */}
+              {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
+            </nav>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 text-sm">
             <Link
               href="/dashboard/profile"
-              className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-slate-100 hover:text-brand"
+              title={session?.user?.name || session?.user?.email || "Profile"}
+              className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
             >
               {session?.user?.image ? (
                 <Image
                   src={session.user.image}
                   alt=""
-                  width={28}
-                  height={28}
+                  width={30}
+                  height={30}
                   unoptimized
-                  className="h-7 w-7 rounded-full object-cover ring-2 ring-white"
+                  className="h-[30px] w-[30px] rounded-full object-cover"
                 />
               ) : (
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white ring-2 ring-white">
+                <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">
                   {(session?.user?.name || session?.user?.email || "?")[0]?.toUpperCase()}
                 </span>
               )}
-              <span className="font-medium text-slate-700">{session?.user?.name || session?.user?.email}</span>
+              <span className="hidden font-medium xl:inline">{session?.user?.name || session?.user?.email}</span>
             </Link>
-            <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
             <form
               action={async () => {
                 "use server";
@@ -206,39 +174,44 @@ export default async function DashboardLayout({
             >
               <button
                 type="submit"
-                className="rounded-full px-3 py-1.5 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                className="rounded-full px-3 py-1.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
               >
                 Sign out
               </button>
             </form>
           </div>
         </div>
+        {/* Narrow screens: the same links on their own scrollable row. */}
+        <nav className="flex items-center gap-1 overflow-x-auto border-t border-white/10 px-3 py-2 text-sm font-medium md:hidden">
+          <NavLink href="/dashboard" exact>
+            Home
+          </NavLink>
+          <NavLink href="/dashboard/deals">Deals</NavLink>
+          <NavLink href="/dashboard/insights">Insights</NavLink>
+          <NavLink href="/dashboard/contacts">Contacts</NavLink>
+          <NavLink href="/dashboard/team">Team</NavLink>
+          <NavLink href="/dashboard/integrations">Integrations</NavLink>
+          {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
+        </nav>
       </header>
-      <main className="flex w-full flex-1 flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
-        <div className="min-w-0 flex-1">
+      {/* Ask Anchor sits on the right of every page (AskAnchorDock.tsx);
+          the page itself fills the rest. */}
+      <AskAnchorProvider>
+        <main className="flex w-full flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <GeneralNewsSidebar
+            // Keyed by industry so switching sectors (Team page -> Change)
+            // fully remounts this instead of quietly keeping the OLD
+            // sector's briefing/ticker text in this component's own React
+            // state (useState only reads its initial prop once, on mount).
+            key={industryLabel ?? "general"}
+            initialDailyBriefing={dailyBriefing}
+            initialBriefingUpdatedAt={dailyBriefingUpdatedAt}
+            initialTickerItems={tickerItems}
+            industryLabel={industryLabel}
+          />
           <PageFade>{children}</PageFade>
-        </div>
-        <GeneralNewsSidebar
-          // Keyed by industry so switching sectors (Team page -> Change)
-          // fully remounts this instead of quietly keeping the OLD
-          // sector's briefing/ticker text sitting in this component's own
-          // React state. Without this key, changing team.industry clears
-          // the cache server-side (see PATCH /api/team) and this component
-          // gets fresh, empty `initial*` props on the next render — but a
-          // client component's useState only reads its initial prop once,
-          // on mount, so it would keep showing the previous sector's
-          // already-loaded news indefinitely instead of picking up the
-          // new one. Remounting resets that local state and restarts the
-          // polling effects below from scratch, matching a subscriber's
-          // actual expectation: they signed up for one specific sector,
-          // and switching it should swap the news, not blend or freeze it.
-          key={industryLabel ?? "general"}
-          initialDailyBriefing={dailyBriefing}
-          initialBriefingUpdatedAt={dailyBriefingUpdatedAt}
-          initialTickerItems={tickerItems}
-          industryLabel={industryLabel}
-        />
-      </main>
+        </main>
+      </AskAnchorProvider>
       {/* Small, quiet footer on every dashboard page — the site's Terms
           and Privacy links previously only lived on the marketing
           homepage, so someone who signed up straight from a sign-up link

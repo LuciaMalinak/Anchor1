@@ -20,6 +20,7 @@ import { isProviderConfigured } from "@/lib/integrations/config";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { MeetingDealPicker } from "./MeetingDealPicker";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
+import { AskAnchorScope } from "@/components/AskAnchorDock";
 
 // Kept as a plain helper outside the component — same reasoning as
 // isResearchStale() in companyResearch.ts: reading Date.now() directly
@@ -209,6 +210,7 @@ export default async function MeetingDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
+      <AskAnchorScope label={meeting.title} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">{meeting.title}</h1>

@@ -25,7 +25,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode {
   );
 }
 
-function FormattedMessage({ content }: { content: string }) {
+export function FormattedMessage({ content }: { content: string }) {
   const blocks = content.split(/\n\n+/).filter((b) => b.trim().length > 0);
   return (
     <>
