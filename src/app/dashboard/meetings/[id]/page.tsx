@@ -211,9 +211,8 @@ export default async function MeetingDetailPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="eyebrow">{summary ? "Recap · ready after the call" : "Meeting"}</p>
-          <h1 className="mt-1.5 text-3xl text-slate-900">{meeting.title}</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-slate-900">{meeting.title}</h1>
+          <p className="text-sm text-slate-500">
             {meeting.occurredAt.toLocaleDateString(undefined, {
               year: "numeric",
               month: "long",
@@ -236,28 +235,8 @@ export default async function MeetingDetailPage({
       </div>
 
       {summary && (
-        // At-a-glance tiles, as in the product design's recap screen.
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { n: summary.keyPoints.length, label: "Key points", tone: "text-slate-900" },
-            { n: summary.actionItems.length, label: "Action items", tone: "text-slate-900" },
-            {
-              n: (summary.dealSignals ?? []).filter((d) => d.type !== "buying_signal").length,
-              label: "Open risks",
-              tone: "text-accent",
-            },
-          ].map((tile) => (
-            <div key={tile.label} className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <p className={`font-semibold text-3xl leading-none ${tile.tone}`}>{tile.n}</p>
-              <p className="mt-2 text-xs text-slate-500">{tile.label}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {summary && (
         <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2>Overview</h2>
+          <h2 className="text-sm font-medium text-slate-900">Overview</h2>
           <p className="mt-2 text-sm text-slate-700">{summary.overview}</p>
 
           {summary.continuityNote && (
@@ -272,20 +251,9 @@ export default async function MeetingDetailPage({
           <h3 className="mt-5 text-xs font-medium uppercase tracking-wide text-slate-500">
             Key points
           </h3>
-          {/* One row per point with a navy check, as on the design's recap. */}
-          <ul className="mt-2 flex flex-col gap-2">
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
             {summary.keyPoints.map((point, i) => (
-              <li key={i} className="flex items-start gap-3 rounded-lg border border-slate-200 px-3.5 py-2.5">
-                <span
-                  aria-hidden="true"
-                  className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand"
-                >
-                  <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2.5 6.2l2.3 2.3 4.7-5" />
-                  </svg>
-                </span>
-                <span className="text-sm leading-snug text-slate-800">{point}</span>
-              </li>
+              <li key={i}>{point}</li>
             ))}
           </ul>
 
@@ -352,7 +320,7 @@ export default async function MeetingDetailPage({
 
       {transcript && (
         <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2>Full transcript</h2>
+          <h2 className="text-sm font-medium text-slate-900">Full transcript</h2>
           <div className="mt-3 flex flex-col gap-3">
             {transcript.utterances?.map((u, i) => (
               <div key={i} className="text-sm">

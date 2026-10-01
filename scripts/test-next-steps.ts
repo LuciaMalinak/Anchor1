@@ -14,6 +14,8 @@ assert(safeReturnTo("/dashboard/meetings/abc") === "/dashboard/meetings/abc", "r
 assert(safeReturnTo("//evil.com") === null && safeReturnTo("/\\evil.com") === null && safeReturnTo("https://evil.com") === null, "returnTo rejects other sites");
 assert(endISO("2026-10-02T10:00:00", 30) === "2026-10-02T10:30:00", "endISO 30m");
 assert(endISO("2026-10-02T09:45", 45) === "2026-10-02T10:30:00", "endISO carries hour");
+assert(endISO("2026-10-02T22:30", 120) === "2026-10-03T00:30:00", "endISO rolls past midnight to the next day");
+assert(endISO("2026-12-31T23:30", 60) === "2027-01-01T00:30:00", "endISO rolls over the year");
 const transcript = "Sam: Let's get on a call Friday to review the churn cohort.\nYou: Great, Friday at 10 works.";
 const fake = async () => JSON.stringify([
   { title: "Churn cohort review — Acme", startISO: "2026-10-02T10:00", durationMinutes: 30, attendees: ["sam@acme.com", "invented@nowhere.com"], sourceQuote: "Let's get on a call Friday to review the churn cohort.", confidence: "high" },

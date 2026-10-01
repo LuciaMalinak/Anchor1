@@ -1,5 +1,4 @@
 import { Fragment, type ReactNode } from "react";
-import { PageHeader } from "@/components/PageHeader";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, users, deals, teams, announcements } from "@/db/schema";
@@ -109,8 +108,6 @@ export default async function DashboardPage({
     }
   }
 
-  const firstName = (session?.user?.name || "").trim().split(/\s+/)[0] || null;
-
   // Rendered in this person's own saved order (sectionOrder) rather than a
   // fixed sequence — see DashboardCustomize.tsx and users.dashboardLayout
   // in schema.ts. "meetings" is one of the reorderable sections too (see
@@ -144,23 +141,16 @@ export default async function DashboardPage({
   };
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
       {teamId && session?.user?.id && (
         <WelcomeGate show={!welcomeSeen} name={session.user.name ?? null} />
       )}
-      <PageHeader
-        eyebrow="Home"
-        title={`Welcome back${firstName ? `, ${firstName}` : ""}.`}
-        subtitle="Everything moving across your deals and meetings, in one place."
-        actions={
-          teamId ? (
-            <DashboardCustomize
-              initialOrder={sectionOrder}
-              initialColorTheme={colorTheme && isColorThemeKey(colorTheme) ? colorTheme : null}
-            />
-          ) : undefined
-        }
-      />
+      {teamId && (
+        <DashboardCustomize
+          initialOrder={sectionOrder}
+          initialColorTheme={colorTheme && isColorThemeKey(colorTheme) ? colorTheme : null}
+        />
+      )}
       {sectionOrder.map((key) => (
         <Fragment key={key}>{sectionByKey[key] ?? null}</Fragment>
       ))}

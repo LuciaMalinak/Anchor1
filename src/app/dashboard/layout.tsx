@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
-import { Logo } from "@/components/Logo";
+import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { PageFade } from "@/components/PageFade";
 import { NavLink } from "@/components/NavLink";
 import { db } from "@/db";
@@ -17,17 +17,10 @@ import { LiveMeetingWatcher } from "@/components/LiveMeetingWatcher";
 import { isAppOwner } from "@/lib/appOwner";
 import { WhatsNewModal } from "@/components/WhatsNewModal";
 
-// Members whose account existed before this date see the one-time "welcome
-// back to the new Anchor" popup (WhatsNewModal). Newer accounts get the
-// first-visit WelcomeSplash instead, so they never see both.
+// Members whose account existed before this date see the one-time "new
+// tools" popup (WhatsNewModal). Newer accounts get the first-visit
+// WelcomeSplash instead, so they never see both.
 const WHATS_NEW_CUTOFF = new Date("2026-10-01T00:00:00Z");
-
-// "Sam Patel" -> "SP", "sam@x.com" -> "S".
-function initials(nameOrEmail: string): string {
-  const words = nameOrEmail.split("@")[0].split(/[\s._-]+/).filter(Boolean);
-  const letters = words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0]?.[0] ?? "?");
-  return letters.toUpperCase();
-}
 
 export default async function DashboardLayout({
   children,
@@ -126,19 +119,50 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="app-shell flex min-h-screen flex-col bg-white" style={accentStyle}>
-      {/* White header on the soft canvas, plain text nav with the current
-          section underlined, and a small initials avatar — the product
-          design's header, kept to the same links as before. */}
-      {/* Logo left, tabs centred, profile right. The tabs sit on the
-          header's bottom edge with an accent bar under the current one; on
-          narrower screens they move to a second, scrollable row. */}
-      <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur">
-        <div className="mx-auto flex h-[76px] w-full max-w-[1400px] items-center justify-between gap-6 px-6 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:px-10 2xl:px-16">
-          <Link href="/dashboard" className="justify-self-start" aria-label="Anchor home">
-            <Logo size="lg" />
+    <div className="flex min-h-screen flex-col bg-slate-50" style={accentStyle}>
+      {/* A fixed backdrop tinted by the team's --accent (set above from
+          src/lib/industries.ts) — one soft, wide, blurred wash in the top
+          corner, nothing else. Reads the CSS variable rather than
+          hardcoding a color per industry, so every sector's dashboard has
+          a subtly different color temperature for free. Deliberately
+          restrained this time: no dot grid, no hard edge, low enough
+          opacity that it reads as "premium ambient light" rather than a
+          pattern or a stripe — the loud version of this (visible dots,
+          35% opacity) is exactly what got called out as unprofessional.
+          Fixed + negative z-index + pointer-events-none, so it never
+          intercepts clicks or competes with real content. */}
+      <div
+        aria-hidden="true"
+        className="drift-bg pointer-events-none fixed inset-0 -z-10"
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse 55% 38% at 82% -8%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%)",
+        }}
+      />
+      {/* Plain white header, neutral border — no colored stripe. The bright
+          solid accent bar this used to have (linear-gradient, 3px, full
+          width) is exactly what read as a garish "bar/glow" rather than
+          professional branding; the accent now shows up only in small,
+          deliberate touches (the signed-in avatar, hover states, buttons)
+          instead of a loud band across the top of every page. */}
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 px-6 py-4 lg:flex-nowrap lg:px-10 2xl:px-16">
+          <Link href="/dashboard">
+            <AnimatedLogo size="lg" />
           </Link>
-          <nav className="hidden h-full items-stretch gap-8 lg:flex">
+          {/* flex-wrap on the row above keeps this from being clipped on a
+              phone-width screen (it used to just run off the right edge,
+              unreachable, since the row itself never wrapped); overflow-x
+              here is a second safety net in case even its own row is still
+              too narrow for every item on a very small phone.
+
+              The nav itself sits in a soft rounded "track" (bg-slate-100/70)
+              so each NavLink's active state reads as a filled pill inside
+              a segmented control, instead of floating text with an
+              underline — a small change that makes the whole header feel
+              more like a deliberate piece of UI and less like a plain
+              list of links. */}
+          <nav className="order-3 flex w-full items-center gap-1 overflow-x-auto rounded-full bg-slate-100/70 p-1 text-sm font-medium lg:order-none lg:w-auto lg:overflow-visible">
             <NavLink href="/dashboard/deals">Deals</NavLink>
             <NavLink href="/dashboard/insights">Insights</NavLink>
             <NavLink href="/dashboard/contacts">Contacts</NavLink>
@@ -148,33 +172,32 @@ export default async function DashboardLayout({
                 isAppOwner(session.user.email) check is false, so the link
                 (and everything under /dashboard/admin) simply doesn't
                 exist for them. See src/lib/adminAccess.ts. */}
-            {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
+            {isAppOwner(session?.user?.email) && (
+              <NavLink href="/dashboard/admin">Admin</NavLink>
+            )}
           </nav>
-          <div className="flex items-center gap-1 justify-self-end text-sm text-slate-500">
+          <div className="flex items-center gap-3 text-sm text-slate-500">
             <Link
               href="/dashboard/profile"
-              title={session?.user?.name || session?.user?.email || "Profile"}
-              className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-slate-100"
+              className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-slate-100 hover:text-brand"
             >
               {session?.user?.image ? (
                 <Image
                   src={session.user.image}
                   alt=""
-                  width={36}
-                  height={36}
+                  width={28}
+                  height={28}
                   unoptimized
-                  className="h-9 w-9 rounded-full object-cover ring-1 ring-slate-200"
+                  className="h-7 w-7 rounded-full object-cover ring-2 ring-white"
                 />
               ) : (
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white">
-                  {initials(session?.user?.name || session?.user?.email || "?")}
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white ring-2 ring-white">
+                  {(session?.user?.name || session?.user?.email || "?")[0]?.toUpperCase()}
                 </span>
               )}
-              <span className="hidden font-medium text-slate-800 sm:inline">
-                {session?.user?.name || session?.user?.email}
-              </span>
+              <span className="font-medium text-slate-700">{session?.user?.name || session?.user?.email}</span>
             </Link>
-            <span className="mx-1 h-6 w-px bg-slate-200" aria-hidden="true" />
+            <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
             <form
               action={async () => {
                 "use server";
@@ -183,27 +206,15 @@ export default async function DashboardLayout({
             >
               <button
                 type="submit"
-                className="rounded-full px-3 py-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                className="rounded-full px-3 py-1.5 transition-colors hover:bg-slate-100 hover:text-slate-900"
               >
                 Sign out
               </button>
             </form>
           </div>
         </div>
-        <nav className="flex h-12 items-stretch gap-6 overflow-x-auto border-t border-slate-100 px-6 lg:hidden">
-          <NavLink href="/dashboard/deals">Deals</NavLink>
-          <NavLink href="/dashboard/insights">Insights</NavLink>
-          <NavLink href="/dashboard/contacts">Contacts</NavLink>
-          <NavLink href="/dashboard/team">Team</NavLink>
-          <NavLink href="/dashboard/integrations">Integrations</NavLink>
-          {/* Only the app owner ever sees this — everyone else's
-              isAppOwner(session.user.email) check is false, so the link
-              (and everything under /dashboard/admin) simply doesn't
-              exist for them. See src/lib/adminAccess.ts. */}
-          {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
-        </nav>
       </header>
-      <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-10 px-6 py-10 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
+      <main className="flex w-full flex-1 flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:px-10 2xl:px-16">
         <div className="min-w-0 flex-1">
           <PageFade>{children}</PageFade>
         </div>

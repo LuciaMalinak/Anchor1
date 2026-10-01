@@ -1,11 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  /* Soft off-white canvas with white cards on top, as in the product
-     design video; pure white is kept for surfaces. */
-  --background: #f4f5f8;
-  --surface: #ffffff;
-  --foreground: #16223a;
+  --background: #ffffff;
+  --foreground: #171717;
   /* Brand: matches the investor deck exactly — deep navy + a copper accent.
      Sampled directly from the deck so the product and the pitch look like
      the same company. */
@@ -18,49 +15,19 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-canvas: var(--background);
-  --color-surface: var(--surface);
   --color-brand: var(--brand);
   --color-brand-dark: var(--brand-dark);
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
-  /* Anchor uses the system font throughout (San Francisco on a Mac).
-     --font-serif points at the same stack, so anything still marked
-     font-serif renders in it too. */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans);
-}
-
-/* Headings: the system font, semibold and slightly tightened. In the base
-   layer so a page's own utility classes (size, weight, colour) still win. */
-@layer base {
-  h1,
-  h2,
-  h3 {
-    font-weight: 600;
-    letter-spacing: -0.015em;
-  }
-}
-
-/* Small uppercase labels ("MEET ANCHOR", "01 · CONNECT", "KEY POINTS"):
-   wide tracking wherever a page marks one up as uppercase + tracking-*.
-   Unlayered on purpose so it wins over the old tracking-wide utilities. */
-.uppercase[class*="tracking-"],
-.eyebrow {
-  letter-spacing: 0.12em;
-}
-.eyebrow {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--accent);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
 }
 
 /* A small, global "it responds to you" polish for the signed-in app —
@@ -388,45 +355,4 @@ a {
       animation-range: entry 0% cover 25%;
     }
   }
-}
-
-/* =========================================================================
-   Signed-in app (the dashboard shell adds .app-shell): the product design's
-   calm, editorial look, applied across every page at once. White page, thin
-   grey card borders with no coloured side stripes, serif page and card
-   titles, copper main buttons. Unlayered on purpose so it wins over the
-   individual pages' older Tailwind classes.
-   ========================================================================= */
-.app-shell h1 {
-  font-size: 2.25rem;
-  line-height: 1.12;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--brand);
-}
-/* Card and section titles; a page can still ask for a bigger one. */
-.app-shell h2:not([class*="text-2xl"]):not([class*="text-3xl"]) {
-  font-size: 1.125rem;
-  line-height: 1.3;
-}
-.app-shell h2 {
-  font-weight: 600;
-  color: var(--foreground);
-}
-.app-shell .border-l-4 {
-  border-left-width: 1px;
-  border-left-color: #e6e8ee;
-}
-.app-shell .rounded-xl.border,
-.app-shell .rounded-2xl.border {
-  border-color: #e6e8ee;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-.app-shell button.bg-brand,
-.app-shell a.bg-brand {
-  background-color: var(--accent);
-}
-.app-shell button.bg-brand:hover:not(:disabled),
-.app-shell a.bg-brand:hover {
-  background-color: var(--accent-dark);
 }

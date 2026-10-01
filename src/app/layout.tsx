@@ -3,8 +3,11 @@ import "./globals.css";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { getAppVersion } from "@/lib/appVersion";
 
-// No web fonts: Anchor uses the system font (see globals.css), which renders
-// instantly everywhere.
+// Deliberately not using next/font/google here — it needs a live fetch to
+// Google Fonts at build time, which isn't reachable from every environment
+// (this sandbox included). The system font stack below renders instantly
+// everywhere and looks fine; swap in a real webfont later if the brand
+// needs it.
 
 export const metadata: Metadata = {
   title: "Anchor",

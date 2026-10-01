@@ -41,19 +41,26 @@ export async function GET(
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");
 
+  let decodedState: { userId: string; returnTo?: string | null } | null = null;
+  try {
+    decodedState = state ? JSON.parse(Buffer.from(state, "base64url").toString()) : null;
+  } catch {
+    decodedState = null;
+  }
+
   if (oauthError) {
+    // Declined a permission asked for from a meeting page ("Save to Gmail
+    // drafts", "Add to calendar"): go back there, where the button explains
+    // what's missing, instead of stranding them on Integrations.
+    const returnTo =
+      decodedState?.userId === session.user.id ? safeReturnTo(decodedState.returnTo ?? null) : null;
+    if (returnTo) return NextResponse.redirect(new URL(returnTo, req.url));
     return redirectWith(req, { error: "denied", provider });
   }
   if (!code || !state) {
     return redirectWith(req, { error: "missing_code", provider });
   }
 
-  let decodedState: { userId: string; returnTo?: string | null } | null = null;
-  try {
-    decodedState = JSON.parse(Buffer.from(state, "base64url").toString());
-  } catch {
-    decodedState = null;
-  }
   if (!decodedState || decodedState.userId !== session.user.id) {
     return redirectWith(req, { error: "state_mismatch", provider });
   }

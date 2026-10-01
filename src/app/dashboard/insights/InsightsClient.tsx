@@ -72,8 +72,7 @@ export function InsightsClient({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="eyebrow">Across every deal</p>
-          <h1 className="mt-1.5">Insights</h1>
+          <h1 className="text-xl font-semibold text-brand">Insights</h1>
           <p className="mt-1 max-w-xl text-sm text-slate-500">
             Anchor reads every deal&apos;s rolling memory and latest meeting, then looks across
             your whole pipeline — {dealCount} deal{dealCount === 1 ? "" : "s"} — for what&apos;s

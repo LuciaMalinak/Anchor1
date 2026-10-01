@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// A header tab that knows when it's the current section: darker text and
-// an accent bar along the header's bottom edge. The parent nav stretches
-// each tab to the header's full height so the bar lines up with the border.
+// A nav link that knows when it's the current section and shows it as a
+// filled pill (white, with a soft shadow) sitting inside the header's
+// track-colored nav group — the same "segmented control" pattern most
+// modern SaaS dashboards use, rather than the plainer underline this
+// used to be. Still eases in/out on hover via the global `a { transition
+// }` rule in globals.css, so moving between sections still feels
+// responsive, not just a hard on/off.
 export function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(`${href}/`);
@@ -13,18 +17,13 @@ export function NavLink({ href, children }: { href: string; children: React.Reac
   return (
     <Link
       href={href}
-      aria-current={active ? "page" : undefined}
-      className={`relative flex shrink-0 items-center text-[15px] transition-colors ${
-        active ? "font-medium text-brand" : "text-slate-500 hover:text-slate-900"
+      className={`shrink-0 rounded-full px-3.5 py-1.5 transition-colors ${
+        active
+          ? "bg-white text-slate-900 shadow-sm"
+          : "text-slate-600 hover:bg-white/60 hover:text-brand"
       }`}
     >
       {children}
-      <span
-        aria-hidden="true"
-        className={`absolute inset-x-0 -bottom-px h-[2.5px] rounded-full bg-accent transition-opacity ${
-          active ? "opacity-100" : "opacity-0"
-        }`}
-      />
     </Link>
   );
 }

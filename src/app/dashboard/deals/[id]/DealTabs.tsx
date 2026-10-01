@@ -2194,10 +2194,7 @@ export function DealTabs({
       <div className="flex min-w-0 flex-1 flex-col gap-6">
         <div className="flex flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="eyebrow">Deal</p>
-              <h1 className="mt-1.5">{deal.name}</h1>
-            </div>
+            <h1 className="text-2xl font-semibold text-brand">{deal.name}</h1>
             {canDeleteDeal && (
               <div className="flex flex-col items-end gap-1">
                 <button

@@ -77,10 +77,11 @@ export async function suggestInvites(
 }
 
 export function endISO(startISO: string, minutes: number): string {
+  // Wall-clock arithmetic done in UTC so no server time zone or DST shift
+  // creeps in; a late meeting correctly rolls over to the next day.
   const [d, t] = startISO.split("T");
+  const [y, mo, day] = d.split("-").map(Number);
   const [h, m] = t.split(":").map(Number);
-  const total = h * 60 + m + minutes;
-  const hh = String(Math.floor(total / 60) % 24).padStart(2, "0");
-  const mm = String(total % 60).padStart(2, "0");
-  return `${d}T${hh}:${mm}:00`; // same-day meetings only (max 240 min, working hours)
+  const end = new Date(Date.UTC(y, mo - 1, day, h, m + minutes));
+  return end.toISOString().slice(0, 19);
 }

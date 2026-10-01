@@ -115,7 +115,7 @@ export function TodayMeetings() {
 
   return (
     <section className="rounded-xl border border-slate-200 border-l-4 border-l-emerald-500 bg-white p-6 shadow-sm">
-      <h2>Today</h2>
+      <h2 className="text-sm font-medium text-slate-900">Today</h2>
       {!googleConnected ? (
         <p className="mt-1 text-sm text-slate-500">
           Connect your Google Calendar to have today&apos;s deal meetings show up here

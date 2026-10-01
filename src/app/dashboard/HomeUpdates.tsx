@@ -29,7 +29,7 @@ function timeAgo(iso: string): string {
 export function HomeUpdates({ updates }: { updates: HomeUpdate[] }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2>Latest updates</h2>
+      <h2 className="text-sm font-medium text-slate-900">Latest updates</h2>
       <p className="text-xs text-slate-500">What&apos;s happened across your team and deals.</p>
 
       <div className="mt-4 flex flex-col gap-3">

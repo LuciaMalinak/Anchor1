@@ -172,8 +172,7 @@ export function TeamClient({
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <p className="eyebrow">Your team</p>
-        <h1 className="mt-1.5">{teamName}</h1>
+        <h1 className="text-xl font-semibold text-brand">{teamName}</h1>
         <p className="text-sm text-slate-500">Everyone here shares deals, files, and recaps.</p>
       </div>
 

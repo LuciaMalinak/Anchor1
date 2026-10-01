@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { stashPendingGoogleAction, takePendingGoogleAction } from "@/lib/pendingGoogleAction";
+
+type PendingDraft = { subject: string; body: string; recipientEmails: string[] };
 
 // googleConfigured: the server has Google credentials set, so "Save to
 // Gmail drafts" can work (it asks for Gmail permission on first use).
@@ -20,6 +23,24 @@ export function FollowUpEmailDraft({
   const [copied, setCopied] = useState(false);
   const [gmailState, setGmailState] = useState<"idle" | "saving" | "saved">("idle");
   const [gmailUrl, setGmailUrl] = useState<string | null>(null);
+
+  // Back from granting Gmail permission: put the edited draft back and
+  // finish saving it, so nothing has to be redone.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current) return;
+    resumed.current = true;
+    const pending = takePendingGoogleAction<PendingDraft>("gmail", meetingId);
+    if (!pending) return;
+    queueMicrotask(() => {
+      setSubject(pending.subject);
+      setBody(pending.body);
+      setRecipientEmails(pending.recipientEmails);
+      setGenerated(true);
+      void saveToGmail(pending, true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingId]);
 
   async function handleGenerate() {
     setLoading(true);
@@ -51,19 +72,28 @@ export function FollowUpEmailDraft({
     }
   }
 
-  async function handleSaveToGmail() {
+  // afterPermission: this is the automatic retry on return from Google, so
+  // a missing permission means they declined it; say so instead of sending
+  // them straight back to Google.
+  async function saveToGmail(draft: PendingDraft, afterPermission = false) {
     setGmailState("saving");
     setError(null);
     try {
       const res = await fetch(`/api/meetings/${meetingId}/gmail-draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: recipientEmails, subject, body }),
+        body: JSON.stringify({ to: draft.recipientEmails, subject: draft.subject, body: draft.body }),
       });
       const responseBody = await res.json().catch(() => ({}));
       if (res.status === 403 && responseBody.connectUrl) {
+        if (afterPermission) {
+          throw new Error(
+            "Anchor needs permission to create Gmail drafts. Click Save to Gmail drafts and allow it on Google's screen."
+          );
+        }
         // First use: Google asks for Gmail permission, then brings them
-        // back here to click again.
+        // back here and the save finishes on its own.
+        stashPendingGoogleAction("gmail", meetingId, draft);
         window.location.href = responseBody.connectUrl;
         return;
       }
@@ -76,6 +106,10 @@ export function FollowUpEmailDraft({
     }
   }
 
+  function handleSaveToGmail() {
+    void saveToGmail({ subject, body, recipientEmails });
+  }
+
   const mailtoHref = `mailto:${recipientEmails.join(",")}?subject=${encodeURIComponent(
     subject
   )}&body=${encodeURIComponent(body)}`;
@@ -84,7 +118,7 @@ export function FollowUpEmailDraft({
     <section className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2>Follow-up email</h2>
+          <h2 className="text-sm font-medium text-slate-900">Follow-up email</h2>
           <p className="mt-1 text-xs text-slate-500">
             A draft Anchor writes from this meeting&apos;s summary — review it before sending; nothing
             goes out on its own.
@@ -109,7 +143,10 @@ export function FollowUpEmailDraft({
             <input
               type="text"
               value={subject}
-              onChange={(e) => setSubject(e.target.value)}
+              onChange={(e) => {
+                setSubject(e.target.value);
+                setGmailState("idle");
+              }}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent"
             />
           </div>
@@ -119,7 +156,10 @@ export function FollowUpEmailDraft({
             </label>
             <textarea
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => {
+                setBody(e.target.value);
+                setGmailState("idle");
+              }}
               rows={10}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent"
             />

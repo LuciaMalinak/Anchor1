@@ -88,7 +88,7 @@ export function AnnouncementsPanel({
     <section className="rounded-xl border border-slate-200 border-l-4 border-l-amber-400 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
-          <h2>From leadership</h2>
+          <h2 className="text-sm font-medium text-slate-900">From leadership</h2>
           <p className="text-xs text-slate-500">Team-wide announcements — also sent in the morning digest.</p>
         </div>
         {isTeamOwner && !composing && (

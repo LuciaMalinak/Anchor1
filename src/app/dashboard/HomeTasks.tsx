@@ -212,7 +212,7 @@ export function HomeTasks({
     <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
-          <h2>To do</h2>
+          <h2 className="text-sm font-medium text-slate-900">To do</h2>
           <p className="text-xs text-slate-500">
             Pulled from every meeting&apos;s action items, ranked by which deal needs attention most.
           </p>

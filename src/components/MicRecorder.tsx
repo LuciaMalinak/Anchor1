@@ -295,7 +295,7 @@ export function MicRecorderView({
     // rather than leaving a gap between it and the description above.
     <div className="flex h-full flex-col justify-between rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
       <div>
-        <p className="font-semibold text-lg text-slate-900">Record in person</p>
+        <p className="text-sm font-medium text-slate-900">Record in person</p>
         <p className="mt-1 text-xs text-slate-500">
           For a call or meeting Anchor can&apos;t join on its own — record straight from
           this device&apos;s microphone. Recording keeps running even if you switch tabs.

@@ -28,12 +28,12 @@ const EMPTY_POLL_INTERVAL_MS = 10 * 1000;
 // M&A deal) — the "read it like a real stock ticker at a glance" part.
 function DirectionMark({ direction }: { direction: TickerItem["direction"] }) {
   if (direction === "up") {
-    return <span className="mr-1 text-emerald-600">▲</span>;
+    return <span className="mr-1 text-emerald-400">▲</span>;
   }
   if (direction === "down") {
-    return <span className="mr-1 text-rose-600">▼</span>;
+    return <span className="mr-1 text-rose-400">▼</span>;
   }
-  return <span className="mr-1 text-slate-300">●</span>;
+  return <span className="mr-1 text-slate-500">●</span>;
 }
 
 export function IndustryTicker({
@@ -87,17 +87,17 @@ export function IndustryTicker({
     // instead of nothing keeps the layout stable and makes clear the
     // ticker is actively catching up to the new sector, not broken.
     return (
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
+      <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+        <div className="flex items-center gap-2 border-b border-white/10 px-3 py-1.5">
           <span className="relative flex h-1.5 w-1.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
           </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
+          <span className="text-[10px] font-semibold tracking-[0.15em] text-slate-300">
             {industryLabel ? `${industryLabel.toUpperCase()} · LIVE` : "MARKETS · LIVE"}
           </span>
         </div>
-        <div className="px-4 py-2.5 text-xs text-slate-400">
+        <div className="px-3 py-2 text-xs font-medium text-slate-400">
           Pulling today&apos;s {industryLabel ? industryLabel.toLowerCase() : "market"} headlines…
         </div>
       </div>
@@ -109,13 +109,13 @@ export function IndustryTicker({
   const loopItems = [...items, ...items];
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
+    <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+      <div className="flex items-center gap-2 border-b border-white/10 px-3 py-1.5">
         <span className="relative flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
         </span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
+        <span className="text-[10px] font-semibold tracking-[0.15em] text-slate-300">
           {industryLabel ? `${industryLabel.toUpperCase()} · LIVE` : "MARKETS · LIVE"}
         </span>
       </div>
@@ -123,7 +123,7 @@ export function IndustryTicker({
         {loopItems.map((item, i) => (
           <span
             key={i}
-            className="mx-4 flex shrink-0 items-center font-mono text-xs text-slate-700"
+            className="mx-4 flex shrink-0 items-center font-mono text-xs font-medium text-slate-100"
           >
             <DirectionMark direction={item.direction} />
             {item.text}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { stashPendingGoogleAction, takePendingGoogleAction } from "@/lib/pendingGoogleAction";
 
 type Suggestion = {
   title: string;
@@ -11,6 +12,7 @@ type Suggestion = {
   confidence: "high" | "medium";
 };
 type ItemState = "idle" | "adding" | "added" | "dismissed";
+type PendingInvite = { suggestions: Suggestion[]; timeZone: string; index: number; sendInvites: boolean };
 
 function formatWhen(startISO: string, minutes: number) {
   // startISO is wall time in the browser's own time zone (sent with the
@@ -32,6 +34,23 @@ export function SuggestedInvites({ meetingId }: { meetingId: string }) {
   const [itemState, setItemState] = useState<Record<number, ItemState>>({});
   const [itemError, setItemError] = useState<Record<number, string>>({});
   const [sendInvites, setSendInvites] = useState(true);
+
+  // Back from granting Calendar permission: show the same suggestions again
+  // and finish adding the one they clicked.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current) return;
+    resumed.current = true;
+    const pending = takePendingGoogleAction<PendingInvite>("calendar", meetingId);
+    if (!pending || !pending.suggestions[pending.index]) return;
+    queueMicrotask(() => {
+      setSuggestions(pending.suggestions);
+      setTimeZone(pending.timeZone);
+      setSendInvites(pending.sendInvites);
+      void addToCalendar(pending, true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingId]);
 
   async function handleFind() {
     setLoading(true);
@@ -55,18 +74,31 @@ export function SuggestedInvites({ meetingId }: { meetingId: string }) {
     }
   }
 
-  async function handleAdd(i: number) {
-    const s = suggestions![i];
+  // afterPermission: the automatic retry on return from Google, so a
+  // missing permission means they declined it; explain rather than loop.
+  async function addToCalendar(p: PendingInvite, afterPermission = false) {
+    const i = p.index;
+    const s = p.suggestions[i];
     setItemState((m) => ({ ...m, [i]: "adding" }));
     setItemError((m) => ({ ...m, [i]: "" }));
     try {
       const res = await fetch(`/api/meetings/${meetingId}/calendar-event`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...s, timeZone, sendInvites: sendInvites && s.attendees.length > 0 }),
+        body: JSON.stringify({
+          ...s,
+          timeZone: p.timeZone,
+          sendInvites: p.sendInvites && s.attendees.length > 0,
+        }),
       });
       const responseBody = await res.json().catch(() => ({}));
       if (res.status === 403 && responseBody.connectUrl) {
+        if (afterPermission) {
+          throw new Error(
+            "Anchor needs permission to add events to your Google Calendar. Click Add to calendar and allow it on Google's screen."
+          );
+        }
+        stashPendingGoogleAction("calendar", meetingId, p);
         window.location.href = responseBody.connectUrl;
         return;
       }
@@ -78,6 +110,10 @@ export function SuggestedInvites({ meetingId }: { meetingId: string }) {
     }
   }
 
+  function handleAdd(i: number) {
+    void addToCalendar({ suggestions: suggestions!, timeZone, index: i, sendInvites });
+  }
+
   const visible = suggestions?.filter((_, i) => itemState[i] !== "dismissed") ?? [];
   const anyAttendees = visible.some((s) => s.attendees.length > 0);
 
@@ -85,7 +121,7 @@ export function SuggestedInvites({ meetingId }: { meetingId: string }) {
     <section className="rounded-xl border border-slate-200 bg-white p-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2>Suggested invites</h2>
+          <h2 className="text-sm font-medium text-slate-900">Suggested invites</h2>
           <p className="mt-1 text-xs text-slate-500">
             Follow-up meetings people agreed to in this call. Nothing is added to your calendar until
             you click.
