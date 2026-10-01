@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
+import { runAskActions, stripAskActions } from "@/lib/askActions";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -129,11 +130,15 @@ export function AskAnchorPanel({ dealId }: { dealId: string }) {
         const { done, value } = await reader.read();
         if (done) break;
         answer += decoder.decode(value, { stream: true });
-        setStreamingAnswer(answer);
+        setStreamingAnswer(stripAskActions(answer));
         requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
       }
       if (!answer.trim()) throw new Error("Anchor couldn't answer that.");
-      setTurns([...nextTurns, { role: "assistant", content: answer }]);
+      // Stop the meeting / open a file if the answer asked for it — see
+      // askActions.ts. A failure is added under the answer, not hidden.
+      const actionNote = await runAskActions(answer);
+      const shown = stripAskActions(answer) + (actionNote ? `\n\n${actionNote}` : "");
+      setTurns([...nextTurns, { role: "assistant", content: shown }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Anchor couldn't answer that.");
     } finally {

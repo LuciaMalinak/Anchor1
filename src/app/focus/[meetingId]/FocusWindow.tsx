@@ -41,7 +41,7 @@ export function FocusWindow({
   // here would otherwise try to close the wrong window.
   onClose?: () => void;
 }) {
-  const { segments, suggestions, status, hasBot, coachingError } = useLiveMeeting(meetingId);
+  const { segments, suggestions, status, hasBot, isDesktop, coachingError } = useLiveMeeting(meetingId);
   const [widgets, setWidgets] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
@@ -164,14 +164,14 @@ export function FocusWindow({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {/* Ends Anchor's bot early instead of waiting for the call to
-              end on its own — see StopMeetingButton's comment for why
-              this doesn't hang up the call for anyone else. Only while
-              still live, and only for a Zoom/Teams call Anchor's bot
-              actually joined — an in-person recording stops from its own
-              Record-in-person control, not this window. Once it's ended
-              the auto-close notice below takes over. */}
-          {hasBot && stillLive && status && <StopMeetingButton meetingId={meetingId} variant="solid" />}
+          {/* Ends the meeting early: Anchor's bot leaves a Zoom/Teams call
+              (without hanging up for anyone else), or an in-person
+              recording stops and gets written up — see stopMeeting.ts.
+              Only while still live; once it's ended the auto-close notice
+              below takes over. */}
+          {!isDesktop && stillLive && status && (
+            <StopMeetingButton meetingId={meetingId} variant="solid" inPerson={!hasBot} />
+          )}
           <button
             type="button"
             onClick={openCustomize}

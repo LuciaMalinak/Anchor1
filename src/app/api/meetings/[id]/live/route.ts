@@ -185,6 +185,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // stops from its own Record-in-person control instead). See
     // LiveMeetingPanel.tsx and FocusWindow.tsx.
     hasBot: Boolean(meeting.recallBotId),
+    // Anchor Desktop recordings stop from the desktop app itself; every
+    // other live meeting (bot or in-person) can be stopped from the web.
+    isDesktop: Boolean(meeting.recallRecordingId),
     segments: segments.map((s) => ({
       id: s.id,
       speakerName: s.speakerName,

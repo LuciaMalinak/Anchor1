@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
+import { registerLocalRecorder } from "@/lib/stopMeeting";
 
 // Records straight from the browser's microphone — for an in-person
 // meeting or phone call where there's no Zoom/Meet/Teams link for the
@@ -63,6 +64,9 @@ export function useMicRecorder({
   // start() resets it, for the NEXT recording), so the audio is still
   // there to resend; this is just what's missing to resend it.
   const meetingIdRef = useRef<string | null>(null);
+  // Lets Stop in the live panel, the Focus window, or Ask Anchor stop
+  // THIS recorder (so the real audio gets uploaded) — see stopMeeting.ts.
+  const unregisterRef = useRef<(() => void) | null>(null);
 
   // Closing the tab or navigating away mid-recording (or with a failed
   // upload still waiting to retry) used to lose the whole recording with
@@ -191,12 +195,15 @@ export function useMicRecorder({
     setSeconds(0);
     timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
 
+    unregisterRef.current = registerLocalRecorder(meetingId, stop);
     startLiveTranscription(meetingId);
     focusWindow.attach(meetingId);
     onStarted?.(meetingId);
   }
 
   function stop() {
+    unregisterRef.current?.();
+    unregisterRef.current = null;
     mediaRecorderRef.current?.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     if (timerRef.current) clearInterval(timerRef.current);

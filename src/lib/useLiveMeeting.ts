@@ -42,6 +42,7 @@ export function useLiveMeeting(meetingId: string) {
   // so the Stop button doesn't flash in and immediately disappear while
   // this is still loading (the common case).
   const [hasBot, setHasBot] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Why live coaching couldn't be generated, from the /live route —
   // null while it's working (or hasn't been tried yet).
@@ -62,6 +63,7 @@ export function useLiveMeeting(meetingId: string) {
         setCoachingError(body.coachingError || null);
         setStatus(body.status);
         setHasBot(body.hasBot !== false);
+        setIsDesktop(body.isDesktop === true);
         setError(null);
         // Stop polling once the meeting's left the live states — the
         // caller decides what to show once that happens.
@@ -85,5 +87,5 @@ export function useLiveMeeting(meetingId: string) {
     };
   }, [meetingId]);
 
-  return { segments, suggestions, status, hasBot, error, coachingError };
+  return { segments, suggestions, status, hasBot, isDesktop, error, coachingError };
 }

@@ -11,8 +11,9 @@ import {
   deals,
   tasks,
   dealFiles,
+  meetingLiveSegments,
 } from "@/db/schema";
-import { transcribeAudioFile } from "./transcribe";
+import { transcribeAudioFile, type Utterance } from "./transcribe";
 import { summarizeMeeting, mergeContactMemory, mergeDealMemory } from "./summarize";
 import { readStoredFile } from "./storage";
 import { getOrCreateTeamId } from "./team";
@@ -48,13 +49,6 @@ export async function processMeeting(meetingId: string): Promise<void> {
       .from(meetings)
       .where(eq(meetings.id, meetingId));
     if (!meeting) throw new Error("Meeting not found");
-    if (!meeting.audioStoragePath) throw new Error("No audio file on this meeting");
-
-    const audioBuffer = await readStoredFile(meeting.audioStoragePath);
-    if (!audioBuffer) {
-      throw new Error("The audio file for this meeting is missing from storage.");
-    }
-
     // Fetched once, up front, so it's available both to ground today's
     // summary/action items (below) and, later, to update the deal's own
     // rolling memory — avoids a second identical query for the same row.
@@ -62,10 +56,30 @@ export async function processMeeting(meetingId: string): Promise<void> {
       ? (await db.select().from(deals).where(eq(deals.id, meeting.dealId)))[0]
       : undefined;
 
-    const { fullText, utterances } = await withRetry(
-      () => transcribeAudioFile(audioBuffer),
-      { label: `transcribe ${meetingId}` }
-    );
+    let fullText: string;
+    let utterances: Utterance[];
+    let provider: string;
+    if (meeting.audioStoragePath) {
+      const audioBuffer = await readStoredFile(meeting.audioStoragePath);
+      if (!audioBuffer) {
+        throw new Error("The audio file for this meeting is missing from storage.");
+      }
+      ({ fullText, utterances } = await withRetry(
+        () => transcribeAudioFile(audioBuffer),
+        { label: `transcribe ${meetingId}` }
+      ));
+      provider = "assemblyai";
+    } else {
+      // No audio — an in-person recording stopped from somewhere other
+      // than the browser tab holding the audio (another page, the Focus
+      // window after a reload, Ask Anchor), so the audio never got
+      // uploaded. The live transcript captured during the call is still
+      // here, so summarize from that rather than losing the meeting.
+      utterances = await liveTranscriptUtterances(meetingId);
+      if (utterances.length === 0) throw new Error("No audio file on this meeting");
+      fullText = utterances.map((u) => u.text).join(" ");
+      provider = "live";
+    }
 
     if (utterances.length === 0) {
       throw new Error(
@@ -75,7 +89,7 @@ export async function processMeeting(meetingId: string): Promise<void> {
 
     await db.insert(transcripts).values({
       meetingId,
-      provider: "assemblyai",
+      provider,
       fullText,
       utterances,
     });
@@ -360,4 +374,20 @@ export async function processMeeting(meetingId: string): Promise<void> {
       })
       .where(eq(meetings.id, meetingId));
   }
+}
+
+// Builds transcript utterances from the live transcript lines captured
+// during the call (see meetingLiveSegments), for a meeting whose audio
+// never made it to storage. Timing is approximate: relativeSeconds when
+// the source had it, otherwise evenly spaced in arrival order.
+async function liveTranscriptUtterances(meetingId: string): Promise<Utterance[]> {
+  const segments = await db
+    .select()
+    .from(meetingLiveSegments)
+    .where(eq(meetingLiveSegments.meetingId, meetingId))
+    .orderBy(asc(meetingLiveSegments.createdAt));
+  return segments.map((s, i) => {
+    const startMs = s.relativeSeconds != null ? s.relativeSeconds * 1000 : i * 5000;
+    return { speakerLabel: s.speakerName || "Speaker", text: s.text, startMs, endMs: startMs + 4000 };
+  });
 }

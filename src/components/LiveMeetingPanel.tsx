@@ -11,7 +11,7 @@ import { StopMeetingButton } from "@/components/StopMeetingButton";
 // focus-mode pop-out window (src/app/focus) can share it instead of
 // running a second, independent poll of the same endpoint.
 export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; title: string }) {
-  const { segments, suggestions, status, hasBot, error, coachingError } = useLiveMeeting(meetingId);
+  const { segments, suggestions, status, hasBot, isDesktop, error, coachingError } = useLiveMeeting(meetingId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,12 +42,11 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
           >
             Focus window ⛶
           </button>
-          {/* Ends Anchor's bot early instead of waiting for the call to
-              end on its own — see StopMeetingButton's comment for why
-              this doesn't hang up the call for anyone else. Only for a
-              Zoom/Teams call Anchor's bot actually joined — an in-person
-              recording stops from its own Record-in-person control. */}
-          {hasBot && <StopMeetingButton meetingId={meetingId} variant="light" />}
+          {/* Ends the meeting early: Anchor's bot leaves a Zoom/Teams call
+              (without hanging up for anyone else), or an in-person
+              recording stops and gets written up — see stopMeeting.ts.
+              Anchor Desktop recordings stop from the desktop app. */}
+          {!isDesktop && <StopMeetingButton meetingId={meetingId} variant="light" inPerson={!hasBot} />}
           <span className="text-xs text-slate-200">{status === "joining" ? "Joining…" : "Live"}</span>
         </div>
       </div>

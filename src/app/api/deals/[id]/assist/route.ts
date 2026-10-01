@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { dealFiles, meetings, summaries, meetingParticipants, contacts, meetingLiveSegments, users } from "@/db/schema";
 import { and, asc, desc, eq, or } from "drizzle-orm";
-import { askAnchorStream, describeAnswerError, type DealContext, type AnchorImage } from "@/lib/liveAssist";
+import { askAnchorStream, describeAnswerError, type DealContext, type AnchorImage, type AskActions } from "@/lib/liveAssist";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { isImageFile, imageMediaType } from "@/lib/extractText";
@@ -191,6 +191,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     relevantPassages: passages.length ? formatPassages(passages) : null,
   };
 
+  // What Ask Anchor can do here beyond answering — stop the meeting that's
+  // live on this deal, open one of its files (see AskActions in
+  // liveAssist.ts). File links are absolute because answers only make
+  // http(s) links clickable (FormattedMessage in AskAnchorPanel.tsx).
+  const origin = process.env.AUTH_URL || req.nextUrl.origin;
+  const actions: AskActions = {
+    liveMeetingId: liveMeetingId ?? null,
+    files: files.map((f) => ({ fileName: f.fileName, url: `${origin}/api/deals/${dealId}/files/${f.id}` })),
+  };
+
   // Streamed as plain text chunks rather than one JSON payload at the
   // end — the UI can start showing words the moment they're generated
   // instead of waiting for the whole answer (see askAnchorStream).
@@ -198,7 +208,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const chunk of askAnchorStream({ context, question, history, images, mode })) {
+        for await (const chunk of askAnchorStream({ context, question, history, images, mode, actions })) {
           controller.enqueue(encoder.encode(chunk));
         }
       } catch (err) {

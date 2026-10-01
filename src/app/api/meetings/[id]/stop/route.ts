@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, deals } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
+import { processMeeting } from "@/lib/processMeeting";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { leaveCall, cancelBot } from "@/lib/recall";
 
-// Lets someone end a live "Send Anchor to a live meeting" bot early — see
+// Lets someone end a live meeting early — a "Send Anchor to a live
+// meeting" bot, or an in-person recording (see the !recallBotId branch).
+// Originally only for bots — see
 // src/components/StopMeetingButton.tsx for where this gets called from
 // (the During tab's live panel, the Focus window). This does NOT end the
 // call for anyone else on it, only tells Recall.ai's bot to leave.
@@ -59,10 +62,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "This meeting isn't live." }, { status: 400 });
   }
   if (!meeting.recallBotId) {
-    return NextResponse.json(
-      { error: "This meeting wasn't joined by Anchor's bot, so there's nothing to stop here." },
-      { status: 400 }
-    );
+    if (meeting.recallRecordingId) {
+      return NextResponse.json(
+        { error: "Anchor Desktop is recording this call — stop it from the desktop app." },
+        { status: 400 }
+      );
+    }
+    // An in-person recording. When the browser tab holding its audio is
+    // the one asking, the client stops that recorder and uploads the
+    // audio instead of calling this (see src/lib/stopMeeting.ts). Getting
+    // here means the audio isn't reachable — the tab was reloaded, closed,
+    // or it's a different page — so wrap the meeting up from its live
+    // transcript (processMeeting falls back to it when there's no audio)
+    // rather than leaving it stuck "live" with no way to stop it. The
+    // status guard keeps this from racing a real upload that just landed.
+    const [ended] = await db
+      .update(meetings)
+      .set({ status: "uploaded", updatedAt: new Date() })
+      .where(and(eq(meetings.id, id), or(eq(meetings.status, "recording"), eq(meetings.status, "joining"))))
+      .returning({ id: meetings.id });
+    if (ended) {
+      // Fire and forget — same pattern as finish-recording; the live poll
+      // picks up the status change.
+      void processMeeting(id);
+    }
+    return NextResponse.json({ ok: true, fromLiveTranscript: true });
   }
 
   const body = await req.json().catch(() => ({}));

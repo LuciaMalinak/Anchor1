@@ -318,7 +318,9 @@ function webSearchTool(maxUses: number): Anthropic.Messages.WebSearchTool2025030
 // web search hiccup), retries once without web search so the person still
 // gets an answer from their own Anchor data instead of an error. A failure
 // after text has started is passed on, since retrying would repeat it.
-async function* streamWithSearchFallback(start: (withSearch: boolean) => AnswerStream): AsyncGenerator<string> {
+async function* streamWithSearchFallback(
+  start: (withSearch: boolean) => AnswerStream
+): AsyncGenerator<string, Anthropic.Message> {
   let produced = false;
   try {
     const stream = start(true);
@@ -330,8 +332,9 @@ async function* streamWithSearchFallback(start: (withSearch: boolean) => AnswerS
     }
     // Surfaces stream-level errors (e.g. an API error mid-response) that a
     // plain `for await` over content_block_delta events alone would swallow.
-    await stream.finalMessage();
-    if (produced) return;
+    const message: Anthropic.Message = await stream.finalMessage();
+    // An action-only reply (a tool call with no text) is a real answer too.
+    if (produced || message.content.some((b) => b.type === "tool_use")) return message;
     console.error("[liveAssist] answer with web search came back empty; retrying without it");
   } catch (err) {
     if (produced) throw err;
@@ -343,7 +346,75 @@ async function* streamWithSearchFallback(start: (withSearch: boolean) => AnswerS
       yield event.delta.text;
     }
   }
-  await stream.finalMessage();
+  return await stream.finalMessage();
+}
+
+// What Ask Anchor can actually DO on a deal, beyond answering — it used to
+// have no actions at all, so "stop this meeting" got a reply claiming the
+// meeting was being stopped while nothing happened. Each tool call is
+// passed to the browser as a marker after the answer text, and carried
+// out there (see src/lib/askActions.ts) — stopping an in-person recording
+// has to happen in the browser tab holding its audio.
+export type AskActions = {
+  // The meeting live on this deal right now, if any.
+  liveMeetingId: string | null;
+  files: { fileName: string; url: string }[];
+};
+
+function actionTools(actions: AskActions): Anthropic.Tool[] {
+  const tools: Anthropic.Tool[] = [];
+  if (actions.liveMeetingId) {
+    tools.push({
+      name: "stop_meeting",
+      description:
+        "Stop the meeting that's live on this deal right now: ends the in-person recording, or has Anchor's bot leave the Zoom/Teams call (without ending it for anyone else), then writes the meeting up. Use when the person asks to stop, end, finish or wrap up the meeting, call or recording.",
+      input_schema: { type: "object", properties: {} },
+    });
+  }
+  if (actions.files.length) {
+    tools.push({
+      name: "open_file",
+      description:
+        "Open one of this deal's files for the person in a new tab. Use when they ask to pull up, open, show or bring up a file, document, deck or attachment. Pick the file that best matches what they asked for.",
+      input_schema: {
+        type: "object",
+        properties: {
+          file_name: { type: "string", enum: actions.files.map((f) => f.fileName) },
+        },
+        required: ["file_name"],
+      },
+    });
+  }
+  return tools;
+}
+
+function actionRules(actions: AskActions): string {
+  const can = [
+    actions.liveMeetingId ? "stop the live meeting (stop_meeting)" : null,
+    actions.files.length ? "open one of this deal's files (open_file)" : null,
+  ].filter(Boolean);
+  const list = can.length ? `You can ${can.join(" and ")} by calling the tool. ` : "";
+  return `\n\nActions: ${list}When the person asks for one of these, call the tool — a short sentence before it is fine — rather than describing how they could do it. Never say you did something (stopped or ended a meeting, opened a file, sent an email, created a task, changed a setting) unless you called a tool for it in this reply; if there's no tool for what they ask, say plainly that you can't do that from here and where in Anchor they can do it.${
+    actions.liveMeetingId ? "" : " Nothing is live on this deal right now, so there's no meeting to stop."
+  }`;
+}
+
+// Turns the model's tool calls into the text the person sees plus the
+// action markers askActions.ts carries out.
+function* actionOutput(message: Anthropic.Message, actions: AskActions, producedText: boolean): Generator<string> {
+  for (const block of message.content) {
+    if (block.type !== "tool_use") continue;
+    if (block.name === "stop_meeting" && actions.liveMeetingId) {
+      if (!producedText) yield "Stopping the meeting now — I'll write it up from what was recorded.";
+      yield `\n\n[[anchor:stop:${actions.liveMeetingId}]]`;
+    } else if (block.name === "open_file") {
+      const name = (block.input as { file_name?: unknown }).file_name;
+      const file = actions.files.find((f) => f.fileName === name);
+      if (!file) continue;
+      yield `${producedText ? "\n\n" : ""}Opening [${file.fileName}](${file.url}).`;
+      yield `\n\n[[anchor:open:${file.url}]]`;
+    }
+  }
 }
 
 export async function askAnchor(params: {
@@ -403,22 +474,29 @@ export async function* askAnchorStream(params: {
   history: { role: "user" | "assistant"; content: string }[];
   images?: AnchorImage[];
   mode?: AskMode;
+  actions?: AskActions;
 }): AsyncGenerator<string> {
   const contextBlock = buildContextBlock(params.context);
   const mode = params.mode ?? "live";
+  const actions = params.actions ?? { liveMeetingId: null, files: [] };
+  const tools = actionTools(actions);
 
-  yield* streamWithSearchFallback((withSearch) =>
+  const message = yield* streamWithSearchFallback((withSearch) =>
     client().messages.stream({
       model: MODEL,
       max_tokens: mode === "live" ? 700 : 1500,
-      ...(withSearch ? { tools: [webSearchTool(mode === "live" ? 3 : 5)] } : {}),
-      system: buildSystemPrompt(contextBlock, mode, params.context),
+      ...(withSearch || tools.length
+        ? { tools: [...(withSearch ? [webSearchTool(mode === "live" ? 3 : 5)] : []), ...tools] }
+        : {}),
+      system: buildSystemPrompt(contextBlock, mode, params.context) + actionRules(actions),
       messages: [
         ...params.history.map((h) => ({ role: h.role, content: h.content })),
         { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
       ],
     })
   );
+  const producedText = message.content.some((b) => b.type === "text" && b.text.trim().length > 0);
+  yield* actionOutput(message, actions, producedText);
 }
 
 // The app-wide Ask Anchor panel (see /api/ask and AskAnchorDock.tsx) —
