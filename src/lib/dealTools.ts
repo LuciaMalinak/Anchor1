@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithForcedTool } from "./forcedTool";
 
 // Model calls behind the deal tools: the "Draft a nudge" email for a
 // deal going quiet, the pre-call brief, and the CRM update proposal after
@@ -21,7 +22,7 @@ async function callTool<T>(params: {
   tool: Anthropic.Tool;
   maxTokens: number;
 }): Promise<T> {
-  const message = await client().messages.create({
+  const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: params.maxTokens,
     system: params.system,

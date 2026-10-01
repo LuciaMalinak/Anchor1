@@ -12,6 +12,7 @@
 // Anthropic tool-use with a structured input_schema, never invent details
 // not actually present in the source material.
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithForcedTool } from "./forcedTool";
 import type { EmailContextItem } from "./integrations/gmail";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
@@ -108,7 +109,7 @@ export async function extractDealEmailDigest(
   }
 
   try {
-    const message = await client().messages.create({
+    const message = await createWithForcedTool(client(), {
       model: MODEL,
       max_tokens: 1024,
       system:

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithForcedTool } from "./forcedTool";
 import type { Utterance } from "./transcribe";
 
 // Centralized so it's a one-line change if this needs to point at a
@@ -137,7 +138,7 @@ export async function summarizeMeeting(
         }${dealContext.emailContext ? `Relevant email history: ${dealContext.emailContext}` : ""}`
       : "";
 
-  const message = await client().messages.create({
+  const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 2048,
     system:
@@ -240,7 +241,7 @@ export async function mergeContactMemory(params: {
       `What happened with them in today's meeting:\n${params.newNote}${manualNotesBlock}\n\n` +
       `Produce an updated relationship summary, a one-sentence continuity note, and what changed vs. the prior summary.`;
 
-  const message = await client().messages.create({
+  const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 512,
     system:
@@ -297,7 +298,7 @@ export async function draftFollowUpEmail(params: {
     .map((a) => `- ${a.text}${a.owner ? ` (${a.owner})` : ""}`)
     .join("\n");
 
-  const message = await client().messages.create({
+  const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 768,
     system:
@@ -429,7 +430,7 @@ export async function mergeDealMemory(params: {
         "; "
       )}\nAction items: ${actionItemsText || "None"}${manualNotesBlock}${attachedFilesBlock}${emailContextBlock}\n\nProduce an updated rolling memory for this deal, and note what changed vs. the prior memory.`;
 
-  const message = await client().messages.create({
+  const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 512,
     system:

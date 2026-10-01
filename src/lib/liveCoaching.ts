@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithForcedTool } from "./forcedTool";
 
 // Real-time nudges during an active meeting — same latency-first
 // reasoning as liveAssist.ts's MODEL choice: fast beats maximally
@@ -77,20 +78,13 @@ const LIVE_COACHING_TOOL = {
   },
 };
 
-function requestCoaching(
-  system: string,
-  content: string,
-  opts: { model?: string; forceTool?: boolean } = {}
-) {
-  const { model = MODEL, forceTool = true } = opts;
-  return client().messages.create({
+function requestCoaching(system: string, content: string, model: string = MODEL) {
+  return createWithForcedTool(client(), {
     model,
     max_tokens: MAX_TOKENS,
     system,
     tools: [LIVE_COACHING_TOOL],
-    tool_choice: forceTool
-      ? { type: "tool", name: LIVE_COACHING_TOOL.name }
-      : { type: "auto" },
+    tool_choice: { type: "tool", name: LIVE_COACHING_TOOL.name },
     messages: [{ role: "user", content }],
   });
 }
@@ -98,24 +92,17 @@ function requestCoaching(
 // Live coaching used to make exactly one attempt and, on any error, the
 // live route just logged it — so the Suggestions panel sat on
 // "Preparing suggestions…" for the whole call with no sign anything was
-// wrong. Two failures in particular were permanent, not transient:
-// - Newer models (Sonnet 5.5, Opus 5.5, Fable 5.1) reject a forced
-//   tool_choice with a 400, so if ANTHROPIC_MODEL is set to one of them
-//   every single refresh failed. Retry with tool_choice "auto" (the system
-//   prompt tells it to always call the tool).
-// - A misspelled/retired ANTHROPIC_MODEL 404s. Fall back to the default
-//   fast model rather than going dark for the whole call.
+// wrong. Newer models rejecting forced tool use is handled in
+// createWithForcedTool (see forcedTool.ts); on top of that, a
+// misspelled/retired ANTHROPIC_MODEL 404s, so fall back to the default
+// fast model rather than going dark for the whole call.
 async function requestCoachingWithFallbacks(system: string, content: string) {
   try {
     return await requestCoaching(system, content);
   } catch (err) {
-    if (err instanceof Anthropic.BadRequestError) {
-      console.warn(`[live coaching] ${MODEL} rejected the request, retrying without forced tool use:`, err.message);
-      return await requestCoaching(system, content, { forceTool: false });
-    }
     if (err instanceof Anthropic.NotFoundError && MODEL !== DEFAULT_MODEL) {
       console.warn(`[live coaching] model ${MODEL} not found, falling back to ${DEFAULT_MODEL}`);
-      return await requestCoaching(system, content, { model: DEFAULT_MODEL });
+      return await requestCoaching(system, content, DEFAULT_MODEL);
     }
     throw err;
   }
@@ -245,7 +232,7 @@ export async function generateLiveCoaching(params: {
     : "";
 
   const system =
-    "You are a live sales-call coach watching a transcript stream in during a real meeting, and this runs on a repeating timer for as long as the call lasts — the rep should always have something current to look at, not a panel that goes blank the moment the live conversation itself doesn't hand you something new. Give sharp, specific, non-generic guidance: ground it in what's actually been said when there's something to react to, and otherwise ground it in what's already known about this deal from its prep notes, decision boundaries, and past meetings — never leave nudges empty just because the last few seconds of transcript were quiet. Never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for — if there's truly nothing to go on yet (no transcript, no prep, no history), say so plainly rather than inventing something. If the transcript so far doesn't support a checklist item being covered, mark it not covered. You're also watching for a specific kind of moment: the other side asking something that needs answering right now, like a live interview-assist tool would — when that happens, surface it and a ready-to-say answer separately from the general nudges above (see questionAsked/question/suggestedAnswer), grounded the same way, and respecting decision boundaries the same way. Always respond by calling the record_live_coaching tool.";
+    "You are a live sales-call coach watching a transcript stream in during a real meeting, and this runs on a repeating timer for as long as the call lasts — the rep should always have something current to look at, not a panel that goes blank the moment the live conversation itself doesn't hand you something new. Give sharp, specific, non-generic guidance: ground it in what's actually been said when there's something to react to, and otherwise ground it in what's already known about this deal from its prep notes, decision boundaries, and past meetings — never leave nudges empty just because the last few seconds of transcript were quiet. Never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for — if there's truly nothing to go on yet (no transcript, no prep, no history), say so plainly rather than inventing something. If the transcript so far doesn't support a checklist item being covered, mark it not covered. You're also watching for a specific kind of moment: the other side asking something that needs answering right now, like a live interview-assist tool would — when that happens, surface it and a ready-to-say answer separately from the general nudges above (see questionAsked/question/suggestedAnswer), grounded the same way, and respecting decision boundaries the same way.";
 
   const message = await requestCoachingWithFallbacks(system, `Deal: ${params.dealName || "Unnamed deal"}
 

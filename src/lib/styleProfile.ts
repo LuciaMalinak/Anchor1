@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithForcedTool } from "./forcedTool";
 import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { deals, dealMessages, meetingParticipants, meetings, summaries, transcripts, userStyleProfiles, users } from "@/db/schema";
@@ -139,7 +140,7 @@ export async function buildStyleProfile(
 
   const messagesBlock = messageRows.map((m) => `— ${m.content}`).join("\n");
 
-  const message = await client().messages.create({
+  const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 600,
     system:

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithForcedTool } from "./forcedTool";
 import type { IndustryKey } from "./industries";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
@@ -155,7 +156,7 @@ Then reply with ONLY a plain list, one short item per line, each starting with "
 
   if (rawItems.length === 0) return [];
 
-  const structureMessage = await client().messages.create({
+  const structureMessage = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 600,
     system:

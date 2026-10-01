@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithForcedTool } from "./forcedTool";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
@@ -58,7 +59,7 @@ export async function extractLinkedInProfile(params: {
     ? `\n\nWhat Anchor already knows about them from past meetings — keep anything from this that's still relevant, don't drop it just because it's not repeated in the pasted text:\n${params.priorSummary.trim()}`
     : "";
 
-  const message = await client().messages.create({
+  const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 500,
     system:

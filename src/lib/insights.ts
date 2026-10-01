@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithForcedTool } from "./forcedTool";
 import { db } from "@/db";
 import { deals, meetings, summaries } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
@@ -80,7 +81,7 @@ export async function generateInsights(dealsData: DealForInsights[]): Promise<In
     })
     .join("\n\n---\n\n");
 
-  const message = await client().messages.create({
+  const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 1024,
     system:

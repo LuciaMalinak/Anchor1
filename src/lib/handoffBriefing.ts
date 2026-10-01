@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithForcedTool } from "./forcedTool";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
@@ -123,7 +124,7 @@ export async function generateHandoffBriefing(params: {
     ? `\n\nFiles/voice notes attached to this deal:\n${params.attachedFiles}`
     : "";
 
-  const message = await client().messages.create({
+  const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 700,
     system:
