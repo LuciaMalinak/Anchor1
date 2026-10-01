@@ -272,6 +272,45 @@ function buildQuestionContent(
   ];
 }
 
+type AnswerStream = ReturnType<ReturnType<typeof client>["messages"]["stream"]>;
+
+function webSearchTool(maxUses: number): Anthropic.Messages.WebSearchTool20250305 {
+  return { type: "web_search_20250305", name: "web_search", max_uses: maxUses };
+}
+
+// Streams an answer's text. If the request fails before any text has
+// arrived (for example web search being unavailable on the account, or a
+// web search hiccup), retries once without web search so the person still
+// gets an answer from their own Anchor data instead of an error. A failure
+// after text has started is passed on, since retrying would repeat it.
+async function* streamWithSearchFallback(start: (withSearch: boolean) => AnswerStream): AsyncGenerator<string> {
+  let produced = false;
+  try {
+    const stream = start(true);
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        produced = true;
+        yield event.delta.text;
+      }
+    }
+    // Surfaces stream-level errors (e.g. an API error mid-response) that a
+    // plain `for await` over content_block_delta events alone would swallow.
+    await stream.finalMessage();
+    if (produced) return;
+    console.error("[liveAssist] answer with web search came back empty; retrying without it");
+  } catch (err) {
+    if (produced) throw err;
+    console.error("[liveAssist] answer with web search failed; retrying without it:", err);
+  }
+  const stream = start(false);
+  for await (const event of stream) {
+    if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+      yield event.delta.text;
+    }
+  }
+  await stream.finalMessage();
+}
+
 export async function askAnchor(params: {
   context: DealContext;
   question: string;
@@ -282,15 +321,22 @@ export async function askAnchor(params: {
   const contextBlock = buildContextBlock(params.context);
   const mode = params.mode ?? "live";
 
-  const message = await client().messages.create({
-    model: MODEL,
-    max_tokens: mode === "live" ? 700 : 1500,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: mode === "live" ? 3 : 5 }],
-    system: buildSystemPrompt(contextBlock, mode, params.context),
-    messages: [
-      ...params.history.map((h) => ({ role: h.role, content: h.content })),
-      { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
-    ],
+  const request = (withSearch: boolean) =>
+    client().messages.create({
+      model: MODEL,
+      max_tokens: mode === "live" ? 700 : 1500,
+      ...(withSearch ? { tools: [webSearchTool(mode === "live" ? 3 : 5)] } : {}),
+      system: buildSystemPrompt(contextBlock, mode, params.context),
+      messages: [
+        ...params.history.map((h) => ({ role: h.role, content: h.content })),
+        { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
+      ],
+    });
+  // Same safeguard as streamWithSearchFallback: answer without web search
+  // rather than not at all.
+  const message = await request(true).catch((err) => {
+    console.error("[liveAssist] answer with web search failed; retrying without it:", err);
+    return request(false);
   });
 
   // With web search in play, the reply can be split across several text
@@ -326,26 +372,18 @@ export async function* askAnchorStream(params: {
   const contextBlock = buildContextBlock(params.context);
   const mode = params.mode ?? "live";
 
-  const stream = client().messages.stream({
-    model: MODEL,
-    max_tokens: mode === "live" ? 700 : 1500,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: mode === "live" ? 3 : 5 }],
-    system: buildSystemPrompt(contextBlock, mode, params.context),
-    messages: [
-      ...params.history.map((h) => ({ role: h.role, content: h.content })),
-      { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
-    ],
-  });
-
-  for await (const event of stream) {
-    if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-      yield event.delta.text;
-    }
-  }
-
-  // Surfaces stream-level errors (e.g. an API error mid-response) that a
-  // plain `for await` over content_block_delta events alone would swallow.
-  await stream.finalMessage();
+  yield* streamWithSearchFallback((withSearch) =>
+    client().messages.stream({
+      model: MODEL,
+      max_tokens: mode === "live" ? 700 : 1500,
+      ...(withSearch ? { tools: [webSearchTool(mode === "live" ? 3 : 5)] } : {}),
+      system: buildSystemPrompt(contextBlock, mode, params.context),
+      messages: [
+        ...params.history.map((h) => ({ role: h.role, content: h.content })),
+        { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
+      ],
+    })
+  );
 }
 
 // The app-wide Ask Anchor panel (see /api/ask and AskAnchorDock.tsx) —
@@ -355,7 +393,8 @@ export async function* askAnchorStream(params: {
 function buildWorkspaceSystemPrompt(
   scope: "workspace" | "meeting",
   contextBlock: string,
-  lead: { name: string | null; style: string | null }
+  lead: { name: string | null; style: string | null },
+  canSearchWeb = true
 ): string {
   const material =
     scope === "meeting"
@@ -372,10 +411,25 @@ Facts about Anchor itself, for questions about the app:
 - Slack is used to send deal handoff briefings to a teammate. Salesforce and HubSpot sync contacts and deals into Anchor, and Anchor can suggest field updates after a call that are only written back when the person approves them.
 - Anchor Desktop records Zoom and Teams calls on a Mac without a bot joining.
 
-${formatRules("panel")}
+${scope === "workspace" ? quietDayRules(canSearchWeb) + "\n\n" : ""}${formatRules("panel")}
 
 --- Context ---
 ${contextBlock}`;
+}
+
+// For "what needs me today?"-style questions on a day with nothing urgent:
+// there is always something worth doing on a deal, so never answer that
+// nothing needs attention.
+function quietDayRules(canSearchWeb: boolean): string {
+  return `When the person asks what needs them, what to work on, or what's happening, and nothing in the context is urgent (no overdue or open tasks, no call today, no deal flagged at risk), never reply that nothing needs them. Suggest the most useful next steps instead, for example:
+- Documents on their deals that were recently added or updated: say which and why they're worth a look.
+- Deals that have gone quiet (no meeting or email in a while): suggest a check-in, and name the person to contact.
+- Upcoming calls in the next few days worth preparing for.
+${
+  canSearchWeb
+    ? "- Recent news that could affect their deals: search the web for the companies behind their most active deals and share one to three relevant articles from the last few weeks, each as a markdown link with one line on why it matters for that deal. Only share articles you actually found; never invent a link."
+    : "- News that could affect their deals: suggest checking for recent news on the companies behind their most active deals (web search isn't available for this answer, so don't cite or invent articles)."
+}`;
 }
 
 export async function* askWorkspaceStream(params: {
@@ -385,21 +439,16 @@ export async function* askWorkspaceStream(params: {
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
 }): AsyncGenerator<string> {
-  const stream = client().messages.stream({
-    model: MODEL,
-    max_tokens: 1500,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
-    system: buildWorkspaceSystemPrompt(params.scope, params.contextBlock, params.lead),
-    messages: [
-      ...params.history.map((h) => ({ role: h.role, content: h.content })),
-      { role: "user" as const, content: params.question },
-    ],
-  });
-
-  for await (const event of stream) {
-    if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-      yield event.delta.text;
-    }
-  }
-  await stream.finalMessage();
+  yield* streamWithSearchFallback((withSearch) =>
+    client().messages.stream({
+      model: MODEL,
+      max_tokens: 1500,
+      ...(withSearch ? { tools: [webSearchTool(5)] } : {}),
+      system: buildWorkspaceSystemPrompt(params.scope, params.contextBlock, params.lead, withSearch),
+      messages: [
+        ...params.history.map((h) => ({ role: h.role, content: h.content })),
+        { role: "user" as const, content: params.question },
+      ],
+    })
+  );
 }

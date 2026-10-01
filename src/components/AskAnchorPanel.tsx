@@ -14,15 +14,25 @@ type ChatTurn = { role: "user" | "assistant"; content: string };
 // **bold** spans and "- "/"* " bullet lists — the two things worth
 // handling; anything else just renders as plain text, which is exactly
 // what it did before.
+// **bold** and [label](https://link) — e.g. news articles Ask Anchor
+// suggests. Only http(s) links are made clickable; they open in a new tab.
 function renderInline(text: string, keyPrefix: string): ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter((p) => p.length > 0);
-  return parts.map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
-      <strong key={`${keyPrefix}-${i}`}>{part.slice(2, -2)}</strong>
-    ) : (
-      <span key={`${keyPrefix}-${i}`}>{part}</span>
-    )
-  );
+  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).filter((p) => p.length > 0);
+  return parts.map((part, i) => {
+    const key = `${keyPrefix}-${i}`;
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return <strong key={key}>{part.slice(2, -2)}</strong>;
+    }
+    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    if (link) {
+      return (
+        <a key={key} href={link[2]} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:opacity-80">
+          {link[1]}
+        </a>
+      );
+    }
+    return <span key={key}>{part}</span>;
+  });
 }
 
 export function FormattedMessage({ content }: { content: string }) {
