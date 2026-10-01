@@ -25,16 +25,16 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL("/sign-in", req.url));
+    return NextResponse.redirect(new URL("/sign-in", baseUrl(req)));
   }
 
   const { provider } = await params;
   if (!isProviderKey(provider)) {
-    return NextResponse.redirect(new URL("/dashboard/integrations?error=unknown_provider", req.url));
+    return NextResponse.redirect(new URL("/dashboard/integrations?error=unknown_provider", baseUrl(req)));
   }
   if (!isProviderConfigured(provider)) {
     return NextResponse.redirect(
-      new URL(`/dashboard/integrations?error=not_configured&provider=${provider}`, req.url)
+      new URL(`/dashboard/integrations?error=not_configured&provider=${provider}`, baseUrl(req))
     );
   }
 

@@ -11,7 +11,7 @@ function baseUrl(req: NextRequest): string {
 }
 
 function redirectWith(req: NextRequest, params: Record<string, string>) {
-  const url = new URL("/dashboard/integrations", req.url);
+  const url = new URL("/dashboard/integrations", baseUrl(req));
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   return NextResponse.redirect(url);
 }
@@ -29,7 +29,7 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL("/sign-in", req.url));
+    return NextResponse.redirect(new URL("/sign-in", baseUrl(req)));
   }
 
   const { provider } = await params;
@@ -54,7 +54,7 @@ export async function GET(
     // what's missing, instead of stranding them on Integrations.
     const returnTo =
       decodedState?.userId === session.user.id ? safeReturnTo(decodedState.returnTo ?? null) : null;
-    if (returnTo) return NextResponse.redirect(new URL(returnTo, req.url));
+    if (returnTo) return NextResponse.redirect(new URL(returnTo, baseUrl(req)));
     return redirectWith(req, { error: "denied", provider });
   }
   if (!code || !state) {
@@ -147,7 +147,7 @@ export async function GET(
       });
 
     const returnTo = safeReturnTo(decodedState.returnTo ?? null);
-    if (returnTo) return NextResponse.redirect(new URL(returnTo, req.url));
+    if (returnTo) return NextResponse.redirect(new URL(returnTo, baseUrl(req)));
     return redirectWith(req, { connected: provider });
   } catch (err) {
     console.error(`${provider} OAuth callback failed:`, err);
