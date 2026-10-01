@@ -121,6 +121,20 @@ export function isGoogleExtraScopeKey(value: string | null): value is GoogleExtr
   return value !== null && value in GOOGLE_EXTRA_SCOPES;
 }
 
+// Write access to HubSpot deals for "Update HubSpot" after a call. Like
+// the Google extras above, not part of the default connection: asked for
+// only the first time someone approves an update, via
+// /api/integrations/hubspot/connect?add=deals_write. (Salesforce's "api"
+// scope already covers updating an opportunity the user can edit.)
+export const HUBSPOT_EXTRA_SCOPES = {
+  deals_write: "crm.objects.deals.write",
+} as const;
+export type HubspotExtraScopeKey = keyof typeof HUBSPOT_EXTRA_SCOPES;
+
+export function isHubspotExtraScopeKey(value: string | null): value is HubspotExtraScopeKey {
+  return value !== null && value in HUBSPOT_EXTRA_SCOPES;
+}
+
 export function isProviderConfigured(key: ProviderKey): boolean {
   const cfg = PROVIDERS[key];
   return Boolean(process.env[cfg.clientIdEnv] && process.env[cfg.clientSecretEnv]);

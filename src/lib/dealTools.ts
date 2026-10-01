@@ -159,38 +159,45 @@ export type CrmProposal = {
 const CRM_TOOL: Anthropic.Tool = {
   name: "record_crm_update",
   description:
-    "Record the CRM field changes this call justifies. Use null for any field the call gives no clear reason to change.",
+    "Record the CRM field changes this call justifies. Leave out any field the call gives no clear reason to change.",
   input_schema: {
     type: "object",
     properties: {
       stage: {
-        type: ["object", "null"],
+        type: "object",
         description: "New stage, only if the call clearly moved the deal. Must be exactly one of the allowed stages.",
         properties: { value: { type: "string" }, reason: { type: "string" } },
         required: ["value", "reason"],
       },
       closeDate: {
-        type: ["object", "null"],
+        type: "object",
         description: "New expected close date (YYYY-MM-DD), only if a timeline was discussed.",
         properties: { value: { type: "string" }, reason: { type: "string" } },
         required: ["value", "reason"],
       },
       amount: {
-        type: ["object", "null"],
+        type: "object",
         description: "New deal amount (a number, no currency symbol), only if a size or price was agreed or clearly stated.",
         properties: { value: { type: "number" }, reason: { type: "string" } },
         required: ["value", "reason"],
       },
       nextStep: {
-        type: ["object", "null"],
+        type: "object",
         description: "The concrete next step agreed in the call, under 200 characters.",
         properties: { value: { type: "string" }, reason: { type: "string" } },
         required: ["value", "reason"],
       },
     },
-    required: ["stage", "closeDate", "amount", "nextStep"],
+    required: [],
   },
 };
+
+// "2026-02-31" parses in JavaScript (it rolls over), so require a round trip.
+function isRealDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
 
 function field<T>(v: unknown, parse: (x: unknown) => T | null): { value: T; reason: string } | null {
   if (!v || typeof v !== "object") return null;
@@ -216,7 +223,7 @@ export async function proposeCrmUpdate(params: {
   const stages = new Set(params.allowedStages);
   return {
     stage: field(out.stage, (x) => (typeof x === "string" && stages.has(x.trim()) && x.trim() !== params.current.stage ? x.trim() : null)),
-    closeDate: field(out.closeDate, (x) => (typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x) && !Number.isNaN(Date.parse(x)) && x !== params.current.closeDate ? x : null)),
+    closeDate: field(out.closeDate, (x) => (isRealDate(x) && x !== params.current.closeDate ? x : null)),
     amount: field(out.amount, (x) => (typeof x === "number" && Number.isFinite(x) && x >= 0 && x !== params.current.amount ? Math.round(x * 100) / 100 : null)),
     nextStep: field(out.nextStep, (x) => (typeof x === "string" && x.trim() && x.trim() !== params.current.nextStep ? x.trim().slice(0, 255) : null)),
   };

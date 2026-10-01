@@ -21,6 +21,9 @@ import { ParticipantsPanel } from "./ParticipantsPanel";
 import { MeetingDealPicker } from "./MeetingDealPicker";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { AskAnchorScope } from "@/components/AskAnchorDock";
+import { CrmUpdateCard } from "./CrmUpdateCard";
+import { authorizeMeeting } from "@/lib/meetingAccess";
+import { CRM_NAME, crmTargetFor } from "@/lib/integrations/crmWrite";
 
 // Kept as a plain helper outside the component — same reasoning as
 // isResearchStale() in companyResearch.ts: reading Date.now() directly
@@ -79,6 +82,17 @@ export default async function MeetingDetailPage({
   if (!isOwner && !sharedViaTeam) notFound();
 
   const googleConfigured = isProviderConfigured("google");
+
+  // "Update Salesforce / HubSpot": only when this meeting's deal is linked
+  // to a CRM record and this person has that CRM connected themselves.
+  let crmName: string | null = null;
+  let crmHint: string | null = null;
+  const meetingAccess = await authorizeMeeting(session.user.id, id);
+  if (meetingAccess?.deal) {
+    const target = await crmTargetFor(session.user.id, meetingAccess.deal);
+    if (target.provider) crmName = CRM_NAME[target.provider];
+    else if (target.reason === "not_connected" && target.linkedTo) crmHint = CRM_NAME[target.linkedTo];
+  }
 
   // Only the owner gets to reassign this meeting's deal (see the PATCH
   // route's comment) — a teammate viewing a shared meeting gets read-only
@@ -315,6 +329,17 @@ export default async function MeetingDetailPage({
       {summary && <FollowUpEmailDraft meetingId={id} googleConfigured={googleConfigured} />}
 
       {summary && transcript && googleConfigured && <SuggestedInvites meetingId={id} />}
+
+      {summary && crmName && <CrmUpdateCard meetingId={id} crmName={crmName} />}
+      {summary && !crmName && crmHint && (
+        <p className="text-xs text-slate-500">
+          This deal is linked to {crmHint}.{" "}
+          <Link href="/dashboard/integrations" className="font-medium text-brand hover:underline">
+            Connect {crmHint}
+          </Link>{" "}
+          to update it from here after each call.
+        </p>
+      )}
 
       {participants.length > 0 && (
         <ParticipantsPanel meetingId={id} participants={participants} canEdit={isOwner || sharedViaTeam} />

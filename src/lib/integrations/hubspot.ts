@@ -3,7 +3,7 @@
 // shape and same one-way (HubSpot -> Anchor), read-only design as
 // src/lib/integrations/salesforce.ts, for teams that run HubSpot instead
 // of (or alongside) Salesforce — see that file's header comment for why
-// this only ever reads, never writes back to the connected CRM.
+// the sync only reads; approved after-call updates live in crmWrite.ts.
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { integrationConnections, contacts, deals } from "@/db/schema";
@@ -13,7 +13,8 @@ import { getOrCreateTeamId } from "@/lib/team";
 // for a first sync/demo; paging through everything is future work, same
 // simplification Salesforce's RECORD_LIMIT makes.
 const PAGE_LIMIT = 100;
-const API_BASE = "https://api.hubapi.com";
+// Overridable only so the write path can be exercised against a local stand-in.
+const API_BASE = process.env.HUBSPOT_API_BASE || "https://api.hubapi.com";
 
 type Connection = typeof integrationConnections.$inferSelect;
 
@@ -198,3 +199,10 @@ export async function syncHubspotData(
 
   return { contactsSynced, dealsSynced };
 }
+
+// Shared with crmWrite.ts (the approved, after-call field updates).
+export {
+  getConnection as getHubspotConnection,
+  refreshAccessToken as refreshHubspotAccessToken,
+  API_BASE as HUBSPOT_API_BASE,
+};

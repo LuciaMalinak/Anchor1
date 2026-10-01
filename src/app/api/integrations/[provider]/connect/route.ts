@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
   GOOGLE_EXTRA_SCOPES,
+  HUBSPOT_EXTRA_SCOPES,
   PROVIDERS,
   isGoogleExtraScopeKey,
+  isHubspotExtraScopeKey,
   isProviderConfigured,
   isProviderKey,
 } from "@/lib/integrations/config";
@@ -54,10 +56,13 @@ export async function GET(
   // ?add=gmail_compose / calendar_events asks for one extra Google
   // permission on top of the default read-only ones (see config.ts).
   const add = req.nextUrl.searchParams.get("add");
+  // ?add=deals_write on HubSpot does the same for updating deals.
   const scopes =
     provider === "google" && isGoogleExtraScopeKey(add)
       ? [...cfg.scopes, GOOGLE_EXTRA_SCOPES[add]]
-      : cfg.scopes;
+      : provider === "hubspot" && isHubspotExtraScopeKey(add)
+        ? [...cfg.scopes, HUBSPOT_EXTRA_SCOPES[add]]
+        : cfg.scopes;
 
   const url = new URL(cfg.authorizeUrl);
   url.searchParams.set("client_id", clientId);

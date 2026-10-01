@@ -1,10 +1,11 @@
 // Real, working Salesforce sync — pulls Contacts and Opportunities from
 // the connected Salesforce org into Anchor's own contacts/deals tables.
-// One-way (Salesforce -> Anchor) by design for now: writing back to a
-// prospect's live production CRM from an early-stage tool carries real
-// risk (a bad write could corrupt a customer's real data), whereas a
-// read-only pull is safe to run repeatedly and is what makes the "see
-// your real CRM data enriched with meeting intelligence" demo work.
+// The sync is one-way (Salesforce -> Anchor): writing back to a live
+// production CRM carries real risk (a bad write could corrupt a
+// customer's real data), whereas a read-only pull is safe to run
+// repeatedly. The only writes are the after-call updates in crmWrite.ts:
+// four fields on one linked opportunity, each reviewed and approved by
+// the user first.
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { integrationConnections, contacts, deals } from "@/db/schema";
@@ -194,3 +195,10 @@ export async function syncSalesforceData(
 
   return { contactsSynced, dealsSynced };
 }
+
+// Shared with crmWrite.ts (the approved, after-call field updates).
+export {
+  getConnection as getSalesforceConnection,
+  refreshAccessToken as refreshSalesforceAccessToken,
+  API_VERSION as SALESFORCE_API_VERSION,
+};

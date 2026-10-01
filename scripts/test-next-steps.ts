@@ -41,3 +41,14 @@ const fake = async () => JSON.stringify([
   const s2 = await suggestInvites({ transcript, actionItems: [], meetingDateISO: "2026-09-30", timeZone: "UTC", participants: [] }, async () => "Sorry, here you go: {");
   assert(s2.length === 0, "garbage model output -> empty list, no crash");
 })();
+
+// CRM updates: only real values for the record's own options get through.
+import("@/lib/integrations/crmValidate").then(({ validateChanges, isRealDate }) => {
+  const snap = { provider: "salesforce" as const, recordId: "006", recordName: null, recordUrl: null, stage: "Qualification", stageOptions: [{ value: "Qualification", label: "Qualification" }, { value: "Negotiation", label: "Negotiation" }], closeDate: "2026-12-31", amount: 100, nextStep: null };
+  assert(!isRealDate("2026-02-31") && !isRealDate("2026-13-01") && isRealDate("2028-02-29"), "only real calendar dates count");
+  assert(typeof validateChanges(snap, { stage: "Made up" }) === "string", "unknown CRM stage rejected");
+  assert(typeof validateChanges(snap, { amount: -1 }) === "string", "negative amount rejected");
+  assert(typeof validateChanges(snap, { stage: "Qualification" }) === "string", "no-op update rejected");
+  const ok = validateChanges(snap, { stage: "Negotiation", nextStep: "x".repeat(300) });
+  assert(typeof ok === "object" && ok.stage === "Negotiation" && ok.nextStep?.length === 255, "valid update kept, next step capped at 255");
+}).catch((err) => { console.error("FAIL crmWrite tests", err); process.exit(1); });
