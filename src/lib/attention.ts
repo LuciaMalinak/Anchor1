@@ -1,7 +1,8 @@
 import { db } from "@/db";
-import { deals, meetings } from "@/db/schema";
-import { and, desc, eq, inArray, max } from "drizzle-orm";
+import { deals, meetings, tasks } from "@/db/schema";
+import { and, asc, desc, eq, inArray, lte, max } from "drizzle-orm";
 import { computeDealHealth, daysSinceActivity, type DealHealth } from "./dealHealth";
+import { accessibleDealIds, dealVisibilityWhere } from "./dealAccess";
 
 export type StaleDeal = {
   id: string;
@@ -18,12 +19,24 @@ export type StuckMeeting = {
   minutesOld: number;
 };
 
+// A promise made in a call (a meeting-sourced task) still open days later.
+export type OpenPromise = {
+  taskId: string;
+  text: string;
+  ownerLabel: string | null;
+  dealId: string;
+  dealName: string;
+  daysOpen: number;
+};
+
 export type AttentionSummary = {
   staleDeals: StaleDeal[];
   stuckMeetings: StuckMeeting[];
+  openPromises: OpenPromise[];
 };
 
 const STUCK_MINUTES = 10;
+const PROMISE_OPEN_DAYS = 5;
 
 // Everything here is computed from existing data — nothing is stored —
 // so it's always current and never needs its own cleanup job. Kept to a
@@ -33,6 +46,12 @@ export async function getAttentionItems(params: {
   teamId: string;
   userId: string;
 }): Promise<AttentionSummary> {
+  // Only deals this person can see — a restricted deal's name shouldn't
+  // show up on the home page of someone who isn't on it.
+  const access = await accessibleDealIds(params.userId);
+  if (!access || access.teamId !== params.teamId) {
+    return { staleDeals: [], stuckMeetings: [], openPromises: [] };
+  }
   const dealRows = await db
     .select({
       id: deals.id,
@@ -43,7 +62,7 @@ export async function getAttentionItems(params: {
     })
     .from(deals)
     .leftJoin(meetings, eq(meetings.dealId, deals.id))
-    .where(eq(deals.teamId, params.teamId))
+    .where(dealVisibilityWhere(access))
     .groupBy(deals.id);
 
   const staleDeals: StaleDeal[] = dealRows
@@ -86,5 +105,37 @@ export async function getAttentionItems(params: {
     }))
     .filter((m) => m.minutesOld > STUCK_MINUTES);
 
-  return { staleDeals, stuckMeetings };
+  // Promises from calls still open after a few days, on open deals only.
+  const openDealIds = dealRows
+    .filter((d) => d.stage !== "Closed won" && d.stage !== "Closed lost")
+    .map((d) => d.id);
+  const dealNameById = new Map(dealRows.map((d) => [d.id, d.name]));
+  const promiseRows = openDealIds.length
+    ? await db
+        .select({ id: tasks.id, text: tasks.text, ownerLabel: tasks.ownerLabel, dealId: tasks.dealId, createdAt: tasks.createdAt })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.teamId, params.teamId),
+            eq(tasks.completed, false),
+            eq(tasks.source, "meeting"),
+            inArray(tasks.dealId, openDealIds),
+            lte(tasks.createdAt, new Date(Date.now() - PROMISE_OPEN_DAYS * 86_400_000))
+          )
+        )
+        .orderBy(asc(tasks.createdAt))
+        .limit(5)
+    : [];
+  const openPromises: OpenPromise[] = promiseRows
+    .filter((t): t is typeof t & { dealId: string } => Boolean(t.dealId))
+    .map((t) => ({
+      taskId: t.id,
+      text: t.text,
+      ownerLabel: t.ownerLabel,
+      dealId: t.dealId,
+      dealName: dealNameById.get(t.dealId) ?? "",
+      daysOpen: Math.floor((Date.now() - t.createdAt.getTime()) / 86_400_000),
+    }));
+
+  return { staleDeals, stuckMeetings, openPromises };
 }

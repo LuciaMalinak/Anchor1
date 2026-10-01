@@ -3,6 +3,7 @@
 import { buildMime } from "@/lib/integrations/gmailMime";
 import { suggestInvites, endISO } from "@/lib/suggestInvites";
 import { safeReturnTo } from "@/lib/integrations/returnTo";
+import { createShareToken, readShareToken } from "@/lib/shareLink";
 const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL", m); process.exit(1); } else console.log("ok ", m); };
 const mime = buildMime({ to: ["sam@acme.com"], subject: "Acme — next steps\r\nBcc: evil@x.com", body: "Hi Sam —\nthanks.\nMüller" });
 const [hdr, b64] = mime.split("\r\n\r\n");
@@ -16,6 +17,15 @@ assert(endISO("2026-10-02T10:00:00", 30) === "2026-10-02T10:30:00", "endISO 30m"
 assert(endISO("2026-10-02T09:45", 45) === "2026-10-02T10:30:00", "endISO carries hour");
 assert(endISO("2026-10-02T22:30", 120) === "2026-10-03T00:30:00", "endISO rolls past midnight to the next day");
 assert(endISO("2026-12-31T23:30", 60) === "2027-01-01T00:30:00", "endISO rolls over the year");
+process.env.AUTH_SECRET ??= "test-secret";
+const dealId = "93e784b7-9360-46eb-9581-a3171e6c9177";
+const { token } = createShareToken(dealId, Date.UTC(2026, 9, 1));
+assert(readShareToken(token, Date.UTC(2026, 9, 2))?.dealId === dealId, "share link opens the right deal");
+assert(readShareToken(token, Date.UTC(2026, 11, 1)) === null, "share link stops working after 30 days");
+const [payload, sig] = token.split(".");
+const otherPayload = Buffer.from(`00000000-0000-0000-0000-000000000000.${Date.UTC(2027, 0, 1)}`).toString("base64url");
+assert(readShareToken(`${otherPayload}.${sig}`, Date.UTC(2026, 9, 2)) === null, "share link can't be edited to point at another deal");
+assert(readShareToken(`${payload}.${sig}x`, Date.UTC(2026, 9, 2)) === null && readShareToken("garbage", Date.UTC(2026, 9, 2)) === null, "tampered or junk share links are rejected");
 const transcript = "Sam: Let's get on a call Friday to review the churn cohort.\nYou: Great, Friday at 10 works.";
 const fake = async () => JSON.stringify([
   { title: "Churn cohort review — Acme", startISO: "2026-10-02T10:00", durationMinutes: 30, attendees: ["sam@acme.com", "invented@nowhere.com"], sourceQuote: "Let's get on a call Friday to review the churn cohort.", confidence: "high" },

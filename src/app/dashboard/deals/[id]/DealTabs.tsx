@@ -10,6 +10,8 @@ import { getCompanyLogoUrl } from "@/lib/companyLogo";
 import { HEALTH_LABEL, HEALTH_BADGE_CLASSES, HEALTH_DOT_CLASSES, type DealHealth } from "@/lib/dealHealth";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { AskAnchorScope } from "@/components/AskAnchorDock";
+import { PreCallBrief } from "@/components/PreCallBrief";
+import { ShareNextSteps } from "@/components/ShareNextSteps";
 import { DealContextBox } from "@/components/DealContextBox";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 
@@ -372,6 +374,7 @@ function BeforePanel({
           No prior meetings on this deal yet — the first one starts the record.
         </p>
       )}
+      <PreCallBrief dealId={dealId} dealName={dealName} />
       {upcoming.map((m) => (
         <div
           key={m.id}
@@ -1905,6 +1908,8 @@ function AfterPanel({
           </button>
           {sendResult && <p className="mt-2 text-xs text-slate-600">{sendResult}</p>}
         </div>
+
+        <ShareNextSteps dealId={dealId} disabled={readyMeetings.length === 0} />
 
         <FilesSection dealId={dealId} files={files} />
       </div>
