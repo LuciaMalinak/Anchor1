@@ -276,6 +276,37 @@ function buildQuestionContent(
   ];
 }
 
+// What to tell the person when an answer can't be produced at all (after
+// the web-search retry), so a dead key, empty credit balance or a bad
+// model name says so plainly instead of a vague "try again". Shown in the
+// Ask Anchor panels; the full error is logged too.
+export function describeAnswerError(err: unknown): string {
+  if (err instanceof Error && /ANTHROPIC_API_KEY is not set/.test(err.message)) {
+    return "Anchor's AI isn't set up on this server yet (ANTHROPIC_API_KEY is missing in Render).";
+  }
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
+    return "Anchor's AI key isn't working, so it can't answer right now. Check ANTHROPIC_API_KEY in Render.";
+  }
+  if (err instanceof Anthropic.NotFoundError) {
+    return "The AI model Anchor is set to use isn't available. Check ANTHROPIC_MODEL in Render.";
+  }
+  if (err instanceof Anthropic.RateLimitError || (err instanceof Anthropic.APIError && (err.status === 529 || err.status === 503))) {
+    return "Anchor's AI is busy right now. Try again in a minute.";
+  }
+  if (err instanceof Anthropic.BadRequestError) {
+    // Anthropic reports an empty balance as a 400 whose message names it;
+    // there's no dedicated error class for it.
+    if (/credit balance/i.test(err.message)) {
+      return "Anchor's Anthropic account is out of credits, so it can't answer. Add credits at console.anthropic.com → Billing.";
+    }
+    return `Anchor couldn't answer that (the AI rejected the request: ${err.message.slice(0, 160)}).`;
+  }
+  if (err instanceof Anthropic.APIError) {
+    return `Anchor couldn't finish answering that (AI error ${err.status ?? "unknown"}). Try again in a moment.`;
+  }
+  return "Anchor couldn't finish answering that. Try asking again.";
+}
+
 type AnswerStream = ReturnType<ReturnType<typeof client>["messages"]["stream"]>;
 
 function webSearchTool(maxUses: number): Anthropic.Messages.WebSearchTool20250305 {
@@ -403,7 +434,7 @@ function buildWorkspaceSystemPrompt(
   const material =
     scope === "meeting"
       ? "The meeting this person is looking at, below: its summary, action items, signals and full transcript (lines start with [minutes:seconds]), plus passages matched to this question from the deal's other calls, documents and emails."
-      : "This person's own Anchor workspace, below: passages matched to this question from their deals' calls, documents and emails, then their deals, recent meetings, upcoming calls, open tasks and the people they've met.";
+      : "This person's own Google Calendar (next 36 hours) and Gmail inbox (last 3 days), then their Anchor workspace: passages matched to this question from their deals' calls, documents and emails, their deals, recent meetings, upcoming calls, open tasks and the people they've met. For questions about their day, agenda, schedule or email, answer from the calendar and inbox first: name the meetings with times, and the emails that need a reply (who, what, why it matters), linking them to deals where they relate.";
   return `You are Anchor, an assistant built into a meeting-intelligence app for sales and client teams. The person is asking you a question from inside the app.
 
 ${sourcingRules(material)}

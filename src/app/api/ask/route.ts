@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { askWorkspaceStream } from "@/lib/liveAssist";
+import { askWorkspaceStream, describeAnswerError } from "@/lib/liveAssist";
+import { fetchPersonalGoogleContext, formatPersonalGoogleContext } from "@/lib/integrations/personalGoogle";
 import { buildMeetingContext, buildWorkspaceContext } from "@/lib/askAnchorContext";
 import { loadAskSources } from "@/lib/askSources";
 import { findRelevantPassages, formatPassages } from "@/lib/askRetrieval";
@@ -10,6 +11,16 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 const MAX_HISTORY_TURNS = 6;
+
+function safeTimeZone(tz: string | null): string {
+  if (!tz) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return "UTC";
+  }
+}
 
 // The app-wide Ask Anchor panel. With a meetingId it answers about that
 // one meeting (the recap page); without, about everything this person can
@@ -38,6 +49,8 @@ export async function POST(req: NextRequest) {
     .slice(-MAX_HISTORY_TURNS * 2);
 
   const meetingId = typeof body.meetingId === "string" && body.meetingId ? body.meetingId : null;
+  // The browser's time zone, so "today" and event times match theirs.
+  const timeZone = safeTimeZone(typeof body.timeZone === "string" ? body.timeZone : null);
   let scope: "workspace" | "meeting" = "workspace";
   let contextBlock: string;
   // Whose way of working the answer should follow: the deal's lead on a
@@ -54,9 +67,16 @@ export async function POST(req: NextRequest) {
       dealIds = meeting.dealId ? [meeting.dealId] : [];
       leadUserId = meeting.leadUserId;
     } else {
-      const workspace = await buildWorkspaceContext(userId);
+      // Their own inbox and calendar are always part of a workspace
+      // question ("check my email", "what's on today"), fetched alongside
+      // the Anchor data rather than only when a question names them.
+      const [workspace, personal] = await Promise.all([
+        buildWorkspaceContext(userId),
+        fetchPersonalGoogleContext(userId, timeZone),
+      ]);
       if (!workspace) return NextResponse.json({ error: "Join or create a team first." }, { status: 400 });
-      contextBlock = workspace.context;
+      const now = new Date().toLocaleString("en-US", { timeZone, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+      contextBlock = `Right now it's ${now} (${timeZone}).\n\n${formatPersonalGoogleContext(personal, timeZone)}\n\n${workspace.context}`;
       dealIds = workspace.dealIds;
     }
 
@@ -90,7 +110,7 @@ export async function POST(req: NextRequest) {
         }
       } catch (err) {
         console.error("[ask] stream failed:", err);
-        controller.enqueue(encoder.encode("Anchor couldn't finish answering that — try asking again."));
+        controller.enqueue(encoder.encode(describeAnswerError(err)));
       } finally {
         controller.close();
       }

@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { dealFiles, meetings, summaries, meetingParticipants, contacts, meetingLiveSegments, users } from "@/db/schema";
 import { and, asc, desc, eq, or } from "drizzle-orm";
-import { askAnchorStream, type DealContext, type AnchorImage } from "@/lib/liveAssist";
+import { askAnchorStream, describeAnswerError, type DealContext, type AnchorImage } from "@/lib/liveAssist";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { isImageFile, imageMediaType } from "@/lib/extractText";
@@ -204,7 +204,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       } catch (err) {
         console.error(`[assist] stream failed for deal ${dealId}:`, err);
         controller.enqueue(
-          encoder.encode("Anchor couldn't finish answering that — try asking again.")
+          encoder.encode(describeAnswerError(err))
         );
       } finally {
         controller.close();

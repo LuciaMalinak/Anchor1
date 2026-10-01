@@ -121,7 +121,13 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
         const res = await fetch(scope.endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...scope.body, question, history }),
+          body: JSON.stringify({
+            ...scope.body,
+            question,
+            history,
+            // So "today" and calendar times are in their own time zone.
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
         });
         if (!res.ok || !res.body) {
           const body = await res.json().catch(() => ({}));
