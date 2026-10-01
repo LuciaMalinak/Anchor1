@@ -4,6 +4,7 @@ import { buildMime } from "@/lib/integrations/gmailMime";
 import { suggestInvites, endISO } from "@/lib/suggestInvites";
 import { safeReturnTo } from "@/lib/integrations/returnTo";
 import { createShareToken, readShareToken } from "@/lib/shareLink";
+import { findRelevantPassages, keywords } from "@/lib/askRetrieval";
 const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL", m); process.exit(1); } else console.log("ok ", m); };
 const mime = buildMime({ to: ["sam@acme.com"], subject: "Acme — next steps\r\nBcc: evil@x.com", body: "Hi Sam —\nthanks.\nMüller" });
 const [hdr, b64] = mime.split("\r\n\r\n");
@@ -26,6 +27,17 @@ const [payload, sig] = token.split(".");
 const otherPayload = Buffer.from(`00000000-0000-0000-0000-000000000000.${Date.UTC(2027, 0, 1)}`).toString("base64url");
 assert(readShareToken(`${otherPayload}.${sig}`, Date.UTC(2026, 9, 2)) === null, "share link can't be edited to point at another deal");
 assert(readShareToken(`${payload}.${sig}x`, Date.UTC(2026, 9, 2)) === null && readShareToken("garbage", Date.UTC(2026, 9, 2)) === null, "tampered or junk share links are rejected");
+// Ask Anchor searches the deal's own calls and documents before the web.
+assert(keywords("What did they say about the pricing?").join(",") === "pric", "question boiled down to what matters");
+const askSources = [
+  { kind: "call" as const, label: "Call \"Kickoff\", 2026-09-01", text: "[0:10] Jordan: Thanks for joining.\n[4:12] Priya: Our budget for this year is capped at 50k, and procurement needs a SOC 2 report.\n[9:40] Jordan: Let's talk Slack later." },
+  { kind: "document" as const, label: "Document \"pricing.xlsx\"", text: "Seat pricing: 40 seats at $49 per seat per month. Volume discount up to 15% above 50 seats." },
+  { kind: "email" as const, label: "Emails with Acme", text: "Jordan asked to move the call to Thursday." },
+];
+const budgetHits = findRelevantPassages("What's their budget and does procurement need anything?", askSources);
+assert(budgetHits[0]?.label.startsWith("Call") && budgetHits[0].text.includes("capped at 50k"), "budget question finds the call line");
+assert(findRelevantPassages("How much is the volume discount on seats?", askSources)[0]?.label.includes("pricing.xlsx"), "pricing question finds the document");
+assert(findRelevantPassages("Who won the 1998 World Cup?", askSources).length === 0, "unrelated question finds nothing, so Anchor goes to the web");
 const transcript = "Sam: Let's get on a call Friday to review the churn cohort.\nYou: Great, Friday at 10 works.";
 const fake = async () => JSON.stringify([
   { title: "Churn cohort review — Acme", startISO: "2026-10-02T10:00", durationMinutes: 30, attendees: ["sam@acme.com", "invented@nowhere.com"], sourceQuote: "Let's get on a call Friday to review the churn cohort.", confidence: "high" },

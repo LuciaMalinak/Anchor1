@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { dealFiles, meetings, summaries, meetingParticipants, contacts, meetingLiveSegments } from "@/db/schema";
+import { dealFiles, meetings, summaries, meetingParticipants, contacts, meetingLiveSegments, users } from "@/db/schema";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 import { askAnchorStream, type DealContext, type AnchorImage } from "@/lib/liveAssist";
 import { authorizeDeal } from "@/lib/dealAccess";
@@ -9,6 +9,8 @@ import { getDealLeadStyle } from "@/lib/styleProfile";
 import { isImageFile, imageMediaType } from "@/lib/extractText";
 import { readStoredFile } from "@/lib/storage";
 import { authenticateBearer } from "@/lib/apiToken";
+import { loadAskSources } from "@/lib/askSources";
+import { findRelevantPassages, formatPassages } from "@/lib/askRetrieval";
 
 const MAX_HISTORY_TURNS = 6;
 
@@ -63,7 +65,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Independent queries — run together instead of one after another.
   // Doesn't change what's asked of the model, just how long someone
   // waits before the first token of the answer even starts generating.
-  const [recentReady, files, dealContactRows, dealLeadStyle, liveMeetingRows] = await Promise.all([
+  // The docked Ask Anchor panel asks for the fuller answer (sources and
+  // suggested next steps); the live-call widgets keep the short one.
+  const mode = body.mode === "panel" ? "panel" : "live";
+
+  const [recentReady, files, dealContactRows, dealLeadStyle, liveMeetingRows, askSources, leadRows] = await Promise.all([
     db
       .select({ meeting: meetings, summary: summaries })
       .from(meetings)
@@ -106,7 +112,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       )
       .orderBy(desc(meetings.occurredAt))
       .limit(1),
+    // Everything said on this deal's calls, the full text of its
+    // documents, and its email digest — searched for this question so the
+    // answer starts from the deal's own material (see askRetrieval.ts).
+    loadAskSources({ dealIds: [dealId] }).catch((err) => {
+      console.error(`[assist] loading sources failed for deal ${dealId}:`, err);
+      return [];
+    }),
+    deal.leadUserId
+      ? db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, deal.leadUserId))
+      : Promise.resolve([] as { name: string | null; email: string }[]),
   ]);
+  const searchText = [...history.filter((h) => h.role === "user").slice(-1).map((h) => h.content), question].join(" ");
+  const passages = findRelevantPassages(searchText, askSources, { maxPassages: mode === "live" ? 5 : 8, maxChars: mode === "live" ? 3500 : 7000 });
 
   let liveTranscript: string | null = null;
   const liveMeetingId = liveMeetingRows[0]?.id;
@@ -168,6 +186,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     emailContext: deal.emailContext,
     calendarContext: deal.calendarContext,
     dealLeadStyle,
+    dealLeadName: leadRows[0] ? leadRows[0].name || leadRows[0].email : null,
+    relevantPassages: passages.length ? formatPassages(passages) : null,
   };
 
   // Streamed as plain text chunks rather than one JSON payload at the
@@ -177,7 +197,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const chunk of askAnchorStream({ context, question, history, images })) {
+        for await (const chunk of askAnchorStream({ context, question, history, images, mode })) {
           controller.enqueue(encoder.encode(chunk));
         }
       } catch (err) {

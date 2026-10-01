@@ -28,7 +28,9 @@ function day(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function buildWorkspaceContext(userId: string): Promise<string | null> {
+export async function buildWorkspaceContext(
+  userId: string
+): Promise<{ context: string; dealIds: string[]; userName: string | null } | null> {
   const access = await accessibleDealIds(userId);
   if (!access) return null;
 
@@ -169,7 +171,7 @@ export async function buildWorkspaceContext(userId: string): Promise<string | nu
     }
   }
 
-  return parts.join("\n");
+  return { context: parts.join("\n"), dealIds, userName: me?.name || me?.email || null };
 }
 
 // One meeting's recap page: its summary, people and transcript, plus the
@@ -177,7 +179,7 @@ export async function buildWorkspaceContext(userId: string): Promise<string | nu
 export async function buildMeetingContext(
   userId: string,
   meetingId: string
-): Promise<{ context: string; title: string } | null> {
+): Promise<{ context: string; title: string; dealId: string | null; leadUserId: string | null } | null> {
   const access = await authorizeMeeting(userId, meetingId);
   if (!access) return null;
   const { meeting, deal } = access;
@@ -222,5 +224,11 @@ export async function buildMeetingContext(
     const clipped = text.length > MAX_TRANSCRIPT_CHARS;
     parts.push(`\nTranscript${clipped ? " (first part only — it's long)" : ""}:\n${clipped ? text.slice(0, MAX_TRANSCRIPT_CHARS) : text}`);
   }
-  return { context: parts.join("\n"), title: meeting.title };
+  return {
+    context: parts.join("\n"),
+    title: meeting.title,
+    dealId: deal?.id ?? null,
+    // The deal's lead, or whoever recorded the call if it's not on a deal.
+    leadUserId: deal ? deal.leadUserId : meeting.userId,
+  };
 }

@@ -41,7 +41,7 @@ function scopeFor(pathname: string): Scope | null {
   if (pathname.startsWith("/dashboard/admin")) return null; // viewing someone else's account
   const deal = pathname.match(/^\/dashboard\/deals\/([0-9a-f-]{36})$/i);
   if (deal) {
-    return { key: `deal:${deal[1]}`, endpoint: `/api/deals/${deal[1]}/assist`, body: {}, kind: "deal" };
+    return { key: `deal:${deal[1]}`, endpoint: `/api/deals/${deal[1]}/assist`, body: { mode: "panel" }, kind: "deal" };
   }
   const meeting = pathname.match(/^\/dashboard\/meetings\/([0-9a-f-]{36})$/i);
   if (meeting) {

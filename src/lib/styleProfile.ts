@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { and, desc, eq, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { deals, dealMessages, userStyleProfiles } from "@/db/schema";
+import { deals, dealMessages, meetingParticipants, meetings, summaries, transcripts, userStyleProfiles, users } from "@/db/schema";
 
 // Same model as the other batch/quality-sensitive features (summarize,
 // handoff briefing) — this only ever runs in the background or on an
@@ -26,6 +26,9 @@ function client() {
 const MIN_SOURCE_ITEMS = 3;
 const MAX_DEALS = 25;
 const MAX_MESSAGES = 40;
+const MAX_CALLS = 15;
+const MAX_SPOKEN_LINES = 60;
+const MAX_COMMITMENTS = 30;
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 export function isStyleProfileStale(updatedAt: Date | null | undefined): boolean {
@@ -34,6 +37,9 @@ export function isStyleProfileStale(updatedAt: Date | null | undefined): boolean
 }
 
 async function gatherSourceMaterial(userId: string) {
+  const [me] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId));
+  const myName = me?.name?.trim() || null;
+
   const dealRows = await db
     .select({ name: deals.name, notes: deals.notes, decisionBoundaries: deals.decisionBoundaries })
     .from(deals)
@@ -50,8 +56,46 @@ async function gatherSourceMaterial(userId: string) {
     .orderBy(desc(dealMessages.createdAt))
     .limit(MAX_MESSAGES);
 
-  const sourceCount = dealRows.length + messageRows.length;
-  return { dealRows, messageRows, sourceCount };
+  // Their own words on calls: only lines from a speaker whose resolved name
+  // is exactly this person's full name (speaker names are matched or fixed
+  // by hand on the meeting page), never a guess from a bare "Speaker A".
+  // And what they took on themselves: action items assigned to them.
+  const spokenLines: string[] = [];
+  const commitments: string[] = [];
+  if (myName && myName.includes(" ")) {
+    const calls = await db
+      .select({ id: meetings.id, title: meetings.title, utterances: transcripts.utterances, actionItems: summaries.actionItems })
+      .from(meetings)
+      .innerJoin(transcripts, eq(transcripts.meetingId, meetings.id))
+      .leftJoin(summaries, eq(summaries.meetingId, meetings.id))
+      .leftJoin(deals, eq(deals.id, meetings.dealId))
+      .where(or(eq(meetings.userId, userId), eq(deals.leadUserId, userId)))
+      .orderBy(desc(meetings.occurredAt))
+      .limit(MAX_CALLS);
+    const speakers = calls.length
+      ? await db
+          .select({ meetingId: meetingParticipants.meetingId, speakerLabel: meetingParticipants.speakerLabel, displayName: meetingParticipants.displayName })
+          .from(meetingParticipants)
+          .where(inArray(meetingParticipants.meetingId, calls.map((c) => c.id)))
+      : [];
+    const target = myName.toLowerCase();
+    const mine = new Set(
+      speakers.filter((s) => s.displayName?.replace(/\s*\(you\)\s*$/i, "").trim().toLowerCase() === target).map((s) => `${s.meetingId}:${s.speakerLabel}`)
+    );
+    for (const c of calls) {
+      for (const u of c.utterances ?? []) {
+        if (spokenLines.length >= MAX_SPOKEN_LINES) break;
+        if (mine.has(`${c.id}:${u.speakerLabel}`) && u.text.length >= 40) spokenLines.push(`(${c.title}) ${u.text}`);
+      }
+      for (const a of c.actionItems ?? []) {
+        if (commitments.length >= MAX_COMMITMENTS) break;
+        if (a.owner?.trim().toLowerCase() === target) commitments.push(`(${c.title}) ${a.text}`);
+      }
+    }
+  }
+
+  const sourceCount = dealRows.length + messageRows.length + Math.ceil(spokenLines.length / 5) + Math.ceil(commitments.length / 3);
+  return { dealRows, messageRows, spokenLines, commitments, sourceCount };
 }
 
 const STYLE_TOOL = {
@@ -63,7 +107,7 @@ const STYLE_TOOL = {
       profile: {
         type: "string",
         description:
-          "3-5 sentences, written in third person, describing how this specific person tends to negotiate, what they hold firm on vs. stay flexible on, how they make decisions, and their communication tone — grounded ONLY in the material given. Never invent a trait or preference that isn't evidenced. If the material is thin, say less rather than generalize.",
+          "3-6 sentences, written in third person, describing how this specific person tends to negotiate, what they hold firm on vs. stay flexible on, how they make decisions, how they typically handle common moments (price pushback, delays, a new stakeholder, an objection), and their communication tone — grounded ONLY in the material given. Never invent a trait or preference that isn't evidenced. If the material is thin, say less rather than generalize.",
       },
     },
     required: ["profile"],
@@ -71,16 +115,14 @@ const STYLE_TOOL = {
 };
 
 // Builds (or rebuilds) one person's style profile from their own material
-// — never from what other people said about them, and never from a
-// meeting transcript, since Anchor doesn't yet reliably know which
-// speaker label in a transcript is this specific internal person rather
-// than someone external on the call. Deal notes, decision boundaries, and
-// deal-chat messages are all things this exact person typed themselves,
-// which makes them a clean (if narrower) signal to start from.
+// — never from what other people said about them: deal notes, decision
+// boundaries and deal-chat messages they typed, the lines they said on
+// calls (only where the speaker is named as them — see
+// gatherSourceMaterial), and the action items they took on.
 export async function buildStyleProfile(
   userId: string
 ): Promise<{ profile: string | null; sourceCount: number }> {
-  const { dealRows, messageRows, sourceCount } = await gatherSourceMaterial(userId);
+  const { dealRows, messageRows, spokenLines, commitments, sourceCount } = await gatherSourceMaterial(userId);
 
   if (sourceCount < MIN_SOURCE_ITEMS) {
     return { profile: null, sourceCount };
@@ -99,7 +141,7 @@ export async function buildStyleProfile(
 
   const message = await client().messages.create({
     model: MODEL,
-    max_tokens: 400,
+    max_tokens: 600,
     system:
       "You study a salesperson's own written material — never what other people said about them — to describe how they operate. Be specific and grounded only in what's given. Never invent a trait, preference, or habit that isn't evidenced in the material.",
     tools: [STYLE_TOOL],
@@ -111,6 +153,10 @@ export async function buildStyleProfile(
           dealsBlock || "None."
         }\n\nMessages this person has sent in deal chat:\n${
           messagesBlock || "None."
+        }\n\nThings this person said on their own calls:\n${
+          spokenLines.map((l) => `— ${l}`).join("\n") || "None."
+        }\n\nAction items this person took on after calls:\n${
+          commitments.map((l) => `— ${l}`).join("\n") || "None."
         }\n\nDescribe how this specific person negotiates, decides, and communicates.`,
       },
     ],

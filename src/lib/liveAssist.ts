@@ -73,11 +73,24 @@ export type DealContext = {
   // Present so a delegate covering this deal's meeting gets answers that
   // sound like the lead would give them, not a generic assistant voice.
   dealLeadStyle: string | null;
+  // Who leads the deal, so answers can be framed the way they'd play it.
+  dealLeadName?: string | null;
+  // Passages from this deal's own calls, documents and emails that best
+  // match the question (see askRetrieval.ts) — searched in full, unlike
+  // the summaries and file excerpts below.
+  relevantPassages?: string | null;
 };
 
 function buildContextBlock(ctx: DealContext): string {
   const parts: string[] = [`Deal: ${ctx.dealName}`];
   if (ctx.stage) parts.push(`Stage: ${ctx.stage}`);
+  if (ctx.dealLeadName) parts.push(`Deal lead: ${ctx.dealLeadName}`);
+
+  if (ctx.relevantPassages) {
+    parts.push(
+      `\nPassages from this deal's own calls, documents and emails that match the question (each labelled with where it's from; call lines start with [minutes:seconds]):\n${ctx.relevantPassages}`
+    );
+  }
   if (ctx.companyWebsite) parts.push(`Company website: ${ctx.companyWebsite}`);
 
   if (ctx.memory) {
@@ -185,19 +198,48 @@ function buildContextBlock(ctx: DealContext): string {
   return parts.join("\n");
 }
 
-// Shared by askAnchor and askAnchorStream so the two never drift — they
-// need byte-identical prompts since they're the same feature, just
-// streamed vs. not.
-function buildSystemPrompt(contextBlock: string): string {
-  return `You are Anchor, a live meeting assistant. Someone is in the middle of a real meeting right now and typed you a quick question — they need a short, useful, immediately usable answer, not a lecture.
+export type AskMode = "live" | "panel";
 
-Ground every answer in the deal context you're given below (past meeting summaries, action items, flagged signals, continuity notes, the rep's own prep notes and decision boundaries, attached file contents) first. You also have a live web search tool — reach for it when the question needs something current that wouldn't be in the deal context: recent company news, funding, industry trends, competitor moves, market conditions. Only search about the company/industry, never to look up a named individual.
+// How Anchor looks for an answer and what it suggests — shared by the
+// deal assistant and the workspace-wide one so the two never drift.
+function sourcingRules(material: string): string {
+  return `Answer whatever the person asks — about this work or anything else — and always give them a useful answer. Work through these in order:
+1. ${material} When it answers the question, use it first and say exactly where it came from (which call and when — quote the line if it matters — which document, the emails).
+2. If that doesn't fully answer it, use web search: companies, markets, competitors, pricing benchmarks, regulations, how-tos, general facts — anything public. Say what you found and name the site. For people, only public professional information (their role, company, public statements) — never their private life.
+3. If neither covers it, answer from your own knowledge and say so plainly ("not in your deal data or online — from general knowledge: …").
+Never invent anything about the deal itself: what someone said, prices, discounts, dates, commitments and names must come from the material or a source you name. If a deal-specific fact isn't known, say what's missing and how to find it, then still give the best answer you can.`;
+}
 
-Attached files, including PowerPoint and Excel ones, are already converted to plain text before you ever see them — when a file's extracted content is shown in the deal context below, treat it exactly like any other text here and answer from it directly. Do not tell the person you're unable to open, read, or access a file because of its format (.pptx, .xlsx, etc.) — that's never true here, and saying it wastes their time mid-meeting. If a specific detail genuinely isn't in what was extracted, say that plainly instead ("that deck doesn't mention X") rather than claiming you can't read the file at all.
+function leadRules(leadName: string | null | undefined, leadStyle: string | null | undefined): string {
+  const who = leadName ? `the deal lead, ${leadName}` : "the deal lead";
+  return `Think like ${who}: frame the answer and the suggestions the way they would play this — how they negotiate, what they hold firm on, where they stay flexible, and their tone. ${
+    leadStyle
+      ? `What Anchor has learned about how they operate: ${leadStyle}`
+      : "Anchor hasn't learned much about how they operate yet, so infer it from how this deal has been run so far (their notes, decision limits, and what they said and agreed on calls)."
+  }
+If the question touches something that should come from them in person — a firm price or discount, a contract or legal term, a compliance claim — still say what they would most likely answer, but mark it as needing their confirmation, and respect any decision limits they've set.`;
+}
 
-If neither the deal context nor a search turns up a real answer, say plainly that Anchor doesn't have that yet and it'll circle back on it next meeting — never invent facts, numbers, names, or commitments. The same applies even when you DO have enough to say something, if answering definitively would mean committing to something risky to state on the rep's behalf right now — a legal term, a contractual commitment, a firm price or discount, a compliance or regulatory claim, anything that should really come from the actual deal lead or a lawyer rather than from you mid-meeting. In that case, say so plainly and that it's worth circling back on next meeting instead of answering as if it's settled.
+function formatRules(mode: AskMode): string {
+  return mode === "live"
+    ? `They're in a live call and glanced at you. Reply in 2-4 sentences they can say or use right now, then one line starting "Next:" with the single best move, then one short line starting "Source:" (e.g. "Source: call on Sep 29" or "Source: web, reuters.com").`
+    : `Reply in this shape, with no other headings:
+- The answer first: a short paragraph, or a few "- " bullets if listing things.
+- Then a line starting "Sources:" naming what you used, e.g. "Sources: call with Jordan, Sep 29 · pricing.xlsx · web: gartner.com".
+- Then a line "**Suggested next steps**" followed by 1-3 "- " bullets: concrete moves, in the order you'd make them, phrased the way the lead would do it.
+Use **bold** sparingly for names.`;
+}
 
-Keep answers to 2-4 sentences unless the question clearly calls for a short list. Write like you're quietly feeding them a talking point mid-meeting, not writing a report.
+function buildSystemPrompt(contextBlock: string, mode: AskMode, ctx: DealContext): string {
+  return `You are Anchor, the assistant for the team working on "${ctx.dealName}"${mode === "live" ? ", answering a quick question during a live call" : ""}.
+
+${sourcingRules("This deal's own material below: first the passages matched to this question from its calls, documents and emails, then the live call (if one is happening), past meeting summaries, notes, files, and email and calendar context.")}
+
+Attached files, including PowerPoint and Excel ones, are already converted to plain text before you ever see them — treat their content like any other text here. Never say you can't open or read a file because of its format.
+
+${leadRules(ctx.dealLeadName, ctx.dealLeadStyle)}
+
+${formatRules(mode)}
 
 --- Deal context ---
 ${contextBlock}`;
@@ -235,14 +277,16 @@ export async function askAnchor(params: {
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
   images?: AnchorImage[];
+  mode?: AskMode;
 }): Promise<string> {
   const contextBlock = buildContextBlock(params.context);
+  const mode = params.mode ?? "live";
 
   const message = await client().messages.create({
     model: MODEL,
-    max_tokens: 500,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-    system: buildSystemPrompt(contextBlock),
+    max_tokens: mode === "live" ? 700 : 1500,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: mode === "live" ? 3 : 5 }],
+    system: buildSystemPrompt(contextBlock, mode, params.context),
     messages: [
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
@@ -277,14 +321,16 @@ export async function* askAnchorStream(params: {
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
   images?: AnchorImage[];
+  mode?: AskMode;
 }): AsyncGenerator<string> {
   const contextBlock = buildContextBlock(params.context);
+  const mode = params.mode ?? "live";
 
   const stream = client().messages.stream({
     model: MODEL,
-    max_tokens: 500,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-    system: buildSystemPrompt(contextBlock),
+    max_tokens: mode === "live" ? 700 : 1500,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: mode === "live" ? 3 : 5 }],
+    system: buildSystemPrompt(contextBlock, mode, params.context),
     messages: [
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
@@ -306,21 +352,27 @@ export async function* askAnchorStream(params: {
 // same model and streaming shape as askAnchorStream, but grounded in a
 // whole workspace (every visible deal, recent meetings, tasks, people) or
 // in one meeting's recap, instead of a single deal mid-call.
-function buildWorkspaceSystemPrompt(scope: "workspace" | "meeting", contextBlock: string): string {
-  const what =
+function buildWorkspaceSystemPrompt(
+  scope: "workspace" | "meeting",
+  contextBlock: string,
+  lead: { name: string | null; style: string | null }
+): string {
+  const material =
     scope === "meeting"
-      ? "one meeting this person is looking at right now: its summary, action items, signals and full transcript (lines are prefixed with [minutes:seconds] timestamps)"
-      : "this person's whole Anchor workspace: their deals, recent meetings, upcoming calls, open tasks, and the people they've met";
-  return `You are Anchor, an assistant built into a meeting-intelligence app for sales and client teams. The person is asking you a question from inside the app. You can see ${what}.
+      ? "The meeting this person is looking at, below: its summary, action items, signals and full transcript (lines start with [minutes:seconds]), plus passages matched to this question from the deal's other calls, documents and emails."
+      : "This person's own Anchor workspace, below: passages matched to this question from their deals' calls, documents and emails, then their deals, recent meetings, upcoming calls, open tasks and the people they've met.";
+  return `You are Anchor, an assistant built into a meeting-intelligence app for sales and client teams. The person is asking you a question from inside the app.
 
-Answer from the context below first. Be specific: name the deal, meeting, person or date your answer comes from, and when quoting a meeting say when (date, or the transcript timestamp). If the context doesn't contain the answer, say plainly that Anchor doesn't have that yet — never invent facts, numbers, names, dates or commitments. You can use web search for public company or industry news, never to look up private individuals.
+${sourcingRules(material)}
+
+${leadRules(lead.name, lead.style)}${scope === "workspace" ? "\nFor a deal someone else leads (each deal lists its lead), frame suggestions the way that lead would." : ""}
 
 Facts about Anchor itself, for questions about the app:
 - Google (Gmail + Calendar) connects read-only by default, to keep each deal's email and calendar history current. Anchor only asks for permission to create Gmail drafts or calendar events the first time someone clicks "Save to Gmail drafts" or "Add to calendar", and it never sends an email by itself.
 - Slack is used to send deal handoff briefings to a teammate. Salesforce and HubSpot sync contacts and deals into Anchor, and Anchor can suggest field updates after a call that are only written back when the person approves them.
 - Anchor Desktop records Zoom and Teams calls on a Mac without a bot joining.
 
-Keep answers short and scannable: a sentence or two, or a short "- " list when listing several things. Use **bold** sparingly for names of deals or people. No headings.
+${formatRules("panel")}
 
 --- Context ---
 ${contextBlock}`;
@@ -329,14 +381,15 @@ ${contextBlock}`;
 export async function* askWorkspaceStream(params: {
   scope: "workspace" | "meeting";
   contextBlock: string;
+  lead: { name: string | null; style: string | null };
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
 }): AsyncGenerator<string> {
   const stream = client().messages.stream({
     model: MODEL,
-    max_tokens: 1200,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
-    system: buildWorkspaceSystemPrompt(params.scope, params.contextBlock),
+    max_tokens: 1500,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+    system: buildWorkspaceSystemPrompt(params.scope, params.contextBlock, params.lead),
     messages: [
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user" as const, content: params.question },

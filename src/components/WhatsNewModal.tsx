@@ -14,7 +14,7 @@ const STORAGE_KEY = "anchor.whatsNew.seen";
 const TOOLS = [
   {
     title: "Ask Anchor, on every page",
-    body: "It's on the right of every page now (⌘K). Ask about any deal, call or person: on a deal it knows that deal, on a recap it knows that call word for word.",
+    body: "On the right of every page (⌘K). Ask it anything: it checks your calls, documents and emails first, then the web, and suggests next steps the way your deal lead would.",
   },
   {
     title: "Prep me for the next call",

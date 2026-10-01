@@ -26,33 +26,49 @@ function renderInline(text: string, keyPrefix: string): ReactNode {
 }
 
 export function FormattedMessage({ content }: { content: string }) {
-  const blocks = content.split(/\n\n+/).filter((b) => b.trim().length > 0);
+  // Grouped line by line, so a bolded line followed straight away by
+  // "- " bullets (e.g. "**Suggested next steps**") renders as a label and
+  // a real list rather than literal dashes.
+  const groups: { type: "p" | "ul"; lines: string[] }[] = [];
+  for (const raw of content.split("\n")) {
+    const line = raw.trimEnd();
+    if (!line.trim()) {
+      groups.push({ type: "p", lines: [] }); // paragraph break
+      continue;
+    }
+    const isBullet = /^\s*[-*•]\s+/.test(line);
+    const last = groups[groups.length - 1];
+    if (isBullet) {
+      const text = line.trim().replace(/^[-*•]\s+/, "");
+      if (last?.type === "ul") last.lines.push(text);
+      else groups.push({ type: "ul", lines: [text] });
+    } else if (last?.type === "p" && last.lines.length > 0) {
+      last.lines.push(line);
+    } else {
+      groups.push({ type: "p", lines: [line] });
+    }
+  }
+  const blocks = groups.filter((g) => g.lines.length > 0);
   return (
     <>
-      {blocks.map((block, bi) => {
-        const lines = block.split("\n").filter((l) => l.trim().length > 0);
-        const isList = lines.length > 0 && lines.every((l) => /^[-*]\s+/.test(l.trim()));
-        if (isList) {
-          return (
-            <ul key={bi} className={`list-disc space-y-0.5 pl-4 ${bi > 0 ? "mt-2" : ""}`}>
-              {lines.map((line, li) => (
-                <li key={li}>{renderInline(line.trim().replace(/^[-*]\s+/, ""), `${bi}-${li}`)}</li>
-              ))}
-            </ul>
-          );
-        }
-        const rawLines = block.split("\n");
-        return (
+      {blocks.map((block, bi) =>
+        block.type === "ul" ? (
+          <ul key={bi} className={`list-disc space-y-0.5 pl-4 ${bi > 0 ? "mt-1.5" : ""}`}>
+            {block.lines.map((line, li) => (
+              <li key={li}>{renderInline(line, `${bi}-${li}`)}</li>
+            ))}
+          </ul>
+        ) : (
           <p key={bi} className={bi > 0 ? "mt-2" : undefined}>
-            {rawLines.map((line, li) => (
+            {block.lines.map((line, li) => (
               <span key={li}>
                 {renderInline(line, `${bi}-${li}`)}
-                {li < rawLines.length - 1 && <br />}
+                {li < block.lines.length - 1 && <br />}
               </span>
             ))}
           </p>
-        );
-      })}
+        )
+      )}
     </>
   );
 }
