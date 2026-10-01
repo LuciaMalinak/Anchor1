@@ -349,6 +349,71 @@ async function* streamWithSearchFallback(
   return await stream.finalMessage();
 }
 
+// Tools Ask Anchor runs on the server mid-answer, feeding the result back
+// to the model before it carries on — e.g. searching the person's Google
+// Drive. Before this it had one shot with whatever context was preloaded,
+// so a question about a file that wasn't in it got "I don't have a tool
+// to search your Drive" even with Drive connected.
+export type ServerTool = {
+  tool: Anthropic.Tool;
+  run: (input: Record<string, unknown>) => Promise<string>;
+};
+
+// A few search-and-read rounds are plenty for one question (e.g. "2027
+// forecast", then just the company name); more would only slow it down.
+const MAX_TOOL_ROUNDS = 3;
+
+// Streams an answer, running any server tools the model calls and
+// continuing until it answers. Text from every round streams straight
+// through. Calls to the browser-side action tools (AskActions) don't stop
+// the loop — they're acknowledged and collected, and the returned message
+// carries all of them for actionOutput.
+async function* streamWithServerTools(
+  start: (withSearch: boolean, messages: Anthropic.MessageParam[]) => AnswerStream,
+  messages: Anthropic.MessageParam[],
+  serverTools: ServerTool[]
+): AsyncGenerator<string, Anthropic.Message> {
+  const convo = [...messages];
+  const collected: Anthropic.ContentBlock[] = [];
+  let producedText = false;
+  for (let round = 0; ; round++) {
+    let roundText = false;
+    const stream = streamWithSearchFallback((withSearch) => start(withSearch, convo));
+    let step = await stream.next();
+    while (!step.done) {
+      // Keep separate rounds' text from running together.
+      yield producedText && !roundText ? `\n\n${step.value}` : step.value;
+      roundText = true;
+      step = await stream.next();
+    }
+    producedText ||= roundText;
+    const message = step.value;
+    collected.push(...message.content);
+
+    const toolUses = message.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    const serverCalls = toolUses.filter((b) => serverTools.some((t) => t.tool.name === b.name));
+    if (message.stop_reason !== "tool_use" || serverCalls.length === 0 || round >= MAX_TOOL_ROUNDS) {
+      return { ...message, content: collected };
+    }
+
+    const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
+      toolUses.map(async (b) => {
+        const server = serverTools.find((t) => t.tool.name === b.name);
+        if (!server) {
+          return { type: "tool_result" as const, tool_use_id: b.id, content: "Done — carried out in the person's browser." };
+        }
+        try {
+          return { type: "tool_result" as const, tool_use_id: b.id, content: await server.run(b.input as Record<string, unknown>) };
+        } catch (err) {
+          console.error(`[liveAssist] tool ${b.name} failed:`, err);
+          return { type: "tool_result" as const, tool_use_id: b.id, content: `That didn't work: ${err instanceof Error ? err.message : "unknown error"}`, is_error: true };
+        }
+      })
+    );
+    convo.push({ role: "assistant", content: message.content }, { role: "user", content: results });
+  }
+}
+
 // What Ask Anchor can actually DO on a deal, beyond answering — start or
 // stop a meeting, open a file. It used to have no actions at all, so
 // "stop this meeting" got a reply claiming the meeting was being stopped
@@ -490,25 +555,42 @@ export async function* askAnchorStream(params: {
   images?: AnchorImage[];
   mode?: AskMode;
   actions?: AskActions;
+  // Tools run on the server mid-answer (see ServerTool), plus the system
+  // prompt lines that go with them.
+  serverTools?: ServerTool[];
+  toolRules?: string;
 }): AsyncGenerator<string> {
   const contextBlock = buildContextBlock(params.context);
   const mode = params.mode ?? "live";
   const actions = params.actions;
   const tools = actions ? actionTools(actions) : [];
 
-  const message = yield* streamWithSearchFallback((withSearch) =>
-    client().messages.stream({
-      model: MODEL,
-      max_tokens: mode === "live" ? 700 : 1500,
-      ...(withSearch || tools.length
-        ? { tools: [...(withSearch ? [webSearchTool(mode === "live" ? 3 : 5)] : []), ...tools] }
-        : {}),
-      system: buildSystemPrompt(contextBlock, mode, params.context) + (actions ? actionRules(actions) : ""),
-      messages: [
-        ...params.history.map((h) => ({ role: h.role, content: h.content })),
-        { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
-      ],
-    })
+  const serverTools = params.serverTools ?? [];
+  const message = yield* streamWithServerTools(
+    (withSearch, messages) =>
+      client().messages.stream({
+        model: MODEL,
+        max_tokens: mode === "live" ? 700 : 1500,
+        ...(withSearch || tools.length || serverTools.length
+          ? {
+              tools: [
+                ...(withSearch ? [webSearchTool(mode === "live" ? 3 : 5)] : []),
+                ...tools,
+                ...serverTools.map((t) => t.tool),
+              ],
+            }
+          : {}),
+        system:
+          buildSystemPrompt(contextBlock, mode, params.context) +
+          (actions ? actionRules(actions) : "") +
+          (params.toolRules ?? ""),
+        messages,
+      }),
+    [
+      ...params.history.map((h) => ({ role: h.role, content: h.content })),
+      { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
+    ],
+    serverTools
   );
   const producedText = message.content.some((b) => b.type === "text" && b.text.trim().length > 0);
   if (actions) yield* actionOutput(message, actions, producedText);
@@ -566,17 +648,27 @@ export async function* askWorkspaceStream(params: {
   lead: { name: string | null; style: string | null };
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
+  serverTools?: ServerTool[];
+  toolRules?: string;
 }): AsyncGenerator<string> {
-  yield* streamWithSearchFallback((withSearch) =>
-    client().messages.stream({
-      model: MODEL,
-      max_tokens: 1500,
-      ...(withSearch ? { tools: [webSearchTool(5)] } : {}),
-      system: buildWorkspaceSystemPrompt(params.scope, params.contextBlock, params.lead, withSearch),
-      messages: [
-        ...params.history.map((h) => ({ role: h.role, content: h.content })),
-        { role: "user" as const, content: params.question },
-      ],
-    })
+  const serverTools = params.serverTools ?? [];
+  yield* streamWithServerTools(
+    (withSearch, messages) =>
+      client().messages.stream({
+        model: MODEL,
+        max_tokens: 1500,
+        ...(withSearch || serverTools.length
+          ? { tools: [...(withSearch ? [webSearchTool(5)] : []), ...serverTools.map((t) => t.tool)] }
+          : {}),
+        system:
+          buildWorkspaceSystemPrompt(params.scope, params.contextBlock, params.lead, withSearch) +
+          (params.toolRules ?? ""),
+        messages,
+      }),
+    [
+      ...params.history.map((h) => ({ role: h.role, content: h.content })),
+      { role: "user" as const, content: params.question },
+    ],
+    serverTools
   );
 }

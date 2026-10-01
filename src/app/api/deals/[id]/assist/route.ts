@@ -5,6 +5,7 @@ import { dealFiles, meetings, summaries, meetingParticipants, contacts, meetingL
 import { and, asc, desc, eq, or } from "drizzle-orm";
 import { askAnchorStream, describeAnswerError, type DealContext, type AnchorImage, type AskActions } from "@/lib/liveAssist";
 import { authorizeDeal } from "@/lib/dealAccess";
+import { loadAskTools } from "@/lib/askTools";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { isImageFile, imageMediaType } from "@/lib/extractText";
 import { readStoredFile } from "@/lib/storage";
@@ -197,6 +198,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // liveAssist.ts). File links are absolute because answers only make
   // http(s) links clickable (FormattedMessage in AskAnchorPanel.tsx).
   const origin = process.env.AUTH_URL || req.nextUrl.origin;
+  // Live lookups it can run mid-answer, e.g. searching their Google Drive.
+  const { serverTools, toolRules } = await loadAskTools(userId);
   const actions: AskActions = {
     dealId,
     liveMeetingId: liveMeetingId ?? null,
@@ -210,7 +213,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const chunk of askAnchorStream({ context, question, history, images, mode, actions })) {
+        for await (const chunk of askAnchorStream({
+          context,
+          question,
+          history,
+          images,
+          mode,
+          actions,
+          serverTools,
+          toolRules,
+        })) {
           controller.enqueue(encoder.encode(chunk));
         }
       } catch (err) {

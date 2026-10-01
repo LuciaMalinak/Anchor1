@@ -24,9 +24,9 @@ export function dealSearchTerm(dealName: string): string {
   return first.length >= 3 ? first : dealName.trim();
 }
 
-export function trimExcerpt(text: string): string {
+export function trimExcerpt(text: string, maxChars: number = MAX_EXCERPT_CHARS): string {
   const clean = text.replace(/\s+/g, " ").trim();
-  return clean.length > MAX_EXCERPT_CHARS ? `${clean.slice(0, MAX_EXCERPT_CHARS)}…` : clean;
+  return clean.length > maxChars ? `${clean.slice(0, maxChars)}…` : clean;
 }
 
 export function formatDocumentContext(items: DocumentContextItem[]): string | null {

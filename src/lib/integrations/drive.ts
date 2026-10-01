@@ -1,5 +1,7 @@
-// Read-only Google Drive lookup for a deal: finds documents that mention
-// the deal's company and reads their text, for dealIntegrationContext.ts.
+// Read-only Google Drive lookup: finds documents matching a term (by name
+// or full text) and reads their text — for a deal's company in
+// dealIntegrationContext.ts, and for whatever Ask Anchor searches for
+// (its search_drive tool in liveAssist.ts).
 // Uses the existing Google connection, and only once the person has
 // granted Drive access from the "Google Drive" card on the Integrations
 // page (GOOGLE_EXTRA_SCOPES.drive_read). Never writes to Drive.
@@ -45,14 +47,23 @@ function quoteForDriveQuery(term: string): string {
   return term.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
-export async function fetchRelevantDriveDocuments(userId: string, term: string): Promise<DocumentContextItem[]> {
+export async function fetchRelevantDriveDocuments(
+  userId: string,
+  term: string,
+  opts: { maxDocuments?: number; excerptChars?: number } = {}
+): Promise<DocumentContextItem[]> {
+  const { maxDocuments = MAX_DOCUMENTS, excerptChars } = opts;
   const connection = await getGoogleConnection(userId);
   if (!connection || !hasDriveAccess(connection.scope) || !term.trim()) return [];
 
-  const q = `fullText contains '${quoteForDriveQuery(term)}' and trashed = false`;
+  // By name too, not just full text: a spreadsheet called "2027 Forecast"
+  // is the obvious match for "2027 forecast" even when its cells don't
+  // contain those words.
+  const quoted = quoteForDriveQuery(term.trim());
+  const q = `(name contains '${quoted}' or fullText contains '${quoted}') and trashed = false`;
   const listUrl =
     `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}` +
-    `&pageSize=${MAX_DOCUMENTS * 2}&fields=${encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,size)")}`;
+    `&pageSize=${maxDocuments * 2}&fields=${encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,size)")}`;
 
   let accessToken = connection.accessToken;
   const { json, accessToken: afterList } = await googleGet(connection, accessToken, listUrl);
@@ -62,7 +73,7 @@ export async function fetchRelevantDriveDocuments(userId: string, term: string):
   const files = (Array.isArray(json.files) ? (json.files as DriveFile[]) : [])
     .filter((f) => f.id && f.name && f.mimeType !== "application/vnd.google-apps.folder")
     .sort((a, b) => (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? ""))
-    .slice(0, MAX_DOCUMENTS);
+    .slice(0, maxDocuments);
 
   const items: DocumentContextItem[] = [];
   for (const f of files) {
@@ -88,7 +99,7 @@ export async function fetchRelevantDriveDocuments(userId: string, term: string):
         name: f.name!,
         modified: f.modifiedTime ?? "",
         link: f.webViewLink ?? null,
-        excerpt: trimExcerpt(text),
+        excerpt: trimExcerpt(text, excerptChars),
       });
     } catch (err) {
       // One unreadable file shouldn't drop the rest.

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { askWorkspaceStream, describeAnswerError } from "@/lib/liveAssist";
+import { loadAskTools } from "@/lib/askTools";
 import { fetchPersonalGoogleContext, formatPersonalGoogleContext } from "@/lib/integrations/personalGoogle";
 import { buildMeetingContext, buildWorkspaceContext } from "@/lib/askAnchorContext";
 import { loadAskSources } from "@/lib/askSources";
@@ -99,13 +100,25 @@ export async function POST(req: NextRequest) {
     console.error("[ask] building context failed:", err);
     return NextResponse.json({ error: "Anchor couldn't load your workspace. Try again." }, { status: 500 });
   }
-  const leadStyle = await getDealLeadStyle(leadUserId, { allowSynchronousRebuild: false });
+  const [leadStyle, { serverTools, toolRules }] = await Promise.all([
+    getDealLeadStyle(leadUserId, { allowSynchronousRebuild: false }),
+    // Live lookups it can run mid-answer, e.g. searching their Google Drive.
+    loadAskTools(userId),
+  ]);
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const chunk of askWorkspaceStream({ scope, contextBlock, lead: { name: leadName, style: leadStyle }, question, history })) {
+        for await (const chunk of askWorkspaceStream({
+          scope,
+          contextBlock,
+          lead: { name: leadName, style: leadStyle },
+          question,
+          history,
+          serverTools,
+          toolRules,
+        })) {
           controller.enqueue(encoder.encode(chunk));
         }
       } catch (err) {
