@@ -40,6 +40,9 @@ export function useLiveMeeting(meetingId: string) {
   // this is still loading (the common case).
   const [hasBot, setHasBot] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Why live coaching couldn't be generated, from the /live route —
+  // null while it's working (or hasn't been tried yet).
+  const [coachingError, setCoachingError] = useState<string | null>(null);
   const stoppedRef = useRef(false);
 
   useEffect(() => {
@@ -53,6 +56,7 @@ export function useLiveMeeting(meetingId: string) {
         const body = await res.json();
         setSegments(body.segments || []);
         setSuggestions(body.liveSuggestions || null);
+        setCoachingError(body.coachingError || null);
         setStatus(body.status);
         setHasBot(body.hasBot !== false);
         setError(null);
@@ -78,5 +82,5 @@ export function useLiveMeeting(meetingId: string) {
     };
   }, [meetingId]);
 
-  return { segments, suggestions, status, hasBot, error };
+  return { segments, suggestions, status, hasBot, error, coachingError };
 }

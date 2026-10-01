@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, meetingLiveSegments, deals, summaries, dealFiles } from "@/db/schema";
 import { and, desc, eq, ne, asc, isNull } from "drizzle-orm";
-import { generateLiveCoaching } from "@/lib/liveCoaching";
+import { generateLiveCoaching, describeCoachingError } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { summarizeDealFiles } from "@/lib/dealFilesContext";
@@ -28,6 +28,12 @@ const TRANSCRIPT_WINDOW_CHARS = 6_000;
 // same idea as assist/route.ts's recentReady, just smaller since this
 // regenerates far more often (every ~8s) during a live call.
 const PAST_MEETINGS_LIMIT = 3;
+// Why the most recent coaching refresh failed, per meeting — only the
+// request that wins the refresh lock actually sees the error, so it's
+// kept here for every other poll (and tab) to report until a refresh
+// succeeds. In-memory is enough: it's a status hint, not data, and a
+// restart just means the next refresh re-discovers it.
+const lastCoachingError = new Map<string, string>();
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -194,7 +200,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         .set({ liveSuggestions: coaching, liveSuggestionsUpdatedAt: new Date() })
         .where(eq(meetings.id, id));
       liveSuggestions = coaching;
+      lastCoachingError.delete(id);
     } catch (err) {
+      lastCoachingError.set(id, describeCoachingError(err));
       // Live coaching is a nice-to-have layered on top of the live
       // transcript, which still works fine on its own — never fail the
       // whole poll (and the transcript feed with it) just because a
@@ -220,5 +228,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       relativeSeconds: s.relativeSeconds,
     })),
     liveSuggestions,
+    // Shown in place of "Preparing suggestions…" so a broken key/model
+    // says so instead of looking like it's still loading forever.
+    coachingError: isLive ? lastCoachingError.get(id) ?? null : null,
   });
 }

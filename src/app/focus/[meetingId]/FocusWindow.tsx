@@ -41,7 +41,7 @@ export function FocusWindow({
   // here would otherwise try to close the wrong window.
   onClose?: () => void;
 }) {
-  const { segments, suggestions, status, hasBot } = useLiveMeeting(meetingId);
+  const { segments, suggestions, status, hasBot, coachingError } = useLiveMeeting(meetingId);
   const [widgets, setWidgets] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
@@ -358,7 +358,9 @@ export function FocusWindow({
               SUGGESTIONS
             </p>
             {!suggestions ? (
-              <p className="text-sm text-slate-500">Preparing suggestions…</p>
+              <p className={`text-sm ${coachingError ? "text-amber-600" : "text-slate-500"}`}>
+                {coachingError || "Preparing suggestions…"}
+              </p>
             ) : suggestions.nudges.length === 0 ? (
               <p className="text-sm text-slate-500">
                 Nothing to go on yet for this deal — no prep notes, history, or conversation so

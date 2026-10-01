@@ -11,7 +11,7 @@ import { StopMeetingButton } from "@/components/StopMeetingButton";
 // focus-mode pop-out window (src/app/focus) can share it instead of
 // running a second, independent poll of the same endpoint.
 export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; title: string }) {
-  const { segments, suggestions, status, hasBot, error } = useLiveMeeting(meetingId);
+  const { segments, suggestions, status, hasBot, error, coachingError } = useLiveMeeting(meetingId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -97,7 +97,9 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
               SUGGESTIONS
             </p>
             {!suggestions ? (
-              <p className="text-sm text-slate-500">Preparing suggestions…</p>
+              <p className={`text-sm ${coachingError ? "text-amber-600" : "text-slate-500"}`}>
+                {coachingError || "Preparing suggestions…"}
+              </p>
             ) : suggestions.nudges.length === 0 ? (
               <p className="text-sm text-slate-500">
                 Nothing to go on yet for this deal — no prep notes, history, or conversation so

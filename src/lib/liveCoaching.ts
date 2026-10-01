@@ -3,7 +3,13 @@ import Anthropic from "@anthropic-ai/sdk";
 // Real-time nudges during an active meeting — same latency-first
 // reasoning as liveAssist.ts's MODEL choice: fast beats maximally
 // capable here, since this has to keep up with a live conversation.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+const MODEL = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
+// Was 512 — too tight for 1-3 nudges + a full checklist + a suggested
+// answer, and newer models (which think by default when ANTHROPIC_MODEL
+// points at one) spend part of it reasoning first, so the tool call got
+// cut off mid-way.
+const MAX_TOKENS = 4096;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -70,6 +76,74 @@ const LIVE_COACHING_TOOL = {
     required: ["nudges", "checklist", "questionAsked", "question", "suggestedAnswer"],
   },
 };
+
+function requestCoaching(
+  system: string,
+  content: string,
+  opts: { model?: string; forceTool?: boolean } = {}
+) {
+  const { model = MODEL, forceTool = true } = opts;
+  return client().messages.create({
+    model,
+    max_tokens: MAX_TOKENS,
+    system,
+    tools: [LIVE_COACHING_TOOL],
+    tool_choice: forceTool
+      ? { type: "tool", name: LIVE_COACHING_TOOL.name }
+      : { type: "auto" },
+    messages: [{ role: "user", content }],
+  });
+}
+
+// Live coaching used to make exactly one attempt and, on any error, the
+// live route just logged it — so the Suggestions panel sat on
+// "Preparing suggestions…" for the whole call with no sign anything was
+// wrong. Two failures in particular were permanent, not transient:
+// - Newer models (Sonnet 5.5, Opus 5.5, Fable 5.1) reject a forced
+//   tool_choice with a 400, so if ANTHROPIC_MODEL is set to one of them
+//   every single refresh failed. Retry with tool_choice "auto" (the system
+//   prompt tells it to always call the tool).
+// - A misspelled/retired ANTHROPIC_MODEL 404s. Fall back to the default
+//   fast model rather than going dark for the whole call.
+async function requestCoachingWithFallbacks(system: string, content: string) {
+  try {
+    return await requestCoaching(system, content);
+  } catch (err) {
+    if (err instanceof Anthropic.BadRequestError) {
+      console.warn(`[live coaching] ${MODEL} rejected the request, retrying without forced tool use:`, err.message);
+      return await requestCoaching(system, content, { forceTool: false });
+    }
+    if (err instanceof Anthropic.NotFoundError && MODEL !== DEFAULT_MODEL) {
+      console.warn(`[live coaching] model ${MODEL} not found, falling back to ${DEFAULT_MODEL}`);
+      return await requestCoaching(system, content, { model: DEFAULT_MODEL });
+    }
+    throw err;
+  }
+}
+
+// Plain-language reason shown in the Suggestions panel when coaching
+// can't be generated at all, instead of an endless "Preparing…".
+export function describeCoachingError(err: unknown): string {
+  if (err instanceof Error && /ANTHROPIC_API_KEY is not set/.test(err.message)) {
+    return "Suggestions are off: ANTHROPIC_API_KEY is missing on the server.";
+  }
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
+    return "Suggestions are off: the AI key isn't working. Check ANTHROPIC_API_KEY in Render.";
+  }
+  if (err instanceof Anthropic.NotFoundError) {
+    return "Suggestions are off: the AI model isn't available. Check ANTHROPIC_MODEL in Render.";
+  }
+  if (err instanceof Anthropic.RateLimitError || (err instanceof Anthropic.APIError && (err.status === 529 || err.status === 503))) {
+    return "The AI is busy right now — suggestions will retry in a few seconds.";
+  }
+  if (err instanceof Anthropic.BadRequestError && /credit balance/i.test(err.message)) {
+    return "Suggestions are off: the Anthropic account is out of credits.";
+  }
+  if (err instanceof Anthropic.APIError) {
+    return `Couldn't generate suggestions (AI error ${err.status ?? "unknown"}) — retrying.`;
+  }
+  return "Couldn't generate suggestions — retrying.";
+}
 
 // The tool call gives flat fields (easier for the model to fill in
 // reliably than a nested optional object); this turns them into the
@@ -170,17 +244,10 @@ export async function generateLiveCoaching(params: {
     ? `\n\nFiles/voice notes attached to this deal ahead of the call:\n${params.attachedFiles}`
     : "";
 
-  const message = await client().messages.create({
-    model: MODEL,
-    max_tokens: 512,
-    system:
-      "You are a live sales-call coach watching a transcript stream in during a real meeting, and this runs on a repeating timer for as long as the call lasts — the rep should always have something current to look at, not a panel that goes blank the moment the live conversation itself doesn't hand you something new. Give sharp, specific, non-generic guidance: ground it in what's actually been said when there's something to react to, and otherwise ground it in what's already known about this deal from its prep notes, decision boundaries, and past meetings — never leave nudges empty just because the last few seconds of transcript were quiet. Never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for — if there's truly nothing to go on yet (no transcript, no prep, no history), say so plainly rather than inventing something. If the transcript so far doesn't support a checklist item being covered, mark it not covered. You're also watching for a specific kind of moment: the other side asking something that needs answering right now, like a live interview-assist tool would — when that happens, surface it and a ready-to-say answer separately from the general nudges above (see questionAsked/question/suggestedAnswer), grounded the same way, and respecting decision boundaries the same way.",
-    tools: [LIVE_COACHING_TOOL],
-    tool_choice: { type: "tool", name: LIVE_COACHING_TOOL.name },
-    messages: [
-      {
-        role: "user",
-        content: `Deal: ${params.dealName || "Unnamed deal"}
+  const system =
+    "You are a live sales-call coach watching a transcript stream in during a real meeting, and this runs on a repeating timer for as long as the call lasts — the rep should always have something current to look at, not a panel that goes blank the moment the live conversation itself doesn't hand you something new. Give sharp, specific, non-generic guidance: ground it in what's actually been said when there's something to react to, and otherwise ground it in what's already known about this deal from its prep notes, decision boundaries, and past meetings — never leave nudges empty just because the last few seconds of transcript were quiet. Never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for — if there's truly nothing to go on yet (no transcript, no prep, no history), say so plainly rather than inventing something. If the transcript so far doesn't support a checklist item being covered, mark it not covered. You're also watching for a specific kind of moment: the other side asking something that needs answering right now, like a live interview-assist tool would — when that happens, surface it and a ready-to-say answer separately from the general nudges above (see questionAsked/question/suggestedAnswer), grounded the same way, and respecting decision boundaries the same way. Always respond by calling the record_live_coaching tool.";
+
+  const message = await requestCoachingWithFallbacks(system, `Deal: ${params.dealName || "Unnamed deal"}
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
@@ -188,10 +255,11 @@ Decision boundaries / constraints for this deal: ${params.decisionBoundaries || 
 ${priorChecklistText}
 
 Transcript so far (most recent portion of an in-progress call):
-${params.recentTranscript || "(nothing transcribed yet)"}`,
-      },
-    ],
-  });
+${params.recentTranscript || "(nothing transcribed yet)"}`);
+
+  if (message.stop_reason === "max_tokens") {
+    console.warn(`[live coaching] response hit max_tokens (${MAX_TOKENS}) — output may be incomplete`);
+  }
 
   const toolUse = message.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
