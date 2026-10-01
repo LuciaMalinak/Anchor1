@@ -1,13 +1,15 @@
 "use client";
 
 import { stopMeeting } from "@/lib/stopMeeting";
+import { startRecording } from "@/lib/startRecording";
 
-// Ask Anchor can take a couple of real actions, not just answer — stop
-// the live meeting, open one of the deal's files (see the tools in
-// askAnchorStream, src/lib/liveAssist.ts). The answer stream carries each
-// action as a marker after the text; these helpers keep the markers out
-// of what's displayed and carry them out once the answer has finished.
-const ACTION = /\[\[anchor:(stop|open):([^\]\s]+)\]\]/g;
+// Ask Anchor can take a few real actions, not just answer — start an
+// in-person recording, stop the live meeting, open one of the deal's
+// files (see the tools in askAnchorStream, src/lib/liveAssist.ts). The
+// answer stream carries each action as a marker after the text; these
+// helpers keep the markers out of what's displayed and carry them out
+// once the answer has finished.
+const ACTION = /\[\[anchor:(record|stop|open):([^\]\s]+)\]\]/g;
 // A marker that's only partly streamed in so far.
 const PARTIAL_ACTION = /\[\[[^\]]*\]?$/;
 
@@ -19,7 +21,10 @@ export function stripAskActions(text: string): string {
 // the answer when one couldn't be done, or null when all went fine.
 export async function runAskActions(text: string): Promise<string | null> {
   for (const [, kind, arg] of text.matchAll(ACTION)) {
-    if (kind === "stop") {
+    if (kind === "record") {
+      const problem = await startRecording(arg);
+      if (problem) return `Couldn't start recording: ${problem}`;
+    } else if (kind === "stop") {
       const result = await stopMeeting(arg);
       if (!result.ok) return `Couldn't stop the meeting: ${result.error}`;
     } else if (kind === "open") {

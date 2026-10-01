@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 import { registerLocalRecorder } from "@/lib/stopMeeting";
+import { registerRecordingStarter } from "@/lib/startRecording";
 
 // Records straight from the browser's microphone — for an in-person
 // meeting or phone call where there's no Zoom/Meet/Teams link for the
@@ -134,11 +135,13 @@ export function useMicRecorder({
     }
   }
 
-  async function start() {
+  // Resolves to why it couldn't start (also shown via `error`), or null
+  // once recording — so Ask Anchor can say what went wrong when it's the
+  // one that started it (see startRecording.ts).
+  async function start(): Promise<string | null> {
     setError(null);
     if (!navigator.mediaDevices?.getUserMedia) {
-      setError("This browser doesn't support microphone recording.");
-      return;
+      return fail("This browser doesn't support microphone recording.");
     }
 
     // Opens the Focus window right now, in this same click — see
@@ -151,8 +154,7 @@ export function useMicRecorder({
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
       focusWindow.cancel();
-      setError("Couldn't access your microphone — check this site's permission in your browser.");
-      return;
+      return fail("Couldn't access your microphone — check this site's permission in your browser.");
     }
 
     let meetingId: string;
@@ -173,8 +175,7 @@ export function useMicRecorder({
     } catch (err) {
       focusWindow.cancel();
       stream.getTracks().forEach((t) => t.stop());
-      setError(err instanceof Error ? err.message : "Couldn't start this recording");
-      return;
+      return fail(err instanceof Error ? err.message : "Couldn't start this recording");
     }
 
     streamRef.current = stream;
@@ -199,6 +200,12 @@ export function useMicRecorder({
     startLiveTranscription(meetingId);
     focusWindow.attach(meetingId);
     onStarted?.(meetingId);
+    return null;
+  }
+
+  function fail(message: string): string {
+    setError(message);
+    return message;
   }
 
   function stop() {
@@ -266,6 +273,21 @@ export function useMicRecorder({
     setUploadFailed(false);
     setError(null);
   }
+
+  // Lets Ask Anchor start a recording on this deal (see startRecording.ts).
+  // The latest start/recording are read through a ref so the registration
+  // itself only changes when the deal does.
+  const latestRef = useRef({ start, recording });
+  useEffect(() => {
+    latestRef.current = { start, recording };
+  });
+  useEffect(() => {
+    if (!dealId) return;
+    return registerRecordingStarter(dealId, async () => {
+      if (latestRef.current.recording) return "A recording is already running on this deal.";
+      return latestRef.current.start();
+    });
+  }, [dealId]);
 
   return { recording, seconds, uploading, error, uploadFailed, start, stop, retryUpload, discardFailedUpload };
 }

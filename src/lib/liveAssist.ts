@@ -349,13 +349,15 @@ async function* streamWithSearchFallback(
   return await stream.finalMessage();
 }
 
-// What Ask Anchor can actually DO on a deal, beyond answering — it used to
-// have no actions at all, so "stop this meeting" got a reply claiming the
-// meeting was being stopped while nothing happened. Each tool call is
-// passed to the browser as a marker after the answer text, and carried
-// out there (see src/lib/askActions.ts) — stopping an in-person recording
-// has to happen in the browser tab holding its audio.
+// What Ask Anchor can actually DO on a deal, beyond answering — start or
+// stop a meeting, open a file. It used to have no actions at all, so
+// "stop this meeting" got a reply claiming the meeting was being stopped
+// while nothing happened. Each tool call is passed to the browser as a
+// marker after the answer text, and carried out there (see
+// src/lib/askActions.ts) — recording happens in the browser, and stopping
+// an in-person recording needs the tab holding its audio.
 export type AskActions = {
+  dealId: string;
   // The meeting live on this deal right now, if any.
   liveMeetingId: string | null;
   files: { fileName: string; url: string }[];
@@ -363,6 +365,14 @@ export type AskActions = {
 
 function actionTools(actions: AskActions): Anthropic.Tool[] {
   const tools: Anthropic.Tool[] = [];
+  if (!actions.liveMeetingId) {
+    tools.push({
+      name: "start_recording",
+      description:
+        "Start recording an in-person meeting on this deal from this device's microphone, with live transcript and live suggestions. Use when the person asks to start, begin or record a meeting, call or conversation here. (Joining a Zoom/Teams call with Anchor's bot isn't this — that's done from the During tab with the meeting link.)",
+      input_schema: { type: "object", properties: {} },
+    });
+  }
   if (actions.liveMeetingId) {
     tools.push({
       name: "stop_meeting",
@@ -390,12 +400,14 @@ function actionTools(actions: AskActions): Anthropic.Tool[] {
 
 function actionRules(actions: AskActions): string {
   const can = [
-    actions.liveMeetingId ? "stop the live meeting (stop_meeting)" : null,
+    actions.liveMeetingId ? "stop the live meeting (stop_meeting)" : "start an in-person recording (start_recording)",
     actions.files.length ? "open one of this deal's files (open_file)" : null,
   ].filter(Boolean);
   const list = can.length ? `You can ${can.join(" and ")} by calling the tool. ` : "";
   return `\n\nActions: ${list}When the person asks for one of these, call the tool — a short sentence before it is fine — rather than describing how they could do it. Never say you did something (stopped or ended a meeting, opened a file, sent an email, created a task, changed a setting) unless you called a tool for it in this reply; if there's no tool for what they ask, say plainly that you can't do that from here and where in Anchor they can do it.${
-    actions.liveMeetingId ? "" : " Nothing is live on this deal right now, so there's no meeting to stop."
+    actions.liveMeetingId
+      ? " A meeting is already live on this deal, so there's nothing new to start."
+      : " Nothing is live on this deal right now, so there's no meeting to stop."
   }`;
 }
 
@@ -404,7 +416,10 @@ function actionRules(actions: AskActions): string {
 function* actionOutput(message: Anthropic.Message, actions: AskActions, producedText: boolean): Generator<string> {
   for (const block of message.content) {
     if (block.type !== "tool_use") continue;
-    if (block.name === "stop_meeting" && actions.liveMeetingId) {
+    if (block.name === "start_recording" && !actions.liveMeetingId) {
+      if (!producedText) yield "Starting an in-person recording now — your browser may ask for microphone access.";
+      yield `\n\n[[anchor:record:${actions.dealId}]]`;
+    } else if (block.name === "stop_meeting" && actions.liveMeetingId) {
       if (!producedText) yield "Stopping the meeting now — I'll write it up from what was recorded.";
       yield `\n\n[[anchor:stop:${actions.liveMeetingId}]]`;
     } else if (block.name === "open_file") {
@@ -478,8 +493,8 @@ export async function* askAnchorStream(params: {
 }): AsyncGenerator<string> {
   const contextBlock = buildContextBlock(params.context);
   const mode = params.mode ?? "live";
-  const actions = params.actions ?? { liveMeetingId: null, files: [] };
-  const tools = actionTools(actions);
+  const actions = params.actions;
+  const tools = actions ? actionTools(actions) : [];
 
   const message = yield* streamWithSearchFallback((withSearch) =>
     client().messages.stream({
@@ -488,7 +503,7 @@ export async function* askAnchorStream(params: {
       ...(withSearch || tools.length
         ? { tools: [...(withSearch ? [webSearchTool(mode === "live" ? 3 : 5)] : []), ...tools] }
         : {}),
-      system: buildSystemPrompt(contextBlock, mode, params.context) + actionRules(actions),
+      system: buildSystemPrompt(contextBlock, mode, params.context) + (actions ? actionRules(actions) : ""),
       messages: [
         ...params.history.map((h) => ({ role: h.role, content: h.content })),
         { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
@@ -496,7 +511,7 @@ export async function* askAnchorStream(params: {
     })
   );
   const producedText = message.content.some((b) => b.type === "text" && b.text.trim().length > 0);
-  yield* actionOutput(message, actions, producedText);
+  if (actions) yield* actionOutput(message, actions, producedText);
 }
 
 // The app-wide Ask Anchor panel (see /api/ask and AskAnchorDock.tsx) —

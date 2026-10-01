@@ -191,12 +191,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     relevantPassages: passages.length ? formatPassages(passages) : null,
   };
 
-  // What Ask Anchor can do here beyond answering — stop the meeting that's
-  // live on this deal, open one of its files (see AskActions in
+  // What Ask Anchor can do here beyond answering — start an in-person
+  // recording, stop the meeting that's live on this deal, open one of its
+  // files (see AskActions in
   // liveAssist.ts). File links are absolute because answers only make
   // http(s) links clickable (FormattedMessage in AskAnchorPanel.tsx).
   const origin = process.env.AUTH_URL || req.nextUrl.origin;
   const actions: AskActions = {
+    dealId,
     liveMeetingId: liveMeetingId ?? null,
     files: files.map((f) => ({ fileName: f.fileName, url: `${origin}/api/deals/${dealId}/files/${f.id}` })),
   };
