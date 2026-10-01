@@ -60,6 +60,37 @@ export async function r2Get(key: string): Promise<Buffer | null> {
   }
 }
 
+// Streams an object instead of loading it into memory, optionally just a
+// byte range ("bytes=0-1023", passed straight through from a request's
+// Range header). For large files served through this server, like the
+// desktop app's update download. Null if the object doesn't exist.
+export async function r2GetStream(
+  key: string,
+  range?: string | null
+): Promise<{
+  body: ReadableStream;
+  contentLength: number | null;
+  contentRange: string | null;
+  contentType: string | null;
+  partial: boolean;
+} | null> {
+  try {
+    const res = await client().send(
+      new GetObjectCommand({ Bucket: bucket(), Key: key, ...(range ? { Range: range } : {}) })
+    );
+    if (!res.Body) return null;
+    return {
+      body: res.Body.transformToWebStream(),
+      contentLength: typeof res.ContentLength === "number" ? res.ContentLength : null,
+      contentRange: res.ContentRange ?? null,
+      contentType: res.ContentType ?? null,
+      partial: Boolean(range && res.ContentRange),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Deletes exactly one object — for removing a single deal file without
 // touching any of the deal's other files, which live under the same
 // `deals/${dealId}/` prefix (unlike r2DeletePrefix below, which is a
