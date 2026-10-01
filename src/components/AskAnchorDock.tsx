@@ -287,7 +287,7 @@ function DockBody({
   const suggestions = suggestionsFor(pathname, scope.kind);
 
   return (
-    <div className="flex min-h-0 w-full flex-col text-slate-100">
+    <div className="flex h-full min-h-0 w-full flex-col text-slate-100">
       <div className="border-b border-[#1f3658] px-5 pb-3 pt-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">

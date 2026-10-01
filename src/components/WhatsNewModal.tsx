@@ -6,27 +6,31 @@ import { AnchorMark } from "@/components/Logo";
 // The current "what's new" announcement. Changing RELEASE_ID shows the
 // popup again, once, to every returning member; see WHATS_NEW_CUTOFF in
 // src/app/dashboard/layout.tsx for who counts as returning.
-export const RELEASE_ID = "2026-10-new-tools";
+export const RELEASE_ID = "2026-10-ask-anchor-everywhere";
 const STORAGE_KEY = "anchor.whatsNew.seen";
 
 // New tools only, each with where to find it. Keep this to things a
 // member can use today.
 const TOOLS = [
   {
-    title: "Save follow-ups to Gmail",
-    body: "On any meeting, click Draft a follow-up email, edit it, then Save to Gmail drafts. It lands in your Drafts, nothing is sent.",
+    title: "Ask Anchor, on every page",
+    body: "It's on the right of every page now (⌘K). Ask about any deal, call or person: on a deal it knows that deal, on a recap it knows that call word for word.",
   },
   {
-    title: "Suggested invites",
-    body: "Click Find follow-up meetings on a meeting page. Anchor spots the follow-ups agreed in the call and adds one to Google Calendar, with a Meet link, when you click.",
+    title: "Prep me for the next call",
+    body: "On a deal's Before tab: who matters, what's still open, what to ask and what to watch out for.",
   },
   {
-    title: "Create a deal from a call",
-    body: "When a call doesn't match any deal, Anchor Desktop offers to create one for it at the end of the meeting.",
+    title: "Deals going quiet",
+    body: "Home flags deals with no call in 10+ days and promises still open from calls. Click Draft a nudge for a ready-to-send check-in in your Gmail drafts.",
   },
   {
-    title: "Desktop sign-in in one click",
-    body: "Anchor Desktop now signs in through your browser. No more copying a token.",
+    title: "Update Salesforce or HubSpot",
+    body: "On a meeting recap, Anchor suggests the stage, close date, amount and next step the call changed. Only what you approve is written.",
+  },
+  {
+    title: "Share next steps",
+    body: "On a deal's After tab, copy a link for your customer with what you both agreed and who owns each step. It ticks off as you go.",
   },
 ];
 

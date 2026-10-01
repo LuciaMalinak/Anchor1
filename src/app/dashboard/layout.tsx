@@ -197,7 +197,7 @@ export default async function DashboardLayout({
       {/* Ask Anchor sits on the right of every page (AskAnchorDock.tsx);
           the page itself fills the rest. */}
       <AskAnchorProvider>
-        <main className="flex w-full flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="flex w-full flex-col gap-6 px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:py-8">
           <GeneralNewsSidebar
             // Keyed by industry so switching sectors (Team page -> Change)
             // fully remounts this instead of quietly keeping the OLD
