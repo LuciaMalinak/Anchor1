@@ -1,18 +1,25 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createWithForcedTool } from "./forcedTool";
+import type { LiveDealContext } from "./liveContext";
 
-// Real-time nudges during an active meeting — same latency-first
-// reasoning as liveAssist.ts's MODEL choice: fast beats maximally
-// capable here, since this has to keep up with a live conversation.
-const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-const MODEL = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
+// Real-time nudges and question answers during an active meeting —
+// fast beats maximally capable here, since this has to keep up with a
+// live conversation. Deliberately NOT ANTHROPIC_MODEL: that's set for
+// the slower, non-real-time features (summaries, memory…), and live
+// coaching inheriting a bigger model from it made suggestions and
+// question answers lag seconds behind the call. ANTHROPIC_LIVE_MODEL
+// overrides just the live features if that trade-off ever needs moving.
+export const DEFAULT_LIVE_MODEL = "claude-haiku-4-5-20251001";
+export const LIVE_MODEL = process.env.ANTHROPIC_LIVE_MODEL || DEFAULT_LIVE_MODEL;
+const DEFAULT_MODEL = DEFAULT_LIVE_MODEL;
+const MODEL = LIVE_MODEL;
 // Was 512 — too tight for 1-3 nudges + a full checklist + a suggested
 // answer, and newer models (which think by default when ANTHROPIC_MODEL
 // points at one) spend part of it reasoning first, so the tool call got
 // cut off mid-way.
 const MAX_TOKENS = 4096;
 
-function client() {
+export function liveClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -28,8 +35,10 @@ export type LiveCoaching = {
   // The most recent still-open question from the other side, with a
   // grounded suggested answer — null when nothing's currently hanging.
   // See sanitizeLiveQuestion below for how this gets derived from the
-  // tool call's flat fields.
-  liveQuestion: { question: string; suggestedAnswer: string } | null;
+  // tool call's flat fields. askedAt is set only by the instant question
+  // path (liveQuestion.ts) — an empty suggestedAnswer with askedAt means
+  // the answer is still being written.
+  liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number } | null;
 };
 
 const LIVE_COACHING_TOOL = {
@@ -79,7 +88,7 @@ const LIVE_COACHING_TOOL = {
 };
 
 function requestCoaching(system: string, content: string, model: string = MODEL) {
-  return createWithForcedTool(client(), {
+  return createWithForcedTool(liveClient(), {
     model,
     max_tokens: MAX_TOKENS,
     system,
@@ -147,68 +156,16 @@ function sanitizeLiveQuestion(raw: {
   return { question, suggestedAnswer };
 }
 
-// Regenerates live coaching (nudges + checklist) for a meeting that's
-// actively in progress, from the transcript captured so far. Called on
-// a debounced timer from the live-poll API route — see
-// src/app/api/meetings/[id]/live/route.ts — never on every single
-// incoming transcript webhook, since that would mean an AI call several
-// times a second.
-export async function generateLiveCoaching(params: {
-  dealName: string | null;
-  dealMemory: string | null;
-  decisionBoundaries: string | null;
-  recentTranscript: string;
-  priorChecklist: { label: string; covered: boolean }[] | null;
-  // How the deal's actual lead tends to negotiate, decide, and
-  // communicate (see src/lib/styleProfile.ts) — null if no lead is set,
-  // or there isn't enough of their own material yet.
-  leadStyle?: string | null;
-  // Whatever the rep typed in "Before" prep for this deal (deals.notes) —
-  // the whole point is that this carries straight into the live nudges
-  // without needing deals.memory to have absorbed it first, which only
-  // happens after a meeting finishes. See DealHeaderCard on DealTabs.tsx.
-  notes?: string | null;
-  // A handful of the most recent FINISHED meetings on this deal (not
-  // this one) — dealMemory is a rolling free-text synthesis and can
-  // blur specifics together over time, so this gives nudges a way to
-  // reference something concrete a specific past meeting actually
-  // covered ("last time they asked about X"), which is what "based on
-  // previous discussions" means here. Kept short — this regenerates
-  // every ~8s during a live call (see the route that calls this), so
-  // it's a few condensed lines per meeting, not full transcripts.
-  pastMeetings?: {
-    title: string;
-    occurredAt: string;
-    overview: string;
-    dealSignals: { type: "buying_signal" | "risk" | "blocker"; detail: string }[];
-  }[];
-  // Recent Gmail/Calendar activity with this deal's contacts, when the
-  // deal's lead has Google connected (see src/lib/dealIntegrationContext.ts)
-  // — already fetched and cached on the deal row (refreshed at most every
-  // 6h), so this adds zero extra latency here. Ask Anchor and handoff
-  // briefings already had this; live coaching didn't. Null whenever
-  // there's no connection or nothing matched — never invented.
-  emailContext?: string | null;
-  calendarContext?: string | null;
-  documentContext?: string | null;
-  // A short digest of files/voice notes attached to this deal (see
-  // src/lib/dealFilesContext.ts) — background material the rep uploaded
-  // ahead of time (a contract, a prior proposal, a voice memo), not
-  // something said in this call.
-  attachedFiles?: string | null;
-}): Promise<LiveCoaching> {
-  const priorChecklistText = params.priorChecklist?.length
-    ? `\n\nChecklist from the last update (keep these labels, just update covered status, unless the conversation clearly calls for a different item):\n${params.priorChecklist
-        .map((c) => `- [${c.covered ? "x" : " "}] ${c.label}`)
-        .join("\n")}`
-    : "";
+// The deal-facts block shared by live coaching and live question answers
+// (liveQuestion.ts), so both are grounded in exactly the same material.
+export function liveDealContextText(params: LiveDealContext): string {
   const leadStyleText = params.leadStyle
-    ? `\n\nHow the deal lead actually operates — nudges should sound like guidance from them, not generic coaching: ${params.leadStyle}`
+    ? `\n\nHow the deal lead actually operates — guidance should sound like it comes from them, not generic coaching: ${params.leadStyle}`
     : "";
   const notesText = params.notes
     ? `\n\nWhat the rep prepped going into this call (their own notes, written before it started — treat this as their intent and prioritize it in the checklist): ${params.notes}`
     : "";
-  const pastMeetingsText = params.pastMeetings?.length
+  const pastMeetingsText = params.pastMeetings.length
     ? `\n\nPrevious meetings on this deal (most recent first) — reference these specifically when relevant, don't just treat them as background:\n${params.pastMeetings
         .map((m) => {
           const signals = m.dealSignals.length
@@ -231,14 +188,36 @@ export async function generateLiveCoaching(params: {
     ? `\n\nFiles/voice notes attached to this deal ahead of the call:\n${params.attachedFiles}`
     : "";
 
-  const system =
-    "You are a live sales-call coach watching a transcript stream in during a real meeting, and this runs on a repeating timer for as long as the call lasts — the rep should always have something current to look at, not a panel that goes blank the moment the live conversation itself doesn't hand you something new. Give sharp, specific, non-generic guidance: ground it in what's actually been said when there's something to react to, and otherwise ground it in what's already known about this deal from its prep notes, decision boundaries, and past meetings — never leave nudges empty just because the last few seconds of transcript were quiet. Never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for — if there's truly nothing to go on yet (no transcript, no prep, no history), say so plainly rather than inventing something. If the transcript so far doesn't support a checklist item being covered, mark it not covered. You're also watching for a specific kind of moment: the other side asking something that needs answering right now, like a live interview-assist tool would — when that happens, surface it and a ready-to-say answer separately from the general nudges above (see questionAsked/question/suggestedAnswer), grounded the same way, and respecting decision boundaries the same way.";
-
-  const message = await requestCoachingWithFallbacks(system, `Deal: ${params.dealName || "Unnamed deal"}
+  return `Deal: ${params.dealName || "Unnamed deal"}
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}`;
+}
+
+// Regenerates live coaching (nudges + checklist) for a meeting that's
+// actively in progress, from the transcript captured so far. Called from
+// the live-poll API route (src/app/api/meetings/[id]/live/route.ts) when
+// new speech has arrived — never once per transcript webhook, since
+// that would mean an AI call several times a second. Questions get a
+// much faster dedicated path (liveQuestion.ts); this still watches for
+// them too, as a backstop for questions that path's quick check misses.
+export async function generateLiveCoaching(
+  params: LiveDealContext & {
+    recentTranscript: string;
+    priorChecklist: { label: string; covered: boolean }[] | null;
+  }
+): Promise<LiveCoaching> {
+  const priorChecklistText = params.priorChecklist?.length
+    ? `\n\nChecklist from the last update (keep these labels, just update covered status, unless the conversation clearly calls for a different item):\n${params.priorChecklist
+        .map((c) => `- [${c.covered ? "x" : " "}] ${c.label}`)
+        .join("\n")}`
+    : "";
+
+  const system =
+    "You are a live sales-call coach watching a transcript stream in during a real meeting, and this runs on a repeating timer for as long as the call lasts — the rep should always have something current to look at, not a panel that goes blank the moment the live conversation itself doesn't hand you something new. Give sharp, specific, non-generic guidance: ground it in what's actually been said when there's something to react to, and otherwise ground it in what's already known about this deal from its prep notes, decision boundaries, and past meetings — never leave nudges empty just because the last few seconds of transcript were quiet. Never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for — if there's truly nothing to go on yet (no transcript, no prep, no history), say so plainly rather than inventing something. If the transcript so far doesn't support a checklist item being covered, mark it not covered. You're also watching for a specific kind of moment: the other side asking something that needs answering right now, like a live interview-assist tool would — when that happens, surface it and a ready-to-say answer separately from the general nudges above (see questionAsked/question/suggestedAnswer), grounded the same way, and respecting decision boundaries the same way.";
+
+  const message = await requestCoachingWithFallbacks(system, `${liveDealContextText(params)}
 ${priorChecklistText}
 
 Transcript so far (most recent portion of an in-progress call):

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { meetings, meetingLiveSegments } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { authenticateBearer } from "@/lib/apiToken";
+import { onLiveSegment } from "@/lib/liveQuestion";
 
 // Appends one finalized utterance to a meeting's live transcript, from
 // the browser's own live speech-to-text running during an in-person
@@ -58,6 +59,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     speakerName,
     relativeSeconds,
   });
+  // A question gets answered right away instead of waiting for the next
+  // coaching refresh — see liveQuestion.ts. Runs after this responds.
+  onLiveSegment(meeting.id, text, speakerName);
 
   return NextResponse.json({ ok: true });
 }

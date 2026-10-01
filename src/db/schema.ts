@@ -200,7 +200,7 @@ export const meetings = pgTable("meeting", {
     // style prompt, kept visible until the transcript shows the rep
     // actually addressed it (see generateLiveCoaching in liveCoaching.ts).
     // Null whenever nothing's currently hanging.
-    liveQuestion: { question: string; suggestedAnswer: string } | null;
+    liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number } | null;
   }>(),
   liveSuggestionsUpdatedAt: timestamp("liveSuggestionsUpdatedAt", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),

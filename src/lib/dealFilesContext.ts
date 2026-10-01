@@ -4,7 +4,7 @@
 // already does (it hands liveAssist.ts the full extractedText of every
 // file, since that's a single interactive answer). Live coaching, handoff
 // briefings, and the rolling deal-memory merge run far more often (a live
-// call regenerates coaching every ~8s) or want a tighter prompt, so they
+// call regenerates coaching every few seconds) or want a tighter prompt, so they
 // get a capped digest instead: a handful of files, a short excerpt each.
 const MAX_FILES = 5;
 const MAX_CHARS_PER_FILE = 500;

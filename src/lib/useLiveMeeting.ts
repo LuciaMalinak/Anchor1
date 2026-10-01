@@ -12,7 +12,9 @@ export type LiveSegment = {
 export type LiveSuggestions = {
   nudges: string[];
   checklist: { label: string; covered: boolean }[];
-  liveQuestion: { question: string; suggestedAnswer: string } | null;
+  // suggestedAnswer is "" while the answer is still being written (see
+  // src/lib/liveQuestion.ts) — the question itself shows right away.
+  liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number } | null;
 } | null;
 
 // Was 4000ms — the actual transcript segments aren't behind any
@@ -20,10 +22,11 @@ export type LiveSuggestions = {
 // meetingLiveSegments fresh on every call), so this interval alone was
 // the biggest lever on how quickly new words show up on screen.
 // Tightened for a snappier "it's really listening" feel; the coaching
-// nudges have their own separate, longer server-side debounce (see
-// COACHING_REFRESH_MS in the live route) so this doesn't multiply AI
-// call volume.
-const POLL_MS = 1500;
+// nudges have their own separate server-side throttle (see
+// MIN_REFRESH_MS in the live route) so this doesn't multiply AI call
+// volume. Dropped from 1500ms to 1000ms so a just-asked question and its
+// answer show up as soon as the server has them.
+const POLL_MS = 1000;
 
 // Polls /api/meetings/[id]/live for the transcript + AI coaching of a
 // meeting Anchor is actively sitting in on. Pulled out of

@@ -1,39 +1,44 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, meetingLiveSegments, deals, summaries, dealFiles } from "@/db/schema";
-import { and, desc, eq, ne, asc, isNull } from "drizzle-orm";
-import { generateLiveCoaching, describeCoachingError } from "@/lib/liveCoaching";
+import { meetings, meetingLiveSegments, deals } from "@/db/schema";
+import { and, eq, asc, isNull } from "drizzle-orm";
+import { generateLiveCoaching, describeCoachingError, type LiveCoaching } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
-import { getDealLeadStyle } from "@/lib/styleProfile";
-import { summarizeDealFiles } from "@/lib/dealFilesContext";
+import { loadLiveDealContext } from "@/lib/liveContext";
 import { authenticateBearer } from "@/lib/apiToken";
 
-// How often live coaching (nudges + checklist) is allowed to regenerate.
-// The During tab polls this route every couple of seconds (see
-// LiveMeetingPanel.tsx) for a smooth-feeling live transcript, but
-// re-running the AI call that often would be slow and needlessly
-// expensive — this debounces it server-side so it doesn't matter how
-// often (or how many open tabs) poll this route. Was 20s; tightened to
-// keep nudges feeling like they're keeping up with the conversation
-// rather than lagging noticeably behind it — still bounded, still one
-// call at a time no matter how many people have the tab open (the soft
-// lock below), just a shorter window.
-const COACHING_REFRESH_MS = 8_000;
+// When live coaching (nudges + checklist) regenerates. It used to run on
+// a flat 8s timer whether or not anyone had said anything, so a new
+// point in the conversation could wait up to 8s just to be looked at.
+// Now: as soon as new speech has arrived since the last refresh started
+// (at most once per MIN_REFRESH_MS), plus a slower heartbeat during
+// silence so nudges grounded in prep notes still keep current. Still one
+// refresh at a time per meeting no matter how many tabs poll (the soft
+// lock + inFlight below). Questions don't wait for any of this — they
+// have their own instant path (src/lib/liveQuestion.ts).
+const MIN_REFRESH_MS = 3_000;
+const IDLE_REFRESH_MS = 20_000;
 // How much of the transcript (from the end) to hand the model each time,
 // in characters — enough context without an ever-growing prompt as a
 // long call goes on.
 const TRANSCRIPT_WINDOW_CHARS = 6_000;
-// How many of this deal's past FINISHED meetings to ground nudges in —
-// same idea as assist/route.ts's recentReady, just smaller since this
-// regenerates far more often (every ~8s) during a live call.
-const PAST_MEETINGS_LIMIT = 3;
+// How long a question from the instant path is protected from being
+// cleared by a coaching refresh that doesn't see it as open — long
+// enough that a refresh racing the question doesn't make it flicker
+// away, short enough that it does go once the rep has answered it.
+const FAST_QUESTION_HOLD_MS = 15_000;
 // Why the most recent coaching refresh failed, per meeting — only the
 // request that wins the refresh lock actually sees the error, so it's
 // kept here for every other poll (and tab) to report until a refresh
 // succeeds. In-memory is enough: it's a status hint, not data, and a
 // restart just means the next refresh re-discovers it.
 const lastCoachingError = new Map<string, string>();
+// Meetings with a coaching refresh currently running in this process —
+// refreshes now run in the background (after the poll responds), so
+// without this a slow AI call could overlap the next one and the two
+// would race to write.
+const inFlight = new Set<string>();
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -93,27 +98,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return 0;
   });
 
-  let liveSuggestions = meeting.liveSuggestions;
+  const liveSuggestions = meeting.liveSuggestions;
 
   const isLive = meeting.status === "joining" || meeting.status === "recording";
   const transcriptText = segments
     .map((s) => (s.speakerName ? `${s.speakerName}: ${s.text}` : s.text))
     .join("\n");
-  // No longer gated on the transcript having anything in it yet — nudges
-  // used to stay blank ("Nudges show up here once the conversation gets
-  // going") until the first words were transcribed, which could be a
-  // real gap right at the start of a call when there's nothing urgent to
-  // react to live but plenty already known about the deal (prep notes,
-  // decision boundaries, what happened last meeting). Coaching now keeps
-  // regenerating on the same debounced cadence the whole time the
-  // meeting is live, transcript or not — see generateLiveCoaching's
-  // instruction to always ground nudges in known facts when the live
-  // conversation hasn't given it anything new yet, rather than going
-  // quiet.
+  // liveSuggestionsUpdatedAt is stamped when a refresh STARTS (the lock
+  // below), so anything that arrived after it hasn't been coached on yet.
+  const lastRefreshAt = meeting.liveSuggestionsUpdatedAt?.getTime() ?? 0;
+  const sinceRefresh = Date.now() - lastRefreshAt;
+  const hasNewSpeech = rawSegments.some((s) => s.createdAt.getTime() > lastRefreshAt);
+  // Keeps running even before the first words are transcribed — there's
+  // usually plenty already known about the deal (prep notes, decision
+  // boundaries, last meeting) to coach on from the very start of a call.
   const dueForRefresh =
     isLive &&
+    !inFlight.has(id) &&
     (!meeting.liveSuggestionsUpdatedAt ||
-      Date.now() - meeting.liveSuggestionsUpdatedAt.getTime() > COACHING_REFRESH_MS);
+      (hasNewSpeech && sinceRefresh > MIN_REFRESH_MS) ||
+      sinceRefresh > IDLE_REFRESH_MS);
 
   if (dueForRefresh) {
     // Soft lock: stamp the timestamp before the (slow) AI call so a
@@ -126,9 +130,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // both read the same stale timestamp both "win" the lock and both
     // fire a full generateLiveCoaching call. The .returning() row is only
     // present if this request's WHERE actually matched, i.e. actually won.
+    const startedAt = new Date();
     const [wonLock] = await db
       .update(meetings)
-      .set({ liveSuggestionsUpdatedAt: new Date() })
+      .set({ liveSuggestionsUpdatedAt: startedAt })
       .where(
         and(
           eq(meetings.id, id),
@@ -140,74 +145,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .returning({ id: meetings.id });
 
     // !wonLock means another concurrent poll already claimed this refresh
-    // cycle — skip regenerating and fall through to the same response
-    // below with the not-yet-refreshed liveSuggestions; that other
-    // request's result is what the next poll will see.
-    if (wonLock) try {
-      // Never rebuilt synchronously here — this route is polled every
-      // few seconds during a live call, so it reads whatever style
-      // profile already exists (possibly a day stale) rather than ever
-      // waiting on a rebuild.
-      const [leadStyle, pastMeetingRows, fileRows] = await Promise.all([
-        getDealLeadStyle(deal?.leadUserId ?? null, { allowSynchronousRebuild: false }),
-        deal
-          ? db
-              .select({ meeting: meetings, summary: summaries })
-              .from(meetings)
-              .innerJoin(summaries, eq(summaries.meetingId, meetings.id))
-              .where(
-                and(
-                  eq(meetings.dealId, deal.id),
-                  eq(meetings.status, "ready"),
-                  ne(meetings.id, id)
-                )
-              )
-              .orderBy(desc(meetings.occurredAt))
-              .limit(PAST_MEETINGS_LIMIT)
-          : Promise.resolve([]),
-        // Files/voice notes attached from the Before tab's "Give Anchor
-        // more context" box (see DealContextBox.tsx) — a bounded digest,
-        // not the full text (see dealFilesContext.ts for why).
-        deal
-          ? db.select().from(dealFiles).where(eq(dealFiles.dealId, deal.id))
-          : Promise.resolve([]),
-      ]);
-      const coaching = await generateLiveCoaching({
-        dealName: deal?.name || null,
-        dealMemory: deal?.memory || null,
-        decisionBoundaries: deal?.decisionBoundaries || null,
-        recentTranscript: transcriptText.slice(-TRANSCRIPT_WINDOW_CHARS),
-        priorChecklist: meeting.liveSuggestions?.checklist || null,
-        leadStyle,
-        notes: deal?.notes || null,
-        // Already cached on the deal row (refreshed at most every 6h — see
-        // src/lib/dealIntegrationContext.ts), so this adds zero extra
-        // latency to a live poll. Ask Anchor and handoff briefings already
-        // had this; live coaching was blind to Gmail/Calendar until now.
-        emailContext: deal?.emailContext || null,
-        calendarContext: deal?.calendarContext || null,
-        documentContext: deal?.documentContext || null,
-        attachedFiles: summarizeDealFiles(fileRows),
-        pastMeetings: pastMeetingRows.map((r) => ({
-          title: r.meeting.title,
-          occurredAt: r.meeting.occurredAt.toLocaleDateString(),
-          overview: r.summary.overview,
-          dealSignals: r.summary.dealSignals,
-        })),
+    // cycle. Otherwise the AI call runs after this response is sent, so
+    // the poll that triggers it isn't stuck waiting seconds for the model
+    // (it used to freeze the live transcript for that tab meanwhile); the
+    // result shows up on the next poll, about a second later.
+    if (wonLock) {
+      inFlight.add(id);
+      const priorChecklist = meeting.liveSuggestions?.checklist || null;
+      after(async () => {
+        try {
+          const context = await loadLiveDealContext(id, deal);
+          const coaching = await generateLiveCoaching({
+            ...context,
+            recentTranscript: transcriptText.slice(-TRANSCRIPT_WINDOW_CHARS),
+            priorChecklist,
+          });
+          await saveCoaching(id, coaching, startedAt.getTime());
+          lastCoachingError.delete(id);
+        } catch (err) {
+          lastCoachingError.set(id, describeCoachingError(err));
+          // Live coaching is a nice-to-have layered on top of the live
+          // transcript, which still works fine on its own — never fail the
+          // poll (and the transcript feed with it) over a coaching hiccup.
+          console.error(`[live coaching] failed for meeting ${id}:`, err);
+        } finally {
+          inFlight.delete(id);
+        }
       });
-      await db
-        .update(meetings)
-        .set({ liveSuggestions: coaching, liveSuggestionsUpdatedAt: new Date() })
-        .where(eq(meetings.id, id));
-      liveSuggestions = coaching;
-      lastCoachingError.delete(id);
-    } catch (err) {
-      lastCoachingError.set(id, describeCoachingError(err));
-      // Live coaching is a nice-to-have layered on top of the live
-      // transcript, which still works fine on its own — never fail the
-      // whole poll (and the transcript feed with it) just because a
-      // coaching refresh hiccuped.
-      console.error(`[live coaching] failed for meeting ${id}:`, err);
     }
   }
 
@@ -232,4 +196,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // says so instead of looking like it's still loading forever.
     coachingError: isLive ? lastCoachingError.get(id) ?? null : null,
   });
+}
+
+// Writes a coaching refresh without clobbering a question the instant
+// path (liveQuestion.ts) put up meanwhile. Re-reads the current row
+// first since that path writes to the same column independently.
+async function saveCoaching(id: string, coaching: LiveCoaching, startedAt: number) {
+  const [current] = await db
+    .select({ liveSuggestions: meetings.liveSuggestions })
+    .from(meetings)
+    .where(eq(meetings.id, id));
+  const existing = current?.liveSuggestions?.liveQuestion ?? null;
+  const fastQuestionIsFresh =
+    existing?.askedAt != null &&
+    (existing.askedAt > startedAt || Date.now() - existing.askedAt < FAST_QUESTION_HOLD_MS);
+
+  let liveQuestion = coaching.liveQuestion;
+  if (fastQuestionIsFresh) {
+    // Asked after this refresh started, or too recently to judge — keep it.
+    liveQuestion = existing;
+  } else if (coaching.liveQuestion && existing?.suggestedAnswer) {
+    // Still an open question — keep the answer already on screen rather
+    // than swapping in a reworded one mid-read.
+    liveQuestion = existing;
+  }
+
+  await db
+    .update(meetings)
+    .set({ liveSuggestions: { ...coaching, liveQuestion } })
+    .where(eq(meetings.id, id));
 }

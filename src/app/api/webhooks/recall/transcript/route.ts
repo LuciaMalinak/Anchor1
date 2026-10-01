@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { meetings, meetingLiveSegments } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
+import { onLiveSegment } from "@/lib/liveQuestion";
 
 // Recall.ai calls this in real time (usually a few times a second) while
 // a "send Anchor to a live meeting" bot is on a call, once a finalized
@@ -13,7 +14,7 @@ import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
 // Only transcript.data (finalized utterances) is requested — we don't
 // subscribe to transcript.partial_data, since partials would mean
 // rewriting/dedup logic here for not much benefit to a coaching panel
-// that already re-summarizes every ~20s.
+// that already refreshes within seconds of each finalized utterance.
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret");
   // See the matching comment in ../route.ts — RECALL_WEBHOOK_SECRET is
@@ -61,13 +62,18 @@ export async function POST(req: NextRequest) {
 
   const relativeSeconds = utterance?.words?.[0]?.start_timestamp?.relative;
 
+  const speakerName = utterance?.participant?.name || null;
   await db.insert(meetingLiveSegments).values({
     meetingId: meeting.id,
-    speakerName: utterance?.participant?.name || null,
+    speakerName,
     text,
     relativeSeconds:
       typeof relativeSeconds === "number" ? Math.round(relativeSeconds) : null,
   });
+
+  // A question gets answered right away instead of waiting for the next
+  // coaching refresh — see liveQuestion.ts. Runs after this responds.
+  onLiveSegment(meeting.id, text, speakerName);
 
   // First real speech is the most reliable signal we have that a bot
   // scheduled for later (see /api/meetings/join) has actually joined and

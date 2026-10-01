@@ -347,7 +347,9 @@ export function FocusWindow({
               &ldquo;{suggestions.liveQuestion.question}&rdquo;
             </p>
             <p className="mt-1.5 text-sm font-medium text-slate-900">
-              {suggestions.liveQuestion.suggestedAnswer}
+              {suggestions.liveQuestion.suggestedAnswer || (
+                <span className="font-normal text-slate-500">Working on an answer…</span>
+              )}
             </p>
           </section>
         )}
