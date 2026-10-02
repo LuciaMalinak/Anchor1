@@ -39,6 +39,19 @@ import RecallAiSdk from "@recallai/desktop-sdk";
 import { autoUpdater } from "electron-updater";
 import { loadConfig, saveConfig, DEFAULT_API_BASE } from "./config";
 import { AnchorApi } from "./anchorApi";
+import {
+  BACKGROUND_ARG,
+  canUseBackgroundAgent,
+  installBackgroundAgent,
+  isBackgroundAgentInstalled,
+  removeBackgroundAgent,
+} from "./backgroundAgent";
+
+// Started silently at login (or restarted after a crash) by the
+// background agent — see backgroundAgent.ts. Stays out of sight (menu bar
+// icon only, no window or Dock icon) until a call is detected or the
+// person opens it.
+const launchedInBackground = process.argv.includes(BACKGROUND_ARG);
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -1018,10 +1031,14 @@ function createWindow(show = true) {
     if (isQuitting) return;
     evt.preventDefault();
     mainWindow?.hide();
+    // Back to a background menu-bar app: no Dock icon while it's just
+    // watching for calls.
+    app.dock?.hide();
   });
 }
 
 function showWindow() {
+  app.dock?.show();
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow();
   } else {
@@ -1040,9 +1057,32 @@ function createTray() {
   tray.on("click", showWindow);
 }
 
+// On an installed Mac app: the background agent (silent start at login,
+// restart after a crash — see backgroundAgent.ts), replacing the plain
+// login item so the two don't both launch it. Elsewhere: the login item,
+// asked to start in the background.
+function enableLaunchAtLogin() {
+  if (canUseBackgroundAgent()) {
+    if (installBackgroundAgent()) log("Set Anchor Desktop to start in the background at login.");
+    if (app.getLoginItemSettings().openAtLogin) app.setLoginItemSettings({ openAtLogin: false });
+  } else if (!app.getLoginItemSettings().openAtLogin) {
+    app.setLoginItemSettings({ openAtLogin: true, args: [BACKGROUND_ARG] });
+    log("Turned on launch at login.");
+  }
+}
+
+function disableLaunchAtLogin() {
+  removeBackgroundAgent();
+  app.setLoginItemSettings({ openAtLogin: false });
+}
+
+function launchAtLoginEnabled(): boolean {
+  return isBackgroundAgentInstalled() || app.getLoginItemSettings().openAtLogin;
+}
+
 function refreshTrayMenu() {
   if (!tray) return;
-  const openAtLogin = app.getLoginItemSettings().openAtLogin;
+  const openAtLogin = launchAtLoginEnabled();
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Open Anchor Desktop", click: showWindow },
@@ -1052,7 +1092,8 @@ function refreshTrayMenu() {
         type: "checkbox",
         checked: openAtLogin,
         click: (item) => {
-          app.setLoginItemSettings({ openAtLogin: item.checked });
+          if (item.checked) enableLaunchAtLogin();
+          else disableLaunchAtLogin();
           saveConfig({ ...loadConfig(), launchAtLoginOptOut: !item.checked });
         },
       },
@@ -1120,6 +1161,9 @@ if (!gotSingleInstanceLock) {
     // "open-url" above instead), but this is harmless there too.
     const deepLink = commandLine.find((arg) => arg.startsWith("anchor-desktop://"));
     if (deepLink) handleDeepLinkSafely(deepLink);
+    // The background agent starting a copy while this one already runs
+    // isn't someone asking to see the window.
+    if (!deepLink && commandLine.includes(BACKGROUND_ARG)) return;
     showWindow();
   });
 
@@ -1132,7 +1176,9 @@ if (!gotSingleInstanceLock) {
       saveConfig({ ...loadConfig(), restartedForUpdate: null });
       log(`Updated to Anchor Desktop ${app.getVersion()}.`);
     }
-    createWindow(!updateRestart || updateRestart.windowWasVisible);
+    const showOnStart = updateRestart ? updateRestart.windowWasVisible : !launchedInBackground;
+    createWindow(showOnStart);
+    if (!showOnStart) app.dock?.hide();
     createTray();
 
     // Same Windows/Linux deep-link case as the second-instance handler
@@ -1147,16 +1193,13 @@ if (!gotSingleInstanceLock) {
     pendingOpenUrlDeepLink = null;
     if (coldStartDeepLink) handleDeepLinkSafely(coldStartDeepLink);
 
-    // Keep "launch at login" on, so installing it is the only setup step
-    // anyone needs — the app can only notice a call while it's running.
+    // Keep Anchor starting at login, so installing it is the only setup
+    // step anyone needs — it can only notice a call while it's running.
     // Re-applied on every launch (it used to be set once, on the very
-    // first run, and never checked again — so if macOS dropped it, or the
-    // app was first opened from somewhere other than Applications, it
-    // silently stayed off and calls stopped being picked up after the
-    // next restart). Only an explicit "off" in the tray menu stops this.
-    if (!loadConfig().launchAtLoginOptOut && !app.getLoginItemSettings().openAtLogin) {
-      app.setLoginItemSettings({ openAtLogin: true });
-      log("Turned on launch at login.");
+    // first run, and never checked again). Only an explicit "off" in the
+    // tray menu stops this.
+    if (!loadConfig().launchAtLoginOptOut) {
+      enableLaunchAtLogin();
       refreshTrayMenu();
     }
 
