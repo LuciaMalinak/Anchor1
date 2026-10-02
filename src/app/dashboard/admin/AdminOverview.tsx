@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { AdminOverview as Overview } from "@/lib/adminStats";
 import { TREND_DAYS } from "@/lib/adminStats";
+import { AdminMeetingActions } from "./AdminMeetingActions";
 
 // The admin Overview: growth and activity across every account, then
 // recordings that failed or got stuck. Data comes from loadAdminOverview
@@ -273,6 +274,7 @@ export function AdminOverview({ data }: { data: Overview }) {
             source: m.source,
             detail: m.errorMessage || "(no error message)",
             tone: "error",
+            canStop: false,
           }))}
         />
         <ProblemTable
@@ -293,6 +295,7 @@ export function AdminOverview({ data }: { data: Overview }) {
             source: m.source,
             detail: `Still "${STATUS_LABEL[m.status] ?? m.status}"`,
             tone: "warning",
+            canStop: true,
           }))}
         />
       </section>
@@ -319,6 +322,7 @@ function ProblemTable({
     source: string;
     detail: string;
     tone: "error" | "warning";
+    canStop: boolean;
   }[];
 }) {
   return (
@@ -368,6 +372,13 @@ function ProblemTable({
                   )}{" "}
                   · {r.userEmail}
                 </p>
+                <div className="mt-2">
+                  <AdminMeetingActions
+                    meetingId={r.id}
+                    title={r.title}
+                    canStop={r.canStop}
+                  />
+                </div>
               </div>
             </li>
           ))}

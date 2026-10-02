@@ -1,12 +1,15 @@
 import { db } from "@/db";
 import { meetings, sessions, teams, users } from "@/db/schema";
-import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, notLike, or, sql } from "drizzle-orm";
 
 // Numbers for the admin Overview (src/app/dashboard/admin/AdminOverview.tsx):
 // growth and activity across every account, and recordings that failed or
 // got stuck, so problems show up here before anyone reports them.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Deleted accounts stay as anonymized rows (api/profile/delete) — not
+// real people, so they're left out of sign-ups and counts.
+const DELETED_EMAIL_PATTERN = "deleted-%@anchor.invalid";
 export const TREND_DAYS = 14;
 // Auth.js database sessions last 30 days and are pushed forward (at most
 // once a day) whenever the person uses the app — so a session expiring
@@ -81,7 +84,8 @@ export async function loadAdminOverview() {
         new7: sql<number>`count(*) filter (where ${users.createdAt} >= ${sqlAgo(7)})`,
         new30: sql<number>`count(*) filter (where ${users.createdAt} >= ${sqlAgo(30)})`,
       })
-      .from(users),
+      .from(users)
+      .where(notLike(users.email, DELETED_EMAIL_PATTERN)),
     db.select({ total: sql<number>`count(*)` }).from(teams),
     db
       .select({ count: sql<number>`count(distinct ${sessions.userId})` })
@@ -102,7 +106,12 @@ export async function loadAdminOverview() {
     db
       .select({ day: dayExpr(users.createdAt), count: sql<number>`count(*)` })
       .from(users)
-      .where(gte(users.createdAt, trendStart))
+      .where(
+        and(
+          gte(users.createdAt, trendStart),
+          notLike(users.email, DELETED_EMAIL_PATTERN),
+        ),
+      )
       .groupBy(sql`1`),
     db
       .select({
@@ -139,6 +148,7 @@ export async function loadAdminOverview() {
       })
       .from(users)
       .leftJoin(teams, eq(teams.id, users.teamId))
+      .where(notLike(users.email, DELETED_EMAIL_PATTERN))
       .orderBy(desc(users.createdAt))
       .limit(8),
     db
