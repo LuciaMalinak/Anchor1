@@ -217,13 +217,20 @@ async function beginRecording(windowId: string, title: string): Promise<ActiveRe
   return promise;
 }
 
+const DEAL_MATCH_TIMEOUT_MS = 2_000;
+
 async function beginRecordingUnguarded(windowId: string, title: string): Promise<ActiveRecording> {
   const api = getApi();
   // Best-effort: figure out which deal this call is for before creating
   // the meeting, so it lands there automatically instead of coming
   // through unassigned — see AnchorApi.matchDealNow(). Never blocks or
   // fails the recording if this comes back empty.
-  const dealMatch = await api.matchDealNow().catch(() => undefined);
+  // Capped, so a slow or waking-up server never holds the recording back —
+  // an unmatched call still records and can be attached to a deal after.
+  const dealMatch = await Promise.race([
+    api.matchDealNow().catch(() => undefined),
+    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), DEAL_MATCH_TIMEOUT_MS)),
+  ]);
   if (dealMatch) {
     log(`Matched this call to "${dealMatch.dealName}" — recording will be added there automatically.`);
   }
@@ -485,7 +492,11 @@ async function fetchRecallApiUrl(): Promise<string | undefined> {
     const res = await fetch(`${apiBase}/api/desktop/recall-region`, { signal: controller.signal });
     if (!res.ok) return undefined;
     const body = await res.json().catch(() => ({}));
-    return typeof body.apiUrl === "string" && body.apiUrl ? body.apiUrl : undefined;
+    if (typeof body.apiUrl !== "string" || !body.apiUrl) return undefined;
+    // The SDK wants the region's base URL and adds its own API path — an
+    // older Anchor server sent .../api/v1, which made every recording fail
+    // with a 404 retrieving the recording configuration.
+    return body.apiUrl.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
   } catch {
     return undefined;
   } finally {

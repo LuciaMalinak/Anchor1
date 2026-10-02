@@ -17,7 +17,12 @@ import { NextResponse } from "next/server";
 // to be callable before the desktop app has any token to authenticate
 // with, since it runs before a member has necessarily connected the app
 // to their account yet.
+//
+// The bare region host, with no /api/v1: the SDK's apiUrl is the region's
+// base URL and it adds its own API path. Sending .../api/v1 made every
+// desktop recording fail right after a call was detected with "Recall
+// returned HTTP 404 while retrieving the recording configuration".
 export async function GET() {
   const region = process.env.RECALL_REGION || "us-east-1";
-  return NextResponse.json({ apiUrl: `https://${region}.recall.ai/api/v1` });
+  return NextResponse.json({ apiUrl: `https://${region}.recall.ai` });
 }
