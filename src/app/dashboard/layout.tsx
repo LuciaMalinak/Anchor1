@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SupportButton } from "@/components/SupportButton";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { Logo } from "@/components/Logo";
@@ -146,6 +147,7 @@ export default async function DashboardLayout({
             </nav>
           </div>
           <div className="flex shrink-0 items-center gap-2 text-sm">
+            <SupportButton />
             <Link
               href="/dashboard/profile"
               title={session?.user?.name || session?.user?.email || "Profile"}

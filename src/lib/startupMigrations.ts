@@ -10,6 +10,20 @@ const MIGRATIONS = [
   `ALTER TYPE "integration_provider" ADD VALUE IF NOT EXISTS 'dropbox'`,
   // Google Drive / Dropbox document excerpts per deal (dealIntegrationContext.ts).
   `ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "documentContext" text`,
+  // "Get help" requests with remote screen sharing (support.ts).
+  `CREATE TABLE IF NOT EXISTS "support_request" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "userId" uuid NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+    "message" text NOT NULL,
+    "pageUrl" text,
+    "accessCode" text,
+    "accessCodeAt" timestamp,
+    "status" text NOT NULL DEFAULT 'open',
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now(),
+    "resolvedAt" timestamp
+  )`,
+  `CREATE INDEX IF NOT EXISTS "support_request_status_idx" ON "support_request" ("status", "createdAt")`,
 ];
 
 export async function runStartupMigrations(): Promise<void> {

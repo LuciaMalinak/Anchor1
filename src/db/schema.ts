@@ -790,3 +790,26 @@ export const adminAccessLogs = pgTable("admin_access_log", {
   view: text("view").notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
+
+// "Get help" requests (see src/lib/support.ts and SupportButton.tsx): what
+// the person needs help with and, once they've generated one, a one-time
+// Chrome Remote Desktop access code so the app owner can view and control
+// their screen — only after they approve the connection in Chrome, and
+// only until they click Stop Sharing. Codes expire after 5 minutes on
+// Google's side; the stored one is just what was last pasted in.
+export const supportRequests = pgTable("support_request", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  // The page they were on when they asked, for context.
+  pageUrl: text("pageUrl"),
+  accessCode: text("accessCode"),
+  accessCodeAt: timestamp("accessCodeAt", { mode: "date" }),
+  // "open" -> "in_progress" (someone's helping) -> "resolved"
+  status: text("status").notNull().default("open"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+  resolvedAt: timestamp("resolvedAt", { mode: "date" }),
+});

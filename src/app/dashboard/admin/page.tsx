@@ -5,6 +5,7 @@ import { eq, desc, sql } from "drizzle-orm";
 import { requireAppOwnerPage } from "@/lib/adminAccess";
 import { loadAdminOverview } from "@/lib/adminStats";
 import { AdminOverview } from "./AdminOverview";
+import { AdminSupportRequests } from "./AdminSupportRequests";
 
 // The founder/admin entry point — an Overview of growth, activity and
 // recording health across everything (AdminOverview.tsx), then every
@@ -73,6 +74,8 @@ export default async function AdminHomePage({
           overview doesn&apos;t.
         </p>
       </div>
+
+      <AdminSupportRequests />
 
       <AdminOverview data={overview} />
 
