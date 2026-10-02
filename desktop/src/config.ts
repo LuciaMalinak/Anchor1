@@ -14,11 +14,10 @@ export const DEFAULT_API_BASE = "https://anchor-be6o.onrender.com";
 type Config = {
   apiBase: string;
   token: string | null;
-  // Whether we've already turned on "launch at login" once, on this
-  // machine, by default. Tracked so a user who later turns it off (via
-  // the tray menu) doesn't get overridden back to on next launch — see
-  // main.ts's tray setup.
-  launchAtLoginDefaultApplied?: boolean;
+  // Set when the person turns "launch at login" off in the tray menu —
+  // otherwise main.ts turns it back on at every launch, since the app can
+  // only notice calls while it's running.
+  launchAtLoginOptOut?: boolean;
   // Email of the Anchor account the token belongs to, shown as
   // "Connected as …". Fetched from /api/desktop/me when connecting.
   accountEmail?: string | null;
@@ -44,7 +43,7 @@ export function loadConfig(): Config {
     return {
       apiBase: typeof parsed.apiBase === "string" && parsed.apiBase ? parsed.apiBase : DEFAULT_API_BASE,
       token: typeof parsed.token === "string" ? parsed.token : null,
-      launchAtLoginDefaultApplied: Boolean(parsed.launchAtLoginDefaultApplied),
+      launchAtLoginOptOut: parsed.launchAtLoginOptOut === true,
       accountEmail: typeof parsed.accountEmail === "string" ? parsed.accountEmail : null,
       pendingSignIn:
         parsed.pendingSignIn &&

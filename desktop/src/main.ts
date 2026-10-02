@@ -27,6 +27,7 @@ import {
   Tray,
   Menu,
   nativeImage,
+  Notification,
   screen,
   shell,
   session as electronSession,
@@ -222,9 +223,13 @@ async function beginRecordingUnguarded(windowId: string, title: string): Promise
   // ordering is the whole reason showOverlay works off activeRecordings
   // rather than a separate map.
   activeRecordings.set(windowId, active);
+  // Swap the "meeting detected" placeholder for the live Focus page now
+  // rather than waiting for recording-started.
+  showOverlay(meeting.id);
   try {
     await RecallAiSdk.startRecording({ windowId, uploadToken });
   } catch (err) {
+    hideOverlayFor(windowId, meeting.id);
     // startMeeting already created this meeting "live" on Anchor's
     // backend before we knew whether the local SDK would actually accept
     // it — if it didn't, undo both sides: drop it from activeRecordings
@@ -293,15 +298,7 @@ const OVERLAY_MARGIN = 16;
 // stealing focus from the actual meeting app (showInactive) — the point
 // is a glanceable panel next to the call, not something that interrupts
 // it.
-function showOverlay(meetingId: string) {
-  const config = loadConfig();
-  if (!config.token) {
-    log("Recording started but no Anchor token is saved yet — can't show the live coaching overlay.");
-    return;
-  }
-  const apiBase = config.apiBase || DEFAULT_API_BASE;
-  const url = `${apiBase}/focus/${meetingId}`;
-
+function ensureOverlayWindow(): BrowserWindow {
   if (!overlayWindow || overlayWindow.isDestroyed()) {
     const { workArea } = screen.getPrimaryDisplay();
     overlayWindow = new BrowserWindow({
@@ -330,20 +327,97 @@ function showOverlay(meetingId: string) {
     overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     overlayWindow.on("closed", () => {
       overlayWindow = null;
+      overlayShowing = null;
     });
   }
+  return overlayWindow;
+}
 
-  log(`Showing live coaching overlay for meeting ${meetingId} (${url})`);
-  overlayWindow.loadURL(url).catch((err) => {
-    log(`Couldn't load the live coaching overlay: ${err instanceof Error ? err.message : err}`);
-  });
-  overlayWindow.showInactive();
+// What the overlay currently shows: a meeting's Focus page, or the
+// "meeting detected" placeholder for a window that's still starting.
+// Lets recording-started skip reloading a page that's already up (the
+// overlay now opens before recording starts — see beginRecordingUnguarded).
+let overlayShowing: { meetingId: string } | { pendingWindowId: string } | null = null;
+
+function showOverlay(meetingId: string) {
+  const config = loadConfig();
+  if (!config.token) {
+    log("Recording started but no Anchor token is saved yet — can't show the live coaching overlay.");
+    return;
+  }
+  const apiBase = config.apiBase || DEFAULT_API_BASE;
+  const url = `${apiBase}/focus/${meetingId}`;
+  const win = ensureOverlayWindow();
+
+  if (!(overlayShowing && "meetingId" in overlayShowing && overlayShowing.meetingId === meetingId)) {
+    log(`Showing live coaching overlay for meeting ${meetingId} (${url})`);
+    overlayShowing = { meetingId };
+    win.loadURL(url).catch((err) => {
+      log(`Couldn't load the live coaching overlay: ${err instanceof Error ? err.message : err}`);
+    });
+  }
+  if (!win.isVisible()) win.showInactive();
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+// Pops the overlay up the instant a meeting is detected — like Granola —
+// instead of only once recording has actually started, which takes a
+// couple of network round-trips first (and much longer if Anchor's server
+// is waking up). Shows a local placeholder, so it appears immediately
+// even offline; showOverlay swaps in the live Focus page once the meeting
+// exists.
+function showOverlayPending(windowId: string, title: string) {
+  if (overlayShowing && "meetingId" in overlayShowing && recordingWindowIds.size > 0) {
+    return; // Already coaching another live call — don't replace it.
+  }
+  const win = ensureOverlayWindow();
+  overlayShowing = { pendingWindowId: windowId };
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    body{margin:0;height:100vh;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:0 28px;
+      font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0f1f3d;color:#fff;-webkit-app-region:drag}
+    .brand{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#8fb3e8}
+    h1{margin:0;font-size:20px;font-weight:600}
+    p{margin:0;font-size:14px;color:#c9d6ea;line-height:1.45}
+    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#34d399;margin-right:8px;animation:p 1.2s infinite}
+    @keyframes p{50%{opacity:.3}}
+  </style></head><body>
+    <div class="brand">⚓ Anchor</div>
+    <h1><span class="dot"></span>Meeting detected</h1>
+    <p>${escapeHtml(title)}</p>
+    <p>Starting the recording and live coaching…</p>
+  </body></html>`;
+  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`).catch(() => {});
+  if (!win.isVisible()) win.showInactive();
 }
 
 function hideOverlay() {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.hide();
   }
+  overlayShowing = null;
+}
+
+// Hides the overlay only if it's showing this window's placeholder or this
+// meeting — used when starting a recording fails.
+function hideOverlayFor(windowId: string, meetingId?: string) {
+  if (!overlayShowing) return;
+  const mine =
+    ("pendingWindowId" in overlayShowing && overlayShowing.pendingWindowId === windowId) ||
+    (meetingId !== undefined && "meetingId" in overlayShowing && overlayShowing.meetingId === meetingId);
+  if (mine) hideOverlay();
+}
+
+// A macOS notification for something that needs the person, clicking
+// through to the main window. Failures used to only reach the in-app
+// Activity log, which nobody sees mid-call.
+function notify(title: string, body: string) {
+  if (!Notification.isSupported()) return;
+  const n = new Notification({ title, body });
+  n.on("click", showWindow);
+  n.show();
 }
 
 // Pushes live coaching (nudges, checklist, the one question that looks
@@ -434,12 +508,26 @@ async function initSdk() {
     const title = evt.window.title || evt.window.platform || evt.window.id;
     log(`Meeting detected: ${title} — starting to record automatically`);
     send("meeting-detected", evt.window);
+    if (!loadConfig().token) {
+      notify("Anchor didn't record this call", "Sign in to Anchor Desktop so it can record and coach your calls.");
+      showWindow();
+      return;
+    }
+    // Pop up right away, the way Granola does — see showOverlayPending.
+    // Not for a window that's already recording or starting (detection
+    // can fire again for the same call) — that would cover its live panel.
+    if (!activeRecordings.has(evt.window.id) && !startsInFlight.has(evt.window.id)) {
+      showOverlayPending(evt.window.id, title);
+    }
     // Auto-record on detection — no manual "Record" click needed, so
     // this only depends on the app already being open (which, once
     // installed, it always is — see the tray/launch-at-login setup
     // below) rather than on someone remembering to press a button.
     beginRecording(evt.window.id, title).catch((err) => {
-      log(`Couldn't auto-start recording: ${err instanceof Error ? err.message : err}`);
+      const reason = err instanceof Error ? err.message : String(err);
+      log(`Couldn't auto-start recording: ${reason}`);
+      hideOverlayFor(evt.window.id);
+      notify("Anchor couldn't record this call", reason);
     });
   });
 
@@ -965,7 +1053,7 @@ function refreshTrayMenu() {
         checked: openAtLogin,
         click: (item) => {
           app.setLoginItemSettings({ openAtLogin: item.checked });
-          saveConfig({ ...loadConfig(), launchAtLoginDefaultApplied: true });
+          saveConfig({ ...loadConfig(), launchAtLoginOptOut: !item.checked });
         },
       },
       { type: "separator" },
@@ -1059,14 +1147,16 @@ if (!gotSingleInstanceLock) {
     pendingOpenUrlDeepLink = null;
     if (coldStartDeepLink) handleDeepLinkSafely(coldStartDeepLink);
 
-    // Turn "launch at login" on by default the first time this app ever
-    // runs on this machine, so installing it is the only setup step anyone
-    // needs — exactly once; if someone later turns it off via the tray
-    // menu, we remember that and don't force it back on.
-    const config = loadConfig();
-    if (!config.launchAtLoginDefaultApplied) {
+    // Keep "launch at login" on, so installing it is the only setup step
+    // anyone needs — the app can only notice a call while it's running.
+    // Re-applied on every launch (it used to be set once, on the very
+    // first run, and never checked again — so if macOS dropped it, or the
+    // app was first opened from somewhere other than Applications, it
+    // silently stayed off and calls stopped being picked up after the
+    // next restart). Only an explicit "off" in the tray menu stops this.
+    if (!loadConfig().launchAtLoginOptOut && !app.getLoginItemSettings().openAtLogin) {
       app.setLoginItemSettings({ openAtLogin: true });
-      saveConfig({ ...config, launchAtLoginDefaultApplied: true });
+      log("Turned on launch at login.");
       refreshTrayMenu();
     }
 
