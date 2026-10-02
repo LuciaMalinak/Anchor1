@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts, dealMembers, teams } from "@/db/schema";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
+import { after } from "next/server";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { isImageFile } from "@/lib/extractText";
 import { researchCompany, isResearchStale } from "@/lib/companyResearch";
@@ -22,7 +23,7 @@ export default async function DealDetailPage({
   const authorized = await authorizeDeal(session.user.id, id);
   if (!authorized) notFound();
   const { teamId } = authorized;
-  let deal = authorized.deal;
+  const deal = authorized.deal;
 
   // Best-effort, throttled auto-refresh: if this deal's research is
   // missing or stale, quietly look it up now so the News callout and
@@ -57,80 +58,70 @@ export default async function DealDetailPage({
       .catch((err) => console.error("Background company research failed:", err));
   }
 
-  // Same best-effort, throttled idea, for whatever Gmail/Calendar
+  // Same best-effort, throttled idea, for whatever Gmail/Calendar/Drive
   // activity is happening with this deal's contacts — see
   // src/lib/dealIntegrationContext.ts for why it uses the deal's lead
   // (or creator)'s connection rather than whoever's viewing the page.
+  // Runs after the page is sent, like company research above: it used to
+  // be awaited, so every ~6h opening a deal sat waiting on Gmail, Calendar
+  // and downloading/reading Drive documents before anything showed. The
+  // page uses what's cached; the next load (and Ask Anchor) gets the fresh
+  // copy.
   if (isIntegrationContextStale(deal.integrationContextUpdatedAt)) {
-    const refreshed = await refreshDealIntegrationContext({
-      id: deal.id,
-      name: deal.name,
-      leadUserId: deal.leadUserId,
-      createdByUserId: deal.createdByUserId,
-      primaryContactEmail: deal.primaryContactEmail,
-    });
-    if (refreshed) {
-      deal = {
-        ...deal,
-        emailContext: refreshed.emailContext ?? deal.emailContext,
-        calendarContext: refreshed.calendarContext ?? deal.calendarContext,
-        documentContext: refreshed.documentContext,
-        integrationContextUpdatedAt: new Date(),
-      };
-    }
+    const { id: dealId, name, leadUserId, createdByUserId, primaryContactEmail } = deal;
+    after(() =>
+      refreshDealIntegrationContext({ id: dealId, name, leadUserId, createdByUserId, primaryContactEmail })
+        .then(() => undefined)
+        .catch((err) => console.error("Background deal integration refresh failed:", err))
+    );
   }
 
   // The team-wide "Today's briefing" now lives in the shared dashboard
   // layout (GeneralNewsSidebar), not here — this page's sidebar is
   // deal-specific news only.
 
-  const dealMeetings = await db
-    .select()
-    .from(meetings)
-    .where(eq(meetings.dealId, id))
-    .orderBy(desc(meetings.occurredAt));
+  // Independent lookups, run together rather than one after another —
+  // each is a round trip to the database, and in sequence they added up.
+  const [dealMeetings, files, teammates, dealContactRows, messageRows, memberRows, [team]] = await Promise.all([
+    db.select().from(meetings).where(eq(meetings.dealId, id)).orderBy(desc(meetings.occurredAt)),
+    db.select().from(dealFiles).where(eq(dealFiles.dealId, id)).orderBy(desc(dealFiles.createdAt)),
+    db.select().from(users).where(eq(users.teamId, teamId)),
+    // The people Anchor has resolved as speakers across this deal's
+    // meetings — a lightweight "who's involved on their side" view. Scoped
+    // to this account's own contacts (contacts aren't team-shared yet).
+    db
+      .selectDistinctOn([contacts.id], {
+        id: contacts.id,
+        name: contacts.name,
+        company: contacts.company,
+        role: contacts.role,
+        relationshipSummary: contacts.relationshipSummary,
+        meetingCount: contacts.meetingCount,
+      })
+      .from(meetingParticipants)
+      .innerJoin(meetings, eq(meetingParticipants.meetingId, meetings.id))
+      .innerJoin(contacts, eq(meetingParticipants.contactId, contacts.id))
+      .where(eq(meetings.dealId, id)),
+    db
+      .select({ message: dealMessages, author: users })
+      .from(dealMessages)
+      .innerJoin(users, eq(dealMessages.userId, users.id))
+      .where(eq(dealMessages.dealId, id))
+      .orderBy(asc(dealMessages.createdAt)),
+    // Who this restricted deal (if it is one) has been explicitly shared
+    // with — used to pre-fill the sharing picker and the chat's recipient
+    // picker. Harmless to compute even when the deal isn't restricted.
+    db.select({ userId: dealMembers.userId }).from(dealMembers).where(eq(dealMembers.dealId, id)),
+    db.select().from(teams).where(eq(teams.id, teamId)),
+  ]);
 
   const readyIds = dealMeetings.filter((m) => m.status === "ready").map((m) => m.id);
-  // Fetch every ready meeting's summary (small N for an MVP — fine as
-  // sequential lookups rather than an IN() query).
-  const allSummaries = await Promise.all(
-    readyIds.map((mid) => db.select().from(summaries).where(eq(summaries.meetingId, mid)))
-  );
-  const summaryByMeetingId = new Map(
-    readyIds.map((mid, i) => [mid, allSummaries[i][0]] as const)
-  );
+  // One query for every ready meeting's summary, instead of one each.
+  const summaryRows = readyIds.length
+    ? await db.select().from(summaries).where(inArray(summaries.meetingId, readyIds))
+    : [];
+  const summaryByMeetingId = new Map(summaryRows.map((r) => [r.meetingId, r] as const));
 
-  const files = await db
-    .select()
-    .from(dealFiles)
-    .where(eq(dealFiles.dealId, id))
-    .orderBy(desc(dealFiles.createdAt));
-
-  const teammates = await db.select().from(users).where(eq(users.teamId, teamId));
-
-  // The people Anchor has resolved as speakers across this deal's
-  // meetings — a lightweight "who's involved on their side" view. Scoped
-  // to this account's own contacts (contacts aren't team-shared yet).
-  const dealContactRows = await db
-    .selectDistinctOn([contacts.id], {
-      id: contacts.id,
-      name: contacts.name,
-      company: contacts.company,
-      role: contacts.role,
-      relationshipSummary: contacts.relationshipSummary,
-      meetingCount: contacts.meetingCount,
-    })
-    .from(meetingParticipants)
-    .innerJoin(meetings, eq(meetingParticipants.meetingId, meetings.id))
-    .innerJoin(contacts, eq(meetingParticipants.contactId, contacts.id))
-    .where(eq(meetings.dealId, id));
-
-  const messageRows = await db
-    .select({ message: dealMessages, author: users })
-    .from(dealMessages)
-    .innerJoin(users, eq(dealMessages.userId, users.id))
-    .where(eq(dealMessages.dealId, id))
-    .orderBy(asc(dealMessages.createdAt));
   // Same visibility rule as GET /api/deals/[id]/messages (see that
   // route's visibleTo comment) — this page fetches messages directly
   // rather than through the API, so it needs its own copy of the filter.
@@ -138,17 +129,11 @@ export default async function DealDetailPage({
     const rids = r.message.recipientUserIds;
     return !rids || r.message.userId === session.user.id || rids.includes(session.user.id);
   });
-
-  // Who this restricted deal (if it is one) has been explicitly shared
-  // with — used to pre-fill the sharing picker and the chat's recipient
-  // picker. Harmless to compute even when the deal isn't restricted.
-  const memberRows = await db.select({ userId: dealMembers.userId }).from(dealMembers).where(eq(dealMembers.dealId, id));
   const sharedWithUserIds = memberRows.map((r) => r.userId);
 
   // Same bar as the DELETE route enforces server-side — computed here too
   // just so the "Delete deal" button only shows up for someone it'll
   // actually work for, instead of everyone getting a 403 surprise.
-  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
   const canDeleteDeal = deal.createdByUserId === session.user.id || team?.ownerUserId === session.user.id;
 
   const lastActivityAt = dealMeetings[0]?.occurredAt ?? null;

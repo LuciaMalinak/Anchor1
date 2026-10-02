@@ -474,6 +474,22 @@ function startLiveSuggestionsPolling() {
   }, LIVE_SUGGESTIONS_POLL_MS);
 }
 
+// Anchor's server is on a hosting plan that sleeps after ~15 idle
+// minutes, and waking it takes 30-60s — which used to land right when a
+// call started (the app has to create the meeting before recording) or
+// when someone opened the site. A tiny request every 10 minutes keeps it
+// awake for as long as anyone on the team has the app running. Cheap and
+// unauthenticated on purpose (the region lookup).
+const KEEP_AWAKE_MS = 10 * 60_000;
+function startServerKeepAwake() {
+  setInterval(() => {
+    const apiBase = loadConfig().apiBase || DEFAULT_API_BASE;
+    fetch(`${apiBase}/api/desktop/recall-region`).catch(() => {
+      // Offline or asleep mid-wake — the next tick tries again.
+    });
+  }, KEEP_AWAKE_MS);
+}
+
 // Recall.ai's API is region-scoped — see
 // src/app/api/desktop/recall-region/route.ts for the full explanation.
 // Without this, RecallAiSdk.init() defaults to a host that may not match
@@ -1215,6 +1231,7 @@ if (!gotSingleInstanceLock) {
     }
 
     startLiveSuggestionsPolling();
+    startServerKeepAwake();
     initAutoUpdate();
 
     try {
