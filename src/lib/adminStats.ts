@@ -50,6 +50,11 @@ function fillDays(rows: { day: string; count: number }[], now: Date) {
 export async function loadAdminOverview() {
   const now = new Date();
   const ago = (days: number) => new Date(now.getTime() - days * DAY_MS);
+  // A date inside a hand-written sql`` fragment must go in as text: the
+  // production driver (postgres-js) rejects a JS Date there ("The "string"
+  // argument must be of type string… Received an instance of Date"), which
+  // crashed the whole admin page. Column comparisons (gte/lt) are fine.
+  const sqlAgo = (days: number) => sql`${ago(days).toISOString()}::timestamp`;
   const trendStart = new Date(`${dayKey(ago(TREND_DAYS - 1))}T00:00:00Z`);
   const activeSince = (days: number) =>
     new Date(now.getTime() + (SESSION_MAX_AGE_DAYS - days) * DAY_MS);
@@ -73,8 +78,8 @@ export async function loadAdminOverview() {
     db
       .select({
         total: sql<number>`count(*)`,
-        new7: sql<number>`count(*) filter (where ${users.createdAt} >= ${ago(7)})`,
-        new30: sql<number>`count(*) filter (where ${users.createdAt} >= ${ago(30)})`,
+        new7: sql<number>`count(*) filter (where ${users.createdAt} >= ${sqlAgo(7)})`,
+        new30: sql<number>`count(*) filter (where ${users.createdAt} >= ${sqlAgo(30)})`,
       })
       .from(users),
     db.select({ total: sql<number>`count(*)` }).from(teams),
@@ -88,9 +93,9 @@ export async function loadAdminOverview() {
       .where(gte(sessions.expires, activeSince(30))),
     db
       .select({
-        week: sql<number>`count(*) filter (where ${meetings.createdAt} >= ${ago(7)})`,
-        readyWeek: sql<number>`count(*) filter (where ${meetings.createdAt} >= ${ago(7)} and ${meetings.status} = 'ready')`,
-        failedWeek: sql<number>`count(*) filter (where ${meetings.createdAt} >= ${ago(7)} and ${meetings.status} = 'failed')`,
+        week: sql<number>`count(*) filter (where ${meetings.createdAt} >= ${sqlAgo(7)})`,
+        readyWeek: sql<number>`count(*) filter (where ${meetings.createdAt} >= ${sqlAgo(7)} and ${meetings.status} = 'ready')`,
+        failedWeek: sql<number>`count(*) filter (where ${meetings.createdAt} >= ${sqlAgo(7)} and ${meetings.status} = 'failed')`,
         total: sql<number>`count(*)`,
       })
       .from(meetings),
