@@ -83,22 +83,25 @@ function TabBar({
     { key: "after", label: "After" },
     { key: "chat", label: "Chat" },
   ];
+  // A segmented control: one rounded track with the active tab filled in
+  // its own color, instead of four separate outlined buttons in capitals.
   return (
-    <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-4">
+    <div className="inline-flex flex-wrap gap-1 self-start rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200">
       {tabs.map((t) => (
         <button
           key={t.key}
           type="button"
           onClick={() => onChange(t.key)}
-          className={`relative rounded-lg px-6 py-2.5 text-sm font-semibold tracking-[0.1em] transition ${
+          aria-pressed={active === t.key}
+          className={`relative rounded-lg px-5 py-2 text-sm font-semibold transition ${
             active === t.key
-              ? TAB_ACTIVE_CLASSES[t.key]
-              : "border border-slate-300 text-slate-500 hover:border-slate-400"
+              ? `${TAB_ACTIVE_CLASSES[t.key]} shadow-sm`
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
           }`}
         >
-          {t.label.toUpperCase()}
+          {t.label}
           {t.badge ? (
-            <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold text-white">
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[11px] font-bold text-white ring-2 ring-white">
               {t.badge}
             </span>
           ) : null}

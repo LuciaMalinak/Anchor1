@@ -1,3 +1,7 @@
+/* Inter, loaded at runtime from Google Fonts (not next/font, which needs a
+   build-time fetch — see layout.tsx). Until it arrives, and if it can't
+   load, the system font stack below shows instead. */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 :root {
@@ -19,15 +23,42 @@
   --color-brand-dark: var(--brand-dark);
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: var(--font-geist-mono);
+}
+
+/* App-wide look: softer borders and rounder corners everywhere, by
+   adjusting the shared scale every page's classes already use, rather than
+   restyling hundreds of components one by one. */
+@theme {
+  --color-slate-200: #e6e9f0;
+  --color-slate-300: #d5dae4;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
+}
+
+/* White bordered panels — the card pattern used across the app — get a
+   soft lift so they read as cards on the tinted page background instead
+   of flat outlined boxes. Form fields and buttons are left alone. */
+.bg-white.border:not(input):not(textarea):not(select):not(button) {
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 2px 8px -2px rgba(16, 24, 40, 0.06);
 }
 
 /* A small, global "it responds to you" polish for the signed-in app —

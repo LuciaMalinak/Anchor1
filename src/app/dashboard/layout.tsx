@@ -120,9 +120,10 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f4f6f9]" style={accentStyle}>
-      {/* Navy header, as on the original site and the public homepage. */}
-      <header className="sticky top-0 z-20 bg-brand text-white">
+    <div className="flex min-h-screen flex-col bg-[#f5f7fb]" style={accentStyle}>
+      {/* Navy header, as on the original site and the public homepage —
+          a slight gradient and shadow so it sits above the page. */}
+      <header className="sticky top-0 z-20 bg-linear-to-r from-brand-dark via-brand to-brand text-white shadow-[0_1px_0_rgba(255,255,255,0.06),0_4px_16px_-6px_rgba(11,25,48,0.45)]">
         <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-6 lg:gap-8">
             <Link href="/dashboard" aria-label="Anchor home" className="shrink-0">
@@ -174,7 +175,7 @@ export default async function DashboardLayout({
             >
               <button
                 type="submit"
-                className="rounded-full px-3 py-1.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                className="rounded-full px-3 py-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
               >
                 Sign out
               </button>
