@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings } from "@/db/schema";
+import { meetings, transcripts, summaries } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { saveMeetingAudio } from "@/lib/storage";
 import { processMeeting } from "@/lib/processMeeting";
@@ -27,7 +27,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!meeting || meeting.userId !== session.user.id) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
-  if (meeting.status !== "recording" && meeting.status !== "joining") {
+  const live = meeting.status === "recording" || meeting.status === "joining";
+  // An in-person recording that failed before its audio was ever stored —
+  // a storage error on the first attempt below, or it was wrapped up from
+  // the live transcript and that failed — still takes its real audio, so
+  // "Retry upload" in the browser can actually recover it. Before this,
+  // the first failure marked the meeting "failed" and every retry after
+  // it was rejected here as "already finished".
+  const recoverable =
+    meeting.status === "failed" &&
+    !meeting.audioStoragePath &&
+    !meeting.recallBotId &&
+    !meeting.recallRecordingId;
+  if (!live && !recoverable) {
     return NextResponse.json({ error: "This recording was already finished." }, { status: 400 });
   }
 
@@ -49,12 +61,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const storagePath = await saveMeetingAudio(meeting.id, file.name, buffer);
+    if (recoverable) {
+      // Whatever a failed live-transcript write-up left behind, so the
+      // real recording's transcript and summary don't sit next to it.
+      await db.delete(summaries).where(eq(summaries.meetingId, meeting.id));
+      await db.delete(transcripts).where(eq(transcripts.meetingId, meeting.id));
+    }
     await db
       .update(meetings)
       .set({
         audioFileName: file.name,
         audioStoragePath: storagePath,
         status: "uploaded",
+        errorMessage: null,
         updatedAt: new Date(),
       })
       .where(eq(meetings.id, meeting.id));
