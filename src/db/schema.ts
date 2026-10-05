@@ -121,6 +121,18 @@ export const sessions = pgTable("session", {
   expires: timestamp("expires", { mode: "date" }).notNull(),
 });
 
+// When each member last loaded a page of the app — for the admin pages'
+// "last used Anchor" (src/lib/memberActivity.ts). Written by src/proxy.ts,
+// at most every few minutes per person (src/lib/lastSeen.ts). Its own
+// table rather than a users column so nothing else that selects users can
+// break before it exists: lastSeen.ts creates it on first use.
+export const memberLastSeen = pgTable("member_last_seen", {
+  userId: uuid("userId")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  lastSeenAt: timestamp("lastSeenAt", { mode: "date" }).notNull(),
+});
+
 export const verificationTokens = pgTable(
   "verificationToken",
   {
