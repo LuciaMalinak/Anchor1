@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { AdminOverview as Overview } from "@/lib/adminStats";
 import { TREND_DAYS } from "@/lib/adminStats";
-import { AdminMeetingActions } from "./AdminMeetingActions";
+import { AdminMeetingActions, FillMissingSummariesButton } from "./AdminMeetingActions";
 
 // The admin Overview: growth and activity across every account, then
 // recordings that failed or got stuck. Data comes from loadAdminOverview
@@ -239,6 +239,9 @@ export function AdminOverview({ data }: { data: Overview }) {
               ? "✓ All recordings healthy"
               : `⚠ ${data.failed.length} failed · ${data.stuck.length} stuck`}
           </span>
+          <div className="ml-auto">
+            <FillMissingSummariesButton />
+          </div>
         </div>
 
         {data.commonErrors.length > 0 && (
@@ -275,6 +278,7 @@ export function AdminOverview({ data }: { data: Overview }) {
             detail: m.errorMessage || "(no error message)",
             tone: "error",
             canStop: false,
+            canRetry: true,
           }))}
         />
         <ProblemTable
@@ -296,6 +300,7 @@ export function AdminOverview({ data }: { data: Overview }) {
             detail: `Still "${STATUS_LABEL[m.status] ?? m.status}"`,
             tone: "warning",
             canStop: true,
+            canRetry: false,
           }))}
         />
       </section>
@@ -323,6 +328,7 @@ function ProblemTable({
     detail: string;
     tone: "error" | "warning";
     canStop: boolean;
+    canRetry: boolean;
   }[];
 }) {
   return (
@@ -377,6 +383,7 @@ function ProblemTable({
                     meetingId={r.id}
                     title={r.title}
                     canStop={r.canStop}
+                    canRetry={r.canRetry}
                   />
                 </div>
               </div>

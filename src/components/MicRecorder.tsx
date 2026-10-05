@@ -68,6 +68,10 @@ export function useMicRecorder({
   // Lets Stop in the live panel, the Focus window, or Ask Anchor stop
   // THIS recorder (so the real audio gets uploaded) — see stopMeeting.ts.
   const unregisterRef = useRef<(() => void) | null>(null);
+  // What the browser actually recorded in — Chrome/Firefox give webm,
+  // Safari only does mp4 — so the upload is labelled with the real format
+  // instead of always claiming webm.
+  const mimeTypeRef = useRef("audio/webm");
 
   // Closing the tab or navigating away mid-recording (or with a failed
   // upload still waiting to retry) used to lose the whole recording with
@@ -79,14 +83,14 @@ export function useMicRecorder({
   // may not be saved" confirmation, which is the standard way to at
   // least stop someone from losing a recording by accident.
   useEffect(() => {
-    if (!recording && !uploadFailed) return;
+    if (!recording && !uploading && !uploadFailed) return;
     function handleBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
       e.returnValue = "";
     }
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [recording, uploadFailed]);
+  }, [recording, uploading, uploadFailed]);
 
   function startLiveTranscription(meetingId: string) {
     const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -179,18 +183,39 @@ export function useMicRecorder({
     }
 
     streamRef.current = stream;
-    const mimeType = MediaRecorder.isTypeSupported("audio/webm")
-      ? "audio/webm"
-      : undefined;
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-    chunksRef.current = [];
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-    recorder.onstop = () => {
-      void upload(meetingId);
-    };
-    recorder.start();
+    const mimeType = pickMimeType();
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mimeTypeRef.current = recorder.mimeType || mimeType || "audio/webm";
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      // Fires for an explicit Stop AND when the browser ends the recording
+      // on its own (mic unplugged, permission revoked) — either way, wind
+      // everything down and upload what was captured, rather than leaving
+      // the UI showing "Recording" over a recorder that's already dead.
+      recorder.onstop = () => {
+        finishCapture();
+        void upload(meetingId);
+      };
+      recorder.onerror = () => stop();
+      // A timeslice hands audio over every second instead of only once at
+      // the very end, so whatever was captured is already in chunksRef if
+      // the recorder dies abruptly.
+      recorder.start(1000);
+    } catch {
+      focusWindow.cancel();
+      stream.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      void endWithoutAudio(meetingId);
+      return fail("Couldn't start recording on this browser — try Chrome or Edge.");
+    }
+    // The mic going away (unplugged headset, OS permission pulled) ends
+    // the track without the recorder always noticing — stop explicitly so
+    // what was captured so far still gets uploaded.
+    stream.getAudioTracks().forEach((t) => t.addEventListener("ended", () => stop()));
     mediaRecorderRef.current = recorder;
     setRecording(true);
     setSeconds(0);
@@ -208,37 +233,60 @@ export function useMicRecorder({
     return message;
   }
 
+  // Safe to call any number of times (the banner and the live panel each
+  // have a Stop, and Stop can race the mic dropping out) — calling stop()
+  // on an already-inactive MediaRecorder throws, which used to leave the
+  // recording half torn down.
   function stop() {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      // onstop (set in start()) runs finishCapture() and the upload.
+      recorder.stop();
+    } else {
+      finishCapture();
+    }
+  }
+
+  // Releases the mic, timer and live transcription — everything except
+  // the recorded audio itself, which upload() still needs.
+  function finishCapture() {
     unregisterRef.current?.();
     unregisterRef.current = null;
-    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
     recognitionActiveRef.current = false;
     recognitionRef.current?.stop();
     recognitionRef.current = null;
     setRecording(false);
   }
 
+  // No usable audio for this meeting — have the server wrap it up from
+  // its live transcript (see /api/meetings/[id]/stop) instead of leaving
+  // it showing as live forever.
+  async function endWithoutAudio(meetingId: string) {
+    await fetch(`/api/meetings/${meetingId}/stop`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }).catch(() => {});
+  }
+
   async function upload(meetingId: string) {
-    const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+    const mimeType = mimeTypeRef.current;
+    const blob = new Blob(chunksRef.current, { type: mimeType });
     if (blob.size === 0) {
-      setError("Nothing was recorded — try again.");
+      setError("No audio was captured — check your microphone and try again.");
+      void endWithoutAudio(meetingId);
+      onUploaded?.();
       return;
     }
     setUploading(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.append("file", blob, `recording-${Date.now()}.webm`);
-      const res = await fetch(`/api/meetings/${meetingId}/finish-recording`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Upload failed");
-      }
+      await sendRecording(meetingId, blob, `recording-${Date.now()}.${extensionFor(mimeType)}`);
       setUploadFailed(false);
       onUploaded?.();
     } catch (err) {
@@ -268,6 +316,7 @@ export function useMicRecorder({
   // recording (and its beforeunload warning) would linger forever with no
   // way to clear it short of reloading the page.
   function discardFailedUpload() {
+    if (meetingIdRef.current) void endWithoutAudio(meetingIdRef.current);
     chunksRef.current = [];
     meetingIdRef.current = null;
     setUploadFailed(false);
@@ -408,4 +457,47 @@ export function RecordingBanner({ recording, seconds, stop }: MicRecorderState) 
       </button>
     </div>
   );
+}
+
+function pickMimeType(): string | undefined {
+  for (const type of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return undefined;
+}
+
+function extensionFor(mimeType: string): string {
+  if (mimeType.includes("mp4")) return "m4a";
+  if (mimeType.includes("ogg")) return "ogg";
+  return "webm";
+}
+
+// Uploads a finished recording, retrying a couple of times on network
+// drops and server errors before giving up — a long meeting's upload is
+// big, and one flaky moment on hotel/office Wi-Fi shouldn't need a manual
+// retry. A 4xx means retrying won't help, so that fails straight away.
+async function sendRecording(meetingId: string, blob: Blob, fileName: string): Promise<void> {
+  const delays = [2000, 5000];
+  for (let attempt = 0; ; attempt++) {
+    let message: string;
+    try {
+      const formData = new FormData();
+      formData.append("file", blob, fileName);
+      const res = await fetch(`/api/meetings/${meetingId}/finish-recording`, {
+        method: "POST",
+        body: formData,
+      });
+      if (res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      message = body.error || "Upload failed";
+      if (res.status < 500) throw new Error(message);
+    } catch (err) {
+      // fetch() itself rejects with a TypeError on a network drop —
+      // retryable. Anything else is the 4xx thrown just above.
+      if (!(err instanceof TypeError)) throw err;
+      message = "Upload failed — check your connection";
+    }
+    if (attempt >= delays.length) throw new Error(message);
+    await new Promise((r) => setTimeout(r, delays[attempt]));
+  }
 }

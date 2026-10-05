@@ -34,7 +34,7 @@ export function StopMeetingButton({
   async function stop(force = false) {
     setStopping(true);
     setError(null);
-    const result = await stopMeeting(meetingId, force);
+    const result = await stopMeeting(meetingId, force, { inPerson });
     // Deliberately leaving `stopping`/`confirming` as-is on success —
     // the live poll elsewhere (useLiveMeeting) picks up the status
     // change within a couple of seconds and swaps the whole panel to
