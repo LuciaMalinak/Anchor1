@@ -5,6 +5,7 @@ import { teams, users, deals } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { requireAppOwnerPage, logAdminAccess } from "@/lib/adminAccess";
 import { computeDealHealth, HEALTH_LABEL, HEALTH_BADGE_CLASSES } from "@/lib/dealHealth";
+import { loadMemberActivity, timeAgo, isInactive, type MemberActivity } from "@/lib/memberActivity";
 
 // Read-only team overview — members and deals, each linking to its own
 // read-only drill-down (member -> their meetings/contacts, deal -> notes/
@@ -25,6 +26,7 @@ export default async function AdminTeamPage({
   await logAdminAccess(admin.id, teamId, "team overview");
 
   const members = await db.select().from(users).where(eq(users.teamId, teamId));
+  const activity = await loadMemberActivity(members.map((m) => m.id));
   const teamDeals = await db
     .select()
     .from(deals)
@@ -66,8 +68,9 @@ export default async function AdminTeamPage({
                   </span>
                 )}
                 <span className="ml-2 text-slate-400">{m.email}</span>
+                {m.title && <span className="ml-2 text-slate-400">· {m.title}</span>}
               </span>
-              <span className="shrink-0 text-slate-400">{m.title || ""}</span>
+              <MemberActivityCell activity={activity.get(m.id)} />
             </Link>
           ))}
           {members.length === 0 && <p className="py-3 text-sm text-slate-400">No members.</p>}
@@ -114,5 +117,26 @@ export default async function AdminTeamPage({
         </div>
       </section>
     </div>
+  );
+}
+
+function MemberActivityCell({ activity: a }: { activity: MemberActivity | undefined }) {
+  const last = a?.lastActivity;
+  return (
+    <span className="shrink-0 text-right text-xs">
+      <span
+        className={isInactive(a) ? "font-medium text-amber-700" : "text-slate-600"}
+        title={a?.lastActiveAt?.toLocaleString()}
+      >
+        {a?.lastActiveAt ? `Last used ${timeAgo(a.lastActiveAt)}` : "Never used Anchor"}
+      </span>
+      <span className="block max-w-xs truncate text-slate-400">
+        {last
+          ? `${last.kind}${last.detail ? `: ${last.detail}` : ""} · ${timeAgo(last.at)}`
+          : a?.lastActiveAt
+            ? "Only opened the app"
+            : ""}
+      </span>
+    </span>
   );
 }
