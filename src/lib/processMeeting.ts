@@ -14,7 +14,12 @@ import {
   meetingLiveSegments,
 } from "@/db/schema";
 import { transcribeAudioFile, type Utterance } from "./transcribe";
-import { summarizeMeeting, mergeContactMemory, mergeDealMemory } from "./summarize";
+import {
+  summarizeMeeting,
+  mergeContactMemory,
+  mergeDealMemory,
+  type MeetingSummaryResult,
+} from "./summarize";
 import { readStoredFile } from "./storage";
 import { getOrCreateTeamId } from "./team";
 import { withRetry } from "./retry";
@@ -27,6 +32,9 @@ import { summarizeDealFiles } from "./dealFilesContext";
 // only ever compounding one incremental edit on top of the last.
 const RESYNTHESIS_INTERVAL = 5;
 const RESYNTHESIS_HISTORY_LIMIT = 12;
+
+const AI_SUMMARY_UNAVAILABLE =
+  "The AI summary isn't available right now — the full transcript is below.";
 
 // Orchestrates the full pipeline for one meeting: transcribe -> summarize
 // -> resolve speakers against known contacts -> update rolling memory.
@@ -99,14 +107,34 @@ export async function processMeeting(meetingId: string): Promise<void> {
       .set({ status: "summarizing", updatedAt: new Date() })
       .where(eq(meetings.id, meetingId));
 
-    const result = await withRetry(
-      () =>
-        summarizeMeeting(
-          utterances,
-          deal ? { memory: deal.memory, emailContext: deal.emailContext } : null
-        ),
-      { label: `summarize ${meetingId}` }
-    );
+    // If Claude can't summarize (out of API credits, an outage), the
+    // meeting still finishes as "ready" with its transcript and a short
+    // note, instead of failing outright and hiding a transcript that
+    // worked fine. Speaker/contact matching and deal memory need the AI
+    // summary, so they're skipped for this meeting.
+    let result: MeetingSummaryResult;
+    let aiSummary = true;
+    try {
+      result = await withRetry(
+        () =>
+          summarizeMeeting(
+            utterances,
+            deal ? { memory: deal.memory, emailContext: deal.emailContext } : null
+          ),
+        { label: `summarize ${meetingId}` }
+      );
+    } catch (err) {
+      console.error(`[processMeeting] summary unavailable for ${meetingId}, saving transcript only:`, err);
+      aiSummary = false;
+      result = {
+        suggestedTitle: meeting.title,
+        overview: AI_SUMMARY_UNAVAILABLE,
+        keyPoints: [],
+        actionItems: [],
+        speakers: [],
+        dealSignals: [],
+      };
+    }
 
     const continuityLines: string[] = [];
 
@@ -286,7 +314,7 @@ export async function processMeeting(meetingId: string): Promise<void> {
     // Deal-level memory — the same rolling-summary idea as contact
     // memory above, but for the deal as a whole. Best-effort: a failure
     // here shouldn't flip an otherwise-successful meeting to "failed".
-    if (meeting.dealId) {
+    if (meeting.dealId && aiSummary) {
       try {
         if (deal) {
           // How many meetings on this deal have a summary so far
