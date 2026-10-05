@@ -33,7 +33,9 @@ import { summarizeDealFiles } from "./dealFilesContext";
 const RESYNTHESIS_INTERVAL = 5;
 const RESYNTHESIS_HISTORY_LIMIT = 12;
 
-const AI_SUMMARY_UNAVAILABLE =
+// Also how adminFillMissingSummaries (adminMeetingActions.ts) finds the
+// meetings to write real summaries for once Claude is available again.
+export const AI_SUMMARY_UNAVAILABLE =
   "The AI summary isn't available right now — the full transcript is below.";
 
 // Orchestrates the full pipeline for one meeting: transcribe -> summarize
@@ -67,7 +69,18 @@ export async function processMeeting(meetingId: string): Promise<void> {
     let fullText: string;
     let utterances: Utterance[];
     let provider: string;
-    if (meeting.audioStoragePath) {
+    // A meeting being re-run (an admin Retry, or filling in a summary that
+    // was skipped while Claude was unavailable) already has its transcript
+    // — reuse it rather than paying to transcribe the same audio again.
+    const [existingTranscript] = await db
+      .select()
+      .from(transcripts)
+      .where(eq(transcripts.meetingId, meetingId));
+    if (existingTranscript?.utterances?.length) {
+      fullText = existingTranscript.fullText;
+      utterances = existingTranscript.utterances;
+      provider = existingTranscript.provider;
+    } else if (meeting.audioStoragePath) {
       const audioBuffer = await readStoredFile(meeting.audioStoragePath);
       if (!audioBuffer) {
         throw new Error("The audio file for this meeting is missing from storage.");
@@ -95,12 +108,14 @@ export async function processMeeting(meetingId: string): Promise<void> {
       );
     }
 
-    await db.insert(transcripts).values({
-      meetingId,
-      provider,
-      fullText,
-      utterances,
-    });
+    if (!existingTranscript) {
+      await db.insert(transcripts).values({
+        meetingId,
+        provider,
+        fullText,
+        utterances,
+      });
+    }
 
     await db
       .update(meetings)
@@ -159,6 +174,12 @@ export async function processMeeting(meetingId: string): Promise<void> {
         canonicalSpeakerLabels.find((c) => normalize(c) === normalize(raw)) || raw
       );
     }
+
+    // Clears what an earlier run of this meeting left behind (the
+    // placeholder summary from when Claude was unavailable), since each
+    // meeting has at most one summary.
+    await db.delete(meetingParticipants).where(eq(meetingParticipants.meetingId, meetingId));
+    await db.delete(summaries).where(eq(summaries.meetingId, meetingId));
 
     for (const speaker of result.speakers) {
       let contactId: string | null = null;

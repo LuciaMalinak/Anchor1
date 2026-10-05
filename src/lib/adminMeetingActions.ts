@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ilike, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { meetings, users } from "@/db/schema";
+import { meetings, summaries, users } from "@/db/schema";
 import { cancelBot, leaveCall } from "@/lib/recall";
-import { processMeeting } from "@/lib/processMeeting";
+import { processMeeting, AI_SUMMARY_UNAVAILABLE } from "@/lib/processMeeting";
 import { deleteMeetingAudio } from "@/lib/storage";
 import { logAdminAccess } from "@/lib/adminAccess";
 
@@ -83,4 +83,49 @@ export async function adminDeleteMeeting(
   await deleteMeetingAudio(meeting.id).catch((err) =>
     console.error(`[admin] couldn't delete audio for ${meeting.id}:`, err),
   );
+}
+
+// Re-runs a failed meeting through processing. It reuses the transcript
+// if one was already made, so a meeting that only failed at the summary
+// step (e.g. out of Anthropic credits) isn't transcribed and billed again.
+export async function adminRetryMeeting(
+  adminUserId: string,
+  meeting: Meeting,
+): Promise<string> {
+  await logFor(adminUserId, meeting, `retry-meeting:${meeting.id}`);
+  await db
+    .update(meetings)
+    .set({ status: "uploaded", errorMessage: null, updatedAt: new Date() })
+    .where(eq(meetings.id, meeting.id));
+  void processMeeting(meeting.id);
+  return "Retrying — refresh in a minute.";
+}
+
+// Writes real summaries for every meeting that was saved transcript-only
+// while Claude was unavailable, plus any that failed outright for lack of
+// Anthropic credits. Runs one at a time in the background; returns how
+// many it started on.
+export async function adminFillMissingSummaries(adminUserId: string): Promise<number> {
+  const placeholder = await db
+    .select({ id: meetings.id })
+    .from(meetings)
+    .innerJoin(summaries, eq(summaries.meetingId, meetings.id))
+    .where(and(eq(meetings.status, "ready"), eq(summaries.overview, AI_SUMMARY_UNAVAILABLE)));
+  const outOfCredits = await db
+    .select({ id: meetings.id })
+    .from(meetings)
+    .where(and(eq(meetings.status, "failed"), ilike(meetings.errorMessage, "%credit balance%")));
+  const ids = [...new Set([...placeholder, ...outOfCredits].map((m) => m.id))];
+  if (ids.length === 0) return 0;
+
+  const rows = await db.select().from(meetings).where(inArray(meetings.id, ids));
+  for (const meeting of rows) await logFor(adminUserId, meeting, `fill-summary:${meeting.id}`);
+  await db
+    .update(meetings)
+    .set({ status: "uploaded", errorMessage: null, updatedAt: new Date() })
+    .where(inArray(meetings.id, ids));
+  void (async () => {
+    for (const id of ids) await processMeeting(id);
+  })();
+  return ids.length;
 }
