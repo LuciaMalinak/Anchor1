@@ -5,25 +5,20 @@ import {
   dealMessages,
   deals,
   meetings,
-  sessions,
+  memberLastSeen,
   supportRequests,
   taskComments,
   tasks,
 } from "@/db/schema";
-import { and, desc, inArray, isNotNull, max, type SQL } from "drizzle-orm";
+import { and, desc, inArray, isNotNull, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import { ensureLastSeenTable } from "@/lib/lastSeen";
 
 // When each member last used Anchor, and the last thing they actually did,
-// for the admin pages. Nothing records page views, so this is pieced
-// together from what members leave behind: meetings, deals, deal messages,
+// for the admin pages. Pieced together from what members did — meetings, deals, deal messages,
 // tasks, comments, file uploads, help requests, Anchor Desktop use — plus
-// their sign-in session, which shows they opened the app even when they
-// didn't create anything.
-
-// Auth.js database sessions last 30 days and are pushed forward (at most
-// once a day) whenever the person uses the app, so expires - 30 days is
-// when they last loaded a page (the most recent one that refreshed it).
-const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+// when they last loaded the app at all (memberLastSeen, see lastSeen.ts),
+// which shows they opened it even when they didn't create anything.
 
 export type Activity = {
   at: Date;
@@ -76,6 +71,7 @@ export async function loadMemberActivity(userIds?: string[]): Promise<Map<string
     }));
   };
 
+  await ensureLastSeenTable();
   const [actions, visits] = await Promise.all([
     Promise.all([
       latest(meetings.userId, meetings.createdAt, meetings.title, meetings, "Recorded a meeting"),
@@ -88,10 +84,9 @@ export async function loadMemberActivity(userIds?: string[]): Promise<Map<string
       latest(apiTokens.userId, apiTokens.lastUsedAt, null, apiTokens, "Used Anchor Desktop"),
     ]),
     db
-      .select({ userId: sessions.userId, expires: max(sessions.expires) })
-      .from(sessions)
-      .where(only(sessions.userId))
-      .groupBy(sessions.userId),
+      .select({ userId: memberLastSeen.userId, at: memberLastSeen.lastSeenAt })
+      .from(memberLastSeen)
+      .where(only(memberLastSeen.userId)),
   ]);
 
   const result = new Map<string, MemberActivity>();
@@ -110,12 +105,9 @@ export async function loadMemberActivity(userIds?: string[]): Promise<Map<string
     e.lastActiveAt = later(e.lastActiveAt, activity.at);
     if (!e.lastActivity || activity.at > e.lastActivity.at) e.lastActivity = activity;
   }
-  const now = Date.now();
   for (const v of visits) {
-    if (!v.expires) continue;
-    const seen = new Date(Math.min(now, new Date(v.expires).getTime() - SESSION_MAX_AGE_MS));
     const e = entry(v.userId);
-    e.lastActiveAt = later(e.lastActiveAt, seen);
+    e.lastActiveAt = later(e.lastActiveAt, v.at);
   }
   return result;
 }

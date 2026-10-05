@@ -1,5 +1,6 @@
 import { db } from "@/db";
-import { meetings, sessions, teams, users } from "@/db/schema";
+import { meetings, teams, users } from "@/db/schema";
+import { loadMemberActivity } from "@/lib/memberActivity";
 import { and, desc, eq, gte, inArray, lt, notLike, or, sql } from "drizzle-orm";
 
 // Numbers for the admin Overview (src/app/dashboard/admin/AdminOverview.tsx):
@@ -11,11 +12,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // real people, so they're left out of sign-ups and counts.
 const DELETED_EMAIL_PATTERN = "deleted-%@anchor.invalid";
 export const TREND_DAYS = 14;
-// Auth.js database sessions last 30 days and are pushed forward (at most
-// once a day) whenever the person uses the app — so a session expiring
-// more than 30 - N days from now was used within the last N days. That's
-// the only "last active" signal there is (accurate to about a day).
-const SESSION_MAX_AGE_DAYS = 30;
 // How long a meeting can sit in one state before it counts as stuck.
 const STUCK_LIVE_MS = 4 * 60 * 60 * 1000; // joining/recording
 const STUCK_PROCESSING_MS = 60 * 60 * 1000; // uploaded/transcribing/summarizing
@@ -59,16 +55,13 @@ export async function loadAdminOverview() {
   // crashed the whole admin page. Column comparisons (gte/lt) are fine.
   const sqlAgo = (days: number) => sql`${ago(days).toISOString()}::timestamp`;
   const trendStart = new Date(`${dayKey(ago(TREND_DAYS - 1))}T00:00:00Z`);
-  const activeSince = (days: number) =>
-    new Date(now.getTime() + (SESSION_MAX_AGE_DAYS - days) * DAY_MS);
   const dayExpr = (col: typeof users.createdAt | typeof meetings.createdAt) =>
     sql<string>`to_char(date_trunc('day', ${col} at time zone 'UTC'), 'YYYY-MM-DD')`;
 
   const [
     [userTotals],
     [teamTotals],
-    [active7],
-    [active30],
+    activity,
     [meetingTotals],
     signupRows,
     meetingRows,
@@ -87,14 +80,10 @@ export async function loadAdminOverview() {
       .from(users)
       .where(notLike(users.email, DELETED_EMAIL_PATTERN)),
     db.select({ total: sql<number>`count(*)` }).from(teams),
-    db
-      .select({ count: sql<number>`count(distinct ${sessions.userId})` })
-      .from(sessions)
-      .where(gte(sessions.expires, activeSince(7))),
-    db
-      .select({ count: sql<number>`count(distinct ${sessions.userId})` })
-      .from(sessions)
-      .where(gte(sessions.expires, activeSince(30))),
+    // Same "last used Anchor" as the Member activity table. Sign-in
+    // sessions used to stand in for this, but they last up to 90 days
+    // without being refreshed, so nearly everyone counted as active.
+    loadMemberActivity(),
     db
       .select({
         week: sql<number>`count(*) filter (where ${meetings.createdAt} >= ${sqlAgo(7)})`,
@@ -222,13 +211,16 @@ export async function loadAdminOverview() {
       .limit(5),
   ]);
 
+  const activeWithin = (days: number) =>
+    [...activity.values()].filter((a) => a.lastActiveAt && a.lastActiveAt >= ago(days)).length;
+
   return {
     users: {
       total: Number(userTotals.total),
       new7: Number(userTotals.new7),
       new30: Number(userTotals.new30),
-      active7: Number(active7.count),
-      active30: Number(active30.count),
+      active7: activeWithin(7),
+      active30: activeWithin(30),
     },
     teams: Number(teamTotals.total),
     meetings: {

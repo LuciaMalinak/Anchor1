@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { sessionCookieName, absoluteUrl } from "@/lib/auth/password";
+import { recordSeen } from "@/lib/lastSeen";
 
 // Deliberately NOT using next-auth's `auth((req) => {...})` wrapper here.
 // That wrapper runs Auth.js's full session action on every request, which
@@ -23,7 +24,7 @@ export default async function proxy(req: NextRequest) {
   }
 
   const [row] = await db
-    .select({ expires: sessions.expires, passwordHash: users.passwordHash })
+    .select({ userId: sessions.userId, expires: sessions.expires, passwordHash: users.passwordHash })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
     .where(eq(sessions.sessionToken, token))
@@ -39,6 +40,9 @@ export default async function proxy(req: NextRequest) {
   if (!row.passwordHash) {
     return NextResponse.redirect(absoluteUrl("/welcome/set-password", req));
   }
+
+  // For the admin pages' "last used Anchor" — throttled, never blocks.
+  void recordSeen(row.userId);
 
   return NextResponse.next();
 }
