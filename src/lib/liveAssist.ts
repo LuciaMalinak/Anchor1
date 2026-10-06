@@ -1,14 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { LIVE_MODEL } from "./liveCoaching";
 
 // Same pattern as summarize.ts, but conversational rather than
-// tool-forced structured output: this is "Ask Anchor" during a live
-// meeting, so it just needs a short, grounded answer in plain text.
-// Latency matters more than anywhere else in the app here — someone's
-// mid-conversation waiting on this — so it deliberately runs on the
-// fastest current model rather than the more capable one summarize.ts
-// and the other, non-real-time features use. Override with
-// ANTHROPIC_MODEL if that trade-off ever needs to move the other way.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+// tool-forced structured output: this is "Ask Anchor", including during
+// a live meeting, so it just needs a short, grounded answer in plain
+// text. Latency matters more than anywhere else in the app here —
+// someone's often mid-conversation waiting on this — so it runs on the
+// same fast model as live coaching. It used to follow ANTHROPIC_MODEL,
+// which is set to a bigger, slower model for summaries and memory, so
+// every Ask Anchor answer quietly inherited that model's lag.
+// ANTHROPIC_ASK_MODEL overrides just Ask Anchor if that trade-off ever
+// needs to move the other way.
+const MODEL = process.env.ANTHROPIC_ASK_MODEL || LIVE_MODEL;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -571,6 +574,10 @@ export async function* askAnchorStream(params: {
       client().messages.stream({
         model: MODEL,
         max_tokens: mode === "live" ? 700 : 1500,
+        // The deal context in the system prompt is large and identical
+        // for every follow-up question (and every tool round within one
+        // answer), so cache it — later turns start answering sooner.
+        cache_control: { type: "ephemeral" },
         ...(withSearch || tools.length || serverTools.length
           ? {
               tools: [
@@ -657,6 +664,7 @@ export async function* askWorkspaceStream(params: {
       client().messages.stream({
         model: MODEL,
         max_tokens: 1500,
+        cache_control: { type: "ephemeral" },
         ...(withSearch || serverTools.length
           ? { tools: [...(withSearch ? [webSearchTool(5)] : []), ...serverTools.map((t) => t.tool)] }
           : {}),

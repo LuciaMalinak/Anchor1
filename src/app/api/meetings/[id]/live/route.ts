@@ -2,10 +2,10 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, meetingLiveSegments, deals } from "@/db/schema";
-import { and, eq, asc, isNull } from "drizzle-orm";
+import { and, eq, asc, isNull, sql } from "drizzle-orm";
 import { generateLiveCoaching, describeCoachingError, type LiveCoaching } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
-import { loadLiveDealContext } from "@/lib/liveContext";
+import { loadLiveDealContextCached } from "@/lib/liveContext";
 import { authenticateBearer } from "@/lib/apiToken";
 
 // When live coaching (nudges + checklist) regenerates. It used to run on
@@ -17,8 +17,11 @@ import { authenticateBearer } from "@/lib/apiToken";
 // refresh at a time per meeting no matter how many tabs poll (the soft
 // lock + inFlight below). Questions don't wait for any of this — they
 // have their own instant path (src/lib/liveQuestion.ts).
-const MIN_REFRESH_MS = 3_000;
-const IDLE_REFRESH_MS = 20_000;
+// Was 3s/20s; the deal context is now cached and the deal facts are
+// prompt-cached, so a refresh is cheap enough to run on nearly every new
+// line.
+const MIN_REFRESH_MS = 1_500;
+const IDLE_REFRESH_MS = 15_000;
 // How much of the transcript (from the end) to hand the model each time,
 // in characters — enough context without an ever-growing prompt as a
 // long call goes on.
@@ -154,7 +157,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       const priorChecklist = meeting.liveSuggestions?.checklist || null;
       after(async () => {
         try {
-          const context = await loadLiveDealContext(id, deal);
+          const context = await loadLiveDealContextCached(id, deal);
           const coaching = await generateLiveCoaching({
             ...context,
             recentTranscript: transcriptText.slice(-TRANSCRIPT_WINDOW_CHARS),
@@ -198,6 +201,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // Shown in place of "Preparing suggestions…" so a broken key/model
     // says so instead of looking like it's still loading forever.
     coachingError: isLive ? lastCoachingError.get(id) ?? null : null,
+    // True while new suggestions are being generated — the panel shows
+    // an "updating" hint so the rep can see Anchor is reacting.
+    coachingRefreshing: isLive && inFlight.has(id),
   });
 }
 
@@ -222,6 +228,21 @@ async function saveCoaching(id: string, coaching: LiveCoaching, startedAt: numbe
     // Still an open question — keep the answer already on screen rather
     // than swapping in a reworded one mid-read.
     liveQuestion = existing;
+  }
+
+  if (liveQuestion === existing && existing) {
+    // Keep whatever question is in the row at write time, not the copy
+    // read above — the instant path may have streamed more of its answer
+    // (or finished it) in between.
+    const { liveQuestion: _ignored, ...rest } = coaching;
+    void _ignored;
+    await db
+      .update(meetings)
+      .set({
+        liveSuggestions: sql`${JSON.stringify(rest)}::jsonb || jsonb_build_object('liveQuestion', ${meetings.liveSuggestions}->'liveQuestion')`,
+      })
+      .where(eq(meetings.id, id));
+    return;
   }
 
   await db

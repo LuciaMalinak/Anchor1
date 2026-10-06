@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 import { registerLocalRecorder } from "@/lib/stopMeeting";
 import { registerRecordingStarter } from "@/lib/startRecording";
+import { startStreamingTranscription } from "@/lib/liveStreamingTranscription";
 
 // Records straight from the browser's microphone — for an in-person
 // meeting or phone call where there's no Zoom/Meet/Teams link for the
@@ -13,10 +14,12 @@ import { registerRecordingStarter } from "@/lib/startRecording";
 // in-person meeting show up in the During tab's live panel, pop the
 // Focus window open, and get a real-time transcript + AI coaching, the
 // same way a Zoom/Teams call Anchor's bot joins already does. Live
-// transcription itself runs on the browser's own speech recognition
-// (Chrome/Edge and newer Firefox — see src/types/speech-recognition.d.ts)
-// and feeds /api/meetings/[id]/live-transcript; unsupported browsers just
-// skip that part and the recording still works exactly as before. Once
+// transcription streams the mic to AssemblyAI (see
+// src/lib/liveStreamingTranscription.ts), falling back to the browser's
+// own speech recognition (Chrome/Edge and newer Firefox — see
+// src/types/speech-recognition.d.ts) when that's unavailable; either way
+// it feeds /api/meetings/[id]/live-transcript, and a browser with neither
+// just skips that part — the recording still works exactly as before. Once
 // you stop, the actual audio gets attached via
 // /api/meetings/[id]/finish-recording, which hands it to the same
 // transcribe/summarize pipeline a manual upload goes through.
@@ -30,6 +33,26 @@ import { registerRecordingStarter } from "@/lib/startRecording";
 // navigates anywhere on its own once started (unlike the Zoom join
 // flow) — the actual capture lives in this browser tab's memory, so
 // leaving the page would kill it.
+
+// Sends a line of live transcript to the server: a finished line to
+// store, or (partial) an in-progress one the speaker paused on, which is
+// only checked for a question to answer right away.
+function postLiveText(meetingId: string, text: string, partial: boolean) {
+  fetch(`/api/meetings/${meetingId}/live-transcript`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(partial ? { text, partial: true } : { text }),
+  }).catch(() => {
+    // Best-effort — a dropped live-transcript line doesn't affect the
+    // actual recording, which is the source of truth once it uploads and
+    // gets properly transcribed.
+  });
+}
+
+// How long the in-progress (interim) speech has to stop changing before
+// it's checked for a question — see startLiveTranscription.
+const INTERIM_PAUSE_MS = 600;
+
 export function useMicRecorder({
   dealId,
   onUploaded,
@@ -59,6 +82,8 @@ export function useMicRecorder({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const recognitionActiveRef = useRef(false);
+  // Stops the AssemblyAI live transcript, when that's what's running.
+  const streamingStopRef = useRef<(() => void) | null>(null);
   // The meeting this recording belongs to, kept outside start()'s own
   // closure so retryUpload() below can re-attempt the SAME upload later
   // — chunksRef itself is never cleared after a failed upload (only
@@ -92,28 +117,72 @@ export function useMicRecorder({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [recording, uploading, uploadFailed]);
 
-  function startLiveTranscription(meetingId: string) {
+  // Live transcript for the During tab / Focus window: AssemblyAI's
+  // streaming speech-to-text when the server has a key (much more
+  // accurate, punctuated, works in every browser — see
+  // liveStreamingTranscription.ts), otherwise the browser's own speech
+  // recognition. Falls back to the browser's if AssemblyAI drops mid-call.
+  async function startLiveTranscription(meetingId: string, stream: MediaStream) {
+    const stopStreaming = await startStreamingTranscription(meetingId, stream, {
+      onFinal: (text) => postLiveText(meetingId, text, false),
+      onPartial: (text) => postLiveText(meetingId, text, true),
+      onFailed: () => {
+        streamingStopRef.current = null;
+        if (streamRef.current) startBrowserRecognition(meetingId);
+      },
+    });
+    // Recording may have been stopped while this was connecting.
+    if (!streamRef.current) {
+      stopStreaming?.();
+      return;
+    }
+    if (stopStreaming) {
+      streamingStopRef.current = stopStreaming;
+    } else {
+      startBrowserRecognition(meetingId);
+    }
+  }
+
+  function startBrowserRecognition(meetingId: string) {
     const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Ctor) return; // No live transcript on this browser — the recording itself is unaffected.
     const recognizer = new Ctor();
     recognizer.continuous = true;
-    recognizer.interimResults = false;
-    recognizer.lang = "en-US";
+    // Interim results let a question get answered as soon as the speaker
+    // pauses, instead of waiting for the browser to decide the line is
+    // final (which can lag a second or more, or not happen at all during
+    // a long run of speech). Only finals are stored as transcript lines.
+    recognizer.interimResults = true;
+    // The person's own English variant (en-GB, en-AU, en-IN…) recognizes
+    // their accent noticeably better than always forcing en-US.
+    const browserLang = navigator.language || "";
+    recognizer.lang = /^en(-|$)/i.test(browserLang) ? browserLang : "en-US";
+    const post = (text: string, partial: boolean) => postLiveText(meetingId, text, partial);
+    let interimTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastInterimSent = "";
     recognizer.onresult = (e) => {
+      let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
-        if (!result.isFinal) continue;
         const text = result[0]?.transcript?.trim();
         if (!text) continue;
-        fetch(`/api/meetings/${meetingId}/live-transcript`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        }).catch(() => {
-          // Best-effort — a dropped live-transcript line doesn't affect
-          // the actual recording, which is the source of truth once it
-          // uploads and gets properly transcribed.
-        });
+        if (result.isFinal) {
+          post(text, false);
+        } else {
+          interim += `${text} `;
+        }
+      }
+      if (interimTimer) clearTimeout(interimTimer);
+      interim = interim.trim();
+      // Once the in-progress line stops changing for a moment (the
+      // speaker paused), send it as a partial — the server only checks it
+      // for a question to answer; it isn't stored.
+      if (interim && interim.split(/\s+/).length >= 3) {
+        interimTimer = setTimeout(() => {
+          if (interim === lastInterimSent) return;
+          lastInterimSent = interim;
+          post(interim, true);
+        }, INTERIM_PAUSE_MS);
       }
     };
     recognizer.onerror = () => {
@@ -222,7 +291,7 @@ export function useMicRecorder({
     timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
 
     unregisterRef.current = registerLocalRecorder(meetingId, stop);
-    startLiveTranscription(meetingId);
+    void startLiveTranscription(meetingId, stream);
     focusWindow.attach(meetingId);
     onStarted?.(meetingId);
     return null;
@@ -257,6 +326,8 @@ export function useMicRecorder({
     streamRef.current = null;
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
+    streamingStopRef.current?.();
+    streamingStopRef.current = null;
     recognitionActiveRef.current = false;
     recognitionRef.current?.stop();
     recognitionRef.current = null;
