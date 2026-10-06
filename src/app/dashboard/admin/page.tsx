@@ -7,6 +7,7 @@ import { loadAdminOverview } from "@/lib/adminStats";
 import { AdminOverview } from "./AdminOverview";
 import { AdminSupportRequests } from "./AdminSupportRequests";
 import { loadMemberActivity, timeAgo, isInactive, INACTIVE_AFTER_DAYS } from "@/lib/memberActivity";
+import { loadAiCosts, formatUsd, COST_WINDOW_DAYS } from "@/lib/aiCosts";
 
 // The founder/admin entry point — an Overview of growth, activity and
 // recording health across everything (AdminOverview.tsx), then every
@@ -25,7 +26,7 @@ export default async function AdminHomePage({
   const { q } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
 
-  const [overview, rows, memberCounts, dealCounts, allMembers, activity] = await Promise.all([
+  const [overview, rows, memberCounts, dealCounts, allMembers, activity, aiCosts] = await Promise.all([
     loadAdminOverview(),
     db
       .select({
@@ -60,6 +61,7 @@ export default async function AdminHomePage({
       // Deleted accounts stay as anonymized rows — not real members.
       .where(notLike(users.email, "deleted-%@anchor.invalid")),
     loadMemberActivity(),
+    loadAiCosts(),
   ]);
   // Most recently active first; members who've never used it last.
   const members = allMembers
@@ -102,6 +104,69 @@ export default async function AdminHomePage({
 
       <AdminOverview data={overview} />
 
+      {aiCosts && (
+        <section className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">
+              AI &amp; transcription cost · last {COST_WINDOW_DAYS} days
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Measured from every AI and transcription call (Anthropic list prices; AssemblyAI at the
+              rates set in ASSEMBLYAI_USD_PER_HOUR / ASSEMBLYAI_STREAMING_USD_PER_HOUR). Hosting isn&apos;t
+              included.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-xs text-slate-500">Total</p>
+              <p className="text-2xl font-semibold text-slate-900">{formatUsd(aiCosts.totalUsd)}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-xs text-slate-500">Per hour of recorded meeting</p>
+              <p className="text-2xl font-semibold text-slate-900">
+                {aiCosts.usdPerMeetingHour != null ? formatUsd(aiCosts.usdPerMeetingHour) : "—"}
+              </p>
+              <p className="text-xs text-slate-400">{aiCosts.meetingHours.toFixed(1)} hours transcribed</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-xs text-slate-500">Not tied to a member</p>
+              <p className="text-2xl font-semibold text-slate-900">{formatUsd(aiCosts.unattributedUsd)}</p>
+              <p className="text-xs text-slate-400">Shared news, background jobs</p>
+            </div>
+          </div>
+          {aiCosts.byFeature.length > 0 ? (
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Feature</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right">Calls</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right">Cost</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right">Share</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {aiCosts.byFeature.map((f) => (
+                    <tr key={f.feature}>
+                      <td className="px-4 py-2.5 text-slate-700">{f.label}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{f.calls.toLocaleString()}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-slate-900">{formatUsd(f.usd)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">
+                        {aiCosts.totalUsd > 0 ? `${Math.round((f.usd / aiCosts.totalUsd) * 100)}%` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Nothing recorded yet — costs show up here as members use Anchor.
+            </p>
+          )}
+        </section>
+      )}
+
       <section className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <h2 className="text-base font-semibold text-slate-900">Member activity</h2>
@@ -121,6 +186,7 @@ export default async function AdminHomePage({
                 <th className="whitespace-nowrap px-4 py-3">Team</th>
                 <th className="whitespace-nowrap px-4 py-3">Last used Anchor</th>
                 <th className="whitespace-nowrap px-4 py-3">Last activity</th>
+                <th className="whitespace-nowrap px-4 py-3 text-right">AI cost ({COST_WINDOW_DAYS}d)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -165,12 +231,15 @@ export default async function AdminHomePage({
                         </span>
                       )}
                     </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-slate-600">
+                      {aiCosts ? formatUsd(aiCosts.byUser.get(m.id) ?? 0) : "—"}
+                    </td>
                   </tr>
                 );
               })}
               {members.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
                     No members yet.
                   </td>
                 </tr>

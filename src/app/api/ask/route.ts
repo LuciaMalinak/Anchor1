@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { askWorkspaceStream, describeAnswerError } from "@/lib/liveAssist";
+import { withAiUser } from "@/lib/aiUsage";
 import { loadAskTools } from "@/lib/askTools";
 import { fetchPersonalGoogleContext, formatPersonalGoogleContext } from "@/lib/integrations/personalGoogle";
 import { buildMeetingContext, buildWorkspaceContext } from "@/lib/askAnchorContext";
@@ -108,7 +109,8 @@ export async function POST(req: NextRequest) {
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    // Charged to this member (see aiUsage.ts).
+    start: (controller) => withAiUser({ userId }, async () => {
       try {
         for await (const chunk of askWorkspaceStream({
           scope,
@@ -127,7 +129,7 @@ export async function POST(req: NextRequest) {
       } finally {
         controller.close();
       }
-    },
+    }),
   });
 
   return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } });

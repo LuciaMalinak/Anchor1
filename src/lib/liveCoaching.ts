@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import type { LiveDealContext } from "./liveContext";
 
@@ -19,14 +20,15 @@ const MODEL = LIVE_MODEL;
 // cut off mid-way.
 const MAX_TOKENS = 4096;
 
-export function liveClient() {
+// feature labels the calls for usage tracking (see aiUsage.ts).
+export function liveClient(feature: "live_coaching" | "live_questions" = "live_coaching") {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error(
       "ANTHROPIC_API_KEY is not set. Get a key at https://console.anthropic.com and add it to .env.local"
     );
   }
-  return new Anthropic({ apiKey });
+  return new Anthropic({ apiKey, fetch: meteredFetch(feature) });
 }
 
 export type LiveCoaching = {
@@ -67,7 +69,7 @@ const LIVE_COACHING_TOOL = {
           required: ["label", "covered"],
         },
         description:
-          "The full talking-point checklist for this call (keep the same items across updates whenever possible, just flip 'covered' as topics come up) — a handful of concrete things this call should cover given the deal's prep notes and decision boundaries, each marked covered:true only if the transcript shows it was actually discussed.",
+          "The full talking-point checklist for this call (keep the same items across updates whenever possible, just flip 'covered' as topics come up) — a handful of concrete things this call should cover given the deal's prep notes and decision boundaries, each marked covered:true only if the transcript shows it was actually discussed. Leave it out entirely when the message says to keep the checklist as it is.",
       },
       questionAsked: {
         type: "boolean",
@@ -85,7 +87,7 @@ const LIVE_COACHING_TOOL = {
           "A short, concrete, ready-to-say answer to that question, grounded only in what's known about this deal (memory, notes, decision boundaries, past meetings, attached files) — written like a talking point the rep could say almost as-is, not a summary. If the real answer isn't something you actually know, say so plainly ('Anchor doesn't have pricing for that tier — worth saying you'll follow up') rather than inventing a number, date, or commitment. Never suggest committing to anything outside the deal's decision boundaries — if the question asks for exactly that, the suggested answer should say to note it and follow up rather than decide it live. Empty string when questionAsked is false.",
       },
     },
-    required: ["nudges", "checklist", "questionAsked", "question", "suggestedAnswer"],
+    required: ["nudges", "questionAsked", "question", "suggestedAnswer"],
   },
 };
 
@@ -210,8 +212,12 @@ export async function generateLiveCoaching(
   params: LiveDealContext & {
     recentTranscript: string;
     priorChecklist: { label: string; covered: boolean }[] | null;
+    // false = keep priorChecklist as is this time, which keeps the reply
+    // (and its cost) much shorter.
+    updateChecklist?: boolean;
   }
 ): Promise<LiveCoaching> {
+  const updateChecklist = params.updateChecklist !== false || !params.priorChecklist?.length;
   const priorChecklistText = params.priorChecklist?.length
     ? `\n\nChecklist from the last update (keep these labels, just update covered status, unless the conversation clearly calls for a different item):\n${params.priorChecklist
         .map((c) => `- [${c.covered ? "x" : " "}] ${c.label}`)
@@ -230,7 +236,11 @@ export async function generateLiveCoaching(
       { type: "text", text: system },
       { type: "text", text: liveDealContextText(params), cache_control: { type: "ephemeral" } },
     ],
-    `${priorChecklistText.trim() || "No checklist yet — draft one."}
+    `${
+      updateChecklist
+        ? priorChecklistText.trim() || "No checklist yet — draft one."
+        : "Keep the checklist as it is this time — leave it out of your reply."
+    }
 
 Transcript so far (most recent portion of an in-progress call):
 ${params.recentTranscript || "(nothing transcribed yet)"}`
@@ -253,14 +263,16 @@ ${params.recentTranscript || "(nothing transcribed yet)"}`
     suggestedAnswer?: unknown;
   };
 
+  const returnedChecklist = Array.isArray(raw.checklist)
+    ? raw.checklist.filter(
+        (c): c is { label: string; covered: boolean } =>
+          Boolean(c) && typeof c === "object" && typeof (c as { label?: unknown }).label === "string"
+      )
+    : [];
+
   return {
     nudges: Array.isArray(raw.nudges) ? raw.nudges.filter((n): n is string => typeof n === "string") : [],
-    checklist: Array.isArray(raw.checklist)
-      ? raw.checklist.filter(
-          (c): c is { label: string; covered: boolean } =>
-            Boolean(c) && typeof c === "object" && typeof (c as { label?: unknown }).label === "string"
-        )
-      : [],
+    checklist: returnedChecklist.length && updateChecklist ? returnedChecklist : params.priorChecklist ?? [],
     liveQuestion: sanitizeLiveQuestion(raw),
   };
 }

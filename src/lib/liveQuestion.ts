@@ -5,6 +5,7 @@ import { deals, meetingLiveSegments, meetings, users } from "@/db/schema";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { loadLiveDealContextCached } from "@/lib/liveContext";
 import { LIVE_MODEL, liveClient, liveDealContextText } from "@/lib/liveCoaching";
+import { withAiUser } from "@/lib/aiUsage";
 
 // The instant path for "they just asked something": runs the moment a
 // transcript line that looks like a question lands (from Recall's
@@ -243,7 +244,7 @@ Ground the answer only in the deal facts and transcript given; if the real answe
 
 If the line was asked by the rep${ownerName ? ` (${ownerName})` : ""}, was already answered in the transcript, or isn't a real question needing an answer (rhetorical, small talk, a filler like "you know?", "can you hear me?"), reply with exactly ${NOT_A_QUESTION} and nothing else.`;
 
-  const stream = liveClient().messages.stream({
+  const stream = withAiUser({ userId: meeting.userId, meetingId }, () => liveClient("live_questions").messages.stream({
     model: LIVE_MODEL,
     max_tokens: ANSWER_MAX_TOKENS,
     // The deal facts are the same for every question in this call, so
@@ -262,7 +263,7 @@ ${transcript || "(nothing transcribed yet)"}
 The line that looked like a question${speakerName ? ` (said by ${speakerName})` : ""}: "${question}"`,
       },
     ],
-  });
+  }));
 
   let raw = "";
   let lastFlush = 0;

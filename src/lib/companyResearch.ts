@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { meteredFetch } from "./aiUsage";
 
 // Centralized so it's a one-line change if this needs to point at a
 // different model later.
@@ -11,7 +12,7 @@ function client() {
       "ANTHROPIC_API_KEY is not set. Get a key at https://console.anthropic.com and add it to .env.local"
     );
   }
-  return new Anthropic({ apiKey });
+  return new Anthropic({ apiKey, fetch: meteredFetch("company_research") });
 }
 
 // Was once a day — shortened for the same reason as dailyBriefing.ts's

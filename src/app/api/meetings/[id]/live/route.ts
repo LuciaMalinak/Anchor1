@@ -7,6 +7,7 @@ import { generateLiveCoaching, describeCoachingError, type LiveCoaching } from "
 import { canAccessDeal } from "@/lib/dealAccess";
 import { loadLiveDealContextCached } from "@/lib/liveContext";
 import { authenticateBearer } from "@/lib/apiToken";
+import { withAiUser } from "@/lib/aiUsage";
 
 // When live coaching (nudges + checklist) regenerates. It used to run on
 // a flat 8s timer whether or not anyone had said anything, so a new
@@ -17,15 +18,21 @@ import { authenticateBearer } from "@/lib/apiToken";
 // refresh at a time per meeting no matter how many tabs poll (the soft
 // lock + inFlight below). Questions don't wait for any of this — they
 // have their own instant path (src/lib/liveQuestion.ts).
-// Was 3s/20s; the deal context is now cached and the deal facts are
-// prompt-cached, so a refresh is cheap enough to run on nearly every new
-// line.
-const MIN_REFRESH_MS = 1_500;
-const IDLE_REFRESH_MS = 15_000;
+// Was 1.5s/15s, which regenerated suggestions after almost every line —
+// about 80% of what a member's AI usage cost. Nudges don't need to change
+// every second (questions have their own instant path), so refresh at
+// most every 8s while people talk, and every 30s in silence.
+const MIN_REFRESH_MS = 8_000;
+const IDLE_REFRESH_MS = 30_000;
+// The checklist is the longest part of each reply and only changes when a
+// topic gets covered, so it's only rewritten this often; refreshes in
+// between keep the current one.
+const CHECKLIST_REFRESH_MS = 45_000;
+const lastChecklistAt = new Map<string, number>();
 // How much of the transcript (from the end) to hand the model each time,
 // in characters — enough context without an ever-growing prompt as a
 // long call goes on.
-const TRANSCRIPT_WINDOW_CHARS = 6_000;
+const TRANSCRIPT_WINDOW_CHARS = 4_000;
 // How long a question from the instant path is protected from being
 // cleared by a coaching refresh that doesn't see it as open — long
 // enough that a refresh racing the question doesn't make it flicker
@@ -155,14 +162,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (wonLock) {
       inFlight.add(id);
       const priorChecklist = meeting.liveSuggestions?.checklist || null;
+      const updateChecklist =
+        !priorChecklist?.length || Date.now() - (lastChecklistAt.get(id) ?? 0) >= CHECKLIST_REFRESH_MS;
+      if (updateChecklist) lastChecklistAt.set(id, Date.now());
+      if (lastChecklistAt.size > 500) lastChecklistAt.clear();
       after(async () => {
         try {
           const context = await loadLiveDealContextCached(id, deal);
-          const coaching = await generateLiveCoaching({
+          // Charged to the meeting's owner, whichever tab or window's
+          // poll happened to trigger it (see aiUsage.ts).
+          const coaching = await withAiUser({ userId: meeting.userId, meetingId: id }, () => generateLiveCoaching({
             ...context,
             recentTranscript: transcriptText.slice(-TRANSCRIPT_WINDOW_CHARS),
             priorChecklist,
-          });
+            updateChecklist,
+          }));
           await saveCoaching(id, coaching, startedAt.getTime());
           lastCoachingError.delete(id);
         } catch (err) {

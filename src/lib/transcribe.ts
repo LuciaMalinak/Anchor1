@@ -1,3 +1,4 @@
+import { recordAudioUsage } from "./aiUsage";
 import { AssemblyAI } from "assemblyai";
 
 export type Utterance = {
@@ -37,6 +38,7 @@ export async function transcribeAudioFile(
   if (transcript.status === "error") {
     throw new Error(`Transcription failed: ${transcript.error}`);
   }
+  recordAudioUsage({ feature: "transcription", seconds: transcript.audio_duration ?? 0 });
 
   const utterances: Utterance[] = (transcript.utterances ?? []).map((u) => ({
     speakerLabel: `Speaker ${u.speaker}`,

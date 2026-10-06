@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { dealFiles, meetings, summaries, meetingParticipants, contacts, meetingLiveSegments, users } from "@/db/schema";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 import { askAnchorStream, describeAnswerError, type DealContext, type AnchorImage, type AskActions } from "@/lib/liveAssist";
+import { withAiUser } from "@/lib/aiUsage";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { loadAskTools } from "@/lib/askTools";
 import { getDealLeadStyle } from "@/lib/styleProfile";
@@ -211,7 +212,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // instead of waiting for the whole answer (see askAnchorStream).
   const encoder = new TextEncoder();
   const responseStream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    // Charged to this member (see aiUsage.ts) — a desktop bearer-token
+    // request has no session for the usage tracker to find on its own.
+    start: (controller) => withAiUser({ userId }, async () => {
       try {
         for await (const chunk of askAnchorStream({
           context,
@@ -233,7 +236,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       } finally {
         controller.close();
       }
-    },
+    }),
   });
 
   return new Response(responseStream, {
