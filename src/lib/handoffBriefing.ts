@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
@@ -10,7 +11,7 @@ function client() {
       "ANTHROPIC_API_KEY is not set. Get a key at https://console.anthropic.com and add it to .env.local"
     );
   }
-  return new Anthropic({ apiKey });
+  return new Anthropic({ apiKey, fetch: meteredFetch("handoff_briefing") });
 }
 
 const HANDOFF_TOOL = {

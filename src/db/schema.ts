@@ -9,6 +9,7 @@ import {
   primaryKey,
   pgEnum,
   uniqueIndex,
+  doublePrecision,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -131,6 +132,29 @@ export const memberLastSeen = pgTable("member_last_seen", {
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
   lastSeenAt: timestamp("lastSeenAt", { mode: "date" }).notNull(),
+});
+
+// One row per paid AI or transcription call — what it was for, who it
+// was for, and what it cost — so the admin page can show real spend per
+// member instead of estimates. Written by src/lib/aiUsage.ts, which also
+// creates the table on first use. userId/meetingId are null when a call
+// isn't tied to one (shared news, a background job).
+export const aiUsage = pgTable("ai_usage", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("userId").references(() => users.id, { onDelete: "set null" }),
+  meetingId: uuid("meetingId"),
+  // e.g. "live_coaching", "summaries", "ask_anchor", "transcription".
+  feature: text("feature").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model"),
+  inputTokens: integer("inputTokens").notNull().default(0),
+  outputTokens: integer("outputTokens").notNull().default(0),
+  cacheReadTokens: integer("cacheReadTokens").notNull().default(0),
+  cacheWriteTokens: integer("cacheWriteTokens").notNull().default(0),
+  webSearches: integer("webSearches").notNull().default(0),
+  audioSeconds: integer("audioSeconds").notNull().default(0),
+  costUsd: doublePrecision("costUsd").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
 export const verificationTokens = pgTable(

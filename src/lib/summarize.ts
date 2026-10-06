@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import type { Utterance } from "./transcribe";
 
@@ -13,7 +14,7 @@ function client() {
       "ANTHROPIC_API_KEY is not set. Get a key at https://console.anthropic.com and add it to .env.local"
     );
   }
-  return new Anthropic({ apiKey });
+  return new Anthropic({ apiKey, fetch: meteredFetch("meeting_summaries") });
 }
 
 function transcriptToPlainText(utterances: Utterance[]): string {

@@ -12,6 +12,7 @@
 // Anthropic tool-use with a structured input_schema, never invent details
 // not actually present in the source material.
 import Anthropic from "@anthropic-ai/sdk";
+import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import type { EmailContextItem } from "./integrations/gmail";
 
@@ -24,7 +25,7 @@ function client() {
       "ANTHROPIC_API_KEY is not set. Get a key at https://console.anthropic.com and add it to .env.local"
     );
   }
-  return new Anthropic({ apiKey });
+  return new Anthropic({ apiKey, fetch: meteredFetch("email_digest") });
 }
 
 // Caps how many raw characters of email go into the prompt — MAX_EMAILS (12)

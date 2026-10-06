@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
@@ -17,7 +18,7 @@ function client() {
       "ANTHROPIC_API_KEY is not set. Get a key at https://console.anthropic.com and add it to .env.local"
     );
   }
-  return new Anthropic({ apiKey });
+  return new Anthropic({ apiKey, fetch: meteredFetch("style_profile") });
 }
 
 // Below this many source items, there simply isn't enough of this

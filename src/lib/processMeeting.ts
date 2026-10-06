@@ -14,6 +14,7 @@ import {
   meetingLiveSegments,
 } from "@/db/schema";
 import { transcribeAudioFile, type Utterance } from "./transcribe";
+import { withAiUser } from "./aiUsage";
 import {
   summarizeMeeting,
   mergeContactMemory,
@@ -48,6 +49,18 @@ export const AI_SUMMARY_UNAVAILABLE =
 // call can take minutes and an in-process job is lost if the server
 // restarts mid-run.
 export async function processMeeting(meetingId: string): Promise<void> {
+  // Charge the transcription and every AI call below to the meeting's
+  // owner (see aiUsage.ts) — this often runs in the background, outside
+  // any signed-in request.
+  const [owner] = await db
+    .select({ userId: meetings.userId })
+    .from(meetings)
+    .where(eq(meetings.id, meetingId))
+    .catch(() => []);
+  return withAiUser({ userId: owner?.userId ?? null, meetingId }, () => runProcessMeeting(meetingId));
+}
+
+async function runProcessMeeting(meetingId: string): Promise<void> {
   try {
     await db
       .update(meetings)

@@ -85,6 +85,17 @@ async function fetchToken(meetingId: string): Promise<{ token: string; keyterms:
   }
 }
 
+function reportUsage(meetingId: string, ms: number) {
+  if (ms < 1000) return;
+  // keepalive so it still goes out if the tab is closing.
+  void fetch(`/api/meetings/${meetingId}/live-transcription-usage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ seconds: Math.round(ms / 1000) }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 export async function startStreamingTranscription(
   meetingId: string,
   stream: MediaStream,
@@ -116,6 +127,14 @@ export async function startStreamingTranscription(
   }
 
   let stopped = false;
+  // AssemblyAI bills streaming by how long sessions are open; summed here
+  // and reported when transcription stops (see reportUsage).
+  let billedMs = 0;
+  let sessionStartedAt: number | null = null;
+  const endSession = () => {
+    if (sessionStartedAt != null) billedMs += Date.now() - sessionStartedAt;
+    sessionStartedAt = null;
+  };
   let transcriber: InstanceType<typeof StreamingTranscriber> | null = null;
   let partialTimer: ReturnType<typeof setTimeout> | null = null;
   let lastPartialSent = "";
@@ -162,6 +181,7 @@ export async function startStreamingTranscription(
     });
     next.on("error", (err) => console.warn("[live transcription] streaming error:", err));
     next.on("close", () => {
+      if (transcriber === next) endSession();
       if (stopped || transcriber !== next) return;
       // Dropped mid-call (network blip, the session hit its time limit) —
       // reconnect with a fresh token rather than going quiet.
@@ -170,6 +190,7 @@ export async function startStreamingTranscription(
     });
     await next.connect();
     transcriber = next;
+    sessionStartedAt = Date.now();
   };
 
   let reconnecting = false;
@@ -198,6 +219,8 @@ export async function startStreamingTranscription(
 
   const teardown = () => {
     stopped = true;
+    endSession();
+    reportUsage(meetingId, billedMs);
     if (partialTimer) clearTimeout(partialTimer);
     worklet.port.onmessage = null;
     try {
