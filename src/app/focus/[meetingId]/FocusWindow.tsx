@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
+import { ListeningIndicator, LiveQuestionCard, UpdatingBadge } from "@/components/LiveCoachingBits";
 import { AskAnchorPanel } from "@/components/AskAnchorPanel";
 import { StopMeetingButton } from "@/components/StopMeetingButton";
 import { FOCUS_WIDGETS, type FocusWidgetKey } from "@/lib/focusWidgets";
@@ -41,7 +42,7 @@ export function FocusWindow({
   // here would otherwise try to close the wrong window.
   onClose?: () => void;
 }) {
-  const { segments, suggestions, status, hasBot, isDesktop, coachingError } = useLiveMeeting(meetingId);
+  const { segments, suggestions, status, hasBot, isDesktop, coachingError, coachingRefreshing } = useLiveMeeting(meetingId);
   const [widgets, setWidgets] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
@@ -339,25 +340,14 @@ export function FocusWindow({
         )}
 
         {widgets.has("coaching") && suggestions?.liveQuestion && (
-          <section className="rounded-lg border border-brand/30 bg-brand/5 p-3">
-            <p className="mb-1 text-[11px] font-semibold tracking-[0.15em] text-brand">
-              THEY JUST ASKED
-            </p>
-            <p className="text-xs italic text-slate-500">
-              &ldquo;{suggestions.liveQuestion.question}&rdquo;
-            </p>
-            <p className="mt-1.5 text-sm font-medium text-slate-900">
-              {suggestions.liveQuestion.suggestedAnswer || (
-                <span className="font-normal text-slate-500">Working on an answer…</span>
-              )}
-            </p>
-          </section>
+          <LiveQuestionCard question={suggestions.liveQuestion} className="rounded-lg border border-brand/30 bg-brand/5 p-3" />
         )}
 
         {widgets.has("coaching") && (
           <section className="rounded-lg border border-slate-200 bg-white p-3">
             <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
               SUGGESTIONS
+              <UpdatingBadge active={coachingRefreshing && Boolean(suggestions)} />
             </p>
             {!suggestions ? (
               <p className={`text-sm ${coachingError ? "text-amber-600" : "text-slate-500"}`}>
@@ -433,6 +423,7 @@ export function FocusWindow({
                 ))}
               </div>
             )}
+            {(status === "recording" || status === "joining") && <ListeningIndicator />}
           </section>
         )}
       </div>

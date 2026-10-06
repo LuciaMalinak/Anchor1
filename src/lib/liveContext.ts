@@ -78,3 +78,30 @@ export async function loadLiveDealContext(
     })),
   };
 }
+
+// Live coaching refreshes every couple of seconds and every question
+// triggers an instant answer, and both used to reload the full deal
+// context (deal-lead style profile, past meetings + summaries, attached
+// files) from the database first — several round trips before the AI
+// call could even start. None of it changes mid-call in a way that
+// matters for a live nudge, so keep it for a short while per meeting.
+// In-memory is fine: a miss (restart, another instance) just reloads.
+const CONTEXT_TTL_MS = 60_000;
+const contextCache = new Map<string, { at: number; value: Promise<LiveDealContext> }>();
+
+export function loadLiveDealContextCached(
+  meetingId: string,
+  deal: typeof deals.$inferSelect | null
+): Promise<LiveDealContext> {
+  const key = `${meetingId}:${deal?.id ?? ""}:${deal?.updatedAt.getTime() ?? ""}`;
+  const hit = contextCache.get(key);
+  if (hit && Date.now() - hit.at < CONTEXT_TTL_MS) return hit.value;
+  const value = loadLiveDealContext(meetingId, deal);
+  contextCache.set(key, { at: Date.now(), value });
+  // A failed load shouldn't be served from the cache for the next minute.
+  value.catch(() => contextCache.delete(key));
+  for (const [k, v] of contextCache) {
+    if (Date.now() - v.at > CONTEXT_TTL_MS) contextCache.delete(k);
+  }
+  return value;
+}

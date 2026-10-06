@@ -14,7 +14,8 @@ export type LiveSuggestions = {
   checklist: { label: string; covered: boolean }[];
   // suggestedAnswer is "" while the answer is still being written (see
   // src/lib/liveQuestion.ts) — the question itself shows right away.
-  liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number } | null;
+  // answering stays true while the answer is still streaming in.
+  liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number; answering?: boolean } | null;
 } | null;
 
 // Was 4000ms — the actual transcript segments aren't behind any
@@ -27,6 +28,10 @@ export type LiveSuggestions = {
 // volume. Dropped from 1500ms to 1000ms so a just-asked question and its
 // answer show up as soon as the server has them.
 const POLL_MS = 1000;
+// While a just-asked question's answer is being written (it streams in —
+// see src/lib/liveQuestion.ts), poll much faster so the rep watches it
+// appear word by word instead of in one-second jumps.
+const FAST_POLL_MS = 300;
 
 // Polls /api/meetings/[id]/live for the transcript + AI coaching of a
 // meeting Anchor is actively sitting in on. Pulled out of
@@ -47,6 +52,8 @@ export function useLiveMeeting(meetingId: string) {
   // Why live coaching couldn't be generated, from the /live route —
   // null while it's working (or hasn't been tried yet).
   const [coachingError, setCoachingError] = useState<string | null>(null);
+  // Whether new suggestions are being generated right now.
+  const [coachingRefreshing, setCoachingRefreshing] = useState(false);
   const stoppedRef = useRef(false);
 
   useEffect(() => {
@@ -54,6 +61,7 @@ export function useLiveMeeting(meetingId: string) {
 
     async function poll() {
       if (stoppedRef.current) return;
+      let nextPollMs = POLL_MS;
       try {
         const res = await fetch(`/api/meetings/${meetingId}/live`);
         if (!res.ok) throw new Error("Couldn't load live updates");
@@ -61,6 +69,9 @@ export function useLiveMeeting(meetingId: string) {
         setSegments(body.segments || []);
         setSuggestions(body.liveSuggestions || null);
         setCoachingError(body.coachingError || null);
+        setCoachingRefreshing(body.coachingRefreshing === true);
+        const question = body.liveSuggestions?.liveQuestion;
+        if (question && (question.answering || !question.suggestedAnswer)) nextPollMs = FAST_POLL_MS;
         setStatus(body.status);
         setHasBot(body.hasBot !== false);
         setIsDesktop(body.isDesktop === true);
@@ -75,7 +86,7 @@ export function useLiveMeeting(meetingId: string) {
         setError("Couldn't reach the live feed — retrying…");
       }
       if (!stoppedRef.current) {
-        timer = setTimeout(poll, POLL_MS);
+        timer = setTimeout(poll, nextPollMs);
       }
     }
 
@@ -87,5 +98,5 @@ export function useLiveMeeting(meetingId: string) {
     };
   }, [meetingId]);
 
-  return { segments, suggestions, status, hasBot, isDesktop, error, coachingError };
+  return { segments, suggestions, status, hasBot, isDesktop, error, coachingError, coachingRefreshing };
 }

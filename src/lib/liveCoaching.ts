@@ -38,7 +38,9 @@ export type LiveCoaching = {
   // tool call's flat fields. askedAt is set only by the instant question
   // path (liveQuestion.ts) — an empty suggestedAnswer with askedAt means
   // the answer is still being written.
-  liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number } | null;
+  // answering is true while the instant path is still streaming the
+  // answer in, so the panel can show it's still being written.
+  liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number; answering?: boolean } | null;
 };
 
 const LIVE_COACHING_TOOL = {
@@ -87,7 +89,9 @@ const LIVE_COACHING_TOOL = {
   },
 };
 
-function requestCoaching(system: string, content: string, model: string = MODEL) {
+type SystemPrompt = string | Anthropic.TextBlockParam[];
+
+function requestCoaching(system: SystemPrompt, content: string, model: string = MODEL) {
   return createWithForcedTool(liveClient(), {
     model,
     max_tokens: MAX_TOKENS,
@@ -105,7 +109,7 @@ function requestCoaching(system: string, content: string, model: string = MODEL)
 // createWithForcedTool (see forcedTool.ts); on top of that, a
 // misspelled/retired ANTHROPIC_MODEL 404s, so fall back to the default
 // fast model rather than going dark for the whole call.
-async function requestCoachingWithFallbacks(system: string, content: string) {
+async function requestCoachingWithFallbacks(system: SystemPrompt, content: string) {
   try {
     return await requestCoaching(system, content);
   } catch (err) {
@@ -217,11 +221,20 @@ export async function generateLiveCoaching(
   const system =
     "You are a live sales-call coach watching a transcript stream in during a real meeting, and this runs on a repeating timer for as long as the call lasts — the rep should always have something current to look at, not a panel that goes blank the moment the live conversation itself doesn't hand you something new. Give sharp, specific, non-generic guidance: ground it in what's actually been said when there's something to react to, and otherwise ground it in what's already known about this deal from its prep notes, decision boundaries, and past meetings — never leave nudges empty just because the last few seconds of transcript were quiet. Never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for — if there's truly nothing to go on yet (no transcript, no prep, no history), say so plainly rather than inventing something. If the transcript so far doesn't support a checklist item being covered, mark it not covered. You're also watching for a specific kind of moment: the other side asking something that needs answering right now, like a live interview-assist tool would — when that happens, surface it and a ready-to-say answer separately from the general nudges above (see questionAsked/question/suggestedAnswer), grounded the same way, and respecting decision boundaries the same way.";
 
-  const message = await requestCoachingWithFallbacks(system, `${liveDealContextText(params)}
-${priorChecklistText}
+  // The deal facts don't change between refreshes, so they sit in a
+  // cached system block — every refresh after the first in a call skips
+  // re-reading them, which is most of the prompt. Only the checklist and
+  // transcript (which do change) go in the message.
+  const message = await requestCoachingWithFallbacks(
+    [
+      { type: "text", text: system },
+      { type: "text", text: liveDealContextText(params), cache_control: { type: "ephemeral" } },
+    ],
+    `${priorChecklistText.trim() || "No checklist yet — draft one."}
 
 Transcript so far (most recent portion of an in-progress call):
-${params.recentTranscript || "(nothing transcribed yet)"}`);
+${params.recentTranscript || "(nothing transcribed yet)"}`
+  );
 
   if (message.stop_reason === "max_tokens") {
     console.warn(`[live coaching] response hit max_tokens (${MAX_TOKENS}) — output may be incomplete`);

@@ -30,6 +30,11 @@ import { registerRecordingStarter } from "@/lib/startRecording";
 // navigates anywhere on its own once started (unlike the Zoom join
 // flow) — the actual capture lives in this browser tab's memory, so
 // leaving the page would kill it.
+
+// How long the in-progress (interim) speech has to stop changing before
+// it's checked for a question — see startLiveTranscription.
+const INTERIM_PAUSE_MS = 600;
+
 export function useMicRecorder({
   dealId,
   onUploaded,
@@ -97,23 +102,50 @@ export function useMicRecorder({
     if (!Ctor) return; // No live transcript on this browser — the recording itself is unaffected.
     const recognizer = new Ctor();
     recognizer.continuous = true;
-    recognizer.interimResults = false;
-    recognizer.lang = "en-US";
+    // Interim results let a question get answered as soon as the speaker
+    // pauses, instead of waiting for the browser to decide the line is
+    // final (which can lag a second or more, or not happen at all during
+    // a long run of speech). Only finals are stored as transcript lines.
+    recognizer.interimResults = true;
+    // The person's own English variant (en-GB, en-AU, en-IN…) recognizes
+    // their accent noticeably better than always forcing en-US.
+    const browserLang = navigator.language || "";
+    recognizer.lang = /^en(-|$)/i.test(browserLang) ? browserLang : "en-US";
+    const post = (text: string, partial: boolean) =>
+      fetch(`/api/meetings/${meetingId}/live-transcript`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(partial ? { text, partial: true } : { text }),
+      }).catch(() => {
+        // Best-effort — a dropped live-transcript line doesn't affect
+        // the actual recording, which is the source of truth once it
+        // uploads and gets properly transcribed.
+      });
+    let interimTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastInterimSent = "";
     recognizer.onresult = (e) => {
+      let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
-        if (!result.isFinal) continue;
         const text = result[0]?.transcript?.trim();
         if (!text) continue;
-        fetch(`/api/meetings/${meetingId}/live-transcript`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        }).catch(() => {
-          // Best-effort — a dropped live-transcript line doesn't affect
-          // the actual recording, which is the source of truth once it
-          // uploads and gets properly transcribed.
-        });
+        if (result.isFinal) {
+          post(text, false);
+        } else {
+          interim += `${text} `;
+        }
+      }
+      if (interimTimer) clearTimeout(interimTimer);
+      interim = interim.trim();
+      // Once the in-progress line stops changing for a moment (the
+      // speaker paused), send it as a partial — the server only checks it
+      // for a question to answer; it isn't stored.
+      if (interim && interim.split(/\s+/).length >= 3) {
+        interimTimer = setTimeout(() => {
+          if (interim === lastInterimSent) return;
+          lastInterimSent = interim;
+          post(interim, true);
+        }, INTERIM_PAUSE_MS);
       }
     };
     recognizer.onerror = () => {

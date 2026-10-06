@@ -47,6 +47,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!text) {
     return NextResponse.json({ error: "No text" }, { status: 400 });
   }
+  // An in-progress line the speaker has paused on (the browser mic's
+  // interim speech-to-text): only checked for a question, so it gets
+  // answered before the line is finalized. The final version arrives
+  // separately and is what gets stored.
+  if (body.partial === true) {
+    onLiveSegment(meeting.id, text, null);
+    return NextResponse.json({ ok: true, partial: true });
+  }
+
   // Only the desktop app (via Recall's real-time transcript stream) has
   // these — the in-person mic recorder's browser speech-to-text has no
   // speaker attribution or call-relative timing, so both are optional.
