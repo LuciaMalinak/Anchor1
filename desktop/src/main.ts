@@ -40,7 +40,7 @@ import RecallAiSdk from "@recallai/desktop-sdk";
 import { autoUpdater } from "electron-updater";
 import { loadConfig, saveConfig, DEFAULT_API_BASE } from "./config";
 import { AnchorApi } from "./anchorApi";
-import { startBrowserMeetingWatcher, type BrowserMeeting } from "./browserMeetingWatcher";
+import { startBrowserMeetingWatcher, type DetectedCall } from "./browserMeetingWatcher";
 import {
   BACKGROUND_ARG,
   canUseBackgroundAgent,
@@ -98,9 +98,13 @@ const recordingWindowIds = new Set<string>();
 // the way while any is open, so one call is never recorded twice.
 const sdkDetectedWindowIds = new Set<string>();
 
-// The desktop-audio source id of the browser call the fallback is
-// recording, if any.
+// The desktop-audio source id of the call the fallback is recording, if any.
 let browserCallWindowId: string | null = null;
+
+// Whether Recall's SDK started. The call fallback runs either way, so a
+// call still pops Anchor up (and says why it can't record) when it didn't.
+let sdkReady = false;
+let sdkError: string | null = null;
 
 function send(channel: string, payload: unknown) {
   mainWindow?.webContents.send(channel, payload);
@@ -248,11 +252,12 @@ async function stopRecordingFor(windowId: string) {
 }
 
 // Windows: Recall's SDK doesn't detect Zoom or Teams running in a browser
-// (only their desktop apps, and Google Meet in Chrome/Edge). The watcher
-// (browserMeetingWatcher.ts) notices those calls from the browser's mic
-// use and window title; this records them as a desktop-audio recording
-// (your mic plus whatever the computer plays), and stops when the browser
-// lets go of the mic.
+// (only their desktop apps, and Google Meet in Chrome/Edge), and records
+// nothing if it misses a desktop-app call. The watcher
+// (browserMeetingWatcher.ts) notices those calls from mic use (and, in a
+// browser, the window title); this records them as a desktop-audio
+// recording (your mic plus whatever the computer plays), and stops when
+// the app lets go of the mic.
 function startBrowserCallFallback() {
   if (process.platform !== "win32") return;
   const stopWatcher = startBrowserMeetingWatcher({
@@ -264,18 +269,25 @@ function startBrowserCallFallback() {
 }
 
 // "Weekly sync | Microsoft Teams - Google Chrome" -> "Weekly sync | Microsoft Teams"
-function meetingTitleFromWindow(meeting: BrowserMeeting): string {
+function meetingTitleFromWindow(meeting: DetectedCall): string {
   const title = meeting.title.replace(/\s+[-\u2013\u2014]\s+(Google Chrome|Microsoft\u200b? Edge|Mozilla Firefox)$/i, "").trim();
   return title || `${meeting.platform} call`;
 }
 
-async function recordBrowserCall(meeting: BrowserMeeting) {
+async function recordBrowserCall(meeting: DetectedCall) {
   if (sdkDetectedWindowIds.size > 0 || recordingWindowIds.size > 0 || startsInFlight.size > 0) {
-    log(`Not recording the ${meeting.platform} call in ${meeting.browser} separately: Anchor already found or is recording a call.`);
+    log(`Not recording the ${meeting.platform} call in ${meeting.where} separately: Anchor already found or is recording a call.`);
+    return;
+  }
+  if (!sdkReady) {
+    const reason = sdkError ?? "the recording engine hasn't started";
+    log(`Can't record the ${meeting.platform} call in ${meeting.where}: ${reason}`);
+    notify(`Anchor found your ${meeting.platform} call but can't record it`, reason);
+    showWindow();
     return;
   }
   if (!loadConfig().token) {
-    log(`Didn't record the ${meeting.platform} call in ${meeting.browser}: Anchor Desktop isn't signed in.`);
+    log(`Didn't record the ${meeting.platform} call in ${meeting.where}: Anchor Desktop isn't signed in.`);
     notify("Anchor didn't record this call", "Sign in to Anchor Desktop so it can record and coach your calls.");
     showWindow();
     return;
@@ -305,11 +317,11 @@ async function recordBrowserCall(meeting: BrowserMeeting) {
   }
 }
 
-async function stopBrowserCall(meeting: BrowserMeeting) {
+async function stopBrowserCall(meeting: DetectedCall) {
   const windowId = browserCallWindowId;
   if (!windowId) return;
   browserCallWindowId = null;
-  log(`Stopping the recording of the ${meeting.platform} call in ${meeting.browser} …`);
+  log(`Stopping the recording of the ${meeting.platform} call in ${meeting.where} …`);
   try {
     await stopRecordingFor(windowId);
     log("Stopped. Anchor is processing the recording.");
@@ -676,6 +688,12 @@ async function initSdk() {
     if (!loadConfig().token) {
       notify("Anchor didn't record this call", "Sign in to Anchor Desktop so it can record and coach your calls.");
       showWindow();
+      return;
+    }
+    // The call fallback got there first (Recall can be slower to notice a
+    // call than its mic use); recording it again would make two meetings.
+    if (browserCallWindowId) {
+      log("Already recording this call from its audio, so not starting a second recording.");
       return;
     }
     // Pop up right away, the way Granola does — see showOverlayPending.
@@ -1385,13 +1403,16 @@ if (!gotSingleInstanceLock) {
     startServerKeepAwake();
     initAutoUpdate();
 
+    log(`Anchor Desktop ${app.getVersion()} started.`);
     try {
       await initSdk();
+      sdkReady = true;
       log("Recall Desktop SDK initialized.");
-      startBrowserCallFallback();
     } catch (err) {
-      log(`Failed to initialize the Recall Desktop SDK: ${err instanceof Error ? err.message : err}`);
+      sdkError = err instanceof Error ? err.message : String(err);
+      log(`Failed to initialize the Recall Desktop SDK: ${sdkError}`);
     }
+    startBrowserCallFallback();
   });
 
   app.on("window-all-closed", () => {
