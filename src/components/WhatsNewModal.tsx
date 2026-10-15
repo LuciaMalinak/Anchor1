@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnchorMark } from "@/components/Logo";
+import { useIsMac } from "@/lib/useIsMac";
 
 // The current "what's new" announcement. Changing RELEASE_ID shows the
 // popup again, once, to every returning member; see WHATS_NEW_CUTOFF in
@@ -18,7 +19,7 @@ const TOOLS = [
   },
   {
     title: "Ask Anchor, on every page",
-    body: "On the right of every page (⌘K). Ask it anything: it checks your calls, documents and emails first, then the web, and suggests next steps the way your deal lead would.",
+    body: "On the right of every page (SHORTCUT). Ask it anything: it checks your calls, documents and emails first, then the web, and suggests next steps the way your deal lead would.",
   },
   {
     title: "Prep me for the next call",
@@ -43,6 +44,7 @@ const TOOLS = [
 // and set as soon as it opens, so it never shows twice even if they
 // navigate away.
 export function WhatsNewModal() {
+  const isMac = useIsMac();
   const [open, setOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -109,7 +111,7 @@ export function WhatsNewModal() {
           {TOOLS.map((t) => (
             <li key={t.title} className="rounded-lg bg-slate-50 px-4 py-3">
               <p className="text-sm font-medium text-slate-900">{t.title}</p>
-              <p className="mt-1 text-sm text-slate-600">{t.body}</p>
+              <p className="mt-1 text-sm text-slate-600">{t.body.replace("SHORTCUT", isMac === false ? "Ctrl K" : "⌘K")}</p>
             </li>
           ))}
         </ul>

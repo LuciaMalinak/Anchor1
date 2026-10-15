@@ -32,6 +32,7 @@ import {
   shell,
   session as electronSession,
 } from "electron";
+import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { randomBytes } from "crypto";
@@ -523,6 +524,17 @@ async function fetchRecallApiUrl(): Promise<string | undefined> {
   }
 }
 
+// The native recording program the SDK launches, if it isn't on disk.
+// Mirrors where @recallai/desktop-sdk looks: outside app.asar, since a
+// program can't run from inside the archive.
+function missingRecordingEngine(): string | null {
+  const exe = process.platform === "win32" ? "agent-windows.exe" : process.platform === "darwin" ? "desktop_sdk_macos_exe" : null;
+  if (!exe) return null;
+  const sdkDir = path.dirname(require.resolve("@recallai/desktop-sdk"));
+  const candidates = [path.join(sdkDir, exe).replace("app.asar", "app.asar.unpacked"), path.join(sdkDir, exe)];
+  return candidates.some((p) => fs.existsSync(p)) ? null : exe;
+}
+
 async function initSdk() {
   // acquirePermissionsOnStartup does NOT actually trigger macOS's permission
   // prompts on its own (confirmed against docs.recall.ai/docs/macos-permissions
@@ -535,6 +547,17 @@ async function initSdk() {
     log(`Using Recall.ai region endpoint: ${recallApiUrl}`);
   } else {
     log("Couldn't fetch Anchor's Recall.ai region — falling back to the SDK's default, which may cause 'Invalid upload token' errors if it doesn't match Anchor's account region.");
+  }
+  // The SDK records through a native program (agent-windows.exe on
+  // Windows) that npm only downloads for the platform it runs on, so a
+  // Windows installer built on a Mac shipped without it. Then init only
+  // fails with "The Desktop SDK is not started or is no longer accepting
+  // commands", which doesn't say what's wrong or how to fix it.
+  const missingEngine = missingRecordingEngine();
+  if (missingEngine) {
+    throw new Error(
+      `this copy of Anchor Desktop is missing its recording engine (${missingEngine}). Download and install Anchor Desktop again from Anchor's Integrations page.`
+    );
   }
   await RecallAiSdk.init({ apiUrl: recallApiUrl, acquirePermissionsOnStartup: [] });
 
@@ -1118,6 +1141,10 @@ function createTray() {
 // login item so the two don't both launch it. Elsewhere: the login item,
 // asked to start in the background.
 function enableLaunchAtLogin() {
+  // Builds from before setAppUserModelId("com.anchor.desktop") registered
+  // their login item under Electron's default id; remove it so Windows
+  // doesn't start two copies at login.
+  if (process.platform === "win32") app.setLoginItemSettings({ openAtLogin: false, name: "electron.app.Anchor Desktop" });
   if (canUseBackgroundAgent()) {
     if (installBackgroundAgent()) log("Set Anchor Desktop to start in the background at login.");
     if (app.getLoginItemSettings().openAtLogin) app.setLoginItemSettings({ openAtLogin: false });

@@ -143,6 +143,16 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
+      # The recording engine has to be on disk next to the app, or Anchor
+      # can't detect or record any call ("The Desktop SDK is not started").
+      - name: Check the recording engine is in the installer
+        run: |
+          ENGINE="release/win-unpacked/resources/app.asar.unpacked/node_modules/@recallai/desktop-sdk/agent-windows.exe"
+          if [ ! -f "$ENGINE" ]; then
+            echo "::error::$ENGINE is missing, so this build couldn't record calls."
+            exit 1
+          fi
+
       - name: Publish the download and update feed
         env:
           DESKTOP_APP_UPLOAD_SECRET: ${{ secrets.DESKTOP_APP_UPLOAD_SECRET }}
