@@ -1,0 +1,199 @@
+// The Morning brief's rules and wording that don't need the database:
+// which waiting emails to show today, and the brief itself as a text
+// message, an email and a Slack message. Kept free of database imports so
+// scripts/test-next-steps.ts can run it.
+import { daysBetween, type MorningBriefPrefs } from "./morningBriefPrefs";
+
+export type BriefEmail = {
+  threadId: string;
+  fromName: string;
+  fromEmail: string;
+  subject: string;
+  summary: string;
+  waitingDays: number;
+  // Which brief this is in a row for this email (1 = first time).
+  reminder: number;
+  deal: string | null;
+  priority: 1 | 2 | 3;
+  gmailUrl: string;
+  drafted: boolean;
+};
+
+export type BriefSnapshot = {
+  date: string; // the person's local YYYY-MM-DD
+  googleConnected: boolean;
+  emails: BriefEmail[];
+  moreEmails: number;
+  tasks: { text: string; deal: string | null }[];
+  moreTasks: number;
+  meetings: { time: string; title: string; deal: string | null }[];
+  quietDeals: { name: string; days: number }[];
+};
+
+export type ShownState = Record<string, { on: string; n: number; drafted?: boolean }>;
+
+// An email still waiting on a reply comes back every `remindEveryDays`
+// (1 = every brief) until it's answered, marked done, or snoozed.
+export function shouldShowToday(
+  threadId: string,
+  localDate: string,
+  prefs: Pick<MorningBriefPrefs, "remindEveryDays">,
+  shown: ShownState,
+  dismissed: Record<string, string>
+): boolean {
+  const d = dismissed[threadId];
+  if (d === "done") return false;
+  if (d && d > localDate) return false; // snoozed until a later date
+  const last = shown[threadId];
+  if (!last) return true;
+  if (last.on === localDate) return true; // same day (a "send me one now" re-run)
+  return daysBetween(last.on, localDate) >= prefs.remindEveryDays;
+}
+
+// Most important first: customers and deal contacts, then the longest
+// waiting.
+export function rankEmails(emails: BriefEmail[]): BriefEmail[] {
+  return [...emails].sort(
+    (a, b) =>
+      a.priority - b.priority ||
+      Number(Boolean(b.deal)) - Number(Boolean(a.deal)) ||
+      b.waitingDays - a.waitingDays
+  );
+}
+
+export function isEmptyBrief(b: BriefSnapshot): boolean {
+  return !b.emails.length && !b.tasks.length && !b.meetings.length && !b.quietDeals.length;
+}
+
+function waited(e: BriefEmail): string {
+  const days = e.waitingDays <= 0 ? "today" : `${e.waitingDays}d`;
+  return e.reminder > 1 ? `${days}, reminder ${e.reminder}` : days;
+}
+
+function firstName(name: string): string {
+  const n = name.trim();
+  if (!n || n.includes("@")) return n.split("@")[0];
+  return n.split(/\s+/)[0];
+}
+
+export function briefHeadline(b: BriefSnapshot): string {
+  const parts: string[] = [];
+  if (b.emails.length) parts.push(`${b.emails.length + b.moreEmails} to reply to`);
+  if (b.meetings.length) parts.push(`${b.meetings.length} meeting${b.meetings.length === 1 ? "" : "s"}`);
+  if (b.tasks.length) parts.push(`${b.tasks.length + b.moreTasks} to-do${b.tasks.length + b.moreTasks === 1 ? "" : "s"}`);
+  return parts.length ? parts.join(" · ") : "nothing urgent";
+}
+
+function dayLabel(date: string): string {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+// A text message: the essentials, short enough to read at a glance.
+export function renderBriefText(b: BriefSnapshot, link: string): string {
+  const lines: string[] = [`Anchor · ${dayLabel(b.date)}`];
+  if (b.emails.length) {
+    lines.push("", `Reply to (${b.emails.length + b.moreEmails}):`);
+    for (const e of b.emails.slice(0, 5)) {
+      lines.push(`• ${firstName(e.fromName)}${e.deal ? ` (${e.deal})` : ""}: ${e.summary} – ${waited(e)}`);
+    }
+    const extra = b.emails.length + b.moreEmails - Math.min(b.emails.length, 5);
+    if (extra > 0) lines.push(`+${extra} more`);
+  }
+  if (b.meetings.length) {
+    lines.push("", `Today: ${b.meetings.map((m) => `${m.time} ${m.title}`).join("; ")}`);
+  }
+  if (b.tasks.length) {
+    const more = b.tasks.length - 1 + b.moreTasks;
+    lines.push("", `To do: ${b.tasks[0].text}${more > 0 ? ` (+${more} more)` : ""}`);
+  }
+  if (b.quietDeals.length) {
+    lines.push("", `Gone quiet: ${b.quietDeals.map((d) => `${d.name} ${d.days}d`).join(", ")}`);
+  }
+  if (b.emails.some((e) => e.drafted)) lines.push("", "Reply drafts are waiting in your Gmail.");
+  lines.push("", `Done / snooze: ${link}`);
+  return lines.join("\n");
+}
+
+// Slack message (mrkdwn).
+export function renderBriefSlack(b: BriefSnapshot, link: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const lines: string[] = [`*Your morning brief* · ${dayLabel(b.date)} · ${briefHeadline(b)}`];
+  if (b.emails.length) {
+    lines.push("", "*Waiting on your reply*");
+    for (const e of b.emails) {
+      lines.push(`• <${e.gmailUrl}|${esc(e.fromName)}>${e.deal ? ` (${esc(e.deal)})` : ""}: ${esc(e.summary)} _(${waited(e)})_${e.drafted ? " · draft ready" : ""}`);
+    }
+    if (b.moreEmails) lines.push(`+${b.moreEmails} more`);
+  }
+  if (b.meetings.length) {
+    lines.push("", "*Today*", ...b.meetings.map((m) => `• ${m.time} ${esc(m.title)}`));
+  }
+  if (b.tasks.length) {
+    lines.push("", "*To do*", ...b.tasks.map((t) => `• ${esc(t.text)}${t.deal ? ` (${esc(t.deal)})` : ""}`));
+    if (b.moreTasks) lines.push(`+${b.moreTasks} more`);
+  }
+  if (b.quietDeals.length) {
+    lines.push("", `*Gone quiet:* ${b.quietDeals.map((d) => `${esc(d.name)} (${d.days}d)`).join(", ")}`);
+  }
+  lines.push("", `<${link}|Mark done or snooze>`);
+  return lines.join("\n");
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+// The email: table layout and inline styles, like the other Anchor emails.
+// `note`: shown at the top, e.g. why it came by email instead of text.
+export function renderBriefHtml(b: BriefSnapshot, link: string, personName: string, note?: string): string {
+  const brand = "#12294a";
+  const accent = "#b4531f";
+  const section = (title: string, body: string) =>
+    `<tr><td style="padding:22px 28px 0;"><p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">${title}</p>${body}</td></tr>`;
+  const actionLink = (threadId: string, action: "done" | "snooze", label: string) =>
+    `<a href="${link}?item=${encodeURIComponent(threadId)}&amp;do=${action}" style="color:#64748b;text-decoration:underline;font-size:12px;">${label}</a>`;
+
+  const emails = b.emails
+    .map(
+      (e) => `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;border:1px solid #e2e8f0;border-radius:10px;"><tr><td style="padding:12px 14px;">
+        <p style="margin:0;font-size:14px;color:#0f172a;"><a href="${escapeHtml(e.gmailUrl)}" style="color:${brand};font-weight:700;text-decoration:none;">${escapeHtml(e.fromName)}</a>${e.deal ? ` <span style="color:#64748b;">· ${escapeHtml(e.deal)}</span>` : ""}</p>
+        <p style="margin:4px 0 0;font-size:14px;line-height:1.5;color:#334155;">${escapeHtml(e.summary)}</p>
+        <p style="margin:6px 0 0;font-size:12px;color:${e.waitingDays >= 3 ? accent : "#94a3b8"};">Waiting ${e.waitingDays <= 0 ? "since today" : `${e.waitingDays} day${e.waitingDays === 1 ? "" : "s"}`}${e.reminder > 1 ? ` · reminder ${e.reminder}` : ""}${e.drafted ? " · reply draft in Gmail" : ""}
+        &nbsp; ${actionLink(e.threadId, "done", "Done")} &nbsp; ${actionLink(e.threadId, "snooze", "Snooze 3 days")}</p>
+      </td></tr></table>`
+    )
+    .join("");
+  const list = (items: string[]) =>
+    `<ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6;color:#334155;">${items.map((i) => `<li>${i}</li>`).join("")}</ul>`;
+
+  const rows = [
+    b.emails.length
+      ? section(`Waiting on your reply (${b.emails.length + b.moreEmails})`, emails + (b.moreEmails ? `<p style="margin:0;font-size:13px;color:#64748b;">+${b.moreEmails} more on your brief page</p>` : ""))
+      : "",
+    b.meetings.length ? section("Today", list(b.meetings.map((m) => `<strong>${escapeHtml(m.time)}</strong> ${escapeHtml(m.title)}`))) : "",
+    b.tasks.length
+      ? section(
+          "To do",
+          list(b.tasks.map((t) => `${escapeHtml(t.text)}${t.deal ? ` <span style="color:#94a3b8;">· ${escapeHtml(t.deal)}</span>` : ""}`)) +
+            (b.moreTasks ? `<p style="margin:6px 0 0;font-size:13px;color:#64748b;">+${b.moreTasks} more</p>` : "")
+        )
+      : "",
+    b.quietDeals.length ? section("Gone quiet", list(b.quietDeals.map((d) => `${escapeHtml(d.name)} <span style="color:#94a3b8;">· no call in ${d.days} days</span>`))) : "",
+  ].join("");
+
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;"><tr><td align="center">
+  <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+    <tr><td style="background:${brand};padding:20px 28px;">
+      <p style="margin:0;font-size:13px;color:#cbd5e1;">Anchor · ${escapeHtml(dayLabel(b.date))}</p>
+      <p style="margin:4px 0 0;font-size:20px;font-weight:700;color:#ffffff;">Good morning${personName ? `, ${escapeHtml(firstName(personName))}` : ""}</p>
+      <p style="margin:4px 0 0;font-size:14px;color:#e2e8f0;">${escapeHtml(briefHeadline(b))}</p>
+      ${note ? `<p style="margin:10px 0 0;font-size:12px;color:#fcd34d;">${escapeHtml(note)}</p>` : ""}
+    </td></tr>
+    ${rows}
+    <tr><td style="padding:22px 28px 26px;">
+      <a href="${link}" style="display:inline-block;padding:11px 20px;border-radius:8px;background:${accent};color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">Open your brief</a>
+      <p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#94a3b8;">Emails stay on your brief until you reply, mark them done or snooze them. Change the time, channel or what's included on your Anchor profile.</p>
+    </td></tr>
+  </table></td></tr></table></body></html>`;
+}

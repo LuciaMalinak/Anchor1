@@ -4,11 +4,13 @@
 import { googlePost, requireGoogleScope } from "./google";
 import { buildMime, type DraftInput } from "./gmailMime";
 
-export async function createGmailDraft(userId: string, draft: DraftInput) {
+// threadId files the draft as a reply in an existing thread (pair it with
+// draft.inReplyTo).
+export async function createGmailDraft(userId: string, draft: DraftInput, opts: { threadId?: string } = {}) {
   const connection = await requireGoogleScope(userId, "gmail_compose");
   const raw = Buffer.from(buildMime(draft), "utf8").toString("base64url");
   await googlePost(connection, "https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
-    message: { raw },
+    message: opts.threadId ? { raw, threadId: opts.threadId } : { raw },
   });
   // Gmail has no stable link to a single draft, so open the Drafts folder,
   // in the right account if the user is signed in to several.
