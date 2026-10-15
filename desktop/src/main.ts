@@ -1120,6 +1120,10 @@ function createTray() {
 // login item so the two don't both launch it. Elsewhere: the login item,
 // asked to start in the background.
 function enableLaunchAtLogin() {
+  // Remove the login item older Windows builds registered under this name.
+  // Done before the check below, so if it's also the current name the
+  // entry is simply added again with BACKGROUND_ARG.
+  if (process.platform === "win32") app.setLoginItemSettings({ openAtLogin: false, name: "electron.app.Anchor Desktop" });
   if (canUseBackgroundAgent()) {
     if (installBackgroundAgent()) log("Set Anchor Desktop to start in the background at login.");
     if (app.getLoginItemSettings().openAtLogin) app.setLoginItemSettings({ openAtLogin: false });
