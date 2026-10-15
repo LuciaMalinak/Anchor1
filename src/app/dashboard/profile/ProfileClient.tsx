@@ -115,6 +115,10 @@ export function ProfileClient({ profile }: { profile: Profile }) {
         </p>
       </div>
 
+      {/* First on the page so it's easy to find; Home links here
+          (#morning-brief) until it's turned on. */}
+      <MorningBriefSettings />
+
       <form onSubmit={handleSave} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="h-24 bg-gradient-to-r from-brand to-brand-dark" />
         <div className="flex flex-col gap-5 px-6 pb-6">
@@ -201,7 +205,7 @@ export function ProfileClient({ profile }: { profile: Profile }) {
         </div>
 
         {/* The old "text me a 9am deal digest" checkbox lived here; the
-            Morning brief below replaces it. dailyDigestOptIn is still sent
+            Morning brief above replaces it. dailyDigestOptIn is still sent
             unchanged with this form so existing choices aren't reset. */}
 
         <div className="flex flex-col gap-1">
@@ -244,8 +248,6 @@ export function ProfileClient({ profile }: { profile: Profile }) {
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       </form>
-
-      <MorningBriefSettings />
 
       {/* Intentionally low-key — no danger-zone box, no red border — this
           isn't something anyone should stumble into while editing their

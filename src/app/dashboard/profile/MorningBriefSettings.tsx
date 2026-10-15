@@ -65,7 +65,7 @@ export function MorningBriefSettings() {
 
   if (!prefs || !status) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section id="morning-brief" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-base font-semibold text-brand">Morning brief</h2>
         <p className="mt-2 text-sm text-slate-500">{error ?? "Loading…"}</p>
       </section>
@@ -132,7 +132,7 @@ export function MorningBriefSettings() {
   const check = "h-4 w-4 rounded border-slate-300 accent-[#12294a]";
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section id="morning-brief" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold text-brand">Morning brief</h2>
