@@ -395,18 +395,21 @@ function showOverlayPending(windowId: string, title: string) {
   }
   const win = ensureOverlayWindow();
   overlayShowing = { pendingWindowId: windowId };
+  // Same navy and anchor mark as the main window, on macOS and Windows.
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-    body{margin:0;height:100vh;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:0 28px;
-      font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0f1f3d;color:#fff;-webkit-app-region:drag}
-    .brand{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#8fb3e8}
-    h1{margin:0;font-size:20px;font-weight:600}
-    p{margin:0;font-size:14px;color:#c9d6ea;line-height:1.45}
-    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#34d399;margin-right:8px;animation:p 1.2s infinite}
+    body{margin:0;height:100vh;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:0 28px;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+      background:#0f2340;color:#fff;-webkit-app-region:drag;-webkit-font-smoothing:antialiased}
+    .brand{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:650;color:#fff}
+    h1{margin:6px 0 0;font-size:21px;font-weight:650;display:flex;align-items:center;gap:10px}
+    .title{margin:0;font-size:14px;font-weight:600;color:#e2e8f0;line-height:1.45}
+    p{margin:0;font-size:13px;color:#9fb3d1;line-height:1.5}
+    .dot{width:9px;height:9px;border-radius:50%;background:#34d399;animation:p 1.2s infinite}
     @keyframes p{50%{opacity:.3}}
   </style></head><body>
-    <div class="brand">⚓ Anchor</div>
-    <h1><span class="dot"></span>Meeting detected</h1>
-    <p>${escapeHtml(title)}</p>
+    <div class="brand"><svg width="20" height="20" viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="7.5" r="2.25"/><path d="M16 9.75V24.5"/><path d="M11 13.5H21"/><path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5"/><path d="M8 18.5L6 15.8M8 18.5L10.3 17"/><path d="M24 18.5L26 15.8M24 18.5L21.7 17"/></svg>Anchor</div>
+    <h1><span class="dot"></span>Call detected</h1>
+    <p class="title">${escapeHtml(title)}</p>
     <p>Starting the recording and live coaching…</p>
   </body></html>`;
   win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`).catch(() => {});
@@ -1034,20 +1037,41 @@ function registerIpcHandlers() {
   });
 }
 
+// The window draws its own navy title bar (see .titlebar in
+// renderer/index.html) with the OS window controls inside it, so it looks
+// the same on macOS and Windows: the traffic lights on the left on a Mac,
+// minimise/maximise/close on the right on Windows, and no File/Edit/View
+// menu bar on Windows. Matches TITLEBAR_HEIGHT / --titlebar in the CSS.
+const TITLEBAR_HEIGHT = 52;
+const BRAND_NAVY = "#12294a";
+
 function createWindow(show = true) {
+  const isMac = process.platform === "darwin";
   mainWindow = new BrowserWindow({
     width: 860,
     height: 720,
-    minWidth: 440,
-    minHeight: 520,
-    backgroundColor: "#f4f5f8",
+    minWidth: 460,
+    minHeight: 540,
+    backgroundColor: "#f4f6f9",
+    title: "Anchor Desktop",
     show,
+    ...(isMac
+      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 18, y: 19 } }
+      : {
+          titleBarStyle: "hidden" as const,
+          titleBarOverlay: { color: BRAND_NAVY, symbolColor: "#ffffff", height: TITLEBAR_HEIGHT },
+          autoHideMenuBar: true,
+        }),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+  // Windows/Linux: no menu bar (copy, paste and the other text shortcuts
+  // still work in the window's fields without one). macOS keeps its app
+  // menu in the system menu bar, where it belongs.
+  if (!isMac) mainWindow.removeMenu();
   mainWindow.loadFile(path.join(__dirname, "..", "src", "renderer", "index.html"));
 
   // Closing the window (the red dot) should not stop Anchor from watching
@@ -1075,9 +1099,14 @@ function showWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, "..", "src", "renderer", "icons", "trayTemplate.png");
+  // macOS: a black template glyph it tints for light/dark menu bars.
+  // Windows: a full-colour icon (navy square, white anchor), since a black
+  // glyph disappears on the default dark taskbar. Both ship @2x/@3x files
+  // that Electron picks up for high-DPI screens.
+  const isMac = process.platform === "darwin";
+  const iconPath = path.join(__dirname, "..", "src", "renderer", "icons", isMac ? "trayTemplate.png" : "trayWindows.png");
   const icon = nativeImage.createFromPath(iconPath);
-  icon.setTemplateImage(true); // lets macOS auto-tint it for light/dark menu bars
+  if (isMac) icon.setTemplateImage(true);
   tray = new Tray(icon);
   tray.setToolTip("Anchor Desktop — watching for Zoom, Teams, and Meet calls");
   refreshTrayMenu();
@@ -1195,6 +1224,9 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(async () => {
+    // Windows shows notifications (and groups the taskbar button) under
+    // this id; without it they come from "electron.app.Anchor Desktop".
+    if (process.platform === "win32") app.setAppUserModelId("com.anchor.desktop");
     registerIpcHandlers();
     // After restarting itself to install an update, come back the way it
     // was: in the menu bar only, unless the window was open.
