@@ -1,4 +1,4 @@
-?<#
+<#
   One-time install on a client PC. After this, Anchor opens by itself whenever a meeting starts,
   and the watcher starts automatically every time the client signs in to Windows.
 
