@@ -40,6 +40,7 @@ import RecallAiSdk from "@recallai/desktop-sdk";
 import { autoUpdater } from "electron-updater";
 import { loadConfig, saveConfig, DEFAULT_API_BASE } from "./config";
 import { AnchorApi } from "./anchorApi";
+import { startBrowserMeetingWatcher, type BrowserMeeting } from "./browserMeetingWatcher";
 import {
   BACKGROUND_ARG,
   canUseBackgroundAgent,
@@ -91,6 +92,15 @@ const activeRecordings = new Map<string, ActiveRecording>();
 // with a second one still genuinely live, which is exactly the kind of
 // thing to not discover for the first time live in front of investors.
 const recordingWindowIds = new Set<string>();
+
+// Meeting windows Recall's SDK has detected and not yet closed. The
+// Windows browser-call fallback (startBrowserCallFallback) stays out of
+// the way while any is open, so one call is never recorded twice.
+const sdkDetectedWindowIds = new Set<string>();
+
+// The desktop-audio source id of the browser call the fallback is
+// recording, if any.
+let browserCallWindowId: string | null = null;
 
 function send(channel: string, payload: unknown) {
   mainWindow?.webContents.send(channel, payload);
@@ -219,6 +229,94 @@ async function beginRecording(windowId: string, title: string): Promise<ActiveRe
 }
 
 const DEAL_MATCH_TIMEOUT_MS = 2_000;
+
+// Stops a recording and tells Anchor the meeting is over — the renderer's
+// Stop button, and the browser-call fallback when the mic is released.
+async function stopRecordingFor(windowId: string) {
+  const active = activeRecordings.get(windowId);
+  await RecallAiSdk.stopRecording({ windowId });
+  if (active) {
+    const api = getApi();
+    await api.stopMeeting(active.meetingId).catch((err) => {
+      // Local recording already stopped regardless — surfacing this
+      // as a log line rather than throwing, since the audio will
+      // still reach Anchor via Recall's webhook once it finishes
+      // uploading even if this particular confirmation call failed.
+      log(`Couldn't confirm stop with Anchor: ${err instanceof Error ? err.message : err}`);
+    });
+  }
+}
+
+// Windows: Recall's SDK doesn't detect Zoom or Teams running in a browser
+// (only their desktop apps, and Google Meet in Chrome/Edge). The watcher
+// (browserMeetingWatcher.ts) notices those calls from the browser's mic
+// use and window title; this records them as a desktop-audio recording
+// (your mic plus whatever the computer plays), and stops when the browser
+// lets go of the mic.
+function startBrowserCallFallback() {
+  if (process.platform !== "win32") return;
+  const stopWatcher = startBrowserMeetingWatcher({
+    log,
+    onMeetingStart: (meeting) => void recordBrowserCall(meeting),
+    onMeetingEnd: (meeting) => void stopBrowserCall(meeting),
+  });
+  app.on("will-quit", stopWatcher);
+}
+
+// "Weekly sync | Microsoft Teams - Google Chrome" -> "Weekly sync | Microsoft Teams"
+function meetingTitleFromWindow(meeting: BrowserMeeting): string {
+  const title = meeting.title.replace(/\s+[-\u2013\u2014]\s+(Google Chrome|Microsoft\u200b? Edge|Mozilla Firefox)$/i, "").trim();
+  return title || `${meeting.platform} call`;
+}
+
+async function recordBrowserCall(meeting: BrowserMeeting) {
+  if (sdkDetectedWindowIds.size > 0 || recordingWindowIds.size > 0 || startsInFlight.size > 0) {
+    log(`Not recording the ${meeting.platform} call in ${meeting.browser} separately: Anchor already found or is recording a call.`);
+    return;
+  }
+  if (!loadConfig().token) {
+    log(`Didn't record the ${meeting.platform} call in ${meeting.browser}: Anchor Desktop isn't signed in.`);
+    notify("Anchor didn't record this call", "Sign in to Anchor Desktop so it can record and coach your calls.");
+    showWindow();
+    return;
+  }
+  const title = meetingTitleFromWindow(meeting);
+  let windowId: string;
+  try {
+    log("Preparing to record the call's audio (your microphone and the computer's sound) …");
+    windowId = await RecallAiSdk.prepareDesktopAudioRecording();
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    log(`Couldn't prepare audio recording for the ${meeting.platform} call: ${reason}`);
+    notify("Anchor couldn't record this call", reason);
+    return;
+  }
+  browserCallWindowId = windowId;
+  showOverlayPending(windowId, title);
+  log(`Starting to record "${title}" …`);
+  try {
+    await beginRecording(windowId, title);
+  } catch (err) {
+    browserCallWindowId = null;
+    const reason = err instanceof Error ? err.message : String(err);
+    log(`Couldn't auto-start recording: ${reason}`);
+    hideOverlayFor(windowId);
+    notify("Anchor couldn't record this call", reason);
+  }
+}
+
+async function stopBrowserCall(meeting: BrowserMeeting) {
+  const windowId = browserCallWindowId;
+  if (!windowId) return;
+  browserCallWindowId = null;
+  log(`Stopping the recording of the ${meeting.platform} call in ${meeting.browser} …`);
+  try {
+    await stopRecordingFor(windowId);
+    log("Stopped. Anchor is processing the recording.");
+  } catch (err) {
+    log(`Couldn't stop the recording: ${err instanceof Error ? err.message : err}`);
+  }
+}
 
 async function beginRecordingUnguarded(windowId: string, title: string): Promise<ActiveRecording> {
   const api = getApi();
@@ -571,6 +669,7 @@ async function initSdk() {
   // ran without throwing (which it does either way — requestPermission
   // resolves either outcome without an exception).
   RecallAiSdk.addEventListener("meeting-detected", (evt) => {
+    sdkDetectedWindowIds.add(evt.window.id);
     const title = evt.window.title || evt.window.platform || evt.window.id;
     log(`Meeting detected: ${title} — starting to record automatically`);
     send("meeting-detected", evt.window);
@@ -598,6 +697,7 @@ async function initSdk() {
   });
 
   RecallAiSdk.addEventListener("meeting-closed", (evt) => {
+    sdkDetectedWindowIds.delete(evt.window.id);
     send("meeting-closed", evt.window);
   });
 
@@ -644,6 +744,9 @@ async function initSdk() {
     // recording webhook) isn't affected either way.
     const windowId = evt.window.id;
     const endedRecording = activeRecordings.get(windowId);
+    // Stopped some other way (the Stop button): nothing left for the
+    // browser-call fallback to stop when the mic is released.
+    if (windowId === browserCallWindowId) browserCallWindowId = null;
     setTimeout(() => {
       // Only delete if this window's entry is still the SAME recording
       // that just ended — guards against a quick re-record of the same
@@ -1012,18 +1115,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("stop-recording", async (_evt, windowId: string) => {
-    const active = activeRecordings.get(windowId);
-    await RecallAiSdk.stopRecording({ windowId });
-    if (active) {
-      const api = getApi();
-      await api.stopMeeting(active.meetingId).catch((err) => {
-        // Local recording already stopped regardless — surfacing this
-        // as a log line rather than throwing, since the audio will
-        // still reach Anchor via Recall's webhook once it finishes
-        // uploading even if this particular confirmation call failed.
-        log(`Couldn't confirm stop with Anchor: ${err instanceof Error ? err.message : err}`);
-      });
-    }
+    await stopRecordingFor(windowId);
     return { ok: true };
   });
 
@@ -1296,6 +1388,7 @@ if (!gotSingleInstanceLock) {
     try {
       await initSdk();
       log("Recall Desktop SDK initialized.");
+      startBrowserCallFallback();
     } catch (err) {
       log(`Failed to initialize the Recall Desktop SDK: ${err instanceof Error ? err.message : err}`);
     }
