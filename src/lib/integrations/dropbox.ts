@@ -8,7 +8,16 @@ import { db } from "@/db";
 import { integrationConnections } from "@/db/schema";
 import { extractTextFromFile } from "@/lib/extractText";
 import { PROVIDERS } from "./config";
-import { MAX_DOCUMENTS, MAX_DOWNLOAD_BYTES, trimExcerpt, type DocumentContextItem } from "./documentSearch";
+import {
+  MAX_DOCUMENTS,
+  MAX_DOWNLOAD_BYTES,
+  MAX_SEARCH_TERMS,
+  rankCandidates,
+  searchWords,
+  trimExcerpt,
+  type DocumentContextItem,
+  type SearchCandidate,
+} from "./documentSearch";
 
 type Connection = typeof integrationConnections.$inferSelect;
 
@@ -22,7 +31,7 @@ type DropboxFile = {
   size?: number;
 };
 
-async function getDropboxConnection(userId: string): Promise<Connection | null> {
+export async function getDropboxConnection(userId: string): Promise<Connection | null> {
   const [connection] = await db
     .select()
     .from(integrationConnections)
@@ -85,26 +94,82 @@ async function dropboxFetch(
   return { res, token };
 }
 
-export async function fetchRelevantDropboxDocuments(userId: string, term: string): Promise<DocumentContextItem[]> {
+// Matching folders whose files are also considered, and files per folder.
+const MAX_FOLDERS = 3;
+const MAX_FOLDER_FILES = 50;
+
+// Finds and reads the files most likely meant by the search terms: each
+// term is searched (Dropbox matches file names, and contents too on plans
+// that index them), files inside matching folders count too (a deal's
+// folder holds its files whatever they're called), and the best-ranked
+// are read. One term is enough; Ask Anchor sends several wordings.
+export async function fetchRelevantDropboxDocuments(
+  userId: string,
+  terms: string | string[],
+  opts: { maxDocuments?: number; excerptChars?: number } = {}
+): Promise<DocumentContextItem[]> {
+  const { maxDocuments = MAX_DOCUMENTS, excerptChars } = opts;
+  const queries = [...new Set((Array.isArray(terms) ? terms : [terms]).map((t) => t.trim()).filter(Boolean))].slice(
+    0,
+    MAX_SEARCH_TERMS
+  );
   const connection = await getDropboxConnection(userId);
-  if (!connection || !term.trim()) return [];
+  if (!connection || queries.length === 0) return [];
 
   let token = connection.accessToken;
-  const search = await dropboxFetch(connection, token, "https://api.dropboxapi.com/2/files/search_v2", {
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: term, options: { max_results: MAX_DOCUMENTS * 2, file_status: "active" } }),
-  });
-  token = search.token;
-  const body = (await search.res.json()) as { matches?: { metadata?: { metadata?: DropboxFile } }[] };
+  const call = async <T>(url: string, body: unknown): Promise<T> => {
+    const result = await dropboxFetch(connection, token, url, {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    token = result.token;
+    return (await result.res.json()) as T;
+  };
+  const search = (query: string) =>
+    call<{ matches?: { metadata?: { metadata?: DropboxFile } }[] }>("https://api.dropboxapi.com/2/files/search_v2", {
+      query,
+      options: { max_results: 20, file_status: "active" },
+    }).then((body) => (body.matches ?? []).map((m) => m.metadata?.metadata).filter((f): f is DropboxFile => Boolean(f)));
 
-  const files = (body.matches ?? [])
-    .map((m) => m.metadata?.metadata)
-    .filter((f): f is DropboxFile => Boolean(f && f[".tag"] === "file" && f.path_lower && f.name))
-    .sort((a, b) => (b.server_modified ?? "").localeCompare(a.server_modified ?? ""))
-    .slice(0, MAX_DOCUMENTS);
+  const candidates = new Map<string, SearchCandidate<DropboxFile>>();
+  const folders = new Map<string, number>();
+  const addFile = (f: DropboxFile) => {
+    if (f[".tag"] !== "file" || !f.path_lower || !f.name) return;
+    const existing = candidates.get(f.path_lower);
+    if (existing) existing.hits++;
+    else candidates.set(f.path_lower, { file: f, hits: 1, haystack: f.path_lower, modified: f.server_modified ?? "" });
+  };
+
+  // The first search alone, so an expired token is refreshed once; the
+  // rest together, since someone is waiting on the answer.
+  const results = [await search(queries[0]), ...(await Promise.all(queries.slice(1).map(search)))];
+  for (const f of results.flat()) {
+    if (f[".tag"] === "folder" && f.path_lower) folders.set(f.path_lower, (folders.get(f.path_lower) ?? 0) + 1);
+    else addFile(f);
+  }
+  const topFolders = [...folders.entries()].sort((a, b) => b[1] - a[1]).slice(0, MAX_FOLDERS);
+  const folderFiles = await Promise.all(
+    topFolders.map(([folder]) =>
+      call<{ entries?: DropboxFile[] }>("https://api.dropboxapi.com/2/files/list_folder", {
+        path: folder,
+        recursive: false,
+        limit: MAX_FOLDER_FILES,
+      })
+        .then((body) => body.entries ?? [])
+        .catch((err) => {
+          console.error(`[dropbox] couldn't list ${folder}:`, err);
+          return [];
+        })
+    )
+  );
+  folderFiles.flat().forEach(addFile);
+
+  // Twice as many as needed, so an unreadable file's place goes to the next best.
+  const files = rankCandidates([...candidates.values()], searchWords(queries), maxDocuments * 2);
 
   const items: DocumentContextItem[] = [];
   for (const f of files) {
+    if (items.length >= maxDocuments) break;
     try {
       if (!path.extname(f.name!) || (f.size ?? 0) > MAX_DOWNLOAD_BYTES) continue;
       const download = await dropboxFetch(connection, token, "https://content.dropboxapi.com/2/files/download", {
@@ -128,7 +193,7 @@ export async function fetchRelevantDropboxDocuments(userId: string, term: string
         link: f.path_display
           ? `https://www.dropbox.com/home${encodeURI(path.posix.dirname(f.path_display)).replace(/\/$/, "")}?preview=${encodeURIComponent(f.name!)}`
           : null,
-        excerpt: trimExcerpt(text),
+        excerpt: trimExcerpt(text, excerptChars),
       });
     } catch (err) {
       console.error(`[dropbox] couldn't read ${f.name}:`, err);
