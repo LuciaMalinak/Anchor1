@@ -22,7 +22,7 @@ type DropboxFile = {
   size?: number;
 };
 
-async function getDropboxConnection(userId: string): Promise<Connection | null> {
+export async function getDropboxConnection(userId: string): Promise<Connection | null> {
   const [connection] = await db
     .select()
     .from(integrationConnections)
@@ -85,14 +85,21 @@ async function dropboxFetch(
   return { res, token };
 }
 
-export async function fetchRelevantDropboxDocuments(userId: string, term: string): Promise<DocumentContextItem[]> {
+// Dropbox searches file names, and file contents too on plans that index
+// them (Business and Professional).
+export async function fetchRelevantDropboxDocuments(
+  userId: string,
+  term: string,
+  opts: { maxDocuments?: number; excerptChars?: number } = {}
+): Promise<DocumentContextItem[]> {
+  const { maxDocuments = MAX_DOCUMENTS, excerptChars } = opts;
   const connection = await getDropboxConnection(userId);
   if (!connection || !term.trim()) return [];
 
   let token = connection.accessToken;
   const search = await dropboxFetch(connection, token, "https://api.dropboxapi.com/2/files/search_v2", {
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: term, options: { max_results: MAX_DOCUMENTS * 2, file_status: "active" } }),
+    body: JSON.stringify({ query: term, options: { max_results: maxDocuments * 2, file_status: "active" } }),
   });
   token = search.token;
   const body = (await search.res.json()) as { matches?: { metadata?: { metadata?: DropboxFile } }[] };
@@ -101,7 +108,7 @@ export async function fetchRelevantDropboxDocuments(userId: string, term: string
     .map((m) => m.metadata?.metadata)
     .filter((f): f is DropboxFile => Boolean(f && f[".tag"] === "file" && f.path_lower && f.name))
     .sort((a, b) => (b.server_modified ?? "").localeCompare(a.server_modified ?? ""))
-    .slice(0, MAX_DOCUMENTS);
+    .slice(0, maxDocuments);
 
   const items: DocumentContextItem[] = [];
   for (const f of files) {
@@ -128,7 +135,7 @@ export async function fetchRelevantDropboxDocuments(userId: string, term: string
         link: f.path_display
           ? `https://www.dropbox.com/home${encodeURI(path.posix.dirname(f.path_display)).replace(/\/$/, "")}?preview=${encodeURIComponent(f.name!)}`
           : null,
-        excerpt: trimExcerpt(text),
+        excerpt: trimExcerpt(text, excerptChars),
       });
     } catch (err) {
       console.error(`[dropbox] couldn't read ${f.name}:`, err);
