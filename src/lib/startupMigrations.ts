@@ -1,4 +1,5 @@
 import { rawClient } from "@/db";
+import { BASELINE_STATEMENTS } from "@/db/baseline";
 
 // Small, additive database changes that run automatically every time the
 // server starts (see src/instrumentation.ts), so a deploy never needs a
@@ -37,7 +38,25 @@ const MIGRATIONS = [
   )`,
 ];
 
+// A brand-new database (say, a replacement for an expired one) has no
+// tables at all, which the additions below assume. Create everything in
+// one transaction first, so a new DATABASE_URL is the only setup needed.
+async function createTablesIfEmpty(): Promise<void> {
+  const [{ exists }] = await rawClient<{ exists: boolean }[]>`select to_regclass('public."user"') is not null as exists`;
+  if (exists) return;
+  console.log(`[startupMigrations] empty database: creating Anchor's tables (${BASELINE_STATEMENTS.length} statements)`);
+  await rawClient.begin(async (tx) => {
+    for (const sql of BASELINE_STATEMENTS) await tx.unsafe(sql);
+  });
+  console.log("[startupMigrations] tables created");
+}
+
 export async function runStartupMigrations(): Promise<void> {
+  try {
+    await createTablesIfEmpty();
+  } catch (err) {
+    console.error("[startupMigrations] couldn't create the tables in an empty database:", err);
+  }
   for (const sql of MIGRATIONS) {
     try {
       // One statement per call: ALTER TYPE ... ADD VALUE can't run inside a
