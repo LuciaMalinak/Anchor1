@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useIsMac } from "@/lib/useIsMac";
 
 type TokenRow = {
   id: string;
@@ -22,6 +23,9 @@ export function DesktopTokenPanel() {
   const [freshToken, setFreshToken] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The visitor's own computer's download goes first and stands out; it
+  // was always Mac, even for someone on Windows.
+  const isMac = useIsMac();
 
   async function load() {
     try {
@@ -127,29 +131,28 @@ export function DesktopTokenPanel() {
       </div>
 
       <ol className="flex flex-col gap-2 text-xs text-slate-600">
-        <li className="flex items-center gap-2">
+        <li className="flex flex-wrap items-center gap-2">
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-medium text-slate-500">
             1
           </span>
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- this isn't an app page,
-              it's a real file download (the route 302s straight to a signed R2 URL), which needs
-              an actual browser navigation rather than Next's client-side router. */}
-          <a
-            href="/api/download/desktop-app/mac"
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-brand-dark"
-          >
-            Download for Mac
-          </a>
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- see the Mac link above */}
-          <a
-            href="/api/download/desktop-app/win"
-            className="rounded-lg border border-brand px-3 py-1.5 text-xs font-medium text-brand shadow-sm transition hover:bg-brand/5"
-          >
-            Download for Windows
-          </a>
+          {(isMac === false ? (["win", "mac"] as const) : (["mac", "win"] as const)).map((platform, i) => (
+            // A plain <a>, not <Link>: it's a real file download (the route 302s straight to a
+            // signed R2 URL), which needs an actual browser navigation, not Next's router.
+            <a
+              key={platform}
+              href={`/api/download/desktop-app/${platform}`}
+              className={
+                i === 0
+                  ? "rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-brand-dark"
+                  : "rounded-lg border border-brand px-3 py-1.5 text-xs font-medium text-brand shadow-sm transition hover:bg-brand/5"
+              }
+            >
+              {platform === "mac" ? "Download for Mac" : "Download for Windows"}
+            </a>
+          ))}
           <span className="text-[11px] text-slate-400">Open it once after installing.</span>
         </li>
-        <li className="flex items-center gap-2">
+        <li className="flex flex-wrap items-center gap-2">
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-medium text-slate-500">
             2
           </span>

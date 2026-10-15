@@ -34,6 +34,7 @@
       "channel": "latest"
     },
     "files": ["dist/**/*", "src/renderer/**/*", "package.json"],
+    "asarUnpack": ["node_modules/@recallai/desktop-sdk/**"],
     "protocols": {
       "name": "Anchor Desktop Connect",
       "schemes": ["anchor-desktop"]

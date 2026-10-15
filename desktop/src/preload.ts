@@ -4,6 +4,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("anchor", {
+  // So the window can say "system tray" on Windows and "menu bar" on a Mac.
+  platform: process.platform,
   getConfig: () => ipcRenderer.invoke("get-config"),
   setToken: (token: string, apiBase?: string) => ipcRenderer.invoke("set-token", token, apiBase),
   startSignIn: () => ipcRenderer.invoke("start-sign-in"),

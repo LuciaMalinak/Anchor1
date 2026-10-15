@@ -10,6 +10,13 @@ const tokenInput = document.getElementById("token-input");
 const saveTokenBtn = document.getElementById("save-token");
 const signInBtn = document.getElementById("sign-in");
 const switchAccountBtn = document.getElementById("switch-account");
+
+// Windows has a system tray, not a menu bar; its icon can also sit behind
+// the ^ arrow next to the clock.
+if (window.anchor.platform === "win32") {
+  document.getElementById("foot").textContent =
+    "Closing this window keeps Anchor running in your system tray, watching for calls. Look for the anchor icon next to your clock (or behind the ^ arrow there) to reopen it or quit.";
+}
 const signedOutEl = document.getElementById("signed-out");
 const signedInEl = document.getElementById("signed-in");
 const meetingsEl = document.getElementById("meetings");

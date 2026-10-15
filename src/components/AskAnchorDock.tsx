@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { usePathname } from "next/navigation";
 import { FormattedMessage } from "@/components/AskAnchorPanel";
 import { runAskActions, stripAskActions } from "@/lib/askActions";
+import { useIsMac } from "@/lib/useIsMac";
 
 // Ask Anchor, docked on the right of every signed-in page (a sheet behind
 // a floating button on narrow screens). What it can see follows the page:
@@ -235,6 +236,7 @@ function DockBody({
   onClear: () => void;
   onClose?: () => void;
 }) {
+  const isMac = useIsMac();
   const [question, setQuestion] = useState("");
   const [listening, setListening] = useState(false);
   const recognition = useRef<SpeechRecognitionLike | null>(null);
@@ -321,7 +323,7 @@ function DockBody({
                 ×
               </button>
             ) : (
-              <kbd className="hidden rounded border border-[#2b4268] px-1.5 py-0.5 font-sans text-[11px] text-[#7d8fb0] lg:inline">⌘K</kbd>
+              <kbd className="hidden rounded border border-[#2b4268] px-1.5 py-0.5 font-sans text-[11px] text-[#7d8fb0] lg:inline">{isMac === false ? "Ctrl K" : "⌘K"}</kbd>
             )}
           </div>
         </div>
