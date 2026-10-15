@@ -1,10 +1,12 @@
 # Builds Anchor Desktop for Mac and Windows and publishes both whenever
 # desktop/ changes on main, so nobody has to run `npm run dist:mac` /
-# `dist:win` and build/upload-*-build.sh by hand. Installed apps then
-# pick it up on their own (see initAutoUpdate in desktop/src/main.ts).
+# `dist:win` and the build/upload-*-build.sh scripts by hand. Installed
+# apps then pick it up on their own (see initAutoUpdate in
+# desktop/src/main.ts). The two jobs run side by side; one failing doesn't
+# stop the other.
 #
 # Needs three repository secrets (Settings -> Secrets and variables ->
-# Actions); the Windows job only uses the first:
+# Actions; the Windows job only uses the first):
 #   DESKTOP_APP_UPLOAD_SECRET   same value as in Render's environment
 #   MAC_SIGNING_CERT_P12        base64 of the "Anchor Desktop Local Signing"
 #                               certificate exported from Keychain Access
@@ -109,11 +111,7 @@ jobs:
           DESKTOP_APP_UPLOAD_SECRET: ${{ secrets.DESKTOP_APP_UPLOAD_SECRET }}
         run: bash build/upload-mac-build.sh
 
-  # Windows used to be built and uploaded by hand, so installed Windows
-  # copies stayed on an old build while every fix shipped to the Mac. The
-  # installer is unsigned, as before; electron-updater still installs it
-  # because no publisher name is set to check against.
-  win:
+  windows:
     runs-on: windows-latest
     defaults:
       run:
@@ -130,15 +128,20 @@ jobs:
 
       - run: npm ci
 
-      # Same version as the Mac build from this run (see the mac job).
+      # Same version as the Mac build from this run (see that job).
       - name: Set the version
         run: |
           BASE="$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")"
           VERSION="$BASE.$((100 + GITHUB_RUN_NUMBER))"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
-          echo "Building Anchor Desktop $VERSION"
+          echo "Building Anchor Desktop $VERSION for Windows"
 
+      # Unsigned for now (no Windows code-signing certificate yet), same as
+      # the builds made by hand so far: electron-builder skips signing and
+      # Windows SmartScreen asks "Run anyway" on first install.
       - run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       # The recording engine has to be on disk next to the app, or Anchor
       # can't detect or record any call ("The Desktop SDK is not started").

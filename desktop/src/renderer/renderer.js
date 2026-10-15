@@ -10,17 +10,37 @@ const tokenInput = document.getElementById("token-input");
 const saveTokenBtn = document.getElementById("save-token");
 const signInBtn = document.getElementById("sign-in");
 const switchAccountBtn = document.getElementById("switch-account");
-
-// Windows has a system tray, not a menu bar; its icon can also sit behind
-// the ^ arrow next to the clock.
-if (window.anchor.platform === "win32") {
-  document.getElementById("foot").textContent =
-    "Closing this window keeps Anchor running in your system tray, watching for calls. Look for the anchor icon next to your clock (or behind the ^ arrow there) to reopen it or quit.";
-}
 const signedOutEl = document.getElementById("signed-out");
 const signedInEl = document.getElementById("signed-in");
 const meetingsEl = document.getElementById("meetings");
 const logEl = document.getElementById("log");
+const accountAvatarEl = document.getElementById("account-avatar");
+const footEl = document.getElementById("foot");
+
+// Same window on macOS and Windows; only the room left for the OS window
+// controls (see .titlebar in index.html) and a few words differ.
+const platform = (window.anchor && window.anchor.platform) || "darwin";
+document.body.classList.add(`platform-${platform}`);
+const IS_MAC = platform === "darwin";
+footEl.textContent = IS_MAC
+  ? "Closing this window keeps Anchor running in your menu bar, watching for calls. Click the anchor icon near your clock to reopen it or quit."
+  : "Closing this window keeps Anchor running in the system tray, watching for calls. Click the anchor icon by the clock (bottom-right, maybe under ^) to reopen it or quit.";
+
+const SPARKLE_SVG =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f0b48f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.7 1.8 1.8.7-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/></svg>';
+const ANCHOR_SVG =
+  '<svg width="26" height="26" viewBox="0 0 32 32" fill="none" stroke="#12294a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="7.5" r="2.25"/><path d="M16 9.75V24.5"/><path d="M11 13.5H21"/><path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5"/><path d="M8 18.5L6 15.8M8 18.5L10.3 17"/><path d="M24 18.5L26 15.8M24 18.5L21.7 17"/></svg>';
+
+function watchingHtml() {
+  const signedIn = isConnected;
+  return `<div class="watching"><div class="radar">${ANCHOR_SVG}</div><h2>${
+    signedIn ? "Watching for calls" : "Sign in to start"
+  }</h2><p class="hint">${
+    signedIn
+      ? "Open a Zoom, Teams or Meet call and it shows up here. Anchor starts recording on its own — nobody joins your call."
+      : "Once you're signed in, Anchor spots your Zoom, Teams and Meet calls and records them from this computer."
+  }</p><div class="apps"><span class="app-chip">Zoom</span><span class="app-chip">Microsoft Teams</span><span class="app-chip">Google Meet</span></div></div>`;
+}
 
 // windowId -> {
 //   title, recording, meetingId, dealId,
@@ -64,7 +84,7 @@ function renderSuggestionsHtml(suggestions) {
   }
   let html = "";
   if (suggestions.liveQuestion) {
-    html += `<div class="suggestion question"><span class="tag">ASK</span><div class="suggestion-text">${escapeHtml(
+    html += `<div class="suggestion question"><span class="tag">THEY ASKED</span><div class="suggestion-text">${escapeHtml(
       suggestions.liveQuestion.question
     )}</div><div class="suggested-answer">${escapeHtml(suggestions.liveQuestion.suggestedAnswer)}</div></div>`;
   }
@@ -72,13 +92,13 @@ function renderSuggestionsHtml(suggestions) {
     html += suggestions.nudges
       .map(
         (n) =>
-          `<div class="suggestion"><span class="tag">SUGGESTED</span><div class="suggestion-text">${escapeHtml(n)}</div></div>`
+          `<div class="suggestion"><span class="tag">SUGGESTION</span><div class="suggestion-text">${escapeHtml(n)}</div></div>`
       )
       .join("");
   }
   if (suggestions.checklist && suggestions.checklist.length) {
     html += `<ul class="checklist">${suggestions.checklist
-      .map((c) => `<li class="${c.covered ? "covered" : ""}">${c.covered ? "✓" : "○"} ${escapeHtml(c.label)}</li>`)
+      .map((c) => `<li class="${c.covered ? "covered" : ""}"><span aria-hidden="true">${c.covered ? "✓" : "○"}</span><span>${escapeHtml(c.label)}</span></li>`)
       .join("")}</ul>`;
   }
   if (!html) {
@@ -125,7 +145,10 @@ function updateAskAnswer(windowId) {
   const m = meetings.get(windowId);
   const container = document.getElementById(`ask-answer-${windowId}`);
   if (!m || !container) return;
-  container.textContent = m.askLoading && !m.askAnswer ? "Thinking…" : m.askAnswer;
+  const thinking = m.askLoading && !m.askAnswer;
+  container.textContent = thinking ? "Thinking…" : m.askAnswer;
+  container.classList.toggle("thinking", thinking);
+  container.hidden = !thinking && !m.askAnswer;
 }
 
 // Fetches this deal's open tasks once a recording starts (or right
@@ -200,7 +223,7 @@ function renderTranscriptHtml(m) {
   return m.transcript
     .map(
       (l) =>
-        `<div class="line"><div class="speaker">${escapeHtml(l.speaker || "Speaker")}</div><div>${escapeHtml(l.text)}</div></div>`
+        `<div class="line"><div class="speaker">${escapeHtml(l.speaker || "Speaker")}</div><div class="text">${escapeHtml(l.text)}</div></div>`
     )
     .join("");
 }
@@ -226,18 +249,18 @@ function renderDealPanel(windowId, m) {
 
   const transcriptCol = document.createElement("div");
   transcriptCol.className = "live-col transcript-col";
-  transcriptCol.innerHTML = `<strong>Live transcript</strong><div id="transcript-${windowId}" class="transcript">${renderTranscriptHtml(m)}</div>`;
+  transcriptCol.innerHTML = `<p class="label"><span class="live-dot" aria-hidden="true"></span>Live transcript</p><div id="transcript-${windowId}" class="transcript">${renderTranscriptHtml(m)}</div>`;
   grid.appendChild(transcriptCol);
 
   const sideCol = document.createElement("div");
   sideCol.className = "live-col";
   if (!m.dealId) {
     sideCol.innerHTML =
-      '<strong>Suggestions · from all your context</strong><p class="hint">Not linked to a deal yet. Link this call from Anchor\'s web app to see live suggestions and tasks here.</p>';
+      '<p class="label">Suggestions</p><p class="hint">This call isn\'t linked to a deal yet. Link it from Anchor\'s website to see live suggestions, tasks and Ask Anchor here.</p>';
   } else {
-    sideCol.innerHTML = `<strong>Suggestions · from all your context</strong><div id="suggestions-${windowId}">${renderSuggestionsHtml(
+    sideCol.innerHTML = `<p class="label">Suggestions</p><div id="suggestions-${windowId}">${renderSuggestionsHtml(
       m.suggestions
-    )}</div><div class="panel-section"><strong>To do for this deal</strong><div id="tasks-${windowId}">${renderTasksHtml(
+    )}</div><div class="panel-section"><p class="label">To do for this deal</p><div id="tasks-${windowId}">${renderTasksHtml(
       m
     )}</div></div>`;
     attachTaskHandlers(windowId, sideCol);
@@ -247,13 +270,14 @@ function renderDealPanel(windowId, m) {
 
   if (m.dealId) {
     const askSection = document.createElement("div");
-    askSection.className = "ask-section";
+    askSection.className = "ask-panel";
     askSection.innerHTML = `
+      <div class="ask-head">${SPARKLE_SVG}<span>Ask Anchor</span><span class="hint">about this deal and call</span></div>
+      <div id="ask-answer-${windowId}" class="answer" ${m.askAnswer ? "" : "hidden"}>${escapeHtml(m.askAnswer)}</div>
       <div class="ask-row">
-        <input type="text" class="ask-input" placeholder="Ask Anchor anything…" />
+        <input type="text" class="ask-input" placeholder="Ask anything — what did they say about pricing?" aria-label="Ask Anchor" />
         <button class="ask-btn">Ask</button>
       </div>
-      <div id="ask-answer-${windowId}" class="ask-answer">${escapeHtml(m.askAnswer)}</div>
     `;
     panel.appendChild(askSection);
     const askInput = askSection.querySelector(".ask-input");
@@ -277,9 +301,10 @@ function renderDealPanel(windowId, m) {
 }
 
 function renderMeetings() {
+  // Signed out with nothing detected: the welcome card says it all.
+  document.getElementById("calls-card").hidden = !isConnected && meetings.size === 0;
   if (meetings.size === 0) {
-    meetingsEl.innerHTML =
-      '<div class="empty"><h2>No call open</h2><p class="hint">Open a Zoom, Teams or Meet call and it shows up here. Anchor starts recording on its own.</p></div>';
+    meetingsEl.innerHTML = watchingHtml();
     updateStatusPill();
     return;
   }
@@ -297,12 +322,12 @@ function renderMeetings() {
     const meta = document.createElement("div");
     meta.className = "meeting-meta";
     meta.innerHTML = m.recording
-      ? '<span class="pill recording"><span class="dot"></span>Recording</span>'
-      : '<span class="pill">Detected</span>';
+      ? `<span class="pill recording"><span class="dot"></span>Recording</span><span data-elapsed="${escapeHtml(windowId)}">${formatElapsed(Date.now() - (m.startedAt || Date.now()))}</span>`
+      : '<span class="pill">Call detected</span><span>Not recording yet</span>';
     label.appendChild(titleEl);
     label.appendChild(meta);
     const btn = document.createElement("button");
-    btn.textContent = m.recording ? "Stop" : "Record";
+    btn.textContent = m.recording ? "Stop recording" : "Record this call";
     btn.className = m.recording ? "stop" : "primary";
     btn.onclick = async () => {
       btn.disabled = true;
@@ -356,18 +381,25 @@ function updateStatusPill() {
       ? "Connected"
       : "Not connected";
 }
-// Ticks the recording timer.
+// Ticks the recording timers (title bar and each call's row).
 setInterval(() => {
-  if ([...meetings.values()].some((m) => m.recording)) updateStatusPill();
+  if (![...meetings.values()].some((m) => m.recording)) return;
+  updateStatusPill();
+  for (const [windowId, m] of meetings) {
+    const el = m.recording && document.querySelector(`[data-elapsed="${CSS.escape(windowId)}"]`);
+    if (el) el.textContent = formatElapsed(Date.now() - (m.startedAt || Date.now()));
+  }
 }, 1000);
 
 async function refreshStatus() {
   const config = await window.anchor.getConfig();
   isConnected = config.hasToken;
   accountEmailEl.textContent = config.accountEmail || config.apiBase;
+  accountAvatarEl.textContent = ((config.accountEmail || "A").trim()[0] || "A").toUpperCase();
   signedOutEl.hidden = config.hasToken;
   signedInEl.hidden = !config.hasToken;
   updateStatusPill();
+  if (meetings.size === 0) renderMeetings();
 }
 
 // Opens Anchor's sign-in in the browser; the app connects itself when the

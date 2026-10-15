@@ -5,6 +5,9 @@ import { suggestInvites, endISO } from "@/lib/suggestInvites";
 import { safeReturnTo } from "@/lib/integrations/returnTo";
 import { createShareToken, readShareToken } from "@/lib/shareLink";
 import { findRelevantPassages, keywords } from "@/lib/askRetrieval";
+import { isBriefDue, normalizePrefs, daysBetween } from "@/lib/morningBriefPrefs";
+import { shouldShowToday, rankEmails, renderBriefText, renderBriefHtml, type BriefEmail, type BriefSnapshot } from "@/lib/morningBriefRender";
+import { createBriefToken, readBriefToken } from "@/lib/briefLink";
 const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL", m); process.exit(1); } else console.log("ok ", m); };
 const mime = buildMime({ to: ["sam@acme.com"], subject: "Acme — next steps\r\nBcc: evil@x.com", body: "Hi Sam —\nthanks.\nMüller" });
 const [hdr, b64] = mime.split("\r\n\r\n");
@@ -38,6 +41,38 @@ const budgetHits = findRelevantPassages("What's their budget and does procuremen
 assert(budgetHits[0]?.label.startsWith("Call") && budgetHits[0].text.includes("capped at 50k"), "budget question finds the call line");
 assert(findRelevantPassages("How much is the volume discount on seats?", askSources)[0]?.label.includes("pricing.xlsx"), "pricing question finds the document");
 assert(findRelevantPassages("Who won the 1998 World Cup?", askSources).length === 0, "unrelated question finds nothing, so Anchor goes to the web");
+// Morning brief timing: 8:00 in the person's own time zone, once a day.
+const nyPrefs = normalizePrefs({ hour: 8, timeZone: "America/New_York", days: "weekdays" });
+const thu = (utcHour: number, utcMin = 0) => new Date(Date.UTC(2026, 9, 15, utcHour, utcMin)); // Thu Oct 15 2026, NY is UTC-4
+assert(!isBriefDue(nyPrefs, null, thu(11, 59)).due, "not due at 7:59 local");
+assert(isBriefDue(nyPrefs, null, thu(12, 5)).due && isBriefDue(nyPrefs, null, thu(12, 5)).localDate === "2026-10-15", "due at 8:05 local, dated the local day");
+assert(!isBriefDue(nyPrefs, "2026-10-15", thu(13)).due, "never twice the same day");
+assert(!isBriefDue(nyPrefs, null, thu(15, 30)).due, "skipped if more than 3 hours late");
+assert(!isBriefDue(nyPrefs, null, new Date(Date.UTC(2026, 9, 17, 12, 5))).due, "weekdays-only skips Saturday");
+assert(isBriefDue(normalizePrefs({ ...nyPrefs, days: "everyday" }), null, new Date(Date.UTC(2026, 9, 17, 12, 5))).due, "every-day includes Saturday");
+assert(isBriefDue(normalizePrefs({ hour: 8, timeZone: "Europe/Berlin" }), null, thu(6, 10)).due, "Berlin 8:00 is 6:00 UTC");
+const junk = normalizePrefs({ hour: 99, timeZone: "Mars/Base", channel: "fax", remindEveryDays: 9 });
+assert(junk.hour === 8 && junk.timeZone === "America/New_York" && junk.channel === "email" && junk.remindEveryDays === 1, "bad settings fall back to defaults");
+assert(daysBetween("2026-10-13", "2026-10-15") === 2, "days between dates");
+// Morning brief follow-ups: an unanswered email comes back every N days
+// until answered, marked done or snoozed.
+const every2 = { remindEveryDays: 2 as const };
+assert(shouldShowToday("t1", "2026-10-15", every2, {}, {}), "new email shows");
+assert(!shouldShowToday("t1", "2026-10-15", every2, { t1: { on: "2026-10-14", n: 1 } }, {}), "every-2-days skips the next day");
+assert(shouldShowToday("t1", "2026-10-16", every2, { t1: { on: "2026-10-14", n: 1 } }, {}), "every-2-days comes back after 2 days");
+assert(!shouldShowToday("t1", "2026-10-15", { remindEveryDays: 1 }, {}, { t1: "done" }), "done stops reminders");
+assert(!shouldShowToday("t1", "2026-10-15", { remindEveryDays: 1 }, {}, { t1: "2026-10-17" }) && shouldShowToday("t1", "2026-10-17", { remindEveryDays: 1 }, {}, { t1: "2026-10-17" }), "snooze hides until its date");
+const mk = (o: Partial<BriefEmail>): BriefEmail => ({ threadId: "x", fromName: "A", fromEmail: "a@x.com", subject: "s", summary: "wants x", waitingDays: 0, reminder: 1, deal: null, priority: 3, gmailUrl: "https://mail.google.com", drafted: false, ...o });
+const ranked = rankEmails([mk({ threadId: "old", waitingDays: 6 }), mk({ threadId: "deal", deal: "Northwind", priority: 1 }), mk({ threadId: "new", waitingDays: 1 })]);
+assert(ranked.map((e) => e.threadId).join(",") === "deal,old,new", "deal contacts first, then longest waiting");
+const snap: BriefSnapshot = { date: "2026-10-15", googleConnected: true, emails: [mk({ fromName: "Dana Ruiz", deal: "Northwind", summary: "wants 50-seat pricing by Mon", waitingDays: 2, reminder: 3 })], moreEmails: 0, tasks: [{ text: "Send SOC 2 report", deal: "Northwind" }], moreTasks: 2, meetings: [{ time: "10:00 AM", title: "IT review", deal: "Northwind" }], quietDeals: [{ name: "Bluepeak", days: 12 }] };
+const smsText = renderBriefText(snap, "https://a.co/brief/x");
+assert(smsText.includes("Dana (Northwind): wants 50-seat pricing by Mon – 2d, reminder 3") && smsText.includes("To do: Send SOC 2 report (+2 more)") && smsText.includes("Gone quiet: Bluepeak 12d"), "text message is short and complete");
+assert(smsText.length < 500, "text message stays short");
+assert(renderBriefHtml({ ...snap, emails: [mk({ fromName: "<script>x</script>" })] }, "https://a.co/b", "Lucia").includes("&lt;script&gt;"), "email escapes names");
+const briefToken = createBriefToken(dealId, Date.UTC(2026, 9, 15));
+assert(readBriefToken(briefToken, Date.UTC(2026, 9, 16))?.userId === dealId && readBriefToken(briefToken, Date.UTC(2026, 9, 19)) === null, "brief link opens for 3 days");
+assert(readBriefToken(token, Date.UTC(2026, 9, 2)) === null, "a share link can't open a brief");
 const transcript = "Sam: Let's get on a call Friday to review the churn cohort.\nYou: Great, Friday at 10 works.";
 const fake = async () => JSON.stringify([
   { title: "Churn cohort review — Acme", startISO: "2026-10-02T10:00", durationMinutes: 30, attendees: ["sam@acme.com", "invented@nowhere.com"], sourceQuote: "Let's get on a call Friday to review the churn cohort.", confidence: "high" },
@@ -75,3 +110,18 @@ import("@/lib/integrations/documentSearch").then(({ dealSearchTerm, formatDocume
   const ctx = formatDocumentContext([{ source: "Dropbox", name: "deck.pdf", modified: "2026-09-30T10:00:00Z", link: null, excerpt: "hello" }]);
   assert(ctx === "— deck.pdf (Dropbox, updated 2026-09-30)\nhello", "document context formatted with source and date");
 }).catch((err) => { console.error("FAIL documentSearch tests", err); process.exit(1); });
+
+// Which inbox threads still need a reply, on headers alone.
+import("@/lib/integrations/gmailHeaders").then(({ looksAwaitingReply, parseAddress }) => {
+  const me = new Set(["lucia@acme.com"]);
+  const msg = (headers: Record<string, string>, labelIds: string[] = ["INBOX"]) => ({
+    labelIds,
+    payload: { headers: Object.entries(headers).map(([name, value]) => ({ name, value })) },
+  });
+  assert(looksAwaitingReply(msg({ From: "Dana Ruiz <dana@northwind.com>", To: "Lucia <lucia@acme.com>" }), me), "a person writing to me needs a reply");
+  assert(!looksAwaitingReply(msg({ From: "Lucia <lucia@acme.com>", To: "dana@northwind.com" }, ["SENT"]), me), "my own reply last means answered");
+  assert(!looksAwaitingReply(msg({ From: "news@vendor.com", To: "lucia@acme.com", "List-Unsubscribe": "<mailto:x>" }), me), "newsletters skipped");
+  assert(!looksAwaitingReply(msg({ From: "no-reply@zoom.us", To: "lucia@acme.com" }), me), "no-reply senders skipped");
+  assert(!looksAwaitingReply(msg({ From: "dana@northwind.com", To: "team@acme.com" }), me), "mail only to a group list skipped");
+  assert(parseAddress('"Ruiz, Dana" <Dana@Northwind.com>').email === "dana@northwind.com", "parses sender address");
+}).catch((err) => { console.error("FAIL gmailHeaders tests", err); process.exit(1); });

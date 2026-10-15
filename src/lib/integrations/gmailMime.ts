@@ -5,6 +5,9 @@ export type DraftInput = {
   cc?: string[];
   subject: string;
   body: string; // plain text
+  // Message-ID of the email being replied to, so Gmail files the draft in
+  // that thread (with the thread id passed to the drafts API).
+  inReplyTo?: string;
 };
 
 function encodeHeader(v: string): string {
@@ -20,6 +23,8 @@ export function buildMime(d: DraftInput): string {
     d.to.length ? `To: ${d.to.map(stripCRLF).join(", ")}` : null, // Gmail allows a draft with no recipient yet
     d.cc?.length ? `Cc: ${d.cc.map(stripCRLF).join(", ")}` : null,
     `Subject: ${encodeHeader(stripCRLF(d.subject))}`,
+    d.inReplyTo ? `In-Reply-To: ${stripCRLF(d.inReplyTo)}` : null,
+    d.inReplyTo ? `References: ${stripCRLF(d.inReplyTo)}` : null,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',
     "Content-Transfer-Encoding: base64",

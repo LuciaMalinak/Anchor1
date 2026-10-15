@@ -849,3 +849,27 @@ export const supportRequests = pgTable("support_request", {
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   resolvedAt: timestamp("resolvedAt", { mode: "date" }),
 });
+
+// Each person's Morning brief (see src/lib/morningBrief.ts): their
+// settings, when it last went out, and what they've done with items in it.
+// Created on deploy by startupMigrations.ts.
+export const morningBriefs = pgTable("morning_brief", {
+  userId: uuid("userId")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  // MorningBriefPrefs (src/lib/morningBriefPrefs.ts); normalized on read.
+  prefs: jsonb("prefs").$type<Record<string, unknown>>().notNull().default({}),
+  // The person's local date (YYYY-MM-DD) of the last brief sent, so the
+  // hourly job sends at most one a day.
+  lastSentOn: text("lastSentOn"),
+  // Email thread id -> the local date it last appeared in a brief and how
+  // many briefs it has been in (for "remind me every N days" and "3rd
+  // reminder"), and whether a reply was drafted. Pruned as threads age out.
+  shown: jsonb("shown").$type<Record<string, { on: string; n: number; drafted?: boolean }>>().notNull().default({}),
+  // Email thread id -> date to stay hidden until ("Snooze"), or "done".
+  dismissed: jsonb("dismissed").$type<Record<string, string>>().notNull().default({}),
+  // The last brief as sent, for its web page (Done / Snooze buttons).
+  lastBrief: jsonb("lastBrief").$type<Record<string, unknown>>(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});

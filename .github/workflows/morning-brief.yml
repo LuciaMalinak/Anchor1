@@ -1,0 +1,40 @@
+# Sends Morning briefs: once an hour this asks the website to send every
+# brief whose time has come, in each person's own time zone (see
+# src/lib/morningBrief.ts). The app has no scheduler of its own, and this
+# is free. Each person still gets at most one brief a day, so a late or
+# repeated run never double-sends.
+#
+# Needs one repository secret (Settings -> Secrets and variables ->
+# Actions -> New repository secret):
+#   CRON_SECRET   the same value as CRON_SECRET in Render's environment
+# and, only if the site moves, a repository variable ANCHOR_URL.
+name: Morning briefs
+
+on:
+  schedule:
+    # A few minutes past each hour; GitHub may start it a little late.
+    - cron: "4 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: morning-brief
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Ask Anchor to send the briefs that are due
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ANCHOR_URL: ${{ vars.ANCHOR_URL || 'https://anchor-be6o.onrender.com' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::warning::CRON_SECRET isn't set as a repository secret, so no briefs were sent."
+            exit 0
+          fi
+          # The site may be asleep (Render free plan) and take a minute to
+          # wake, so allow time and retry.
+          curl -sS --fail-with-body --max-time 600 --retry 3 --retry-delay 30 --retry-all-errors \
+            -X POST -H "x-cron-key: $CRON_SECRET" "$ANCHOR_URL/api/cron/morning-brief"

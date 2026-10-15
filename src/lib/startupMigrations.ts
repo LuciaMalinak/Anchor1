@@ -24,6 +24,17 @@ const MIGRATIONS = [
     "resolvedAt" timestamp
   )`,
   `CREATE INDEX IF NOT EXISTS "support_request_status_idx" ON "support_request" ("status", "createdAt")`,
+  // Morning brief settings and state per person (morningBrief.ts).
+  `CREATE TABLE IF NOT EXISTS "morning_brief" (
+    "userId" uuid PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
+    "enabled" boolean NOT NULL DEFAULT false,
+    "prefs" jsonb NOT NULL DEFAULT '{}'::jsonb,
+    "lastSentOn" text,
+    "shown" jsonb NOT NULL DEFAULT '{}'::jsonb,
+    "dismissed" jsonb NOT NULL DEFAULT '{}'::jsonb,
+    "lastBrief" jsonb,
+    "updatedAt" timestamp NOT NULL DEFAULT now()
+  )`,
 ];
 
 export async function runStartupMigrations(): Promise<void> {

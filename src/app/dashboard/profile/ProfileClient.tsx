@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { MorningBriefSettings } from "./MorningBriefSettings";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -37,7 +38,7 @@ export function ProfileClient({ profile }: { profile: Profile }) {
   const [linkedin, setLinkedin] = useState(profile.linkedin || "");
   const [department, setDepartment] = useState(profile.department || "");
   const [otherInfo, setOtherInfo] = useState(profile.otherInfo || "");
-  const [dailyDigestOptIn, setDailyDigestOptIn] = useState(profile.dailyDigestOptIn);
+  const [dailyDigestOptIn] = useState(profile.dailyDigestOptIn);
   const [preview, setPreview] = useState<string | null>(profile.image);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +114,10 @@ export function ProfileClient({ profile }: { profile: Profile }) {
           Shown to your teammates on shared deals and the team page.
         </p>
       </div>
+
+      {/* First on the page so it's easy to find; Home links here
+          (#morning-brief) until it's turned on. */}
+      <MorningBriefSettings />
 
       <form onSubmit={handleSave} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="h-24 bg-gradient-to-r from-brand to-brand-dark" />
@@ -199,20 +204,9 @@ export function ProfileClient({ profile }: { profile: Profile }) {
           </div>
         </div>
 
-        <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5">
-          <input
-            type="checkbox"
-            checked={dailyDigestOptIn}
-            onChange={(e) => setDailyDigestOptIn(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300"
-          />
-          <span className="text-xs text-slate-600">
-            <span className="font-medium text-slate-700">Text me a morning deal digest</span> — a
-            9am summary of deal activity and leadership announcements, sent to the phone number
-            above. (Texting isn&apos;t turned on for this team yet — this just saves your
-            preference for when it is.)
-          </span>
-        </label>
+        {/* The old "text me a 9am deal digest" checkbox lived here; the
+            Morning brief above replaces it. dailyDigestOptIn is still sent
+            unchanged with this form so existing choices aren't reset. */}
 
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">LinkedIn</label>

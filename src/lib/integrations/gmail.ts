@@ -21,7 +21,7 @@ const MAX_BODY_CHARS = 3000;
 
 export type EmailContextItem = { subject: string; from: string; date: string; body: string };
 
-type GmailPart = {
+export type GmailPart = {
   mimeType?: string;
   filename?: string;
   body?: { data?: string };
@@ -58,7 +58,7 @@ function stripHtml(html: string): string {
 // puts the actual message before any quoted-reply parts get merged in as
 // plain text, and multipart/alternative's plain-text sibling is usually
 // good enough on its own.
-function extractBody(payload: GmailPart | undefined): string {
+export function extractBody(payload: GmailPart | undefined): string {
   if (!payload) return "";
 
   function walk(part: GmailPart, preferredType: string): string | null {
@@ -99,7 +99,7 @@ function extractBody(payload: GmailPart | undefined): string {
 // message's worth of new content instead of re-including the entire
 // thread every time it's quoted again. Heuristic, not perfect — errs
 // toward keeping content if a pattern doesn't clearly match.
-function stripQuotedReply(text: string): string {
+export function stripQuotedReply(text: string): string {
   const patterns = [
     /\n[ \t]*On .{0,120} wrote:\s*\n/i,
     /\n-{2,}\s*Original Message\s*-{2,}/i,

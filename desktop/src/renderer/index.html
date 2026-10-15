@@ -4,64 +4,120 @@
     <meta charset="utf-8" />
     <title>Anchor Desktop</title>
     <style>
-      /* Brand tokens shared with the website (src/app/globals.css): navy,
-         copper, a soft off-white canvas with white cards, serif headings
-         and small mono labels in wide caps. Kept in sync by hand (no shared
-         CSS between the two apps). Uses macOS's built-in serif (New York)
-         and mono (SF Mono), so it needs no web fonts and works offline. */
+      /* Same look as the signed-in website (src/app/dashboard/layout.tsx
+         and AskAnchorDock.tsx): a navy title bar, a light grey canvas with
+         white cards, copper for the main action, and a navy Ask Anchor
+         panel. Kept in sync by hand (no shared CSS between the two apps).
+         Identical on macOS and Windows: the window controls sit inside the
+         navy bar on both (see createWindow in main.ts), and the font is
+         each system's own (San Francisco / Segoe UI), so it needs no web
+         fonts and works offline. */
       :root {
         --brand: #12294a;
         --brand-dark: #0b1930;
+        --panel: #0f2340;
+        --panel-card: #16304f;
+        --panel-line: #1f3658;
         --copper: #b4531f;
         --copper-dark: #904218;
-        --canvas: #f4f5f8;
-        --line: #e5e7ee;
-        --ink: #16223a;
+        --copper-soft: #f0b48f;
+        --canvas: #f4f6f9;
+        --line: #e2e8f0;
+        --ink: #0f172a;
+        --body: #334155;
         --muted: #64748b;
         --faint: #94a3b8;
-        /* The system font throughout (San Francisco on a Mac), same as
-           the website. --serif/--mono point at it too so older rules
-           follow; only the activity log stays monospaced. */
-        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        --serif: var(--sans);
-        --mono: var(--sans);
+        --green: #059669;
+        --red: #dc2626;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+        --titlebar: 52px;
       }
       * {
         box-sizing: border-box;
       }
+      html,
+      body {
+        height: 100%;
+      }
       body {
         margin: 0;
+        display: flex;
+        flex-direction: column;
         font-family: var(--sans);
         font-size: 13px;
         color: var(--ink);
         background: var(--canvas);
         -webkit-font-smoothing: antialiased;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      input,
+      textarea,
+      .selectable,
+      #log,
+      .transcript,
+      .answer {
+        -webkit-user-select: text;
+        user-select: text;
       }
       [hidden] {
         display: none !important;
       }
+      /* Slim scrollbars on Windows, matching macOS's overlay ones. */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(100, 116, 139, 0.35);
+        border-radius: 10px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(100, 116, 139, 0.55);
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .ask-panel ::-webkit-scrollbar-thumb {
+        background-color: rgba(159, 179, 209, 0.35);
+      }
 
-      /* Top bar: logo, and a status pill (connected / recording). */
-      .topbar {
+      /* ---- Title bar: draggable, with the OS window controls inside it.
+         macOS draws its traffic lights on the left, Windows its
+         minimise/maximise/close on the right, so each side leaves room. */
+      .titlebar {
+        flex-shrink: 0;
+        height: var(--titlebar);
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 14px 18px;
-        background: white;
-        border-bottom: 1px solid var(--line);
+        gap: 12px;
+        padding: 0 16px;
+        background: var(--brand);
+        color: white;
+        -webkit-app-region: drag;
+      }
+      body.platform-darwin .titlebar {
+        padding-left: 84px;
+      }
+      body.platform-win32 .titlebar,
+      body.platform-linux .titlebar {
+        padding-right: 150px;
+      }
+      .titlebar button,
+      .titlebar a,
+      .titlebar .pill {
+        -webkit-app-region: no-drag;
       }
       .brand {
         display: flex;
         align-items: center;
         gap: 8px;
-      }
-      .brand h1 {
-        margin: 0;
-        font-family: var(--serif);
-        font-weight: 600;
-        font-size: 19px;
+        font-weight: 650;
+        font-size: 16px;
         letter-spacing: -0.01em;
-        color: var(--brand);
       }
       .pill {
         display: inline-flex;
@@ -69,14 +125,15 @@
         gap: 6px;
         padding: 4px 10px;
         border-radius: 999px;
-        font-size: 11px;
-        font-weight: 500;
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
         background: #f1f5f9;
         color: var(--muted);
       }
       .pill .dot {
-        width: 6px;
-        height: 6px;
+        width: 7px;
+        height: 7px;
         border-radius: 50%;
         background: currentColor;
       }
@@ -86,82 +143,96 @@
       }
       .pill.recording {
         background: #fef2f2;
-        color: #dc2626;
+        color: var(--red);
       }
       .pill.recording .dot {
         animation: blink 1.4s ease-in-out infinite;
+      }
+      .titlebar .pill {
+        background: rgba(255, 255, 255, 0.1);
+        color: #cbd5e1;
+      }
+      .titlebar .pill.connected {
+        background: rgba(16, 185, 129, 0.16);
+        color: #6ee7b7;
+      }
+      .titlebar .pill.recording {
+        background: rgba(248, 113, 113, 0.18);
+        color: #fecaca;
+      }
+      .titlebar .pill.recording .dot {
+        background: #f87171;
       }
       @keyframes blink {
         50% {
           opacity: 0.25;
         }
       }
-      .subline {
-        margin: 0;
-        padding: 8px 18px;
-        font-family: var(--mono);
-        font-size: 9.5px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--faint);
-        background: white;
-        border-bottom: 1px solid var(--line);
+
+      /* ---- Layout */
+      .app {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
       }
       main {
-        padding: 16px 18px 24px;
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 18px 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
       }
-
-      /* Cards and labels */
-      section {
+      .card {
         background: white;
         border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 12px;
+        border-radius: 14px;
+        padding: 18px;
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       }
-      .eyebrow,
-      .panel-section strong,
-      .live-col > strong {
-        display: block;
-        margin: 0 0 8px;
-        font-family: var(--mono);
-        font-size: 9.5px;
-        font-weight: 500;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--faint);
-      }
-      .eyebrow.copper {
-        color: var(--copper);
+      .card-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
       }
       h2 {
         margin: 0;
-        font-family: var(--serif);
-        font-weight: 600;
-        font-size: 18px;
-        letter-spacing: -0.01em;
-        color: var(--ink);
+        font-size: 15px;
+        font-weight: 650;
+        color: var(--brand);
       }
       .hint {
         margin: 0;
-        font-size: 12px;
+        font-size: 12.5px;
         line-height: 1.5;
         color: var(--muted);
       }
+      .label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 0 8px;
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
 
-      /* Controls */
+      /* ---- Controls */
       button {
         font: inherit;
-        font-size: 12px;
-        font-weight: 500;
+        font-size: 12.5px;
+        font-weight: 600;
         color: white;
         background: var(--brand);
         border: none;
-        border-radius: 7px;
-        padding: 8px 14px;
+        border-radius: 9px;
+        padding: 9px 16px;
         cursor: pointer;
-        transition: background 150ms ease;
+        transition: background 150ms ease, opacity 150ms ease;
       }
       button:hover:not(:disabled) {
         background: var(--brand-dark);
@@ -170,300 +241,477 @@
         opacity: 0.5;
         cursor: default;
       }
-      button.primary,
-      .ask-row button {
+      button:focus-visible,
+      input:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--copper-soft);
+        outline-offset: 2px;
+      }
+      button.primary {
         background: var(--copper);
       }
-      button.primary:hover:not(:disabled),
-      .ask-row button:hover:not(:disabled) {
+      button.primary:hover:not(:disabled) {
         background: var(--copper-dark);
       }
       button.stop {
-        background: #dc2626;
+        background: white;
+        color: var(--red);
+        box-shadow: inset 0 0 0 1px #fecaca;
       }
       button.stop:hover:not(:disabled) {
-        background: #b91c1c;
+        background: #fef2f2;
       }
       button.link {
         background: none;
-        color: var(--muted);
-        padding: 0;
-        font-size: 11px;
-        text-decoration: underline;
+        color: var(--brand);
+        padding: 4px 6px;
+        font-size: 12px;
+        font-weight: 600;
       }
       button.link:hover:not(:disabled) {
-        background: none;
-        color: var(--brand);
+        background: #eef2f7;
       }
       input {
         width: 100%;
         font: inherit;
-        font-size: 12px;
-        padding: 8px 10px;
-        border: 1px solid #d8dce5;
-        border-radius: 7px;
-        margin-bottom: 8px;
+        font-size: 13px;
+        padding: 9px 11px;
+        border: 1px solid #cbd5e1;
+        border-radius: 9px;
+        background: white;
+        color: var(--ink);
       }
       input:focus {
         outline: none;
         border-color: var(--brand);
       }
 
-      /* Account */
-      #signed-out h2 {
+      /* ---- Signed out: a welcome card */
+      .welcome {
+        text-align: center;
+        padding: 34px 28px 26px;
+      }
+      .badge {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 16px;
+        border-radius: 16px;
+        background: var(--brand);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 24px -12px rgba(18, 41, 74, 0.7);
+      }
+      .welcome h2 {
         font-size: 21px;
       }
-      #signed-out .hint {
-        margin: 6px 0 14px;
+      .welcome .hint {
+        max-width: 360px;
+        margin: 8px auto 18px;
       }
       #sign-in {
-        width: 100%;
-        padding: 11px 14px;
-        font-size: 13px;
+        min-width: 240px;
+        padding: 12px 18px;
+        font-size: 13.5px;
       }
       #token-fallback {
-        margin-top: 12px;
-        font-size: 11px;
+        margin-top: 16px;
+        font-size: 12px;
         color: var(--muted);
+        text-align: left;
+        max-width: 420px;
+        margin-left: auto;
+        margin-right: auto;
       }
       #token-fallback summary {
         cursor: pointer;
-        margin-bottom: 8px;
+        text-align: center;
+        margin-bottom: 10px;
       }
-      .account-row {
+      .token-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      /* ---- Signed in: one quiet account row */
+      .account {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 10px;
+        gap: 12px;
+        padding: 12px 14px 12px 16px;
+      }
+      .avatar {
+        width: 34px;
+        height: 34px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        background: var(--copper);
+        color: white;
+        font-weight: 700;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .account-text {
+        flex: 1;
+        min-width: 0;
+      }
+      .account-text .hint {
+        font-size: 11.5px;
       }
       #account-email {
-        font-family: var(--serif);
-        font-weight: 500;
-        font-size: 14px;
+        display: block;
+        font-weight: 600;
+        font-size: 13.5px;
         color: var(--ink);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
-      /* Detected meetings */
-      .meeting-block {
-        border-top: 1px solid #f1f5f9;
+      /* ---- No call open: watching */
+      .watching {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 26px 16px 18px;
       }
-      .meeting-block:first-child {
-        border-top: none;
+      .radar {
+        position: relative;
+        width: 64px;
+        height: 64px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #eef2f7;
+      }
+      .radar::before,
+      .radar::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid rgba(18, 41, 74, 0.25);
+        animation: ripple 2.6s ease-out infinite;
+      }
+      .radar::after {
+        animation-delay: 1.3s;
+      }
+      @keyframes ripple {
+        from {
+          transform: scale(1);
+          opacity: 0.9;
+        }
+        to {
+          transform: scale(1.8);
+          opacity: 0;
+        }
+      }
+      .watching h2 {
+        font-size: 17px;
+      }
+      .watching .hint {
+        max-width: 380px;
+        margin-top: 6px;
+      }
+      .apps {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .app-chip {
+        padding: 5px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--body);
+        background: #f8fafc;
+      }
+
+      /* ---- A detected / recording call */
+      .meeting-block + .meeting-block {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid #f1f5f9;
       }
       .meeting {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        padding: 10px 0;
+        gap: 12px;
       }
       .meeting-title {
-        font-family: var(--serif);
-        font-weight: 600;
-        font-size: 14px;
+        font-weight: 650;
+        font-size: 15px;
         color: var(--ink);
       }
       .meeting-meta {
         display: flex;
         align-items: center;
-        gap: 6px;
-        margin-top: 3px;
-      }
-      .empty {
-        padding: 18px 0 6px;
-        text-align: center;
+        gap: 8px;
+        margin-top: 5px;
+        font-size: 12px;
+        color: var(--muted);
       }
 
-      /* Live panel while recording */
-      .deal-panel {
-        padding: 2px 0 12px;
+      /* ---- Live view while recording: transcript | suggestions, then
+         Ask Anchor in a navy panel like the website's. */
+      .live-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+        gap: 12px;
+        margin-top: 14px;
       }
-      .panel-section {
-        margin-top: 12px;
-      }
-      .suggestion {
+      .live-col {
         border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 10px 12px;
-        margin-bottom: 8px;
+        border-radius: 12px;
+        padding: 14px;
+        min-width: 0;
         background: white;
       }
+      .transcript-col {
+        background: #fbfcfd;
+      }
+      .live-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--red);
+        animation: blink 1.4s ease-in-out infinite;
+      }
+      .transcript {
+        max-height: 320px;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .transcript .line + .line {
+        margin-top: 12px;
+      }
+      .transcript .speaker {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--brand);
+        margin-bottom: 2px;
+      }
+      .transcript .text {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--body);
+      }
+      .suggestion {
+        border-radius: 10px;
+        padding: 11px 12px;
+        margin-bottom: 8px;
+        background: #f8fafc;
+        border: 1px solid #edf1f6;
+      }
       .suggestion.question {
-        border-color: #e8c9ae;
-        background: #fffaf5;
+        background: #fdf4ee;
+        border-color: #f6dccb;
       }
       .tag {
         display: inline-block;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-family: var(--mono);
-        font-size: 8.5px;
-        letter-spacing: 0.14em;
-        color: white;
-        background: var(--brand);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: var(--brand);
       }
       .suggestion.question .tag {
-        background: var(--copper);
+        color: var(--copper-dark);
       }
       .suggestion-text {
-        margin-top: 6px;
-        font-family: var(--serif);
-        font-weight: 500;
-        font-size: 14px;
-        line-height: 1.35;
+        margin-top: 3px;
+        font-weight: 600;
+        font-size: 13.5px;
+        line-height: 1.4;
         color: var(--ink);
       }
       .suggested-answer {
         margin-top: 4px;
-        font-size: 12px;
-        color: var(--muted);
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--body);
       }
       .checklist {
         list-style: none;
-        margin: 4px 0 0;
+        margin: 6px 0 0;
         padding: 0;
-        font-size: 12px;
+        font-size: 12.5px;
       }
       .checklist li {
+        display: flex;
+        gap: 8px;
         padding: 3px 0;
         color: var(--muted);
       }
       .checklist li.covered {
-        color: #16a34a;
+        color: var(--green);
+      }
+      .panel-section {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid #f1f5f9;
       }
       .task-row {
         display: flex;
         align-items: flex-start;
-        gap: 8px;
-        font-size: 12px;
+        gap: 9px;
+        font-size: 12.5px;
+        line-height: 1.4;
         padding: 5px 0;
         cursor: pointer;
+        color: var(--body);
       }
       .task-row input {
-        width: auto;
-        margin: 2px 0 0;
+        width: 15px;
+        height: 15px;
+        margin: 1px 0 0;
+        flex-shrink: 0;
+        accent-color: var(--brand);
       }
       .task-row em {
         color: var(--faint);
         font-style: normal;
       }
+
+      .ask-panel {
+        /* Stays in view at the bottom of the window while the call's
+           transcript and suggestions scroll above it. */
+        position: sticky;
+        bottom: 12px;
+        z-index: 1;
+        box-shadow: 0 12px 30px -16px rgba(11, 25, 48, 0.6);
+        margin-top: 12px;
+        border-radius: 14px;
+        background: var(--panel);
+        border: 1px solid var(--panel-line);
+        padding: 14px;
+        color: #e2e8f0;
+      }
+      .ask-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-weight: 650;
+        font-size: 14px;
+        color: white;
+      }
+      .ask-head .hint {
+        color: #9fb3d1;
+        font-weight: 400;
+        font-size: 12px;
+      }
+      .answer {
+        margin-bottom: 10px;
+        padding: 11px 13px;
+        border-radius: 4px 14px 14px 14px;
+        background: var(--panel-card);
+        border: 1px solid var(--panel-line);
+        font-size: 13px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        max-height: 240px;
+        overflow-y: auto;
+      }
+      .answer.thinking {
+        color: #9fb3d1;
+      }
       .ask-row {
         display: flex;
+        align-items: center;
         gap: 6px;
+        padding: 5px 5px 5px 12px;
+        border-radius: 12px;
+        background: white;
+        box-shadow: 0 0 0 3px rgba(240, 180, 143, 0.25);
       }
       .ask-row input {
-        margin-bottom: 0;
+        border: none;
+        padding: 8px 0;
+        font-size: 13.5px;
+      }
+      .ask-row input:focus {
+        border: none;
       }
       .ask-row button {
         flex-shrink: 0;
-        padding: 8px 16px;
+        background: var(--copper);
+        padding: 9px 18px;
+        border-radius: 9px;
       }
-      .ask-answer {
-        margin-top: 8px;
-        font-size: 12px;
-        line-height: 1.5;
-        white-space: pre-wrap;
+      .ask-row button:hover:not(:disabled) {
+        background: var(--copper-dark);
       }
 
-      /* Activity log, tucked away */
+      /* ---- Activity log, tucked away */
+      details.activity {
+        padding: 0;
+      }
       details.activity summary {
         cursor: pointer;
         list-style: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
       }
       details.activity summary::-webkit-details-marker {
         display: none;
       }
-      details.activity summary .eyebrow {
-        display: inline;
+      details.activity summary .chev {
+        transition: transform 150ms ease;
+      }
+      details.activity[open] summary .chev {
+        transform: rotate(90deg);
       }
       #log {
-        margin-top: 10px;
-        font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
-        font-size: 10.5px;
+        margin: 0 16px 14px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: #f8fafc;
+        font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, Menlo, monospace;
+        font-size: 11px;
+        line-height: 1.5;
         color: #475569;
-        max-height: 160px;
+        max-height: 170px;
         overflow-y: auto;
         white-space: pre-wrap;
       }
       .foot {
-        margin: 4px 2px 0;
-        font-size: 11px;
+        margin: 0 4px;
+        font-size: 11.5px;
         color: var(--faint);
         line-height: 1.5;
+        text-align: center;
       }
 
-      /* Live view while recording: transcript | suggestions, then the Ask
-         bar, like the product design's desktop window. */
-      .live-grid {
-        display: grid;
-        grid-template-columns: 1fr 1.4fr;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        overflow: hidden;
-        margin-top: 4px;
-      }
-      .live-col {
-        padding: 12px 14px;
-        min-width: 0;
-      }
-      .transcript-col {
-        border-right: 1px solid var(--line);
-        background: #fbfbfd;
-      }
-      .transcript {
-        max-height: 340px;
-        overflow-y: auto;
-      }
-      .transcript .line {
-        margin-bottom: 10px;
-        font-size: 12.5px;
-        line-height: 1.45;
-        color: var(--ink);
-      }
-      .transcript .speaker {
-        font-family: var(--mono);
-        font-size: 9px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--faint);
-        margin-bottom: 2px;
-      }
-      .ask-section {
-        margin-top: 12px;
-      }
-      .ask-row input {
-        padding: 11px 12px;
-        font-size: 13px;
-        background: #fbfbfd;
-      }
-      .ask-row button {
-        padding: 10px 22px;
-        font-size: 13px;
-      }
-      main {
-        max-width: 980px;
-        margin: 0 auto;
-      }
-      @media (max-width: 640px) {
+      @media (max-width: 660px) {
         .live-grid {
           grid-template-columns: 1fr;
         }
-        .transcript-col {
-          border-right: none;
-          border-bottom: 1px solid var(--line);
+        main {
+          padding: 14px 14px 20px;
         }
       }
     </style>
   </head>
   <body>
-    <header class="topbar">
+    <header class="titlebar">
       <div class="brand">
-        <!-- Same anchor glyph as the website's Logo.tsx / icon.svg — keep the
-             path data in sync if either changes. -->
-        <svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="#12294a" stroke-width="1.9"
+        <!-- Same anchor glyph as the website's Logo.tsx — keep the path
+             data in sync if either changes. -->
+        <svg width="22" height="22" viewBox="0 0 32 32" fill="none" stroke="#ffffff" stroke-width="1.9"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="16" cy="7.5" r="2.25" />
           <path d="M16 9.75V24.5" />
@@ -472,58 +720,66 @@
           <path d="M8 18.5L6 15.8M8 18.5L10.3 17" />
           <path d="M24 18.5L26 15.8M24 18.5L21.7 17" />
         </svg>
-        <h1>Anchor</h1>
+        <span>Anchor</span>
       </div>
       <span id="status" class="pill"><span class="dot"></span><span id="status-text">Not connected</span></span>
     </header>
-    <p class="subline">Listening on this device · not a participant in the call</p>
 
-    <main>
-      <section id="token-section">
-        <div id="signed-out" hidden>
-          <p class="eyebrow copper">Welcome to Anchor Desktop</p>
-          <h2>Sign in to start recording</h2>
-          <p class="hint">
-            Your browser opens Anchor&rsquo;s sign-in. Once you&rsquo;re in, this app connects on its own.
-          </p>
-          <button id="sign-in" class="primary">Sign in to Anchor</button>
-          <details id="token-fallback">
-            <summary>Have a desktop token? Paste it instead</summary>
-            <input id="token-input" type="password" placeholder="Paste your desktop token from Anchor's Integrations page" />
-            <button id="save-token">Save token</button>
-          </details>
-        </div>
-        <div id="signed-in" hidden>
-          <p class="eyebrow">Recording into</p>
-          <div class="account-row">
-            <span id="account-email"></span>
+    <div class="app">
+      <main>
+        <section id="token-section">
+          <div id="signed-out" class="card welcome" hidden>
+            <div class="badge">
+              <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#ffffff" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="16" cy="7.5" r="2.25" />
+                <path d="M16 9.75V24.5" />
+                <path d="M11 13.5H21" />
+                <path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5" />
+                <path d="M8 18.5L6 15.8M8 18.5L10.3 17" />
+                <path d="M24 18.5L26 15.8M24 18.5L21.7 17" />
+              </svg>
+            </div>
+            <h2>Welcome to Anchor Desktop</h2>
+            <p class="hint">
+              Records your Zoom, Teams and Meet calls right from this computer — nobody joins the call. Sign in once
+              and it connects on its own.
+            </p>
+            <button id="sign-in" class="primary">Sign in to Anchor</button>
+            <details id="token-fallback">
+              <summary>Have a desktop token? Paste it instead</summary>
+              <div class="token-row">
+                <input id="token-input" type="password" placeholder="Desktop token from Anchor's Integrations page" />
+                <button id="save-token">Save</button>
+              </div>
+            </details>
+          </div>
+          <div id="signed-in" class="card account" hidden>
+            <span id="account-avatar" class="avatar" aria-hidden="true">A</span>
+            <div class="account-text">
+              <p class="hint">Recording into</p>
+              <span id="account-email" class="selectable"></span>
+            </div>
             <button id="switch-account" class="link">Switch account</button>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section>
-        <p class="eyebrow">Your calls</p>
-        <div id="meetings">
-          <div class="empty">
-            <h2>No call open</h2>
-            <p class="hint">Open a Zoom, Teams or Meet call and it shows up here. Anchor starts recording on its own.</p>
+        <section id="calls-card" class="card">
+          <div class="card-head">
+            <h2>Your calls</h2>
+            <span class="hint">Listening on this device · not a participant in the call</span>
           </div>
-        </div>
-      </section>
+          <div id="meetings"></div>
+        </section>
 
-      <section>
-        <details class="activity">
-          <summary><span class="eyebrow">Activity ▸</span></summary>
+        <details class="card activity">
+          <summary><span>Activity</span><span class="chev" aria-hidden="true">›</span></summary>
           <div id="log"></div>
         </details>
-      </section>
 
-      <p class="foot" id="foot">
-        Closing this window keeps Anchor running in your menu bar, watching for calls. Look for the anchor icon near
-        your clock to reopen it or quit.
-      </p>
-    </main>
+        <p id="foot" class="foot"></p>
+      </main>
+    </div>
 
     <script src="renderer.js"></script>
   </body>

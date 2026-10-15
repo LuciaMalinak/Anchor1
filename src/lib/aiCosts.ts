@@ -16,6 +16,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   meeting_summaries: "Summaries, memory & follow-ups",
   ask_anchor: "Ask Anchor",
   deal_tools: "Nudge emails, briefs & CRM updates",
+  morning_brief: "Morning briefs",
   insights: "Insights",
   handoff_briefing: "Handoff briefings",
   company_research: "Company research",

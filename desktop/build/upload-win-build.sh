@@ -44,10 +44,16 @@ fi
 
 echo "Found build: $EXE_PATH ($(du -h "$EXE_PATH" | cut -f1))"
 
-# Asks the website for a short-lived upload URL (body: JSON naming the
-# file). Same retries as upload-mac-build.sh, for a site that's briefly
-# restarting. Reads the JSON with node rather than python3, which the
-# Windows build machine doesn't reliably have.
+# Same as upload-mac-build.sh: asks the website for a short-lived upload
+# URL, retrying for a few minutes if the site is briefly unavailable (e.g.
+# restarting for a deploy pushed at the same moment as this build), and
+# stopping straight away on a real refusal like a wrong upload secret.
+# Parses the reply with Node, which is always there when building the app
+# (GitHub's Windows machines don't have a python3 command).
+json_upload_url() {
+  node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write(JSON.parse(s).uploadUrl||'')}catch{}})"
+}
+
 request_upload_url() {
   local body="$1" response url attempt
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
@@ -55,7 +61,7 @@ request_upload_url() {
       -H "Content-Type: application/json" \
       -H "x-upload-secret: $DESKTOP_APP_UPLOAD_SECRET" \
       -d "$body" 2>&1 || true)
-    url=$(printf '%s' "$response" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write(JSON.parse(s).uploadUrl||'')}catch{}})" 2>/dev/null || echo "")
+    url=$(echo "$response" | json_upload_url 2>/dev/null || echo "")
     if [ -n "$url" ]; then
       echo "$url"
       return 0

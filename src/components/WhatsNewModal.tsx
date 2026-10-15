@@ -7,12 +7,16 @@ import { useIsMac } from "@/lib/useIsMac";
 // The current "what's new" announcement. Changing RELEASE_ID shows the
 // popup again, once, to every returning member; see WHATS_NEW_CUTOFF in
 // src/app/dashboard/layout.tsx for who counts as returning.
-export const RELEASE_ID = "2026-10-ask-anchor-everywhere";
+export const RELEASE_ID = "2026-10-morning-brief";
 const STORAGE_KEY = "anchor.whatsNew.seen";
 
 // New tools only, each with where to find it. Keep this to things a
 // member can use today.
 const TOOLS = [
+  {
+    title: "Your morning brief",
+    body: "Each morning, by email, text or Slack: the emails still waiting on your reply, today's meetings, your to-dos and deals going quiet. Emails keep coming back until you reply. Set the time and what's included on your Profile.",
+  },
   {
     title: "Ask Anchor, on every page",
     body: "On the right of every page (SHORTCUT). Ask it anything: it checks your calls, documents and emails first, then the web, and suggests next steps the way your deal lead would.",

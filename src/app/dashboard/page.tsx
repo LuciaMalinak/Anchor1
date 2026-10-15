@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, users, deals, teams, announcements } from "@/db/schema";
+import { meetings, users, deals, teams, announcements, morningBriefs } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { getOrCreateTeamId } from "@/lib/team";
@@ -16,6 +16,7 @@ import { DashboardClient } from "./DashboardClient";
 import { DashboardCustomize } from "./DashboardCustomize";
 import { HomeTasks } from "./HomeTasks";
 import { HomeUpdates } from "./HomeUpdates";
+import { MorningBriefPrompt } from "./MorningBriefPrompt";
 import { WelcomeGate } from "./WelcomeGate";
 
 export default async function DashboardPage({
@@ -64,12 +65,20 @@ export default async function DashboardPage({
   let isTeamOwner = false;
   let sectionOrder: DashboardSectionKey[] = resolveDashboardOrder(null);
   let colorTheme: string | null = null;
+  let briefOn = true;
 
   if (teamId && session?.user?.id) {
-    const [user, team] = await Promise.all([
+    const [user, team, brief] = await Promise.all([
       db.select().from(users).where(eq(users.id, session.user.id)).then((r) => r[0]),
       db.select().from(teams).where(eq(teams.id, teamId)).then((r) => r[0]),
+      db
+        .select({ enabled: morningBriefs.enabled })
+        .from(morningBriefs)
+        .where(eq(morningBriefs.userId, session.user.id))
+        .then((r) => r[0])
+        .catch(() => undefined),
     ]);
+    briefOn = brief?.enabled ?? false;
     welcomeSeen = user?.welcomeSeen ?? true;
     isTeamOwner = team?.ownerUserId === session.user.id;
     sectionOrder = resolveDashboardOrder(user?.dashboardLayout);
@@ -151,6 +160,7 @@ export default async function DashboardPage({
           initialColorTheme={colorTheme && isColorThemeKey(colorTheme) ? colorTheme : null}
         />
       )}
+      {teamId && !briefOn && <MorningBriefPrompt />}
       {sectionOrder.map((key) => (
         <Fragment key={key}>{sectionByKey[key] ?? null}</Fragment>
       ))}
