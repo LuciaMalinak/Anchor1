@@ -1,10 +1,10 @@
-# Builds Anchor Desktop for Mac and publishes it whenever desktop/ changes
-# on main, so nobody has to run `npm run dist:mac` and
-# build/upload-mac-build.sh by hand. Installed apps then pick it up on
-# their own (see initAutoUpdate in desktop/src/main.ts).
+# Builds Anchor Desktop for Mac and Windows and publishes both whenever
+# desktop/ changes on main, so nobody has to run `npm run dist:mac` /
+# `dist:win` and build/upload-*-build.sh by hand. Installed apps then
+# pick it up on their own (see initAutoUpdate in desktop/src/main.ts).
 #
 # Needs three repository secrets (Settings -> Secrets and variables ->
-# Actions):
+# Actions); the Windows job only uses the first:
 #   DESKTOP_APP_UPLOAD_SECRET   same value as in Render's environment
 #   MAC_SIGNING_CERT_P12        base64 of the "Anchor Desktop Local Signing"
 #                               certificate exported from Keychain Access
@@ -108,3 +108,39 @@ jobs:
         env:
           DESKTOP_APP_UPLOAD_SECRET: ${{ secrets.DESKTOP_APP_UPLOAD_SECRET }}
         run: bash build/upload-mac-build.sh
+
+  # Windows used to be built and uploaded by hand, so installed Windows
+  # copies stayed on an old build while every fix shipped to the Mac. The
+  # installer is unsigned, as before; electron-updater still installs it
+  # because no publisher name is set to check against.
+  win:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - run: npm ci
+
+      # Same version as the Mac build from this run (see the mac job).
+      - name: Set the version
+        run: |
+          BASE="$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")"
+          VERSION="$BASE.$((100 + GITHUB_RUN_NUMBER))"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "Building Anchor Desktop $VERSION"
+
+      - run: npm run dist:win
+
+      - name: Publish the download and update feed
+        env:
+          DESKTOP_APP_UPLOAD_SECRET: ${{ secrets.DESKTOP_APP_UPLOAD_SECRET }}
+        run: bash build/upload-win-build.sh

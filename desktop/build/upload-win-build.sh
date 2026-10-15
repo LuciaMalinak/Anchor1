@@ -44,22 +44,40 @@ fi
 
 echo "Found build: $EXE_PATH ($(du -h "$EXE_PATH" | cut -f1))"
 
+# Asks the website for a short-lived upload URL (body: JSON naming the
+# file). Same retries as upload-mac-build.sh, for a site that's briefly
+# restarting. Reads the JSON with node rather than python3, which the
+# Windows build machine doesn't reliably have.
+request_upload_url() {
+  local body="$1" response url attempt
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    response=$(curl -sS -m 60 -X POST "$ANCHOR_WEB_BASE/api/admin/desktop-app/upload-url" \
+      -H "Content-Type: application/json" \
+      -H "x-upload-secret: $DESKTOP_APP_UPLOAD_SECRET" \
+      -d "$body" 2>&1 || true)
+    url=$(printf '%s' "$response" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write(JSON.parse(s).uploadUrl||'')}catch{}})" 2>/dev/null || echo "")
+    if [ -n "$url" ]; then
+      echo "$url"
+      return 0
+    fi
+    if echo "$response" | grep -qi "not authorized"; then
+      break
+    fi
+    echo "  Anchor didn't answer with an upload URL (attempt $attempt of 10) — retrying in 30s …" >&2
+    sleep 30
+  done
+  echo "Didn't get an upload URL back. Last response was: $response" >&2
+  if [ -n "$GITHUB_ACTIONS" ]; then
+    echo "::error::Upload URL request failed. Last response: $(echo "$response" | head -c 300 | tr '\n' ' ')" >&2
+  fi
+  return 1
+}
+
 echo "Asking $ANCHOR_WEB_BASE for an upload URL …"
-RESPONSE=$(curl -sS -X POST "$ANCHOR_WEB_BASE/api/admin/desktop-app/upload-url" \
-  -H "Content-Type: application/json" \
-  -H "x-upload-secret: $DESKTOP_APP_UPLOAD_SECRET" \
-  -d '{"platform":"win"}')
-
-UPLOAD_URL=$(echo "$RESPONSE" | python3 -c "import sys, json; d = json.load(sys.stdin); print(d.get('uploadUrl', ''))" 2>/dev/null || echo "")
-
-if [ -z "$UPLOAD_URL" ]; then
-  echo "Didn't get an upload URL back. Response was:"
-  echo "$RESPONSE"
-  exit 1
-fi
+UPLOAD_URL=$(request_upload_url '{"platform":"win"}') || exit 1
 
 echo "Uploading to R2 …"
-curl -sS -X PUT "$UPLOAD_URL" \
+curl -sS --fail --retry 3 -X PUT "$UPLOAD_URL" \
   -H "Content-Type: application/x-msdownload" \
   --data-binary "@$EXE_PATH" \
   --progress-bar
@@ -74,17 +92,8 @@ YML_PATH="release/latest.yml"
 if [ -f "$YML_PATH" ]; then
   echo ""
   echo "Publishing update feed ($YML_PATH) …"
-  YML_RESPONSE=$(curl -sS -X POST "$ANCHOR_WEB_BASE/api/admin/desktop-app/upload-url" \
-    -H "Content-Type: application/json" \
-    -H "x-upload-secret: $DESKTOP_APP_UPLOAD_SECRET" \
-    -d '{"file":"latest.yml"}')
-  YML_UPLOAD_URL=$(echo "$YML_RESPONSE" | python3 -c "import sys, json; d = json.load(sys.stdin); print(d.get('uploadUrl', ''))" 2>/dev/null || echo "")
-  if [ -z "$YML_UPLOAD_URL" ]; then
-    echo "Didn't get an upload URL for the update feed. Response was:"
-    echo "$YML_RESPONSE"
-    exit 1
-  fi
-  curl -sS -X PUT "$YML_UPLOAD_URL" \
+  YML_UPLOAD_URL=$(request_upload_url '{"file":"latest.yml"}') || exit 1
+  curl -sS --fail --retry 3 -X PUT "$YML_UPLOAD_URL" \
     -H "Content-Type: text/yaml" \
     --data-binary "@$YML_PATH" \
     --progress-bar

@@ -1075,9 +1075,14 @@ function showWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, "..", "src", "renderer", "icons", "trayTemplate.png");
+  // The Mac icon is a black template that macOS tints to match the menu
+  // bar. Windows doesn't tint, so that black glyph vanished against the
+  // dark taskbar and Anchor seemed not to be running at all; it gets a
+  // white-on-navy version that shows on light and dark taskbars alike.
+  const iconFile = process.platform === "darwin" ? "trayTemplate.png" : "trayWin.png";
+  const iconPath = path.join(__dirname, "..", "src", "renderer", "icons", iconFile);
   const icon = nativeImage.createFromPath(iconPath);
-  icon.setTemplateImage(true); // lets macOS auto-tint it for light/dark menu bars
+  if (process.platform === "darwin") icon.setTemplateImage(true);
   tray = new Tray(icon);
   tray.setToolTip("Anchor Desktop — watching for Zoom, Teams, and Meet calls");
   refreshTrayMenu();
