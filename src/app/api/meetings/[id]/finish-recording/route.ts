@@ -3,7 +3,8 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, transcripts, summaries } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { saveMeetingAudio } from "@/lib/storage";
+import { deleteUploadParts, joinUploadParts, saveMeetingAudio } from "@/lib/storage";
+import { MAX_PARTS, isValidUploadId } from "@/lib/chunkedUpload";
 import { processMeeting } from "@/lib/processMeeting";
 
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024; // 500MB — same cap as a manual upload.
@@ -40,18 +41,42 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     !meeting.recallBotId &&
     !meeting.recallRecordingId;
   if (!live && !recoverable) {
+    // A retry of a finish whose reply got lost on the way back: the audio
+    // is already in, so this one succeeded.
+    if (meeting.audioStoragePath) return NextResponse.json({ ok: true, meetingId: meeting.id });
     return NextResponse.json({ error: "This recording was already finished." }, { status: 400 });
   }
 
-  const formData = await req.formData();
-  const file = formData.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+  // Either the audio itself (older browsers' pages, still open from before
+  // this changed) or the pieces it was uploaded in (src/lib/chunkedUpload.ts).
+  let fileName: string;
+  let buffer: Buffer;
+  let pieces: string | null = null;
+  if ((req.headers.get("content-type") ?? "").includes("application/json")) {
+    const body = await req.json().catch(() => ({}));
+    const uploadId = typeof body.uploadId === "string" ? body.uploadId : "";
+    const parts = Number(body.parts);
+    fileName = typeof body.fileName === "string" && /^[\w.-]{1,100}$/.test(body.fileName) ? body.fileName : "recording.webm";
+    if (!isValidUploadId(uploadId) || !Number.isInteger(parts) || parts < 1 || parts > MAX_PARTS) {
+      return NextResponse.json({ error: "Bad upload" }, { status: 400 });
+    }
+    const joined = await joinUploadParts(session.user.id, uploadId, parts);
+    if (!joined) return NextResponse.json({ error: "Some of the recording didn't arrive — try again." }, { status: 400 });
+    buffer = joined;
+    pieces = uploadId;
+  } else {
+    const formData = await req.formData();
+    const file = formData.get("file");
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    }
+    fileName = file.name;
+    buffer = Buffer.from(await file.arrayBuffer());
   }
-  if (file.size === 0) {
+  if (buffer.length === 0) {
     return NextResponse.json({ error: "Nothing was recorded — try again." }, { status: 400 });
   }
-  if (file.size > MAX_UPLOAD_BYTES) {
+  if (buffer.length > MAX_UPLOAD_BYTES) {
     return NextResponse.json(
       { error: "Recording is too large (500MB max for the MVP)" },
       { status: 400 }
@@ -59,8 +84,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const storagePath = await saveMeetingAudio(meeting.id, file.name, buffer);
+    const storagePath = await saveMeetingAudio(meeting.id, fileName, buffer);
+    if (pieces) await deleteUploadParts(session.user.id, pieces);
     if (recoverable) {
       // Whatever a failed live-transcript write-up left behind, so the
       // real recording's transcript and summary don't sit next to it.
@@ -70,7 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await db
       .update(meetings)
       .set({
-        audioFileName: file.name,
+        audioFileName: fileName,
         audioStoragePath: storagePath,
         status: "uploaded",
         errorMessage: null,

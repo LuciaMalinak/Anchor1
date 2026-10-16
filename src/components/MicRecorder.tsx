@@ -5,6 +5,7 @@ import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 import { registerLocalRecorder } from "@/lib/stopMeeting";
 import { registerRecordingStarter } from "@/lib/startRecording";
 import { startStreamingTranscription } from "@/lib/liveStreamingTranscription";
+import { uploadInParts } from "@/lib/chunkedUpload";
 
 // Records straight from the browser's microphone — for an in-person
 // meeting or phone call where there's no Zoom/Meet/Teams link for the
@@ -75,6 +76,7 @@ export function useMicRecorder({
   // start) that have nothing left in memory to retry. Drives whether the
   // view offers "Retry upload" or a plain "Start recording".
   const [uploadFailed, setUploadFailed] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -357,7 +359,7 @@ export function useMicRecorder({
     setUploading(true);
     setError(null);
     try {
-      await sendRecording(meetingId, blob, `recording-${Date.now()}.${extensionFor(mimeType)}`);
+      await sendRecording(meetingId, blob, `recording-${Date.now()}.${extensionFor(mimeType)}`, setUploadProgress);
       setUploadFailed(false);
       onUploaded?.();
     } catch (err) {
@@ -373,6 +375,21 @@ export function useMicRecorder({
     } finally {
       setUploading(false);
     }
+  }
+
+  // A copy of the recorded audio on this computer, so a long meeting is
+  // never only inside this tab while it uploads (or after it fails).
+  function saveCopy() {
+    if (chunksRef.current.length === 0) return;
+    const mimeType = mimeTypeRef.current;
+    const url = URL.createObjectURL(new Blob(chunksRef.current, { type: mimeType }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `anchor-recording-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.${extensionFor(mimeType)}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   // Re-sends the SAME recorded audio still sitting in chunksRef — see
@@ -409,7 +426,7 @@ export function useMicRecorder({
     });
   }, [dealId]);
 
-  return { recording, seconds, uploading, error, uploadFailed, start, stop, retryUpload, discardFailedUpload };
+  return { recording, seconds, uploading, uploadProgress, error, uploadFailed, start, stop, retryUpload, discardFailedUpload, saveCopy };
 }
 
 export type MicRecorderState = ReturnType<typeof useMicRecorder>;
@@ -421,13 +438,16 @@ export function MicRecorderView({
   recording,
   seconds,
   uploading,
+  uploadProgress,
   error,
   uploadFailed,
   start,
   stop,
   retryUpload,
   discardFailedUpload,
+  saveCopy,
 }: MicRecorderState) {
+  const percent = `${Math.round(uploadProgress * 100)}%`;
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
   const ss = String(seconds % 60).padStart(2, "0");
 
@@ -474,7 +494,7 @@ export function MicRecorderView({
                 disabled={uploading}
                 className="flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-dark disabled:opacity-50"
               >
-                {uploading ? "Retrying…" : "Retry upload"}
+                {uploading ? `Retrying… ${percent}` : "Retry upload"}
               </button>
               <button
                 type="button"
@@ -493,10 +513,19 @@ export function MicRecorderView({
               className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
             >
               <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-              {uploading ? "Uploading…" : "Start recording"}
+              {uploading ? `Uploading… ${percent}` : "Start recording"}
             </button>
           )}
         </div>
+        {(uploading || uploadFailed) && (
+          <button
+            type="button"
+            onClick={saveCopy}
+            className="mt-2 text-xs font-medium text-brand hover:underline"
+          >
+            Save a copy to this computer
+          </button>
+        )}
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
     </div>
@@ -543,20 +572,25 @@ function extensionFor(mimeType: string): string {
   return "webm";
 }
 
-// Uploads a finished recording, retrying a couple of times on network
-// drops and server errors before giving up — a long meeting's upload is
-// big, and one flaky moment on hotel/office Wi-Fi shouldn't need a manual
-// retry. A 4xx means retrying won't help, so that fails straight away.
-async function sendRecording(meetingId: string, blob: Blob, fileName: string): Promise<void> {
-  const delays = [2000, 5000];
+// Uploads a finished recording in pieces (see src/lib/chunkedUpload.ts:
+// each piece retries on its own and the whole hour never rides on one
+// request), then has the server join them onto the meeting. Finishing is
+// retried too; a 4xx means retrying won't help, so that fails at once.
+async function sendRecording(
+  meetingId: string,
+  blob: Blob,
+  fileName: string,
+  onProgress: (fraction: number) => void
+): Promise<void> {
+  const { uploadId, parts } = await uploadInParts(blob, onProgress);
+  const delays = [2000, 5000, 10000];
   for (let attempt = 0; ; attempt++) {
     let message: string;
     try {
-      const formData = new FormData();
-      formData.append("file", blob, fileName);
       const res = await fetch(`/api/meetings/${meetingId}/finish-recording`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uploadId, parts, fileName }),
       });
       if (res.ok) return;
       const body = await res.json().catch(() => ({}));

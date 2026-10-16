@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { uploadMeetingFile } from "@/lib/chunkedUpload";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMicRecorder, MicRecorderView } from "@/components/MicRecorder";
@@ -50,6 +51,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
   const router = useRouter();
   const [meetings, setMeetings] = useState<Meeting[]>(initialMeetings);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -91,7 +93,8 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
 
     setUploading(true);
     try {
-      const res = await fetch("/api/meetings", { method: "POST", body: formData });
+      setUploadProgress(0);
+      const res = await uploadMeetingFile(formData, setUploadProgress);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Upload failed");
@@ -269,7 +272,7 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
             disabled={uploading}
             className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
           >
-            {uploading ? "Uploading…" : "Upload"}
+            {uploading ? `Uploading… ${Math.round(uploadProgress * 100)}%` : "Upload"}
           </button>
         </form>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}

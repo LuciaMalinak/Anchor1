@@ -41,6 +41,47 @@ export async function saveMeetingAudio(
   return filePath;
 }
 
+// Big recordings arrive in pieces (see src/lib/chunkedUpload.ts): one
+// request for a whole hour of audio could hang on a slow connection or
+// run the server out of memory. Pieces are kept per person and upload,
+// then joined into the meeting's audio file when the upload finishes.
+const UPLOAD_PARTS_ROOT = path.join(process.cwd(), "storage", "uploads");
+
+function uploadPartKey(userId: string, uploadId: string, index: number): string {
+  return `uploads/${userId}/${uploadId}/${String(index).padStart(5, "0")}`;
+}
+
+export async function saveUploadPart(userId: string, uploadId: string, index: number, data: Buffer): Promise<void> {
+  if (isR2Configured()) {
+    await r2Put(uploadPartKey(userId, uploadId, index), data);
+    return;
+  }
+  const dir = path.join(UPLOAD_PARTS_ROOT, userId, uploadId);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, String(index).padStart(5, "0")), data);
+}
+
+// All of an upload's pieces in order, joined — or null if any is missing.
+export async function joinUploadParts(userId: string, uploadId: string, count: number): Promise<Buffer | null> {
+  const parts: Buffer[] = [];
+  for (let i = 0; i < count; i++) {
+    const part = isR2Configured()
+      ? await r2Get(uploadPartKey(userId, uploadId, i))
+      : await fs.readFile(path.join(UPLOAD_PARTS_ROOT, userId, uploadId, String(i).padStart(5, "0"))).catch(() => null);
+    if (!part) return null;
+    parts.push(part);
+  }
+  return Buffer.concat(parts);
+}
+
+export async function deleteUploadParts(userId: string, uploadId: string): Promise<void> {
+  if (isR2Configured()) {
+    await r2DeletePrefix(`uploads/${userId}/${uploadId}/`).catch(() => {});
+    return;
+  }
+  await fs.rm(path.join(UPLOAD_PARTS_ROOT, userId, uploadId), { recursive: true, force: true }).catch(() => {});
+}
+
 // Best-effort cleanup when a meeting is deleted — never throws, since the
 // database row is the source of truth and a leftover file on disk (or one
 // that was never written, e.g. a "joining" meeting with no audio yet) is
