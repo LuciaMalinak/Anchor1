@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { uploadMeetingFile } from "@/lib/chunkedUpload";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -138,6 +139,7 @@ function NewMeetingForms({
 }) {
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -155,7 +157,8 @@ function NewMeetingForms({
     formData.set("dealId", dealId);
     setUploading(true);
     try {
-      const res = await fetch("/api/meetings", { method: "POST", body: formData });
+      setUploadProgress(0);
+      const res = await uploadMeetingFile(formData, setUploadProgress);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Upload failed");
@@ -317,7 +320,7 @@ function NewMeetingForms({
               disabled={uploading}
               className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
             >
-              {uploading ? "Uploading…" : "Upload"}
+              {uploading ? `Uploading… ${Math.round(uploadProgress * 100)}%` : "Upload"}
             </button>
           </div>
           {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
