@@ -6,7 +6,8 @@ import { meetingWhen, type BriefSnapshot } from "@/lib/morningBriefRender";
 import { Logo } from "@/components/Logo";
 import { BriefItemActions } from "./BriefItemActions";
 import { CopyReplyButton } from "./CopyReplyButton";
-import { AddMeetingButton } from "./AddMeetingButton";
+import { SaveDraftButton } from "./SaveDraftButton";
+import { MeetingDecision } from "@/components/MeetingDecision";
 
 export const metadata: Metadata = {
   title: "Your morning brief — Anchor",
@@ -95,13 +96,13 @@ export default async function BriefPage({
                       </p>
                     )}
                     {e.meeting && (
-                      <AddMeetingButton
+                      <MeetingDecision
                         token={token}
                         threadId={e.threadId}
                         title={e.meeting.title}
                         when={meetingWhen(e.meeting)}
                         fromName={e.fromName}
-                        initiallyAdded={Boolean(e.meeting.added)}
+                        initial={e.meeting.added ? "added" : e.meeting.declined ? "declined" : null}
                       />
                     )}
                     {e.reply && (
@@ -112,8 +113,9 @@ export default async function BriefPage({
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-3">
                           <CopyReplyButton text={e.reply} />
+                          <SaveDraftButton token={token} threadId={e.threadId} initiallySaved={e.drafted} />
                           <a href={e.gmailUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand hover:underline">
-                            {e.drafted ? "Open the draft in Gmail" : "Reply in Gmail"}
+                            Open in Gmail
                           </a>
                         </div>
                       </div>

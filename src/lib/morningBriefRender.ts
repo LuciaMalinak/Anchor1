@@ -23,7 +23,18 @@ export type BriefEmail = {
   reply?: string | null;
   // A meeting the email asks for or proposes, to add to the calendar with
   // one click from the brief page (start is local, in timeZone).
-  meeting?: { title: string; start: string; durationMinutes: number; timeZone: string; added?: boolean } | null;
+  meeting?: {
+    title: string;
+    start: string;
+    durationMinutes: number;
+    timeZone: string;
+    // Approved (added to a calendar) or declined; unset while undecided.
+    added?: boolean;
+    declined?: boolean;
+  } | null;
+  // The latest message's Message-ID header, so a reply saved to Gmail
+  // drafts from the brief threads under it.
+  replyToHeader?: string | null;
 };
 
 export type BriefSnapshot = {
@@ -56,8 +67,9 @@ export type ShownState = Record<
     sent?: string;
     // The day the thread was last checked for what they sent.
     sentCheckedOn?: string;
-    // The suggested meeting was added to their calendar.
+    // The suggested meeting was added to their calendar, or declined.
     meetingAdded?: boolean;
+    meetingDeclined?: boolean;
   }
 >;
 

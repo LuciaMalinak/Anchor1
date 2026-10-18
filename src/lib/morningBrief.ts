@@ -363,7 +363,15 @@ async function writeReplies(
       }
       t.email.reply = reply.body;
       t.email.approach = reply.approach || null;
-      t.email.meeting = reply.meeting ? { ...reply.meeting, timeZone: prefs.timeZone, added: shown[t.email.threadId]?.meetingAdded } : null;
+      t.email.meeting = reply.meeting
+        ? {
+            ...reply.meeting,
+            timeZone: prefs.timeZone,
+            added: shown[t.email.threadId]?.meetingAdded,
+            declined: shown[t.email.threadId]?.meetingDeclined,
+          }
+        : null;
+      t.email.replyToHeader = t.messageIdHeader;
       if (canDraftInGmail && !shown[t.email.threadId]?.drafted) {
         const subject = /^re:/i.test(t.email.subject) ? t.email.subject : `Re: ${t.email.subject}`;
         await createGmailDraft(
@@ -459,6 +467,7 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
           drafted: e.drafted || prev?.drafted,
           reply: prev?.reply,
           meetingAdded: prev?.meetingAdded,
+          meetingDeclined: prev?.meetingDeclined,
           sent: prev?.sent,
           sentCheckedOn: prev?.sentCheckedOn,
         };
