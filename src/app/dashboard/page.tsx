@@ -17,6 +17,7 @@ import { DashboardCustomize } from "./DashboardCustomize";
 import { HomeTasks } from "./HomeTasks";
 import { HomeUpdates } from "./HomeUpdates";
 import { MorningBriefPrompt } from "./MorningBriefPrompt";
+import { DraftNowPanel } from "@/components/DraftNowPanel";
 import { getGoogleConnection } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
 import { briefSettingsSaved, normalizePrefs } from "@/lib/morningBriefPrefs";
@@ -73,6 +74,7 @@ export default async function DashboardPage({
   // Brief on with replies-to-drafts, but Gmail hasn't let Anchor create
   // drafts — so none can appear there until this is allowed.
   let needsDraftsPermission = false;
+  let googleConnected = false;
 
   if (teamId && session?.user?.id) {
     const [user, team, brief, google] = await Promise.all([
@@ -86,6 +88,7 @@ export default async function DashboardPage({
         .catch(() => undefined),
       getGoogleConnection(session.user.id).catch(() => null),
     ]);
+    googleConnected = Boolean(google);
     needsDraftsPermission = Boolean(
       normalizePrefs(brief?.prefs).draftReplies &&
         google &&
@@ -192,6 +195,7 @@ export default async function DashboardPage({
           </a>
         </section>
       )}
+      {googleConnected && <DraftNowPanel />}
       {sectionOrder.map((key) => (
         <Fragment key={key}>{sectionByKey[key] ?? null}</Fragment>
       ))}
