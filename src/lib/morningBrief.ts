@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { contacts, deals, meetingParticipants, meetings, morningBriefs, tasks, teams, users } from "@/db/schema";
+import { contacts, deals, meetingParticipants, meetings, morningBriefs, summaries, tasks, teams, users } from "@/db/schema";
 import { accessibleDealIds, dealVisibilityWhere } from "@/lib/dealAccess";
 import { getAttentionItems } from "@/lib/attention";
 import { fetchTodaysDealMeetings } from "@/lib/integrations/calendar";
@@ -38,7 +38,7 @@ import {
 
 const MAX_EMAILS = 8;
 const MAX_TASKS = 5;
-const MAX_DRAFTS = 3;
+const MAX_DRAFTS = 5;
 
 export function siteUrl(): string {
   return (process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "https://anchor-be6o.onrender.com").replace(/\/$/, "");
@@ -232,41 +232,84 @@ async function buildSnapshot(params: {
   return { snapshot, candidateIds, draftTargets };
 }
 
-// Puts a suggested reply in the person's Gmail drafts for the top emails,
-// once per thread, if they turned that on and gave Anchor permission.
-async function draftReplies(
+// What a reply should be grounded in: the deal's stage, what the person
+// may and may not agree to, what Anchor has learned about it, and the
+// last call's outcome.
+async function dealContextForReply(dealId: string): Promise<string | null> {
+  const [deal] = await db
+    .select({ name: deals.name, stage: deals.stage, memory: deals.memory, decisionBoundaries: deals.decisionBoundaries })
+    .from(deals)
+    .where(eq(deals.id, dealId));
+  if (!deal) return null;
+  const [last] = await db
+    .select({ title: meetings.title, createdAt: meetings.createdAt, overview: summaries.overview, actionItems: summaries.actionItems })
+    .from(meetings)
+    .innerJoin(summaries, eq(summaries.meetingId, meetings.id))
+    .where(eq(meetings.dealId, dealId))
+    .orderBy(desc(meetings.createdAt))
+    .limit(1);
+  const parts = [`Deal: ${deal.name} (stage: ${deal.stage})`];
+  if (deal.decisionBoundaries?.trim()) parts.push(`What the sender may and may not agree to: ${deal.decisionBoundaries.trim()}`);
+  if (deal.memory?.trim()) parts.push(`What Anchor has learned about this deal:\n${deal.memory.trim().slice(0, 1800)}`);
+  if (last) {
+    const actions = (last.actionItems ?? []).map((a) => `- ${a.text}${a.owner ? ` (${a.owner})` : ""}`).join("\n");
+    parts.push(
+      `Last call (${last.title}, ${last.createdAt.toISOString().slice(0, 10)}): ${last.overview.slice(0, 800)}${actions ? `\nAgreed next steps:\n${actions.slice(0, 600)}` : ""}`
+    );
+  }
+  return parts.join("\n\n");
+}
+
+// Writes how to handle each of the top emails and a ready-to-send reply,
+// shown in the brief itself; once per message (kept in `shown`, so the
+// same unanswered email isn't rewritten every morning). Also puts the
+// reply in the person's Gmail drafts when they turned that on and gave
+// Anchor permission.
+async function writeReplies(
   userId: string,
   user: typeof users.$inferSelect,
   targets: { email: BriefEmail; messageId: string; messageIdHeader: string | null; dealId: string | null }[],
-  shown: ShownState
+  shown: ShownState,
+  saveToGmail: boolean
 ) {
-  const connection = await getGoogleConnection(userId);
-  if (!connection || !(connection.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose)) return;
+  const connection = saveToGmail ? await getGoogleConnection(userId) : null;
+  const canDraftInGmail = Boolean(connection && (connection.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose));
   const style = await getDealLeadStyle(userId, { allowSynchronousRebuild: false });
   for (const t of targets) {
-    if (shown[t.email.threadId]?.drafted) continue;
+    const kept = shown[t.email.threadId]?.reply;
+    let reply = kept && kept.forMessage === t.messageId ? kept : null;
     try {
-      const [text, deal] = await Promise.all([
-        fetchMessageText(userId, t.messageId),
-        t.dealId ? db.select({ memory: deals.memory }).from(deals).where(eq(deals.id, t.dealId)).then((r) => r[0]) : Promise.resolve(null),
-      ]);
-      const body = await draftReply({
-        senderName: user.name || user.email,
-        style,
-        fromName: t.email.fromName,
-        subject: t.email.subject,
-        messageText: text || t.email.summary,
-        dealContext: deal?.memory ? deal.memory.slice(0, 1500) : null,
-      });
-      const subject = /^re:/i.test(t.email.subject) ? t.email.subject : `Re: ${t.email.subject}`;
-      await createGmailDraft(
-        userId,
-        { to: [t.email.fromEmail], subject, body, inReplyTo: t.messageIdHeader ?? undefined },
-        { threadId: t.email.threadId }
-      );
-      t.email.drafted = true;
+      if (!reply) {
+        const [text, dealContext] = await Promise.all([
+          fetchMessageText(userId, t.messageId),
+          t.dealId ? dealContextForReply(t.dealId) : Promise.resolve(null),
+        ]);
+        const drafted = await draftReply({
+          senderName: user.name || user.email,
+          style,
+          fromName: t.email.fromName,
+          subject: t.email.subject,
+          messageText: text || t.email.summary,
+          dealContext,
+        });
+        reply = { forMessage: t.messageId, ...drafted };
+        // A newer message: the Gmail draft for the old one doesn't count.
+        shown[t.email.threadId] = { ...(shown[t.email.threadId] ?? { on: "", n: 0 }), reply, drafted: kept ? false : shown[t.email.threadId]?.drafted };
+        if (kept) t.email.drafted = false;
+      }
+      t.email.reply = reply.body;
+      t.email.approach = reply.approach || null;
+      if (canDraftInGmail && !shown[t.email.threadId]?.drafted) {
+        const subject = /^re:/i.test(t.email.subject) ? t.email.subject : `Re: ${t.email.subject}`;
+        await createGmailDraft(
+          userId,
+          { to: [t.email.fromEmail], subject, body: reply.body, inReplyTo: t.messageIdHeader ?? undefined },
+          { threadId: t.email.threadId }
+        );
+        t.email.drafted = true;
+      }
     } catch (err) {
-      console.error(`[morningBrief] drafting a reply for thread ${t.email.threadId} failed:`, err);
+      console.error(`[morningBrief] writing a reply for thread ${t.email.threadId} failed:`, err);
     }
   }
 }
@@ -337,13 +380,18 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
       const localDate = localNow(prefs.timeZone).date;
 
       const { snapshot, candidateIds, draftTargets } = await buildSnapshot({ userId, user, prefs, shown, dismissed, localDate });
-      if (prefs.draftReplies && draftTargets.length) await draftReplies(userId, user, draftTargets, shown);
+      if (draftTargets.length) await writeReplies(userId, user, draftTargets, shown, prefs.draftReplies);
 
       // Remember what was shown today (for "remind me every N days"), and
       // forget threads that have dropped out of the inbox window.
       for (const e of snapshot.emails) {
         const prev = shown[e.threadId];
-        shown[e.threadId] = { on: localDate, n: prev?.on === localDate ? prev.n : (prev?.n ?? 0) + 1, drafted: e.drafted || prev?.drafted };
+        shown[e.threadId] = {
+          on: localDate,
+          n: prev?.on === localDate ? prev.n : (prev?.n ?? 0) + 1,
+          drafted: e.drafted || prev?.drafted,
+          reply: prev?.reply,
+        };
       }
       const keep = new Set([...candidateIds, ...snapshot.emails.map((e) => e.threadId)]);
       for (const id of Object.keys(shown)) {

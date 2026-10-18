@@ -17,6 +17,10 @@ export type BriefEmail = {
   priority: 1 | 2 | 3;
   gmailUrl: string;
   drafted: boolean;
+  // For the most important emails: how to handle it in this deal, and a
+  // ready-to-send reply (also put in Gmail drafts when that's turned on).
+  approach?: string | null;
+  reply?: string | null;
 };
 
 export type BriefSnapshot = {
@@ -30,7 +34,17 @@ export type BriefSnapshot = {
   quietDeals: { name: string; days: number }[];
 };
 
-export type ShownState = Record<string, { on: string; n: number; drafted?: boolean }>;
+export type ShownState = Record<
+  string,
+  {
+    on: string;
+    n: number;
+    drafted?: boolean;
+    // The reply written for the thread's latest message, kept so it isn't
+    // rewritten every morning; a newer message gets a new one.
+    reply?: { forMessage: string; body: string; approach: string };
+  }
+>;
 
 // An email still waiting on a reply comes back every `remindEveryDays`
 // (1 = every brief) until it's answered, marked done, or snoozed.
@@ -110,6 +124,7 @@ export function renderBriefText(b: BriefSnapshot, link: string): string {
     lines.push("", `Gone quiet: ${b.quietDeals.map((d) => `${d.name} ${d.days}d`).join(", ")}`);
   }
   if (b.emails.some((e) => e.drafted)) lines.push("", "Reply drafts are waiting in your Gmail.");
+  else if (b.emails.some((e) => e.reply)) lines.push("", "Suggested replies are on your brief page.");
   lines.push("", `Done / snooze: ${link}`);
   return lines.join("\n");
 }
@@ -122,6 +137,7 @@ export function renderBriefSlack(b: BriefSnapshot, link: string): string {
     lines.push("", "*Waiting on your reply*");
     for (const e of b.emails) {
       lines.push(`• <${e.gmailUrl}|${esc(e.fromName)}>${e.deal ? ` (${esc(e.deal)})` : ""}: ${esc(e.summary)} _(${waited(e)})_${e.drafted ? " · draft ready" : ""}`);
+      if (e.approach) lines.push(`   ↳ _${esc(e.approach)}_`);
     }
     if (b.moreEmails) lines.push(`+${b.moreEmails} more`);
   }
@@ -135,7 +151,7 @@ export function renderBriefSlack(b: BriefSnapshot, link: string): string {
   if (b.quietDeals.length) {
     lines.push("", `*Gone quiet:* ${b.quietDeals.map((d) => `${esc(d.name)} (${d.days}d)`).join(", ")}`);
   }
-  lines.push("", `<${link}|Mark done or snooze>`);
+  lines.push("", `<${link}|${b.emails.some((e) => e.reply) ? "See the suggested replies, mark done or snooze" : "Mark done or snooze"}>`);
   return lines.join("\n");
 }
 
@@ -159,7 +175,15 @@ export function renderBriefHtml(b: BriefSnapshot, link: string, personName: stri
         <p style="margin:0;font-size:14px;color:#0f172a;"><a href="${escapeHtml(e.gmailUrl)}" style="color:${brand};font-weight:700;text-decoration:none;">${escapeHtml(e.fromName)}</a>${e.deal ? ` <span style="color:#64748b;">· ${escapeHtml(e.deal)}</span>` : ""}</p>
         <p style="margin:4px 0 0;font-size:14px;line-height:1.5;color:#334155;">${escapeHtml(e.summary)}</p>
         <p style="margin:6px 0 0;font-size:12px;color:${e.waitingDays >= 3 ? accent : "#94a3b8"};">Waiting ${e.waitingDays <= 0 ? "since today" : `${e.waitingDays} day${e.waitingDays === 1 ? "" : "s"}`}${e.reminder > 1 ? ` · reminder ${e.reminder}` : ""}${e.drafted ? " · reply draft in Gmail" : ""}
-        &nbsp; ${actionLink(e.threadId, "done", "Done")} &nbsp; ${actionLink(e.threadId, "snooze", "Snooze 3 days")}</p>
+        &nbsp; ${actionLink(e.threadId, "done", "Done")} &nbsp; ${actionLink(e.threadId, "snooze", "Snooze 3 days")}</p>${
+          e.approach
+            ? `<p style="margin:10px 0 0;font-size:13px;line-height:1.5;color:${brand};"><strong>How to handle it:</strong> ${escapeHtml(e.approach)}</p>`
+            : ""
+        }${
+          e.reply
+            ? `<p style="margin:8px 0 0;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;">Suggested reply</p><div style="margin:4px 0 0;padding:10px 12px;border-radius:8px;background:#f8fafc;border-left:3px solid ${accent};font-size:13px;line-height:1.55;color:#334155;white-space:pre-wrap;">${escapeHtml(e.reply)}</div>`
+            : ""
+        }
       </td></tr></table>`
     )
     .join("");
