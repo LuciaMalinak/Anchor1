@@ -21,6 +21,9 @@ export type BriefEmail = {
   // ready-to-send reply (also put in Gmail drafts when that's turned on).
   approach?: string | null;
   reply?: string | null;
+  // A meeting the email asks for or proposes, to add to the calendar with
+  // one click from the brief page (start is local, in timeZone).
+  meeting?: { title: string; start: string; durationMinutes: number; timeZone: string; added?: boolean } | null;
 };
 
 export type BriefSnapshot = {
@@ -42,12 +45,19 @@ export type ShownState = Record<
     drafted?: boolean;
     // The reply written for the thread's latest message, kept so it isn't
     // rewritten every morning; a newer message gets a new one.
-    reply?: { forMessage: string; body: string; approach: string };
+    reply?: {
+      forMessage: string;
+      body: string;
+      approach: string;
+      meeting?: { title: string; start: string; durationMinutes: number } | null;
+    };
     // What they actually sent after that suggestion, once found — how
     // they change Anchor's replies, learned from for the next ones.
     sent?: string;
     // The day the thread was last checked for what they sent.
     sentCheckedOn?: string;
+    // The suggested meeting was added to their calendar.
+    meetingAdded?: boolean;
   }
 >;
 
@@ -186,7 +196,11 @@ export function renderBriefHtml(b: BriefSnapshot, link: string, personName: stri
             : ""
         }${
           e.reply
-            ? `<p style="margin:8px 0 0;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;">Suggested reply</p><div style="margin:4px 0 0;padding:10px 12px;border-radius:8px;background:#f8fafc;border-left:3px solid ${accent};font-size:13px;line-height:1.55;color:#334155;white-space:pre-wrap;">${escapeHtml(e.reply)}</div>`
+            ? `${
+                e.meeting
+                  ? `<p style="margin:8px 0 0;font-size:13px;color:${brand};"><strong>Suggested meeting:</strong> ${escapeHtml(e.meeting.title)} · ${escapeHtml(meetingWhen(e.meeting))} — <a href="${link}?item=${encodeURIComponent(e.threadId)}" style="color:${accent};">add it to your calendar</a></p>`
+                  : ""
+              }<p style="margin:8px 0 0;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;">Suggested reply</p><div style="margin:4px 0 0;padding:10px 12px;border-radius:8px;background:#f8fafc;border-left:3px solid ${accent};font-size:13px;line-height:1.55;color:#334155;white-space:pre-wrap;">${escapeHtml(e.reply)}</div>`
             : ""
         }
       </td></tr></table>`
@@ -225,4 +239,14 @@ export function renderBriefHtml(b: BriefSnapshot, link: string, personName: stri
       <p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#94a3b8;">Emails stay on your brief until you reply, mark them done or snooze them. Change the time, channel or what's included on your Anchor profile.</p>
     </td></tr>
   </table></td></tr></table></body></html>`;
+}
+
+// "Thu, Oct 22, 10:00 AM (30 min)" for a suggested meeting.
+export function meetingWhen(m: { start: string; durationMinutes: number }): string {
+  const [date, time] = m.start.split("T");
+  const [y, mo, d] = date.split("-").map(Number);
+  const [h, mi] = time.split(":").map(Number);
+  const day = new Date(Date.UTC(y, mo - 1, d, 12)).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  const clock = `${((h + 11) % 12) + 1}:${String(mi).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+  return `${day}, ${clock} (${m.durationMinutes} min)`;
 }

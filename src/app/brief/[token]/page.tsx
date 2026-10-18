@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { readBriefToken } from "@/lib/briefLink";
 import { getBriefRow } from "@/lib/morningBrief";
-import type { BriefSnapshot } from "@/lib/morningBriefRender";
+import { meetingWhen, type BriefSnapshot } from "@/lib/morningBriefRender";
 import { Logo } from "@/components/Logo";
 import { BriefItemActions } from "./BriefItemActions";
 import { CopyReplyButton } from "./CopyReplyButton";
+import { AddMeetingButton } from "./AddMeetingButton";
 
 export const metadata: Metadata = {
   title: "Your morning brief — Anchor",
@@ -92,6 +93,16 @@ export default async function BriefPage({
                         <span className="font-semibold">How to handle it: </span>
                         {e.approach}
                       </p>
+                    )}
+                    {e.meeting && (
+                      <AddMeetingButton
+                        token={token}
+                        threadId={e.threadId}
+                        title={e.meeting.title}
+                        when={meetingWhen(e.meeting)}
+                        fromName={e.fromName}
+                        initiallyAdded={Boolean(e.meeting.added)}
+                      />
                     )}
                     {e.reply && (
                       <div className="mt-2">

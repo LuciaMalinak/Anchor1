@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { sendSummary } from "./profile/MorningBriefSettings";
 
 type AutoResult = {
   enabled: boolean;
@@ -18,6 +19,7 @@ type AutoResult = {
 export function MorningBriefPrompt({ neverSetUp }: { neverSetUp: boolean }) {
   const [auto, setAuto] = useState<AutoResult | null>(null);
   const [sending, setSending] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  const [outcome, setOutcome] = useState<{ line: string; problems: string[] } | null>(null);
 
   useEffect(() => {
     if (!neverSetUp) return;
@@ -34,7 +36,13 @@ export function MorningBriefPrompt({ neverSetUp }: { neverSetUp: boolean }) {
   async function sendNow() {
     setSending("sending");
     const res = await fetch("/api/morning-brief/send-now", { method: "POST" }).catch(() => null);
-    setSending(res?.ok ? "sent" : "failed");
+    const body = res ? await res.json().catch(() => ({})) : {};
+    const sent = Boolean(res?.ok && body.sent);
+    setSending(sent ? "sent" : "failed");
+    setOutcome({
+      line: res?.ok ? `${sent ? "Sent." : `Not sent.${body.note ? ` ${body.note}` : ""}`} ${sendSummary(body)}` : body.error || "Couldn't reach Anchor.",
+      problems: Array.isArray(body.problems) ? body.problems : [],
+    });
   }
 
   if (auto?.enabled) {
@@ -47,6 +55,16 @@ export function MorningBriefPrompt({ neverSetUp }: { neverSetUp: boolean }) {
           <p className="mt-1 max-w-2xl text-sm text-emerald-800">
             Every {p?.days === "everyday" ? "day" : "weekday"} at {time} by email: the emails waiting on you, with how to handle each one and a
             reply written the way you write, plus today&apos;s meetings and to-dos.
+            {outcome && (
+              <span className="mt-2 block">
+                {outcome.line}
+                {outcome.problems.map((p) => (
+                  <span key={p} className="block text-red-700">
+                    {p}
+                  </span>
+                ))}
+              </span>
+            )}
             {!auto.gmailCanDraft && (
               <>
                 {" "}

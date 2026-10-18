@@ -39,7 +39,14 @@ export function MorningBriefSettings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sending, setSending] = useState(false);
-  const [preview, setPreview] = useState<{ text: string | null; note: string | null; channel: string | null } | null>(null);
+  const [preview, setPreview] = useState<{
+    sent: boolean;
+    text: string | null;
+    note: string | null;
+    channel: string | null;
+    summary: string;
+    problems: string[];
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -119,7 +126,14 @@ export function MorningBriefSettings() {
       const res = await fetch("/api/morning-brief/send-now", { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Couldn't send it");
-      setPreview({ text: body.text, note: body.note, channel: body.channel });
+      setPreview({
+        sent: body.sent === true,
+        text: body.text,
+        note: body.note,
+        channel: body.channel,
+        summary: sendSummary(body),
+        problems: Array.isArray(body.problems) ? body.problems : [],
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't send it");
     } finally {
@@ -330,13 +344,26 @@ export function MorningBriefSettings() {
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       {preview && (
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-semibold text-slate-600">
-            {preview.text ? `Sent by ${preview.channel === "sms" ? "text" : preview.channel}.` : "Nothing to send right now."}
+          <p className={`text-xs font-semibold ${preview.sent ? "text-slate-600" : "text-red-600"}`}>
+            {preview.sent ? `Sent by ${preview.channel === "sms" ? "text" : preview.channel}.` : preview.text ? "Not sent." : "Nothing to send right now."}
             {preview.note ? ` ${preview.note}` : ""}
           </p>
+          <p className="mt-1 text-xs text-slate-500">{preview.summary}</p>
+          {preview.problems.map((p) => (
+            <p key={p} className="mt-1 text-xs text-red-600">
+              {p}
+            </p>
+          ))}
           {preview.text && <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-slate-700">{preview.text}</pre>}
         </div>
       )}
     </section>
   );
+}
+
+// One line on what "Send me one now" found, so it's clear what happened.
+export function sendSummary(body: { googleConnected?: boolean; emails?: number; replies?: number; drafts?: number }): string {
+  if (body.googleConnected === false) return "Anchor couldn't see your Gmail.";
+  const n = body.emails ?? 0;
+  return `${n} email${n === 1 ? "" : "s"} waiting on you · ${body.replies ?? 0} suggested repl${body.replies === 1 ? "y" : "ies"} · ${body.drafts ?? 0} saved to Gmail drafts`;
 }
