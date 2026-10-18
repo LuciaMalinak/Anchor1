@@ -38,7 +38,10 @@ import {
 
 const MAX_EMAILS = 8;
 const MAX_TASKS = 5;
-const MAX_DRAFTS = 5;
+// Every email in the brief gets a suggested reply (and a Gmail draft).
+const MAX_DRAFTS = MAX_EMAILS;
+// Replies written at once — keeps "Send me one now" well inside its time.
+const REPLY_CONCURRENCY = 4;
 
 export function siteUrl(): string {
   return (process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "https://anchor-be6o.onrender.com").replace(/\/$/, "");
@@ -334,7 +337,8 @@ async function writeReplies(
   if (saveToGmail && connection && !canDraftInGmail) {
     problems.push("Replies weren't saved to Gmail drafts: Anchor doesn't have permission to create drafts yet (the link is on Home).");
   }
-  for (const t of targets) {
+  const queue = [...targets];
+  const writeOne = async (t: (typeof targets)[number]) => {
     const kept = shown[t.email.threadId]?.reply;
     let reply = kept && kept.forMessage === t.messageId ? kept : null;
     try {
@@ -393,7 +397,12 @@ async function writeReplies(
       console.error(`[morningBrief] writing a reply for thread ${t.email.threadId} failed:`, err);
       if (!problems.some((p) => p.startsWith("Couldn't write"))) problems.push(`Couldn't write or save a reply: ${errorText(err)}`);
     }
-  }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(REPLY_CONCURRENCY, queue.length) }, async () => {
+      for (let t = queue.shift(); t; t = queue.shift()) await writeOne(t);
+    })
+  );
   return problems;
 }
 
@@ -515,7 +524,7 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
 // has replies-to-drafts on and has given Anchor the Gmail drafts
 // permission. No AI call unless a new email has arrived since the last
 // run, and at most a few drafts an hour.
-const MAX_AUTO_DRAFTS_PER_RUN = 4;
+const MAX_AUTO_DRAFTS_PER_RUN = 8;
 
 export async function autoDraftReplies(userId: string): Promise<number> {
   return withAiUser({ userId }, async () => {
