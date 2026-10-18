@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
-import { ListeningIndicator, LiveQuestionCard, UpdatingBadge } from "@/components/LiveCoachingBits";
+import { CallSpeakersRow, ListeningIndicator, LiveQuestionsBox, UpdatingBadge } from "@/components/LiveCoachingBits";
 import { requestFocusWindow } from "@/lib/focusWindowBus";
 import { StopMeetingButton } from "@/components/StopMeetingButton";
 
@@ -12,7 +12,7 @@ import { StopMeetingButton } from "@/components/StopMeetingButton";
 // focus-mode pop-out window (src/app/focus) can share it instead of
 // running a second, independent poll of the same endpoint.
 export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; title: string }) {
-  const { segments, suggestions, status, hasBot, isDesktop, error, coachingError, coachingRefreshing } = useLiveMeeting(meetingId);
+  const { segments, suggestions, status, hasBot, isDesktop, error, coachingError, coachingRefreshing, answered, speakers, markSpeaker } = useLiveMeeting(meetingId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -79,8 +79,16 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
         </div>
 
         <div className="flex flex-col gap-4 px-5 py-4">
-          {suggestions?.liveQuestion && (
-            <LiveQuestionCard question={suggestions.liveQuestion} className="rounded-lg border border-brand/30 bg-brand/5 px-3 py-3" />
+          {(
+            <div className="space-y-2">
+              <CallSpeakersRow speakers={speakers} onMark={markSpeaker} />
+              <LiveQuestionsBox
+                current={suggestions?.liveQuestion}
+                answered={answered}
+                onMarkMe={speakers.length ? (name) => markSpeaker(name, true) : undefined}
+                cardClassName="rounded-lg border border-brand/30 bg-brand/5 px-3 py-3"
+              />
+            </div>
           )}
 
           <div>

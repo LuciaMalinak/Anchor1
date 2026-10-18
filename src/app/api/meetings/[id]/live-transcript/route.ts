@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, meetingLiveSegments } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { authenticateBearer } from "@/lib/apiToken";
 import { onLiveSegment } from "@/lib/liveQuestion";
+import { matchLiveMeetingToDeal } from "@/lib/dealMatch";
 
 // Appends one finalized utterance to a meeting's live transcript, from
 // the browser's own live speech-to-text running during an in-person
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const [meeting] = await db
-    .select({ id: meetings.id, userId: meetings.userId, status: meetings.status })
+    .select({ id: meetings.id, userId: meetings.userId, status: meetings.status, dealId: meetings.dealId })
     .from(meetings)
     .where(eq(meetings.id, id));
   if (!meeting || meeting.userId !== userId) {
@@ -71,6 +72,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // A question gets answered right away instead of waiting for the next
   // coaching refresh — see liveQuestion.ts. Runs after this responds.
   onLiveSegment(meeting.id, text, speakerName);
+  // A call started without a deal gets matched to one from what's said.
+  if (!meeting.dealId) {
+    after(() =>
+      matchLiveMeetingToDeal(meeting.id).catch((err) => console.error(`[live-transcript] deal matching failed:`, err))
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -13,6 +13,7 @@ import { readStoredFile } from "@/lib/storage";
 import { authenticateBearer } from "@/lib/apiToken";
 import { loadAskSources } from "@/lib/askSources";
 import { findRelevantPassages, formatPassages } from "@/lib/askRetrieval";
+import { saveAsk } from "@/lib/askLog";
 
 const MAX_HISTORY_TURNS = 6;
 
@@ -216,6 +217,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // request has no session for the usage tracker to find on its own.
     start: (controller) => withAiUser({ userId }, async () => {
       try {
+        let answer = "";
         for await (const chunk of askAnchorStream({
           context,
           question,
@@ -226,8 +228,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           serverTools,
           toolRules,
         })) {
+          answer += chunk;
           controller.enqueue(encoder.encode(chunk));
         }
+        // Kept with the call (or deal) it was asked during — see askLog.ts.
+        void saveAsk({ userId, question, answer, dealId: dealId, meetingId: null }).catch((err) =>
+          console.error("[ask log] couldn't save:", err)
+        );
       } catch (err) {
         console.error(`[assist] stream failed for deal ${dealId}:`, err);
         controller.enqueue(

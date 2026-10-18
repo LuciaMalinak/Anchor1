@@ -11,6 +11,7 @@ import { getDealLeadStyle } from "@/lib/styleProfile";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { saveAsk } from "@/lib/askLog";
 
 const MAX_HISTORY_TURNS = 6;
 
@@ -112,6 +113,7 @@ export async function POST(req: NextRequest) {
     // Charged to this member (see aiUsage.ts).
     start: (controller) => withAiUser({ userId }, async () => {
       try {
+        let answer = "";
         for await (const chunk of askWorkspaceStream({
           scope,
           contextBlock,
@@ -121,8 +123,13 @@ export async function POST(req: NextRequest) {
           serverTools,
           toolRules,
         })) {
+          answer += chunk;
           controller.enqueue(encoder.encode(chunk));
         }
+        // Kept with the call (or deal) it was asked during — see askLog.ts.
+        void saveAsk({ userId, question, answer, dealId: null, meetingId: meetingId }).catch((err) =>
+          console.error("[ask log] couldn't save:", err)
+        );
       } catch (err) {
         console.error("[ask] stream failed:", err);
         controller.enqueue(encoder.encode(describeAnswerError(err)));

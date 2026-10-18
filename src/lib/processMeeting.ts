@@ -25,6 +25,7 @@ import { readStoredFile } from "./storage";
 import { getOrCreateTeamId } from "./team";
 import { withRetry } from "./retry";
 import { summarizeDealFiles } from "./dealFilesContext";
+import { matchDealFromText } from "./dealMatch";
 
 // Every Nth memory update re-derives the summary from actual raw history
 // instead of just trusting the current (possibly drifted) summary text —
@@ -75,7 +76,7 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
     // Fetched once, up front, so it's available both to ground today's
     // summary/action items (below) and, later, to update the deal's own
     // rolling memory — avoids a second identical query for the same row.
-    const deal = meeting.dealId
+    let deal = meeting.dealId
       ? (await db.select().from(deals).where(eq(deals.id, meeting.dealId)))[0]
       : undefined;
 
@@ -128,6 +129,22 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
         fullText,
         utterances,
       });
+    }
+
+    // Recorded or uploaded without a deal (from Home): put it on the deal
+    // the conversation is clearly about, before the summary is written, so
+    // the summary, tasks and deal memory below all land there too.
+    if (!meeting.dealId) {
+      const match = await matchDealFromText(meeting.userId, `${meeting.title ?? ""}\n${fullText}`).catch((err) => {
+        console.error(`[processMeeting] deal matching failed for ${meetingId}:`, err);
+        return null;
+      });
+      if (match) {
+        await db.update(meetings).set({ dealId: match.dealId }).where(eq(meetings.id, meetingId));
+        meeting.dealId = match.dealId;
+        deal = (await db.select().from(deals).where(eq(deals.id, match.dealId)))[0];
+        console.log(`[processMeeting] ${meetingId} matched to deal "${match.dealName}" from what was said`);
+      }
     }
 
     await db

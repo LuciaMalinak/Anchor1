@@ -1,11 +1,13 @@
 import { after } from "next/server";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { deals, meetingLiveSegments, meetings, users } from "@/db/schema";
+import { deals, meetingLiveSegments, meetings, users, type LiveQuestionRecord } from "@/db/schema";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { loadLiveDealContextCached } from "@/lib/liveContext";
 import { LIVE_MODEL, liveClient, liveDealContextText } from "@/lib/liveCoaching";
 import { withAiUser } from "@/lib/aiUsage";
+import { isSelfSpeaker, type CallIdentity } from "@/lib/callIdentity";
+import { liveLinksFor, type LiveLink } from "@/lib/liveLinks";
 
 // The instant path for "they just asked something": runs the moment a
 // transcript line that looks like a question lands (from Recall's
@@ -103,9 +105,8 @@ export function extractQuestion(text: string): string | null {
   return null;
 }
 
-function firstName(name: string | null | undefined): string {
-  return (name || "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-}
+// The call's questions kept for the live panel's list (newest last).
+const MAX_QUESTION_HISTORY = 30;
 
 // Last question started per meeting, to skip an immediate duplicate.
 const recentQuestions = new Map<string, { key: string; at: number }>();
@@ -154,11 +155,16 @@ function stillCurrent(meetingId: string, askedAt: number) {
   );
 }
 
-function writeQuestion(
-  meetingId: string,
-  askedAt: number,
-  value: { question: string; suggestedAnswer: string; askedAt: number; answering?: boolean }
-) {
+type LiveQuestionValue = {
+  question: string;
+  suggestedAnswer: string;
+  askedAt: number;
+  answering?: boolean;
+  askedBy?: string | null;
+  links?: LiveLink[];
+};
+
+function writeQuestion(meetingId: string, askedAt: number, value: LiveQuestionValue) {
   return db
     .update(meetings)
     .set({
@@ -187,17 +193,18 @@ function parseReply(raw: string): { question: string | null; answer: string; not
 
 async function answerLiveQuestion(meetingId: string, question: string, speakerName: string | null) {
   const [row] = await db
-    .select({ meeting: meetings, ownerName: users.name })
+    .select({ meeting: meetings, ownerName: users.name, ownerEmail: users.email, ownerCallNames: users.callNames })
     .from(meetings)
     .leftJoin(users, eq(users.id, meetings.userId))
     .where(eq(meetings.id, meetingId));
   if (!row) return;
   const { meeting, ownerName } = row;
   if (meeting.status !== "joining" && meeting.status !== "recording") return;
+  const me: CallIdentity = { name: ownerName, email: row.ownerEmail, callNames: row.ownerCallNames };
   // The rep asking their own question isn't something to answer for them.
   // Only checkable when the line has a speaker (bot/desktop calls); the
   // in-person mic has none, and the answer call screens those instead.
-  if (speakerName && ownerName && firstName(speakerName) === firstName(ownerName)) return;
+  if (isSelfSpeaker(speakerName, me)) return;
 
   // Show the question right away — the panel renders it with "working on
   // an answer" while the answer streams in below. Loaded alongside
@@ -220,9 +227,13 @@ async function answerLiveQuestion(meetingId: string, question: string, speakerNa
     return deal;
   };
 
+  let deal: typeof deals.$inferSelect | null = null;
   const [, context, segments] = await Promise.all([
     showPending,
-    loadDeal().then((deal) => loadLiveDealContextCached(meetingId, deal)),
+    loadDeal().then((d) => {
+      deal = d;
+      return loadLiveDealContextCached(meetingId, d);
+    }),
     db
       .select({ speakerName: meetingLiveSegments.speakerName, text: meetingLiveSegments.text })
       .from(meetingLiveSegments)
@@ -230,7 +241,9 @@ async function answerLiveQuestion(meetingId: string, question: string, speakerNa
       .orderBy(asc(meetingLiveSegments.createdAt)),
   ]);
   const transcript = segments
-    .map((s) => (s.speakerName ? `${s.speakerName}: ${s.text}` : s.text))
+    .map((s) =>
+      s.speakerName ? `${s.speakerName}${isSelfSpeaker(s.speakerName, me) ? " (the rep)" : ""}: ${s.text}` : s.text
+    )
     .join("\n")
     .slice(-TRANSCRIPT_WINDOW_CHARS);
 
@@ -242,7 +255,7 @@ Q: <the question as the other side meant it, in one short line — use the recen
 
 Ground the answer only in the deal facts and transcript given; if the real answer isn't something you know, say so plainly (e.g. "I don't have that number in front of me — let me follow up right after the call") rather than inventing a number, date, or commitment. Never commit to anything outside the deal's decision boundaries — suggest noting it and following up instead.
 
-If the line was asked by the rep${ownerName ? ` (${ownerName})` : ""}, was already answered in the transcript, or isn't a real question needing an answer (rhetorical, small talk, a filler like "you know?", "can you hear me?"), reply with exactly ${NOT_A_QUESTION} and nothing else.`;
+Lines marked "(the rep)" are the rep's own. Answer only questions the other side asked: if the line was asked by the rep${ownerName ? ` (${ownerName})` : ""} (including the rep asking the client something, or reading a question out), was already answered in the transcript, or isn't a real question needing an answer (rhetorical, small talk, a filler like "you know?", "can you hear me?"), reply with exactly ${NOT_A_QUESTION} and nothing else.`;
 
   const stream = withAiUser({ userId: meeting.userId, meetingId }, () => liveClient("live_questions").messages.stream({
     model: LIVE_MODEL,
@@ -320,6 +333,47 @@ The line that looked like a question${speakerName ? ` (said by ${speakerName})` 
       .where(stillCurrent(meetingId, askedAt));
     return;
   }
-  flush(true);
+  const finalQuestion = parsed.question || question;
+  const links = await liveLinksFor({
+    userId: meeting.userId,
+    deal,
+    askedBy: speakerName,
+    texts: [finalQuestion, parsed.answer],
+  }).catch((err) => {
+    console.error("[live question] couldn't build links:", err);
+    return [];
+  });
+  flushing = flushing.then(() =>
+    writeQuestion(meetingId, askedAt, {
+      question: finalQuestion,
+      suggestedAnswer: parsed.answer,
+      askedAt,
+      askedBy: speakerName,
+      links,
+    })
+  );
   await flushing;
+  await saveToHistory(meetingId, {
+    question: finalQuestion,
+    answer: parsed.answer,
+    askedAt,
+    askedBy: speakerName,
+    links,
+  });
+}
+
+// Appends an answered question to the meeting's list, which the panel
+// shows under the current one so earlier answers don't vanish.
+async function saveToHistory(meetingId: string, record: LiveQuestionRecord) {
+  await db
+    .update(meetings)
+    .set({
+      liveQuestions: sql`(
+        select coalesce(jsonb_agg(q order by (q->>'askedAt')::bigint), '[]'::jsonb) from (
+          select q from jsonb_array_elements(coalesce(${meetings.liveQuestions}, '[]'::jsonb) || ${JSON.stringify([record])}::jsonb) q
+          order by (q->>'askedAt')::bigint desc limit ${MAX_QUESTION_HISTORY}
+        ) recent
+      )`,
+    })
+    .where(eq(meetings.id, meetingId));
 }

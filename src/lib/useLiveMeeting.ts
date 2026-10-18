@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type LiveSegment = {
   id: string;
@@ -15,8 +15,23 @@ export type LiveSuggestions = {
   // suggestedAnswer is "" while the answer is still being written (see
   // src/lib/liveQuestion.ts) — the question itself shows right away.
   // answering stays true while the answer is still streaming in.
-  liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number; answering?: boolean } | null;
+  liveQuestion: {
+    question: string;
+    suggestedAnswer: string;
+    askedAt?: number;
+    answering?: boolean;
+    askedBy?: string | null;
+    links?: LiveLink[];
+  } | null;
 } | null;
+
+export type LiveLink = { label: string; url: string };
+
+// One answered question from earlier in the call (meetings.liveQuestions).
+export type AnsweredQuestion = { question: string; answer: string; askedAt: number; askedBy: string | null; links: LiveLink[] };
+
+// A speaker label on the call, and whether it's the person using Anchor.
+export type CallSpeaker = { name: string; isMe: boolean };
 
 // Was 4000ms — the actual transcript segments aren't behind any
 // server-side debounce (see the live route's GET handler: it reads
@@ -54,6 +69,8 @@ export function useLiveMeeting(meetingId: string) {
   const [coachingError, setCoachingError] = useState<string | null>(null);
   // Whether new suggestions are being generated right now.
   const [coachingRefreshing, setCoachingRefreshing] = useState(false);
+  const [answered, setAnswered] = useState<AnsweredQuestion[]>([]);
+  const [speakers, setSpeakers] = useState<CallSpeaker[]>([]);
   const stoppedRef = useRef(false);
 
   useEffect(() => {
@@ -70,6 +87,8 @@ export function useLiveMeeting(meetingId: string) {
         setSuggestions(body.liveSuggestions || null);
         setCoachingError(body.coachingError || null);
         setCoachingRefreshing(body.coachingRefreshing === true);
+        setAnswered(Array.isArray(body.liveQuestions) ? body.liveQuestions : []);
+        setSpeakers(Array.isArray(body.speakers) ? body.speakers : []);
         const question = body.liveSuggestions?.liveQuestion;
         if (question && (question.answering || !question.suggestedAnswer)) nextPollMs = FAST_POLL_MS;
         setStatus(body.status);
@@ -98,5 +117,35 @@ export function useLiveMeeting(meetingId: string) {
     };
   }, [meetingId]);
 
-  return { segments, suggestions, status, hasBot, isDesktop, error, coachingError, coachingRefreshing };
+  // "That's me" / "Not me" on a speaker: remembered for later calls too.
+  // Updates the panel straight away rather than waiting for the next poll.
+  const markSpeaker = useCallback(
+    async (speakerName: string, isMe: boolean) => {
+      setSpeakers((list) => list.map((s) => (s.name === speakerName ? { ...s, isMe } : s)));
+      if (isMe) {
+        setAnswered((list) => list.filter((q) => q.askedBy !== speakerName));
+        setSuggestions((cur) => (cur?.liveQuestion?.askedBy === speakerName ? { ...cur, liveQuestion: null } : cur));
+      }
+      await fetch(`/api/meetings/${meetingId}/live/me`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ speakerName, isMe }),
+      }).catch(() => {});
+    },
+    [meetingId]
+  );
+
+  return {
+    segments,
+    suggestions,
+    status,
+    hasBot,
+    isDesktop,
+    error,
+    coachingError,
+    coachingRefreshing,
+    answered,
+    speakers,
+    markSpeaker,
+  };
 }
