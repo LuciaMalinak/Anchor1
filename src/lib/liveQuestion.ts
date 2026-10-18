@@ -41,7 +41,7 @@ const QUESTION_START =
 // each needs two words so a lone "what" or "how" inside a statement
 // doesn't count.
 const EMBEDDED_QUESTION =
-  /\b(?:how (?:much|many|long|soon|fast|often|does|do|did|would|will|can|could|is|are|should)|what (?:is|are|does|do|did|would|will|about|if|happens|kind|sort|type|level|options|timeline|price|pricing)|what's (?:the|your|our)|why (?:does|do|did|would|is|are|should)|when (?:can|will|would|do|does|did|is|are|should)|where (?:do|does|is|are|can|would)|who (?:is|are|would|will|else|owns|handles)|which (?:one|plan|option|version|tier)|do you (?:have|offer|support|guys|integrate|work|provide|handle|do|charge|think)|does (?:it|that|this|your)|can (?:you|we|it|i)|could (?:you|we|it)|would (?:you|it|that)|will (?:you|it|that|there)|is (?:there|it|that|this) (?:possible|included|something|a|an|any|going)|are (?:there|you|we) (?:able|planning|going|any)|i(?:'m| am| was) (?:wondering|curious)|i'd (?:like|love) to (?:know|understand|hear)|tell me (?:about|more|how|what|why|when)|walk (?:me|us) through|help (?:me|us) understand|any (?:idea|thoughts|update|chance|plans))\b/i;
+  /\b(?:how (?:much|many|long|soon|fast|often|does|do|did|would|will|can|could|is|are|should)|what (?:is|are|does|do|did|would|will|about|if|happens|kind|sort|type|level|options|timeline|price|pricing)|what's (?:the|your|our)|why (?:does|do|did|would|is|are|should)|when (?:can|will|would|do|does|did|is|are|should)|where (?:do|does|is|are|can|would)|who (?:is|are|would|will|else|owns|handles)|which (?:one|plan|option|version|tier)|do you (?:have|offer|support|guys|integrate|work|provide|handle|do|charge|think)|does (?:it|that|this|your)|can (?:you|we|it|i)|could (?:you|we|it)|would (?:you|it|that)|will (?:you|it|that|there)|is (?:there|it|that|this) (?:possible|included|something|a|an|any|going)|are (?:there|you|we) (?:able|planning|going|any)|i(?:'m| am| was) (?:wondering|curious)|i'd (?:like|love) to (?:know|understand|hear)|tell me (?:about|more|how|what|why|when)|walk (?:me|us) through|help (?:me|us) understand|any (?:idea|thoughts|update|chance|plans)|how about|what about|is it (?:possible|true|included|compatible|secure|hard|easy)|are (?:you|they) (?:able|compliant|certified)|(?:could|can) you (?:send|share|show|explain|clarify|confirm)|(?:send|share|show) (?:me|us) (?:the|a|your|how|what)|i (?:need|want|would like) to (?:know|understand|see)|we(?:'d| would) need to (?:know|understand|see)|(?:i'm|we're|i am|we are) (?:worried|concerned|not sure) (?:about|that|if|whether|how)|not sure (?:if|whether|how|what) (?:you|it|this|that|we)|what would it take|what's (?:included|the difference|the catch|the price|the cost)|how (?:does|would) (?:that|this|it) (?:work|compare))\b/i;
 // "I know how…", "no matter what…" — a question word inside a statement.
 const STATEMENT_LEAD_IN =
   /\b(?:i|we|they|you|he|she) (?:know|knew|see|saw|understand|get|remember|told|showed|explained|decided|figured out|learned)\s*$|\b(?:no matter|regardless of|depends on|that's|thats|which is|exactly)\s*$/i;
@@ -109,7 +109,9 @@ export function extractQuestion(text: string): string | null {
 const MAX_QUESTION_HISTORY = 30;
 
 // Last question started per meeting, to skip an immediate duplicate.
-const recentQuestions = new Map<string, { key: string; at: number }>();
+// partial: it came from a line still being spoken (see onLiveSegment).
+type RecentQuestion = { key: string; at: number; partial: boolean; askedAt: number };
+const recentQuestions = new Map<string, RecentQuestion>();
 
 function normalizeQuestion(q: string): string {
   return q.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
@@ -126,19 +128,44 @@ function sameQuestion(a: string, b: string): boolean {
   return shared / Math.max(wordsA.size, wordsB.length) >= 0.75;
 }
 
-// Called right after a live transcript line is stored. Returns
+// An in-progress line has to look like a whole question before it's
+// answered: either it already ends in "?" or it's long enough that the
+// question has been said, not just started ("How long does…").
+const PARTIAL_MIN_WORDS = 6;
+// When the finished line says noticeably more than the in-progress one
+// that was answered, answer the finished one instead.
+const FINAL_EXTENDS_BY_WORDS = 3;
+
+// Called right after a live transcript line is stored — or, with
+// partial, for a line still being spoken (Recall's partial transcripts,
+// the browser mic's interim results), which is only checked for a
+// question so it's answered before the speaker even stops. Returns
 // immediately; the work runs after the response is sent (Next's after())
 // so the transcript webhook/push stays fast.
-export function onLiveSegment(meetingId: string, text: string, speakerName: string | null) {
+export function onLiveSegment(
+  meetingId: string,
+  text: string,
+  speakerName: string | null,
+  opts: { partial?: boolean } = {}
+) {
+  const partial = opts.partial === true;
   const question = extractQuestion(text);
   if (!question) return;
+  if (partial && !question.endsWith("?") && question.split(/\s+/).length < PARTIAL_MIN_WORDS) return;
   const key = normalizeQuestion(question);
   const previous = recentQuestions.get(meetingId);
-  if (previous && Date.now() - previous.at < DUPLICATE_WINDOW_MS && sameQuestion(previous.key, key)) return;
-  recentQuestions.set(meetingId, { key, at: Date.now() });
+  let replacesAskedAt: number | null = null;
+  if (previous && Date.now() - previous.at < DUPLICATE_WINDOW_MS && sameQuestion(previous.key, key)) {
+    const moreWords = key.split(" ").length - previous.key.split(" ").length;
+    // Answered from the half-said version; the full one adds real detail.
+    if (!previous.partial || moreWords < FINAL_EXTENDS_BY_WORDS) return;
+    replacesAskedAt = previous.askedAt;
+  }
+  const askedAt = Math.max(Date.now(), (previous?.askedAt ?? 0) + 1);
+  recentQuestions.set(meetingId, { key, at: Date.now(), partial, askedAt });
   if (recentQuestions.size > 500) recentQuestions.clear();
   after(() =>
-    answerLiveQuestion(meetingId, question, speakerName).catch((err) => {
+    answerLiveQuestion(meetingId, question, speakerName, askedAt, replacesAskedAt).catch((err) => {
       console.error(`[live question] failed for meeting ${meetingId}:`, err);
     })
   );
@@ -260,7 +287,13 @@ function likelyRole(meetingId: string, speaker: string): "rep" | "client" | null
   return null;
 }
 
-async function answerLiveQuestion(meetingId: string, question: string, speakerName: string | null) {
+async function answerLiveQuestion(
+  meetingId: string,
+  question: string,
+  speakerName: string | null,
+  askedAt: number,
+  replacesAskedAt: number | null
+) {
   const [row] = await db
     .select({ meeting: meetings, ownerName: users.name, ownerEmail: users.email, ownerCallNames: users.callNames })
     .from(meetings)
@@ -281,7 +314,6 @@ async function answerLiveQuestion(meetingId: string, question: string, speakerNa
   // Show the question right away — the panel renders it with "working on
   // an answer" while the answer streams in below. Loaded alongside
   // everything the answer needs rather than one after another.
-  const askedAt = Date.now();
   const pending = { question, suggestedAnswer: "", askedAt, answering: true };
   const showPending = db
     .update(meetings)
@@ -434,7 +466,7 @@ The line that looked like a question${speakerName ? ` (speaker label: ${speakerN
     console.error("[live question] couldn't build links:", err);
     return [];
   });
-  flushing = flushing.then(() =>
+  const written = await flushing.then(() =>
     writeQuestion(meetingId, askedAt, {
       question: finalQuestion,
       suggestedAnswer: parsed.answer,
@@ -444,26 +476,35 @@ The line that looked like a question${speakerName ? ` (speaker label: ${speakerN
       caution: parsed.caution,
     })
   );
-  await flushing;
-  await saveToHistory(meetingId, {
-    question: finalQuestion,
-    answer: parsed.answer,
-    askedAt,
-    askedBy: speakerName,
-    links,
-    caution: parsed.caution,
-  });
+  // Replaced meanwhile (a newer question, or the fuller version of this
+  // one) — the replacement is what gets kept.
+  if (!written.length) return;
+  await saveToHistory(
+    meetingId,
+    {
+      question: finalQuestion,
+      answer: parsed.answer,
+      askedAt,
+      askedBy: speakerName,
+      links,
+      caution: parsed.caution,
+    },
+    replacesAskedAt
+  );
 }
 
 // Appends an answered question to the meeting's list, which the panel
 // shows under the current one so earlier answers don't vanish.
-async function saveToHistory(meetingId: string, record: LiveQuestionRecord) {
+// replacesAskedAt: the half-said version of this question, if that was
+// answered first, which this one takes the place of.
+async function saveToHistory(meetingId: string, record: LiveQuestionRecord, replacesAskedAt: number | null) {
   await db
     .update(meetings)
     .set({
       liveQuestions: sql`(
         select coalesce(jsonb_agg(q order by (q->>'askedAt')::bigint), '[]'::jsonb) from (
           select q from jsonb_array_elements(coalesce(${meetings.liveQuestions}, '[]'::jsonb) || ${JSON.stringify([record])}::jsonb) q
+          where (q->>'askedAt')::bigint <> ${replacesAskedAt ?? -1}
           order by (q->>'askedAt')::bigint desc limit ${MAX_QUESTION_HISTORY}
         ) recent
       )`,
