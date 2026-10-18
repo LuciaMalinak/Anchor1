@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { readBriefToken } from "@/lib/briefLink";
 import { getBriefRow } from "@/lib/morningBrief";
-import { meetingWhen, type BriefSnapshot } from "@/lib/morningBriefRender";
+import { groupByDeal, meetingWhen, type BriefEmail, type BriefSnapshot } from "@/lib/morningBriefRender";
+import { DraftNowPanel } from "@/components/DraftNowPanel";
 import { Logo } from "@/components/Logo";
 import { BriefItemActions } from "./BriefItemActions";
 import { CopyReplyButton } from "./CopyReplyButton";
@@ -48,30 +49,7 @@ export default async function BriefPage({
   const day = new Date(`${brief.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
   const highlight = action === "done" || action === "snooze" ? action : null;
 
-  return (
-    <main className="min-h-screen bg-[#f4f6f9]">
-      <header className="bg-brand">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-5 py-4">
-          <Logo size="md" tone="light" />
-          <span className="text-xs text-slate-300">Morning brief · {day}</span>
-        </div>
-      </header>
-      <div className="mx-auto flex max-w-2xl flex-col gap-5 px-5 py-8">
-        {item && highlight && (
-          <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Tap <strong>{highlight === "done" ? "Done" : "Snooze 3 days"}</strong> on the email below to confirm.
-          </p>
-        )}
-
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h1 className="text-base font-semibold text-brand">Waiting on your reply</h1>
-          {brief.emails.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-500">
-              {brief.googleConnected ? "Nothing waiting on you. Nice." : "Connect Google on Anchor's Integrations page to see emails here."}
-            </p>
-          ) : (
-            <ul className="mt-3 flex flex-col gap-3">
-              {brief.emails.map((e) => {
+  const renderEmail = (e: BriefEmail) => {
                 const d = dismissed[e.threadId];
                 const initial = d === "done" ? "done" : d && d > brief.date ? "snoozed" : null;
                 return (
@@ -82,7 +60,6 @@ export default async function BriefPage({
                     <a href={e.gmailUrl} target="_blank" rel="noreferrer" className="text-[15px] font-semibold text-brand hover:underline">
                       {e.fromName}
                     </a>
-                    {e.deal && <span className="text-sm text-slate-500"> · {e.deal}</span>}
                     <p className="mt-1 text-[15px] text-slate-700">{e.summary}</p>
                     <p className={`mt-1 text-xs ${e.waitingDays >= 3 ? "text-accent" : "text-slate-400"}`}>
                       Waiting {e.waitingDays <= 0 ? "since today" : `${e.waitingDays} day${e.waitingDays === 1 ? "" : "s"}`}
@@ -130,7 +107,50 @@ export default async function BriefPage({
                     </div>
                   </li>
                 );
-              })}
+};
+
+  return (
+    <main className="min-h-screen bg-[#f4f6f9]">
+      <header className="bg-brand">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-5 py-4">
+          <Logo size="md" tone="light" />
+          <span className="text-xs text-slate-300">Morning brief · {day}</span>
+        </div>
+      </header>
+      <div className="mx-auto flex max-w-2xl flex-col gap-5 px-5 py-8">
+        {item && highlight && (
+          <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Tap <strong>{highlight === "done" ? "Done" : "Snooze 3 days"}</strong> on the email below to confirm.
+          </p>
+        )}
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h1 className="text-base font-semibold text-brand">Waiting on your reply</h1>
+          {brief.emails.some((e) => e.reply) && (
+            <div className="mt-3 rounded-lg bg-slate-50 p-4">
+              <DraftNowPanel
+                embedded
+                token={token}
+                autoRun={action === "draftall"}
+                buttonLabel="Save all replies to Gmail drafts"
+                intro="Puts a reply to every email waiting on you in your Gmail drafts, ready to send."
+              />
+            </div>
+          )}
+          {brief.emails.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-500">
+              {brief.googleConnected ? "Nothing waiting on you. Nice." : "Connect Google on Anchor's Integrations page to see emails here."}
+            </p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-3">
+              {groupByDeal(brief.emails).map((g) => (
+                <li key={g.deal ?? "other"} className="flex flex-col gap-3">
+                  {(g.deal || brief.emails.some((e) => e.deal)) && (
+                    <h2 className="mt-2 text-[15px] font-semibold text-brand">{g.deal ?? "Other emails"}</h2>
+                  )}
+                  <ul className="flex flex-col gap-3">{g.emails.map(renderEmail)}</ul>
+                </li>
+              ))}
             </ul>
           )}
           {brief.moreEmails > 0 && <p className="mt-3 text-sm text-slate-500">+{brief.moreEmails} more in your inbox.</p>}

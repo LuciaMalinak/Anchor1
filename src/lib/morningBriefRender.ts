@@ -200,10 +200,8 @@ export function renderBriefHtml(b: BriefSnapshot, link: string, personName: stri
   const actionLink = (threadId: string, action: "done" | "snooze", label: string) =>
     `<a href="${link}?item=${encodeURIComponent(threadId)}&amp;do=${action}" style="color:#64748b;text-decoration:underline;font-size:12px;">${label}</a>`;
 
-  const emails = b.emails
-    .map(
-      (e) => `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;border:1px solid #e2e8f0;border-radius:10px;"><tr><td style="padding:12px 14px;">
-        <p style="margin:0;font-size:14px;color:#0f172a;"><a href="${escapeHtml(e.gmailUrl)}" style="color:${brand};font-weight:700;text-decoration:none;">${escapeHtml(e.fromName)}</a>${e.deal ? ` <span style="color:#64748b;">· ${escapeHtml(e.deal)}</span>` : ""}</p>
+  const emailCard = (e: BriefEmail) => `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;border:1px solid #e2e8f0;border-radius:10px;"><tr><td style="padding:12px 14px;">
+        <p style="margin:0;font-size:14px;color:#0f172a;"><a href="${escapeHtml(e.gmailUrl)}" style="color:${brand};font-weight:700;text-decoration:none;">${escapeHtml(e.fromName)}</a></p>
         <p style="margin:4px 0 0;font-size:14px;line-height:1.5;color:#334155;">${escapeHtml(e.summary)}</p>
         <p style="margin:6px 0 0;font-size:12px;color:${e.waitingDays >= 3 ? accent : "#94a3b8"};">Waiting ${e.waitingDays <= 0 ? "since today" : `${e.waitingDays} day${e.waitingDays === 1 ? "" : "s"}`}${e.reminder > 1 ? ` · reminder ${e.reminder}` : ""}${e.drafted ? " · reply draft in Gmail" : ""}
         &nbsp; ${actionLink(e.threadId, "done", "Done")} &nbsp; ${actionLink(e.threadId, "snooze", "Snooze 3 days")}</p>${
@@ -223,9 +221,23 @@ export function renderBriefHtml(b: BriefSnapshot, link: string, personName: stri
               }</p>`
             : ""
         }
-      </td></tr></table>`
-    )
-    .join("");
+      </td></tr></table>`;
+  // Grouped under each deal as a headline, then everything else.
+  const groups = groupByDeal(b.emails);
+  const emails =
+    (b.emails.some((e) => e.reply && !e.drafted)
+      ? `<p style="margin:0 0 12px;"><a href="${link}?do=draftall" style="display:inline-block;padding:8px 14px;border-radius:8px;background:${brand};color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;">Save all replies to Gmail drafts</a></p>`
+      : "") +
+    groups
+      .map(
+        (g) =>
+          `${
+            groups.length > 1 || g.deal
+              ? `<p style="margin:14px 0 8px;font-size:15px;font-weight:700;color:${brand};">${g.deal ? escapeHtml(g.deal) : "Other emails"}</p>`
+              : ""
+          }${g.emails.map(emailCard).join("")}`
+      )
+      .join("");
   const list = (items: string[]) =>
     `<ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6;color:#334155;">${items.map((i) => `<li>${i}</li>`).join("")}</ul>`;
 
@@ -269,4 +281,18 @@ export function meetingWhen(m: { start: string; durationMinutes: number }): stri
   const day = new Date(Date.UTC(y, mo - 1, d, 12)).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   const clock = `${((h + 11) % 12) + 1}:${String(mi).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
   return `${day}, ${clock} (${m.durationMinutes} min)`;
+}
+
+// The brief's emails grouped by deal (each deal a headline, in the order
+// the emails rank), then the ones not on a deal.
+export function groupByDeal(emails: BriefEmail[]): { deal: string | null; emails: BriefEmail[] }[] {
+  const groups: { deal: string | null; emails: BriefEmail[] }[] = [];
+  for (const e of emails.filter((x) => x.deal)) {
+    const g = groups.find((x) => x.deal === e.deal);
+    if (g) g.emails.push(e);
+    else groups.push({ deal: e.deal, emails: [e] });
+  }
+  const other = emails.filter((x) => !x.deal);
+  if (other.length) groups.push({ deal: null, emails: other });
+  return groups;
 }
