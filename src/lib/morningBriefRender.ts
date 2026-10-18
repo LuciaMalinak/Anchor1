@@ -216,7 +216,11 @@ export function renderBriefHtml(b: BriefSnapshot, link: string, personName: stri
                 e.meeting
                   ? `<p style="margin:8px 0 0;font-size:13px;color:${brand};"><strong>Suggested meeting:</strong> ${escapeHtml(e.meeting.title)} · ${escapeHtml(meetingWhen(e.meeting))} — <a href="${link}?item=${encodeURIComponent(e.threadId)}" style="color:${accent};">add it to your calendar</a></p>`
                   : ""
-              }<p style="margin:8px 0 0;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;">Suggested reply</p><div style="margin:4px 0 0;padding:10px 12px;border-radius:8px;background:#f8fafc;border-left:3px solid ${accent};font-size:13px;line-height:1.55;color:#334155;white-space:pre-wrap;">${escapeHtml(e.reply)}</div>`
+              }<p style="margin:8px 0 0;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;">Suggested reply</p><div style="margin:4px 0 0;padding:10px 12px;border-radius:8px;background:#f8fafc;border-left:3px solid ${accent};font-size:13px;line-height:1.55;color:#334155;white-space:pre-wrap;">${escapeHtml(e.reply)}</div><p style="margin:8px 0 0;font-size:13px;">${
+                e.drafted
+                  ? `<span style="color:#059669;font-weight:600;">✓ In your Gmail drafts</span>`
+                  : `<a href="${link}?item=${encodeURIComponent(e.threadId)}&amp;do=draft" style="display:inline-block;padding:6px 12px;border-radius:6px;background:${brand};color:#ffffff;font-weight:600;text-decoration:none;">Save to Gmail drafts</a>`
+              }</p>`
             : ""
         }
       </td></tr></table>`

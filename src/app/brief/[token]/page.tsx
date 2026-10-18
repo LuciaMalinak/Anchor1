@@ -113,7 +113,12 @@ export default async function BriefPage({
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-3">
                           <CopyReplyButton text={e.reply} />
-                          <SaveDraftButton token={token} threadId={e.threadId} initiallySaved={e.drafted} />
+                          <SaveDraftButton
+                            token={token}
+                            threadId={e.threadId}
+                            initiallySaved={e.drafted}
+                            saveNow={item === e.threadId && action === "draft"}
+                          />
                           <a href={e.gmailUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand hover:underline">
                             Open in Gmail
                           </a>

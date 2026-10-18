@@ -1,10 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Puts the suggested reply in Gmail drafts, in the same thread, ready to
 // send — for any email whose draft isn't there yet.
-export function SaveDraftButton({ token, threadId, initiallySaved }: { token: string; threadId: string; initiallySaved: boolean }) {
+// saveNow: opened from "Save to Gmail drafts" in the brief email, so it
+// saves straight away.
+export function SaveDraftButton({
+  token,
+  threadId,
+  initiallySaved,
+  saveNow,
+}: {
+  token: string;
+  threadId: string;
+  initiallySaved: boolean;
+  saveNow?: boolean;
+}) {
   const [state, setState] = useState<"idle" | "saving" | "saved">(initiallySaved ? "saved" : "idle");
   const [error, setError] = useState<string | null>(null);
   const [connectUrl, setConnectUrl] = useState<string | null>(null);
@@ -30,6 +42,16 @@ export function SaveDraftButton({ token, threadId, initiallySaved }: { token: st
       setError("Anchor needs permission to create Gmail drafts.");
     } else setError(body.error || "Couldn't save it. Try again.");
   }
+
+  const started = useRef(false);
+  useEffect(() => {
+    if (saveNow && !initiallySaved && !started.current) {
+      started.current = true;
+      void save();
+    }
+    // Only on first load from the email link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (state === "saved") {
     return (
