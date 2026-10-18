@@ -43,6 +43,11 @@ export type ShownState = Record<
     // The reply written for the thread's latest message, kept so it isn't
     // rewritten every morning; a newer message gets a new one.
     reply?: { forMessage: string; body: string; approach: string };
+    // What they actually sent after that suggestion, once found — how
+    // they change Anchor's replies, learned from for the next ones.
+    sent?: string;
+    // The day the thread was last checked for what they sent.
+    sentCheckedOn?: string;
   }
 >;
 

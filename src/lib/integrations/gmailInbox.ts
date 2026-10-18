@@ -120,3 +120,73 @@ export async function fetchMessageText(userId: string, messageId: string, maxCha
   const body = extractBody(json.payload as GmailPart | undefined);
   return stripQuotedReply(body).slice(0, maxChars) || (typeof json.snippet === "string" ? json.snippet : "");
 }
+
+// Replies this person actually sent, newest first — how they really
+// write (greeting, length, tone, sign-off), for drafting replies that
+// sound like them. Prefers ones to `toEmail` when given.
+export type SentReply = { to: string; subject: string; text: string };
+
+export async function fetchMySentReplies(
+  userId: string,
+  opts: { toEmail?: string | null; max: number }
+): Promise<SentReply[]> {
+  const connection = await getGoogleConnection(userId);
+  if (!connection) return [];
+  let accessToken = connection.accessToken;
+  const search = async (q: string, limit: number) => {
+    const list = await googleGet(
+      connection,
+      accessToken,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limit}&q=${encodeURIComponent(q)}`
+    );
+    accessToken = list.accessToken;
+    return Array.isArray(list.json.messages)
+      ? (list.json.messages as { id?: string }[]).map((m) => m.id).filter((id): id is string => Boolean(id))
+      : [];
+  };
+  const base = "in:sent newer_than:120d subject:re";
+  const ids = [
+    ...(opts.toEmail ? await search(`${base} to:${opts.toEmail}`, 4) : []),
+    ...(await search(base, 12)),
+  ].filter((id, i, all) => all.indexOf(id) === i);
+
+  const out: SentReply[] = [];
+  for (const id of ids) {
+    if (out.length >= opts.max) break;
+    try {
+      const { json } = await googleGet(connection, accessToken, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`);
+      const m = json as unknown as GmailMessage & { payload?: GmailPart };
+      const text = stripQuotedReply(extractBody(m.payload)).trim();
+      // Skip one-liners ("Thanks!") — they don't show how they write.
+      if (text.length < 80) continue;
+      out.push({ to: parseAddress(header(m, "To")).name || header(m, "To"), subject: header(m, "Subject"), text: text.slice(0, 900) });
+    } catch {
+      // Skip a message that can't be read.
+    }
+  }
+  return out;
+}
+
+// What this person sent in a thread after `afterMessageId` (Gmail's id),
+// if anything — used to learn from how they changed a suggested reply.
+export async function fetchMyReplyInThread(userId: string, threadId: string, afterMessageId: string): Promise<string | null> {
+  const connection = await getGoogleConnection(userId);
+  if (!connection) return null;
+  const myEmail = (connection.externalAccountEmail ?? "").toLowerCase();
+  const { json } = await googleGet(
+    connection,
+    connection.accessToken,
+    `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`
+  );
+  const messages = (Array.isArray(json.messages) ? json.messages : []) as (GmailMessage & { payload?: GmailPart })[];
+  const start = messages.findIndex((m) => m.id === afterMessageId);
+  if (start < 0) return null;
+  for (const m of messages.slice(start + 1)) {
+    const labels = m.labelIds ?? [];
+    const fromMe = labels.includes("SENT") || (myEmail && parseAddress(header(m, "From")).email === myEmail);
+    if (!fromMe || labels.includes("DRAFT")) continue;
+    const text = stripQuotedReply(extractBody(m.payload)).trim();
+    if (text) return text.slice(0, 1500);
+  }
+  return null;
+}

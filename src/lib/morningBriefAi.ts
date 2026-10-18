@@ -131,7 +131,27 @@ export async function draftReply(params: {
   subject: string;
   messageText: string;
   dealContext: string | null;
+  // Replies they really sent (newest first), to match how they write.
+  examples?: { to: string; subject: string; text: string }[];
+  // Anchor's earlier suggestions next to what they actually sent instead.
+  corrections?: { suggested: string; sent: string }[];
 }): Promise<DraftedReply> {
+  const examples = (params.examples ?? []).slice(0, 4);
+  const corrections = (params.corrections ?? []).slice(0, 4);
+  const learned = [
+    examples.length
+      ? `How ${params.senderName} actually writes replies — real emails they sent. Match their greeting, length, tone, formality, phrasing and sign-off closely; write as they would, not as a generic assistant:\n${examples
+          .map((e, i) => `--- Example ${i + 1} (to ${e.to}, "${e.subject}")\n${e.text}`)
+          .join("\n")}`
+      : "",
+    corrections.length
+      ? `Earlier replies Anchor suggested and what ${params.senderName} actually sent instead. Learn from what they changed — what they cut, added, softened or made firmer — and write this one the way they would have sent it:\n${corrections
+          .map((c, i) => `--- ${i + 1}. Anchor suggested:\n${c.suggested}\n--- They sent:\n${c.sent}`)
+          .join("\n")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 1000,
@@ -145,7 +165,7 @@ export async function draftReply(params: {
         role: "user",
         content: `Draft ${params.senderName}'s reply to ${params.fromName}.\n\nSubject: ${params.subject}\n\nTheir message:\n${params.messageText}${
           params.dealContext ? `\n\nWhat Anchor knows about this deal and customer:\n${params.dealContext}` : ""
-        }`,
+        }${learned ? `\n\n${learned}` : ""}`,
       },
     ],
   });

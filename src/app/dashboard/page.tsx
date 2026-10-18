@@ -66,6 +66,7 @@ export default async function DashboardPage({
   let sectionOrder: DashboardSectionKey[] = resolveDashboardOrder(null);
   let colorTheme: string | null = null;
   let briefOn = true;
+  let briefNeverSetUp = false;
 
   if (teamId && session?.user?.id) {
     const [user, team, brief] = await Promise.all([
@@ -79,6 +80,7 @@ export default async function DashboardPage({
         .catch(() => undefined),
     ]);
     briefOn = brief?.enabled ?? false;
+    briefNeverSetUp = brief === undefined;
     welcomeSeen = user?.welcomeSeen ?? true;
     isTeamOwner = team?.ownerUserId === session.user.id;
     sectionOrder = resolveDashboardOrder(user?.dashboardLayout);
@@ -160,7 +162,7 @@ export default async function DashboardPage({
           initialColorTheme={colorTheme && isColorThemeKey(colorTheme) ? colorTheme : null}
         />
       )}
-      {teamId && !briefOn && <MorningBriefPrompt />}
+      {teamId && !briefOn && <MorningBriefPrompt neverSetUp={briefNeverSetUp} />}
       {sectionOrder.map((key) => (
         <Fragment key={key}>{sectionByKey[key] ?? null}</Fragment>
       ))}
