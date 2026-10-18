@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { MorningBriefPrefs, BriefChannel } from "@/lib/morningBriefPrefs";
+import { DraftNowPanel } from "@/components/DraftNowPanel";
 
 type Setup = {
   email: string | null;
@@ -304,7 +305,7 @@ export function MorningBriefSettings() {
             <span>
               Also put the replies in my Gmail drafts
               <span className="block text-xs text-slate-500">
-                Your brief always shows how to handle your top 5 emails and a suggested reply for each, based on the deal. This also puts those replies in your Gmail drafts, written the way you write. Nothing is sent.
+                Your brief always shows how to handle each email waiting on you and a suggested reply, based on the deal. This also puts those replies in your Gmail drafts, written the way you write. Nothing is sent.
                 {prefs.draftReplies && !setup.gmailCanDraft && setup.googleConnected && (
                   <>
                     {" "}
@@ -357,6 +358,9 @@ export function MorningBriefSettings() {
           {preview.text && <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-slate-700">{preview.text}</pre>}
         </div>
       )}
+      <div className="mt-6 border-t border-slate-100 pt-5">
+        <DraftNowPanel embedded />
+      </div>
     </section>
   );
 }

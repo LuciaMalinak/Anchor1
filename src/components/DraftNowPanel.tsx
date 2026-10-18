@@ -1,12 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DraftReport } from "@/lib/morningBrief";
 
-// "Draft my replies now": runs Gmail drafting straight away and shows
-// what happened — the Google account the drafts go to, every email
-// drafted, every one skipped and why, and any error from Gmail.
-export function DraftNowPanel() {
+// "Draft my replies now" (in the Morning brief settings): runs Gmail
+// drafting straight away and shows what happened — the Google account
+// the drafts go to, every email drafted, every one skipped and why, and
+// any error from Gmail. `embedded`: inside another card, so no card of
+// its own.
+// On the brief page: `token` (no sign-in needed) and `autoRun` when opened
+// from "Save all replies to Gmail drafts" in the brief email.
+export function DraftNowPanel({
+  embedded,
+  token,
+  autoRun,
+  buttonLabel = "Draft my replies now",
+  intro = "Anchor drafts a reply to each email waiting on you and leaves it in Gmail, ready to send. It also does this on its own through the day.",
+}: {
+  embedded?: boolean;
+  token?: string;
+  autoRun?: boolean;
+  buttonLabel?: string;
+  intro?: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<DraftReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -15,26 +31,37 @@ export function DraftNowPanel() {
     setBusy(true);
     setError(null);
     setReport(null);
-    const res = await fetch("/api/morning-brief/draft-now", { method: "POST" }).catch(() => null);
+    const res = await fetch("/api/morning-brief/draft-now", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(token ? { token } : {}),
+    }).catch(() => null);
     const body = res ? await res.json().catch(() => ({})) : {};
     setBusy(false);
     if (!res?.ok) setError(body.error || "Couldn't reach Anchor. Try again.");
     else setReport(body as DraftReport);
   }
 
+  const started = useRef(false);
+  useEffect(() => {
+    if (autoRun && !started.current) {
+      started.current = true;
+      void run();
+    }
+    // Only on first load from the email link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const draftsUrl = report?.account
     ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(report.account)}#drafts`
     : "https://mail.google.com/mail/#drafts";
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+    <section className={embedded ? "" : "rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-brand">Gmail reply drafts</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Anchor drafts a reply to each email waiting on you and leaves it in Gmail, ready to send. It also does this on its own
-            through the day.
-          </p>
+          <h3 className="text-sm font-semibold text-brand">Gmail reply drafts</h3>
+          <p className="mt-1 text-sm text-slate-500">{intro}</p>
         </div>
         <button
           type="button"
@@ -42,7 +69,7 @@ export function DraftNowPanel() {
           disabled={busy}
           className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
         >
-          {busy ? "Drafting… (up to a minute)" : "Draft my replies now"}
+          {busy ? "Drafting… (up to a minute)" : buttonLabel}
         </button>
       </div>
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
@@ -63,7 +90,10 @@ export function DraftNowPanel() {
             <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-900">
               {report.blocked}{" "}
               {!report.canDraft && report.account && (
-                <a href="/api/integrations/google/connect?add=gmail_compose&returnTo=%2Fdashboard" className="font-semibold underline">
+                <a
+                  href="/api/integrations/google/connect?add=gmail_compose&returnTo=%2Fdashboard%2Fprofile%23morning-brief"
+                  className="font-semibold underline"
+                >
                   Allow Gmail drafts
                 </a>
               )}
