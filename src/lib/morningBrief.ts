@@ -526,26 +526,48 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
 // run, and at most a few drafts an hour.
 const MAX_AUTO_DRAFTS_PER_RUN = 8;
 
-export async function autoDraftReplies(userId: string): Promise<number> {
+// What a drafting run did, for "Draft my replies now" to show.
+export type DraftReport = {
+  account: string | null;
+  canDraft: boolean;
+  // Why nothing could run at all, when that's the case.
+  blocked: string | null;
+  waiting: number;
+  drafted: { fromName: string; subject: string }[];
+  alreadyInDrafts: { fromName: string; subject: string }[];
+  skipped: { fromName: string; subject: string; reason: string }[];
+  problems: string[];
+};
+
+// `everything`: from the "Draft my replies now" button — drafts every
+// email waiting on them, not only the ones the AI judged need a reply.
+export async function autoDraftReplies(userId: string, opts: { everything?: boolean } = {}): Promise<DraftReport> {
   return withAiUser({ userId }, async () => {
+    const report: DraftReport = { account: null, canDraft: false, blocked: null, waiting: 0, drafted: [], alreadyInDrafts: [], skipped: [], problems: [] };
     const [[user], row, connection] = await Promise.all([
       db.select().from(users).where(eq(users.id, userId)),
       getBriefRow(userId),
       getGoogleConnection(userId),
     ]);
     const prefs = normalizePrefs(row?.prefs);
+    report.account = connection?.externalAccountEmail ?? null;
+    report.canDraft = Boolean(connection && (connection.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose));
     // Doesn't need the brief itself to be on: drafts are their own thing,
     // on by default once Gmail allows them, off only if turned off.
-    if (!user || !prefs.draftReplies) return 0;
-    if (!connection || !(connection.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose)) return 0;
+    if (!user) return { ...report, blocked: "No such user." };
+    if (!connection) return { ...report, blocked: "Google isn't connected. Connect it on the Integrations page." };
+    if (!report.canDraft) return { ...report, blocked: "Anchor doesn't have permission to create Gmail drafts yet. Click \"Allow Gmail drafts\"." };
+    if (!prefs.draftReplies && !opts.everything) return { ...report, blocked: "Saving replies to Gmail drafts is turned off on your Profile." };
     const shown: ShownState = { ...((row?.shown as ShownState) ?? {}) };
     const dismissed = row?.dismissed ?? {};
     const localDate = localNow(prefs.timeZone).date;
 
-    const inbox = await fetchThreadsAwaitingReply(userId, { lookbackDays: 7, extraMyEmails: [user.email] });
+    const inbox = await fetchThreadsAwaitingReply(userId, { lookbackDays: opts.everything ? 14 : 7, extraMyEmails: [user.email] });
     const { dealByEmail } = await dealContacts(userId);
     let open = inbox.threads.filter((t) => !dismissed[t.threadId]);
-    if (prefs.emailScope === "deals") open = open.filter((t) => dealByEmail.has(t.fromEmail));
+    if (prefs.emailScope === "deals" && !opts.everything) open = open.filter((t) => dealByEmail.has(t.fromEmail));
+    report.waiting = open.length;
+    const label = (t: (typeof open)[number]) => ({ fromName: t.fromName || t.fromEmail, subject: t.subject });
     const accountParam = inbox.account ? `?authuser=${encodeURIComponent(inbox.account)}` : "";
     const target = (t: (typeof open)[number], summary: string, priority: 1 | 2 | 3) => {
       const deal = dealByEmail.get(t.fromEmail) ?? null;
@@ -564,51 +586,65 @@ export async function autoDraftReplies(userId: string): Promise<number> {
       };
       return { email, messageId: t.messageId, messageIdHeader: t.messageIdHeader, dealId: deal?.id ?? null };
     };
+    const hasReply = (t: (typeof open)[number]) => shown[t.threadId]?.reply?.forMessage === t.messageId;
+    for (const t of open) if (hasReply(t) && shown[t.threadId]?.drafted) report.alreadyInDrafts.push(label(t));
     // A reply already written for the latest message (in a brief) but not
     // yet in Gmail drafts — e.g. written before the permission was given.
-    const writtenNotSaved = open
-      .filter((t) => shown[t.threadId]?.reply?.forMessage === t.messageId && !shown[t.threadId]?.drafted)
-      .map((t) => target(t, t.subject, 2));
+    const writtenNotSaved = open.filter((t) => hasReply(t) && !shown[t.threadId]?.drafted).map((t) => target(t, t.subject, 2));
     // New since Anchor last looked: no reply written for its latest message.
-    const fresh = open.filter((t) => shown[t.threadId]?.reply?.forMessage !== t.messageId).slice(0, 12);
-    if (!fresh.length && !writtenNotSaved.length) return 0;
+    const limit = opts.everything ? 10 : 12;
+    const freshAll = open.filter((t) => !hasReply(t));
+    const fresh = freshAll.slice(0, limit);
+    for (const t of freshAll.slice(limit)) report.skipped.push({ ...label(t), reason: "More than Anchor drafts in one go — run it again." });
 
-    const triage = !fresh.length ? [] : await triageEmails(
-      user.name || user.email,
-      fresh.map((t, i) => ({
-        id: i,
-        fromName: t.fromName,
-        fromEmail: t.fromEmail,
-        subject: t.subject,
-        snippet: t.snippet,
-        deal: dealByEmail.get(t.fromEmail)?.name ?? null,
-        waitingDays: 0,
-        addressedToMe: t.addressedToMe,
-      }))
-    );
+    let triage: Awaited<ReturnType<typeof triageEmails>> = [];
+    if (fresh.length) {
+      try {
+        triage = await triageEmails(
+          user.name || user.email,
+          fresh.map((t, i) => ({
+            id: i,
+            fromName: t.fromName,
+            fromEmail: t.fromEmail,
+            subject: t.subject,
+            snippet: t.snippet,
+            deal: dealByEmail.get(t.fromEmail)?.name ?? null,
+            waitingDays: 0,
+            addressedToMe: t.addressedToMe,
+          }))
+        );
+      } catch (err) {
+        report.problems.push(`Couldn't sort your emails: ${errorText(err)}`);
+        triage = fresh.map((t, i) => ({ id: i, needsReply: true, summary: t.subject, priority: 2 as const }));
+      }
+    }
+    const picked = [];
+    for (const [i, t] of fresh.entries()) {
+      const r = triage.find((x) => x.id === i);
+      if (r?.needsReply || opts.everything) picked.push({ t, r });
+      else report.skipped.push({ ...label(t), reason: "Anchor read it as not needing a reply (an FYI, a thank-you or similar)." });
+    }
+    picked.sort((a, b) => (a.r?.priority ?? 3) - (b.r?.priority ?? 3));
+    const cap = opts.everything ? limit : MAX_AUTO_DRAFTS_PER_RUN;
+    for (const p of picked.slice(cap)) report.skipped.push({ ...label(p.t), reason: "More than Anchor drafts in one go — it'll do it next time." });
     const targets = [
       ...writtenNotSaved,
-      ...triage
-        .filter((r) => r.needsReply && fresh[r.id])
-        .sort((a, b) => a.priority - b.priority)
-        .slice(0, MAX_AUTO_DRAFTS_PER_RUN)
-        .map((r) => target(fresh[r.id], r.summary || fresh[r.id].subject, r.priority)),
+      ...picked.slice(0, cap).map((p) => target(p.t, p.r?.summary || p.t.subject, p.r?.priority ?? 2)),
     ];
-    if (!targets.length) return 0;
+    if (!targets.length) return report;
 
-    await writeReplies(userId, user, targets, shown, true, localDate, prefs);
-    let drafted = 0;
+    report.problems.push(...(await writeReplies(userId, user, targets, shown, true, localDate, prefs)));
     for (const t of targets) {
       const s = shown[t.email.threadId];
-      if (!s) continue;
-      shown[t.email.threadId] = { ...s, drafted: s.drafted || t.email.drafted, draftedOn: s.on ? s.draftedOn : localDate };
-      if (t.email.drafted) drafted++;
+      if (s) shown[t.email.threadId] = { ...s, drafted: s.drafted || t.email.drafted, draftedOn: s.on ? s.draftedOn : localDate };
+      if (t.email.drafted) report.drafted.push({ fromName: t.email.fromName || t.email.fromEmail, subject: t.email.subject });
+      else report.skipped.push({ fromName: t.email.fromName || t.email.fromEmail, subject: t.email.subject, reason: "Couldn't save it to Gmail (see the error below)." });
     }
     await db
       .insert(morningBriefs)
       .values({ userId, shown, updatedAt: new Date() })
       .onConflictDoUpdate({ target: morningBriefs.userId, set: { shown, updatedAt: new Date() } });
-    return drafted;
+    return report;
   });
 }
 
@@ -689,7 +725,7 @@ export async function runDueMorningBriefs(now: Date = new Date()) {
   summary.draftChecked = drafters.length;
   for (const r of drafters) {
     try {
-      summary.drafted += await autoDraftReplies(r.userId);
+      summary.drafted += (await autoDraftReplies(r.userId)).drafted.length;
     } catch (err) {
       console.error(`[morningBrief] auto-drafting failed for ${r.userId}:`, err);
     }
