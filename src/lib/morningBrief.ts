@@ -4,7 +4,7 @@ import { contacts, deals, meetingParticipants, meetings, morningBriefs, summarie
 import { accessibleDealIds, dealVisibilityWhere } from "@/lib/dealAccess";
 import { getAttentionItems } from "@/lib/attention";
 import { fetchTodaysDealMeetings } from "@/lib/integrations/calendar";
-import { fetchMessageText, fetchThreadsAwaitingReply } from "@/lib/integrations/gmailInbox";
+import { fetchMessageText, fetchMyReplyInThread, fetchMySentReplies, fetchThreadsAwaitingReply } from "@/lib/integrations/gmailInbox";
 import { createGmailDraft } from "@/lib/integrations/gmailDraft";
 import { getGoogleConnection } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
@@ -260,6 +260,34 @@ async function dealContextForReply(dealId: string): Promise<string | null> {
   return parts.join("\n\n");
 }
 
+// How many threads to check per brief for what the person sent after a
+// suggestion, and how many of those pairs to learn from.
+const MAX_SENT_CHECKS = 6;
+const MAX_CORRECTIONS = 4;
+
+// Self-learning: for threads Anchor suggested a reply on, finds what the
+// person actually sent afterwards (once), so later replies follow how
+// they really answer rather than how Anchor first guessed.
+async function learnFromSentReplies(userId: string, shown: ShownState, localDate: string) {
+  const pending = Object.entries(shown)
+    .filter(([, s]) => s.reply && !s.sent && s.sentCheckedOn !== localDate)
+    .sort(([, a], [, b]) => (b.on || "").localeCompare(a.on || ""))
+    .slice(0, MAX_SENT_CHECKS);
+  for (const [threadId, s] of pending) {
+    try {
+      const sent = await fetchMyReplyInThread(userId, threadId, s.reply!.forMessage);
+      shown[threadId] = sent ? { ...s, sent } : { ...s, sentCheckedOn: localDate };
+    } catch {
+      shown[threadId] = { ...s, sentCheckedOn: localDate };
+    }
+  }
+  return Object.values(shown)
+    .filter((s) => s.reply && s.sent)
+    .sort((a, b) => (b.on || "").localeCompare(a.on || ""))
+    .slice(0, MAX_CORRECTIONS)
+    .map((s) => ({ suggested: s.reply!.body, sent: s.sent! }));
+}
+
 // Writes how to handle each of the top emails and a ready-to-send reply,
 // shown in the brief itself; once per message (kept in `shown`, so the
 // same unanswered email isn't rewritten every morning). Also puts the
@@ -270,19 +298,27 @@ async function writeReplies(
   user: typeof users.$inferSelect,
   targets: { email: BriefEmail; messageId: string; messageIdHeader: string | null; dealId: string | null }[],
   shown: ShownState,
-  saveToGmail: boolean
+  saveToGmail: boolean,
+  localDate: string
 ) {
   const connection = saveToGmail ? await getGoogleConnection(userId) : null;
   const canDraftInGmail = Boolean(connection && (connection.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose));
-  const style = await getDealLeadStyle(userId, { allowSynchronousRebuild: false });
+  const [style, corrections] = await Promise.all([
+    getDealLeadStyle(userId, { allowSynchronousRebuild: false }),
+    learnFromSentReplies(userId, shown, localDate).catch((err) => {
+      console.error("[morningBrief] learning from sent replies failed:", err);
+      return [];
+    }),
+  ]);
   for (const t of targets) {
     const kept = shown[t.email.threadId]?.reply;
     let reply = kept && kept.forMessage === t.messageId ? kept : null;
     try {
       if (!reply) {
-        const [text, dealContext] = await Promise.all([
+        const [text, dealContext, examples] = await Promise.all([
           fetchMessageText(userId, t.messageId),
           t.dealId ? dealContextForReply(t.dealId) : Promise.resolve(null),
+          fetchMySentReplies(userId, { toEmail: t.email.fromEmail, max: 4 }).catch(() => []),
         ]);
         const drafted = await draftReply({
           senderName: user.name || user.email,
@@ -291,10 +327,18 @@ async function writeReplies(
           subject: t.email.subject,
           messageText: text || t.email.summary,
           dealContext,
+          examples,
+          corrections,
         });
         reply = { forMessage: t.messageId, ...drafted };
         // A newer message: the Gmail draft for the old one doesn't count.
-        shown[t.email.threadId] = { ...(shown[t.email.threadId] ?? { on: "", n: 0 }), reply, drafted: kept ? false : shown[t.email.threadId]?.drafted };
+        shown[t.email.threadId] = {
+          ...(shown[t.email.threadId] ?? { on: "", n: 0 }),
+          reply,
+          drafted: kept ? false : shown[t.email.threadId]?.drafted,
+          sent: undefined,
+          sentCheckedOn: undefined,
+        };
         if (kept) t.email.drafted = false;
       }
       t.email.reply = reply.body;
@@ -380,7 +424,7 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
       const localDate = localNow(prefs.timeZone).date;
 
       const { snapshot, candidateIds, draftTargets } = await buildSnapshot({ userId, user, prefs, shown, dismissed, localDate });
-      if (draftTargets.length) await writeReplies(userId, user, draftTargets, shown, prefs.draftReplies);
+      if (draftTargets.length) await writeReplies(userId, user, draftTargets, shown, prefs.draftReplies, localDate);
 
       // Remember what was shown today (for "remind me every N days"), and
       // forget threads that have dropped out of the inbox window.
@@ -391,11 +435,15 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
           n: prev?.on === localDate ? prev.n : (prev?.n ?? 0) + 1,
           drafted: e.drafted || prev?.drafted,
           reply: prev?.reply,
+          sent: prev?.sent,
+          sentCheckedOn: prev?.sentCheckedOn,
         };
       }
       const keep = new Set([...candidateIds, ...snapshot.emails.map((e) => e.threadId)]);
       for (const id of Object.keys(shown)) {
-        if (!keep.has(id) && daysBetween(shown[id].on, localDate) > 30) delete shown[id];
+        // What they sent after a suggestion is kept longer: it's what later
+        // replies learn from.
+        if (!keep.has(id) && daysBetween(shown[id].on, localDate) > (shown[id].sent ? 180 : 30)) delete shown[id];
       }
       for (const [id, until] of Object.entries(dismissed)) {
         if (until !== "done" && until < localDate && daysBetween(until, localDate) > 30) delete dismissed[id];

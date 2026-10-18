@@ -31,7 +31,8 @@ export const DEFAULT_PREFS: MorningBriefPrefs = {
   emailScope: "all",
   lookbackDays: 14,
   remindEveryDays: 1,
-  draftReplies: false,
+  // Only takes effect once Anchor may create Gmail drafts.
+  draftReplies: true,
 };
 
 export function isValidTimeZone(tz: unknown): tz is string {
@@ -66,7 +67,7 @@ export function normalizePrefs(raw: unknown): MorningBriefPrefs {
     emailScope: r.emailScope === "deals" ? "deals" : "all",
     lookbackDays: r.lookbackDays === 7 ? 7 : 14,
     remindEveryDays: r.remindEveryDays === 2 ? 2 : r.remindEveryDays === 3 ? 3 : 1,
-    draftReplies: bool(r.draftReplies, false),
+    draftReplies: bool(r.draftReplies, DEFAULT_PREFS.draftReplies),
   };
 }
 
