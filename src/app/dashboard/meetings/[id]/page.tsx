@@ -9,8 +9,9 @@ import {
   meetingParticipants,
   contacts,
   deals,
+  askLog,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { canAccessDeal, accessibleDealIds, dealVisibilityWhere } from "@/lib/dealAccess";
 import { MeetingStatusPoller } from "./MeetingStatusPoller";
 import { MeetingDeleteButton } from "./MeetingDeleteButton";
@@ -192,6 +193,14 @@ export default async function MeetingDetailPage({
     .from(summaries)
     .where(eq(summaries.meetingId, id));
 
+  // What this viewer asked Ask Anchor during the call (their own only).
+  const lookedUp = await db
+    .select({ id: askLog.id, question: askLog.question, answer: askLog.answer, createdAt: askLog.createdAt })
+    .from(askLog)
+    .where(and(eq(askLog.meetingId, id), eq(askLog.userId, session.user.id)))
+    .orderBy(asc(askLog.createdAt));
+  const askedDuringCall = meeting.liveQuestions ?? [];
+
   const participants = await db
     .select({
       id: meetingParticipants.id,
@@ -339,6 +348,53 @@ export default async function MeetingDetailPage({
           </Link>{" "}
           to update it from here after each call.
         </p>
+      )}
+
+      {askedDuringCall.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="text-sm font-medium text-slate-900">Questions they asked</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Asked during the call, with the answer Anchor suggested.</p>
+          <ul className="mt-3 flex flex-col gap-3">
+            {askedDuringCall.map((q) => (
+              <li key={q.askedAt} className="text-sm">
+                <p className="italic text-slate-500">
+                  &ldquo;{q.question}&rdquo;{q.askedBy ? <span className="not-italic text-slate-400"> — {q.askedBy}</span> : null}
+                </p>
+                <p className="mt-0.5 text-slate-800">{q.answer}</p>
+                {q.links.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {q.links.map((l) => (
+                      <a
+                        key={l.url}
+                        href={l.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-full border border-brand/30 px-2 py-0.5 text-[11px] font-medium text-brand hover:bg-brand/10"
+                      >
+                        {l.label} ↗
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {lookedUp.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="text-sm font-medium text-slate-900">What you looked up</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Your Ask Anchor questions from this call. Only you see these.</p>
+          <ul className="mt-3 flex flex-col gap-3">
+            {lookedUp.map((a) => (
+              <li key={a.id} className="text-sm">
+                <p className="font-medium text-slate-900">{a.question}</p>
+                <p className="mt-0.5 whitespace-pre-line text-slate-600">{a.answer}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {participants.length > 0 && (

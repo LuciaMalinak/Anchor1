@@ -215,7 +215,8 @@ function sourcingRules(material: string): string {
 1. ${material} When it answers the question, use it first and say exactly where it came from (which call and when — quote the line if it matters — which document, the emails).
 2. If that doesn't fully answer it, use web search: companies, markets, competitors, pricing benchmarks, regulations, how-tos, general facts — anything public. Say what you found and name the site. For people, only public professional information (their role, company, public statements) — never their private life.
 3. If neither covers it, answer from your own knowledge and say so plainly ("not in your deal data or online — from general knowledge: …").
-Never invent anything about the deal itself: what someone said, prices, discounts, dates, commitments and names must come from the material or a source you name. If a deal-specific fact isn't known, say what's missing and how to find it, then still give the best answer you can.`;
+Never invent anything about the deal itself: what someone said, prices, discounts, dates, commitments and names must come from the material or a source you name. If a deal-specific fact isn't known, say what's missing and how to find it, then still give the best answer you can.
+When the answer is about a person or a company, end with links to look them up, as markdown links: a person's LinkedIn profile if it's in the material or you found it, otherwise a LinkedIn search, https://www.linkedin.com/search/results/people/?keywords= followed by their name and company (spaces as %20); a company's website if you know it, otherwise a web search, https://www.google.com/search?q= followed by its name. Never make up a profile or website address.`;
 }
 
 function leadRules(leadName: string | null | undefined, leadStyle: string | null | undefined): string {

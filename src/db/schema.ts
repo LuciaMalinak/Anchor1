@@ -9,6 +9,7 @@ import {
   primaryKey,
   pgEnum,
   uniqueIndex,
+  index,
   doublePrecision,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
@@ -894,3 +895,23 @@ export const morningBriefs = pgTable("morning_brief", {
   lastBrief: jsonb("lastBrief").$type<Record<string, unknown>>(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
+
+// What someone asked Ask Anchor, and its answer, kept on the meeting that
+// was live at the time and on the deal it was about, so everything looked
+// up during a call stays with that call (shown on the meeting's page).
+// Created on deploy by startupMigrations.ts.
+export const askLog = pgTable(
+  "ask_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    meetingId: uuid("meetingId").references(() => meetings.id, { onDelete: "set null" }),
+    dealId: uuid("dealId").references(() => deals.id, { onDelete: "set null" }),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("ask_log_meetingId_idx").on(t.meetingId, t.createdAt)]
+);

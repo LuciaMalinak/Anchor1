@@ -40,6 +40,17 @@ const MIGRATIONS = [
   // on calls (liveQuestion.ts, callIdentity.ts).
   `ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "liveQuestions" jsonb`,
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "callNames" jsonb`,
+  // What was asked of Ask Anchor during a call (askLog in schema.ts).
+  `CREATE TABLE IF NOT EXISTS "ask_log" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "userId" uuid NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+    "meetingId" uuid REFERENCES "meeting"("id") ON DELETE SET NULL,
+    "dealId" uuid REFERENCES "deal"("id") ON DELETE SET NULL,
+    "question" text NOT NULL,
+    "answer" text NOT NULL,
+    "createdAt" timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "ask_log_meetingId_idx" ON "ask_log" ("meetingId", "createdAt")`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no
