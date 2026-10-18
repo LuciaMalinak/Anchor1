@@ -288,9 +288,9 @@ export function MorningBriefSettings() {
           <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-3">
             <input type="checkbox" className={`${check} mt-0.5`} checked={prefs.draftReplies} onChange={(e) => update({ draftReplies: e.target.checked })} />
             <span>
-              Draft replies for me
+              Also put the replies in my Gmail drafts
               <span className="block text-xs text-slate-500">
-                Puts a suggested reply to the top 3 emails in your Gmail drafts, written the way you write. Nothing is sent.
+                Your brief always shows how to handle your top 5 emails and a suggested reply for each, based on the deal. This also puts those replies in your Gmail drafts, written the way you write. Nothing is sent.
                 {prefs.draftReplies && !setup.gmailCanDraft && setup.googleConnected && (
                   <>
                     {" "}

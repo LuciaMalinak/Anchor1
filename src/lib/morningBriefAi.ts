@@ -103,19 +103,26 @@ export async function triageEmails(personName: string, emails: TriageInput[]): P
 
 const REPLY_TOOL: Anthropic.Tool = {
   name: "record_reply",
-  description: "Record a draft reply to the email.",
+  description: "Record how to handle the email and a draft reply to it.",
   input_schema: {
     type: "object",
     properties: {
+      approach: {
+        type: "string",
+        description:
+          "How to handle this one in their situation, in one line of at most 110 characters, leading with the move — e.g. 'They want 20% off: hold at the 10% you can give and offer annual billing instead' or 'Confirm Thursday and send the security pack they asked for last call'.",
+      },
       body: {
         type: "string",
         description:
-          "Plain-text reply body: a short greeting, 1-4 sentences that answer or move things forward, and a sign-off with the sender's first name. Never invent prices, dates, commitments or facts that aren't given; where something must come from them, leave a clear [placeholder].",
+          "Plain-text reply body, professional and warm, ready to send: a short greeting by first name, 2-5 sentences that answer exactly what they asked (using the real facts given) and move the deal forward with a clear next step, and a sign-off with the sender's first name. Never invent prices, dates, features, commitments or facts that aren't given; where something must come from the sender, leave a clear [placeholder]. Never agree to anything the deal's decision boundaries say the sender can't decide — say you'll confirm and come back instead.",
       },
     },
-    required: ["body"],
+    required: ["approach", "body"],
   },
 };
+
+export type DraftedReply = { body: string; approach: string };
 
 export async function draftReply(params: {
   senderName: string;
@@ -124,11 +131,11 @@ export async function draftReply(params: {
   subject: string;
   messageText: string;
   dealContext: string | null;
-}): Promise<string> {
+}): Promise<DraftedReply> {
   const message = await createWithForcedTool(client(), {
     model: MODEL,
-    max_tokens: 900,
-    system: `You draft email replies in ${params.senderName}'s own voice for them to review and send.${
+    max_tokens: 1000,
+    system: `You draft email replies in ${params.senderName}'s own voice for them to review and send — replies a seasoned, professional account executive would be glad to send as-is: specific to this customer and deal, concise, courteous, never pushy, never generic.${
       params.style ? ` How they write and negotiate: ${params.style}` : ""
     }`,
     tools: [REPLY_TOOL],
@@ -137,13 +144,15 @@ export async function draftReply(params: {
       {
         role: "user",
         content: `Draft ${params.senderName}'s reply to ${params.fromName}.\n\nSubject: ${params.subject}\n\nTheir message:\n${params.messageText}${
-          params.dealContext ? `\n\nWhat Anchor knows about this deal:\n${params.dealContext}` : ""
+          params.dealContext ? `\n\nWhat Anchor knows about this deal and customer:\n${params.dealContext}` : ""
         }`,
       },
     ],
   });
   const toolUse = message.content.find((b) => b.type === "tool_use");
-  const body = toolUse && toolUse.type === "tool_use" ? (toolUse.input as { body?: unknown }).body : null;
+  const input = toolUse && toolUse.type === "tool_use" ? (toolUse.input as { body?: unknown; approach?: unknown }) : null;
+  const body = input?.body;
   if (typeof body !== "string" || !body.trim()) throw new Error("The model returned an empty reply.");
-  return body.trim();
+  const approach = typeof input?.approach === "string" ? input.approach.trim().slice(0, 160) : "";
+  return { body: body.trim(), approach };
 }

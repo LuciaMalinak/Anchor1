@@ -5,6 +5,7 @@ import { getBriefRow } from "@/lib/morningBrief";
 import type { BriefSnapshot } from "@/lib/morningBriefRender";
 import { Logo } from "@/components/Logo";
 import { BriefItemActions } from "./BriefItemActions";
+import { CopyReplyButton } from "./CopyReplyButton";
 
 export const metadata: Metadata = {
   title: "Your morning brief — Anchor",
@@ -86,6 +87,26 @@ export default async function BriefPage({
                       {e.reminder > 1 ? ` · reminder ${e.reminder}` : ""}
                       {e.drafted ? " · reply draft in Gmail" : ""}
                     </p>
+                    {e.approach && (
+                      <p className="mt-3 text-sm text-brand">
+                        <span className="font-semibold">How to handle it: </span>
+                        {e.approach}
+                      </p>
+                    )}
+                    {e.reply && (
+                      <div className="mt-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Suggested reply</p>
+                        <p className="mt-1 whitespace-pre-wrap rounded-md border-l-[3px] border-accent bg-slate-50 px-3 py-2.5 text-sm leading-relaxed text-slate-700">
+                          {e.reply}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                          <CopyReplyButton text={e.reply} />
+                          <a href={e.gmailUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand hover:underline">
+                            {e.drafted ? "Open the draft in Gmail" : "Reply in Gmail"}
+                          </a>
+                        </div>
+                      </div>
+                    )}
                     <div className="mt-3">
                       <BriefItemActions token={token} threadId={e.threadId} initial={initial} highlight={item === e.threadId ? highlight : null} />
                     </div>
