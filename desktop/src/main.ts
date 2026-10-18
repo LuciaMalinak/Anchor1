@@ -41,6 +41,7 @@ import { autoUpdater } from "electron-updater";
 import { loadConfig, saveConfig, DEFAULT_API_BASE } from "./config";
 import { AnchorApi } from "./anchorApi";
 import { startBrowserMeetingWatcher, type DetectedCall } from "./browserMeetingWatcher";
+import { stopOlderCopies } from "./olderCopies";
 import {
   BACKGROUND_ARG,
   canUseBackgroundAgent,
@@ -1396,9 +1397,33 @@ app.on("open-url", (event, url) => {
 // another copy is already running, THIS one quits immediately and instead
 // asks the original (via "second-instance", below) to just bring its
 // existing window forward.
+function olderCopyCheckDue(): boolean {
+  const marker = path.join(os.tmpdir(), "anchor-desktop-older-copy-check");
+  try {
+    if (Date.now() - fs.statSync(marker).mtimeMs < 60 * 60_000) return false;
+  } catch {
+    // Never checked.
+  }
+  try {
+    fs.writeFileSync(marker, "");
+  } catch {
+    // Can't remember it — check anyway.
+  }
+  return true;
+}
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
-  app.quit();
+  // Unless what's running is an older install (Windows) — then this
+  // newer copy closes it and starts again in its place. See olderCopies.ts.
+  // The background restart check lands here every few minutes while
+  // Anchor runs, so it only looks for an older copy about once an hour.
+  if ((!launchedInBackground || olderCopyCheckDue()) && stopOlderCopies(console.log) > 0) {
+    app.relaunch();
+    app.exit(0);
+  } else {
+    app.quit();
+  }
 } else {
   app.on("second-instance", (_event, commandLine) => {
     // Windows/Linux deliver a custom-protocol link by launching a second
@@ -1419,6 +1444,9 @@ if (!gotSingleInstanceLock) {
     // this id; without it they come from "electron.app.Anchor Desktop".
     if (process.platform === "win32") app.setAppUserModelId("com.anchor.desktop");
     registerIpcHandlers();
+    // An older install from before this one may still be running beside
+    // it (one that didn't share this copy's single-instance lock).
+    stopOlderCopies(log);
     // After restarting itself to install an update, come back the way it
     // was: in the menu bar only, unless the window was open.
     const updateRestart = loadConfig().restartedForUpdate;
