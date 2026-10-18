@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { deals, meetingLiveSegments, meetings, users, type LiveQuestionRecord } from "@/db/schema";
+import { deals, meetingLiveSegments, meetings, users, type LiveCaution, type LiveQuestionRecord } from "@/db/schema";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { loadLiveDealContextCached } from "@/lib/liveContext";
 import { LIVE_MODEL, liveClient, liveDealContextText } from "@/lib/liveCoaching";
@@ -162,6 +162,7 @@ type LiveQuestionValue = {
   answering?: boolean;
   askedBy?: string | null;
   links?: LiveLink[];
+  caution?: LiveCaution | null;
 };
 
 function writeQuestion(meetingId: string, askedAt: number, value: LiveQuestionValue) {
@@ -174,21 +175,89 @@ function writeQuestion(meetingId: string, askedAt: number, value: LiveQuestionVa
     .returning({ id: meetings.id });
 }
 
-// The model's reply is "Q: <the question, completed from context>" on the
-// first line, then the answer — so a question cut across two transcript
-// lines (or mangled by speech-to-text) shows up whole and readable.
-function parseReply(raw: string): { question: string | null; answer: string; notAQuestion: boolean } {
-  const text = raw.replace(/^\s+/, "");
-  if (text.toUpperCase().startsWith(NOT_A_QUESTION)) return { question: null, answer: "", notAQuestion: true };
-  const qLine = /^Q:\s*(.*?)(?:\n|$)/i.exec(text);
-  if (!qLine) return { question: null, answer: text.trim(), notAQuestion: false };
-  // Until the newline arrives the question line is still being written.
-  const lineDone = text.length > qLine[0].length || text.endsWith("\n");
-  return {
-    question: lineDone ? qLine[1].trim() || null : null,
-    answer: lineDone ? text.slice(qLine[0].length).replace(/^A:\s*/i, "").trim() : "",
-    notAQuestion: false,
-  };
+// The model's reply opens with a few header lines, then the answer:
+//   WHO: client | rep        — who asked, judged from what was asked
+//   FLAG: none | amber: why | red: why
+//   Q: <the question, completed from context>
+// so a question the rep asked is dropped the moment WHO arrives, a
+// question that touches what the person on the call can't agree to is
+// flagged on screen, and a question cut across two transcript lines (or
+// mangled by speech-to-text) shows up whole and readable.
+type ParsedReply = {
+  question: string | null;
+  answer: string;
+  notAQuestion: boolean;
+  // Dropped because the rep asked it (WHO: rep), as opposed to not being
+  // a real question at all.
+  askedByRep?: boolean;
+  caution: LiveCaution | null;
+};
+
+const HEADER_LINE = /^(WHO|FLAG|Q):[ \t]*(.*?)(?:\n|$)/i;
+
+export function parseReply(raw: string): ParsedReply {
+  let text = raw.replace(/^\s+/, "");
+  if (text.toUpperCase().startsWith(NOT_A_QUESTION)) return { question: null, answer: "", notAQuestion: true, caution: null };
+  let question: string | null = null;
+  let caution: LiveCaution | null = null;
+  let sawHeader = false;
+  for (let m = HEADER_LINE.exec(text); m; m = HEADER_LINE.exec(text)) {
+    sawHeader = true;
+    const key = m[1].toUpperCase();
+    const value = m[2].trim();
+    if (key === "WHO" && /^(rep|seller|us|me)\b/i.test(value)) {
+      return { question: null, answer: "", notAQuestion: true, askedByRep: true, caution: null };
+    }
+    if (key === "FLAG") caution = parseCaution(value);
+    if (key === "Q") question = value || null;
+    text = text.slice(m[0].length).replace(/^\s+/, "");
+  }
+  // A header line still being written: nothing to show from it yet.
+  const partial = text.toUpperCase();
+  if (
+    /^(WHO|FLAG|Q):/i.test(text) ||
+    (!sawHeader && partial.length < 5 && ["WHO:", "FLAG:", NOT_A_QUESTION].some((h) => h.startsWith(partial)))
+  ) {
+    return { question, answer: "", notAQuestion: false, caution };
+  }
+  if (text.toUpperCase().startsWith(NOT_A_QUESTION) && !question) {
+    return { question: null, answer: "", notAQuestion: true, caution: null };
+  }
+  return { question, answer: text.replace(/^A:\s*/i, "").trim(), notAQuestion: false, caution };
+}
+
+function parseCaution(value: string): LiveCaution | null {
+  const m = /^(red|amber|yellow|orange)\b[\s:—–-]*(.*)$/i.exec(value);
+  if (!m) return null;
+  return { level: /^red$/i.test(m[1]) ? "red" : "amber", reason: m[2].trim().slice(0, 140) };
+}
+
+// What the answer call has worked out about each named speaker on a
+// call: how often a line of theirs read as the rep's vs the client's.
+// Given back to the next question's prompt, so a name the account
+// doesn't match (a device name, a nickname) still gets recognized as the
+// rep after a question or two. In memory only — it's a hint, not data.
+const speakerRoles = new Map<string, Map<string, { rep: number; client: number }>>();
+
+function noteSpeakerRole(meetingId: string, speaker: string | null, role: "rep" | "client") {
+  if (!speaker) return;
+  let roles = speakerRoles.get(meetingId);
+  if (!roles) {
+    if (speakerRoles.size > 300) speakerRoles.clear();
+    roles = new Map();
+    speakerRoles.set(meetingId, roles);
+  }
+  const votes = roles.get(speaker) ?? { rep: 0, client: 0 };
+  votes[role]++;
+  roles.set(speaker, votes);
+}
+
+function likelyRole(meetingId: string, speaker: string): "rep" | "client" | null {
+  const votes = speakerRoles.get(meetingId)?.get(speaker);
+  if (!votes) return null;
+  if (votes.rep >= 2 && votes.rep > votes.client * 2) return "rep";
+  if (votes.client >= 1 && votes.client > votes.rep) return "client";
+  return null;
 }
 
 async function answerLiveQuestion(meetingId: string, question: string, speakerName: string | null) {
@@ -205,6 +274,9 @@ async function answerLiveQuestion(meetingId: string, question: string, speakerNa
   // Only checkable when the line has a speaker (bot/desktop calls); the
   // in-person mic has none, and the answer call screens those instead.
   if (isSelfSpeaker(speakerName, me)) return;
+  // Nor is one from a speaker this call has already shown to be the rep
+  // (by what they asked earlier), even when their label isn't their name.
+  if (speakerName && likelyRole(meetingId, speakerName) === "rep") return;
 
   // Show the question right away — the panel renders it with "working on
   // an answer" while the answer streams in below. Loaded alongside
@@ -240,22 +312,38 @@ async function answerLiveQuestion(meetingId: string, question: string, speakerNa
       .where(eq(meetingLiveSegments.meetingId, meetingId))
       .orderBy(asc(meetingLiveSegments.createdAt)),
   ]);
+  const roleTag = (name: string) => {
+    if (isSelfSpeaker(name, me)) return " (the rep)";
+    const role = likelyRole(meetingId, name);
+    return role === "rep" ? " (probably the rep)" : role === "client" ? " (probably the client side)" : "";
+  };
   const transcript = segments
-    .map((s) =>
-      s.speakerName ? `${s.speakerName}${isSelfSpeaker(s.speakerName, me) ? " (the rep)" : ""}: ${s.text}` : s.text
-    )
+    .map((s) => (s.speakerName ? `${s.speakerName}${roleTag(s.speakerName)}: ${s.text}` : s.text))
     .join("\n")
     .slice(-TRANSCRIPT_WINDOW_CHARS);
 
-  const instructions = `You help a sales rep answer a question the other side just asked, live, mid-call — speed matters, so answer straight away.
+  const instructions = `You help the person representing the seller on a live sales call (the "rep" — the deal owner or a teammate covering for them) answer what the other side (the client/prospect) just asked. Speed matters: reply straight away, nothing extra.
 
 Reply in exactly this format:
-Q: <the question as the other side meant it, in one short line — use the recent transcript to complete it if it was cut off or split across lines, and fix obvious speech-to-text mistakes>
-<a short, ready-to-say answer (1-3 sentences) the rep could say almost as-is — no preamble, no quotes, no labels>
+WHO: client or rep
+FLAG: none | amber: <why, max 8 words> | red: <why, max 8 words>
+Q: <the question as they meant it, one short line — complete it from the transcript if it was cut off or split across lines, and fix obvious speech-to-text mistakes>
+<the answer: 1-3 short sentences the rep can say almost word for word — no preamble, no quotes, no labels>
 
-Ground the answer only in the deal facts and transcript given; if the real answer isn't something you know, say so plainly (e.g. "I don't have that number in front of me — let me follow up right after the call") rather than inventing a number, date, or commitment. Never commit to anything outside the deal's decision boundaries — suggest noting it and following up instead.
+WHO — decide from WHAT was asked and how, not from names: speaker labels are often missing (an in-person recording has none), wrong, or a device name. The rep sells; the client buys.
+- Client questions are about the seller's side: the product, features, how it works, pricing, discounts, setup/onboarding, integrations, security/compliance, contract terms, support, references, delivery dates ("do you…", "can your tool…", "how much is…", "what does it cost…", "is it secure…").
+- Rep questions are discovery and steering: about the client's business, team, current tools, process, pain points, budget, decision makers, timeline, next steps ("how do you currently…", "who else is involved…", "what's your budget…", "does Tuesday work?"), or the rep repeating/reading out the client's question.
+- Use the conversation too: whoever explains the product is the rep; whoever describes their own company's problems is the client. Lines tagged "(the rep)" are the rep's; "(probably …)" tags are earlier guesses.
+If WHO is rep, stop after the WHO line.
 
-Lines marked "(the rep)" are the rep's own. Answer only questions the other side asked: if the line was asked by the rep${ownerName ? ` (${ownerName})` : ""} (including the rep asking the client something, or reading a question out), was already answered in the transcript, or isn't a real question needing an answer (rhetorical, small talk, a filler like "you know?", "can you hear me?"), reply with exactly ${NOT_A_QUESTION} and nothing else.`;
+FLAG — check the question against the deal's decision boundaries and prep notes:
+- red: a straight answer would agree to, promise, or disclose something the rep isn't allowed to decide or discuss (e.g. a discount past the limit, custom work, contract or legal terms, roadmap dates, anything the boundaries rule out). The answer must NOT agree — give a polite, confident line that defers it ("Let me take that back to <owner/team> and come back to you by tomorrow") without saying "I'm not allowed".
+- amber: the answer depends on something not in the facts given, or touches a commitment (price, dates, security claims) the boundaries don't cover — answer carefully and suggest confirming after the call.
+- none: everything else.
+
+The answer: ground it only in the deal facts and transcript. Be specific and use real numbers and names from the facts when they answer the question. If the real answer isn't known, say so plainly and offer to follow up — never invent a number, date, feature, or commitment.
+
+Reply with exactly ${NOT_A_QUESTION} and nothing else if it isn't a real question needing an answer (rhetorical, small talk, "you know?", "can you hear me?") or it was already answered in the transcript.`;
 
   const stream = withAiUser({ userId: meeting.userId, meetingId }, () => liveClient("live_questions").messages.stream({
     model: LIVE_MODEL,
@@ -273,7 +361,7 @@ Lines marked "(the rep)" are the rep's own. Answer only questions the other side
         content: `Recent transcript:
 ${transcript || "(nothing transcribed yet)"}
 
-The line that looked like a question${speakerName ? ` (said by ${speakerName})` : ""}: "${question}"`,
+The line that looked like a question${speakerName ? ` (speaker label: ${speakerName}${roleTag(speakerName)})` : " (no speaker label)"}: "${question}"`,
       },
     ],
   }));
@@ -290,6 +378,7 @@ The line that looked like a question${speakerName ? ` (said by ${speakerName})` 
       question: parsed.question || question,
       suggestedAnswer: parsed.answer,
       askedAt,
+      caution: parsed.caution,
       ...(final ? {} : { answering: true }),
     };
     flushing = flushing
@@ -326,6 +415,7 @@ The line that looked like a question${speakerName ? ` (said by ${speakerName})` 
   if (superseded) return;
 
   const parsed = parseReply(raw);
+  if (parsed.askedByRep) noteSpeakerRole(meetingId, speakerName, "rep");
   if (parsed.notAQuestion || !parsed.answer) {
     await db
       .update(meetings)
@@ -333,6 +423,7 @@ The line that looked like a question${speakerName ? ` (said by ${speakerName})` 
       .where(stillCurrent(meetingId, askedAt));
     return;
   }
+  noteSpeakerRole(meetingId, speakerName, "client");
   const finalQuestion = parsed.question || question;
   const links = await liveLinksFor({
     userId: meeting.userId,
@@ -350,6 +441,7 @@ The line that looked like a question${speakerName ? ` (said by ${speakerName})` 
       askedAt,
       askedBy: speakerName,
       links,
+      caution: parsed.caution,
     })
   );
   await flushing;
@@ -359,6 +451,7 @@ The line that looked like a question${speakerName ? ` (said by ${speakerName})` 
     askedAt,
     askedBy: speakerName,
     links,
+    caution: parsed.caution,
   });
 }
 

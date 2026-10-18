@@ -28,7 +28,13 @@ export type LiveQuestionRecord = {
   // calls do; an in-person recording doesn't).
   askedBy: string | null;
   links: { label: string; url: string }[];
+  // Set when answering touches what the person on the call can't agree
+  // to or discuss (red) or should double-check (amber).
+  caution?: LiveCaution | null;
 };
+
+// See parseReply in src/lib/liveQuestion.ts.
+export type LiveCaution = { level: "red" | "amber"; reason: string };
 
 export const users = pgTable("user", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -253,7 +259,12 @@ export const meetings = pgTable("meeting", {
     // style prompt, kept visible until the transcript shows the rep
     // actually addressed it (see generateLiveCoaching in liveCoaching.ts).
     // Null whenever nothing's currently hanging.
-    liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number } | null;
+    liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number; caution?: LiveCaution | null } | null;
+    // A few lines on what's happened on the call so far, and what the
+    // person on the call mustn't agree to or bring up (from the deal's
+    // decision boundaries) — see generateLiveCoaching.
+    summary?: string[];
+    offLimits?: { label: string; raised: boolean }[];
   }>(),
   liveSuggestionsUpdatedAt: timestamp("liveSuggestionsUpdatedAt", { mode: "date" }),
   // Every question the other side asked during the call and the answer
