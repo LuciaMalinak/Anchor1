@@ -19,6 +19,8 @@ import { LiveMeetingWatcher } from "@/components/LiveMeetingWatcher";
 import { MeetingSuggestionPopups } from "@/components/MeetingSuggestionPopups";
 import { isAppOwner } from "@/lib/appOwner";
 import { WhatsNewModal } from "@/components/WhatsNewModal";
+import { after } from "next/server";
+import { autoDraftRepliesOnVisit } from "@/lib/morningBrief";
 
 // Members whose account existed before this date see the one-time "new
 // tools" popup (WhatsNewModal). Newer accounts get the first-visit
@@ -31,6 +33,10 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
+  // New emails get their reply drafted into Gmail while the person is
+  // using Anchor, not only on the hourly job (see autoDraftRepliesOnVisit).
+  const visitorId = session?.user?.id;
+  if (visitorId) after(() => autoDraftRepliesOnVisit(visitorId));
 
   // Team-wide "what's worth knowing today" news — lives in this shared
   // layout (not the deal page) so it can run persistently across the main

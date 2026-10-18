@@ -35,6 +35,12 @@ export const DEFAULT_PREFS: MorningBriefPrefs = {
   draftReplies: true,
 };
 
+// Whether someone has saved Morning brief settings (the Profile page
+// always saves them all), as opposed to a row holding only state.
+export function briefSettingsSaved(raw: unknown): boolean {
+  return Boolean(raw && typeof raw === "object" && Object.keys(raw).length > 0);
+}
+
 export function isValidTimeZone(tz: unknown): tz is string {
   if (typeof tz !== "string" || !tz || tz.length > 64) return false;
   try {
