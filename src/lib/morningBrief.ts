@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, like, or } from "drizzle-orm";
 import { db } from "@/db";
-import { contacts, deals, meetingParticipants, meetings, morningBriefs, summaries, tasks, teams, users } from "@/db/schema";
+import { contacts, deals, integrationConnections, meetingParticipants, meetings, morningBriefs, summaries, tasks, teams, users } from "@/db/schema";
 import { accessibleDealIds, dealVisibilityWhere } from "@/lib/dealAccess";
 import { getAttentionItems } from "@/lib/attention";
 import { fetchTodaysDealMeetings } from "@/lib/integrations/calendar";
@@ -525,10 +525,12 @@ export async function autoDraftReplies(userId: string): Promise<number> {
       getGoogleConnection(userId),
     ]);
     const prefs = normalizePrefs(row?.prefs);
-    if (!user || !row?.enabled || !prefs.draftReplies || !prefs.include.emails) return 0;
+    // Doesn't need the brief itself to be on: drafts are their own thing,
+    // on by default once Gmail allows them, off only if turned off.
+    if (!user || !prefs.draftReplies) return 0;
     if (!connection || !(connection.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose)) return 0;
-    const shown: ShownState = { ...((row.shown as ShownState) ?? {}) };
-    const dismissed = row.dismissed ?? {};
+    const shown: ShownState = { ...((row?.shown as ShownState) ?? {}) };
+    const dismissed = row?.dismissed ?? {};
     const localDate = localNow(prefs.timeZone).date;
 
     const inbox = await fetchThreadsAwaitingReply(userId, { lookbackDays: 7, extraMyEmails: [user.email] });
@@ -593,9 +595,30 @@ export async function autoDraftReplies(userId: string): Promise<number> {
       shown[t.email.threadId] = { ...s, drafted: s.drafted || t.email.drafted, draftedOn: s.on ? s.draftedOn : localDate };
       if (t.email.drafted) drafted++;
     }
-    await db.update(morningBriefs).set({ shown, updatedAt: new Date() }).where(eq(morningBriefs.userId, userId));
+    await db
+      .insert(morningBriefs)
+      .values({ userId, shown, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: morningBriefs.userId, set: { shown, updatedAt: new Date() } });
     return drafted;
   });
+}
+
+// Also runs whenever someone opens Anchor (the dashboard layout), since
+// the hourly job is started by GitHub's scheduler, which can run late or
+// skip an hour. At most every AUTO_DRAFT_ON_VISIT_MS per person.
+const AUTO_DRAFT_ON_VISIT_MS = 10 * 60_000;
+const lastVisitDraft = new Map<string, number>();
+
+export async function autoDraftRepliesOnVisit(userId: string): Promise<void> {
+  const now = Date.now();
+  if (now - (lastVisitDraft.get(userId) ?? 0) < AUTO_DRAFT_ON_VISIT_MS) return;
+  lastVisitDraft.set(userId, now);
+  if (lastVisitDraft.size > 1000) lastVisitDraft.clear();
+  try {
+    await autoDraftReplies(userId);
+  } catch (err) {
+    console.error(`[morningBrief] auto-drafting on visit failed for ${userId}:`, err);
+  }
 }
 
 // Marks one email done (stops reminders) or snoozes it for `days`.
@@ -624,7 +647,7 @@ export async function runDueMorningBriefs(now: Date = new Date()) {
     .innerJoin(teams, eq(teams.id, users.teamId))
     .where(eq(morningBriefs.enabled, true));
 
-  const summary = { checked: rows.length, sent: 0, empty: 0, failed: 0, drafted: 0 };
+  const summary = { checked: rows.length, sent: 0, empty: 0, failed: 0, draftChecked: 0, drafted: 0 };
   for (const r of rows) {
     const prefs = normalizePrefs(r.prefs);
     const { due, localDate } = isBriefDue(prefs, r.lastSentOn, now);
@@ -648,8 +671,14 @@ export async function runDueMorningBriefs(now: Date = new Date()) {
       await db.update(morningBriefs).set({ lastSentOn: r.lastSentOn }).where(eq(morningBriefs.userId, r.userId));
     }
   }
-  // Between briefs, everyone's new emails get their Gmail drafts too.
-  for (const r of rows) {
+  // Between briefs, new emails get their Gmail drafts too — for everyone
+  // who has let Anchor create Gmail drafts, brief on or not.
+  const drafters = await db
+    .select({ userId: integrationConnections.userId })
+    .from(integrationConnections)
+    .where(and(eq(integrationConnections.provider, "google"), like(integrationConnections.scope, `%${GOOGLE_EXTRA_SCOPES.gmail_compose}%`)));
+  summary.draftChecked = drafters.length;
+  for (const r of drafters) {
     try {
       summary.drafted += await autoDraftReplies(r.userId);
     } catch (err) {

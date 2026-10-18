@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { morningBriefs } from "@/db/schema";
 import { getBriefRow } from "@/lib/morningBrief";
-import { DEFAULT_PREFS, isValidTimeZone, normalizePrefs } from "@/lib/morningBriefPrefs";
+import { DEFAULT_PREFS, briefSettingsSaved, isValidTimeZone, normalizePrefs } from "@/lib/morningBriefPrefs";
 import { getGoogleConnection } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
 
@@ -18,15 +18,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const [row, google] = await Promise.all([getBriefRow(userId), getGoogleConnection(userId)]);
   const gmailCanDraft = Boolean(google && (google.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose));
-  if (row) {
+  // A row can exist without anyone choosing anything (Done / Snooze on an
+  // email, or drafting, store state in it); only saved settings count.
+  if (row && (row.enabled || briefSettingsSaved(row.prefs))) {
     return NextResponse.json({ enabled: row.enabled, turnedOn: false, prefs: normalizePrefs(row.prefs), googleConnected: Boolean(google), gmailCanDraft });
   }
   if (!google) return NextResponse.json({ enabled: false, turnedOn: false, googleConnected: false, gmailCanDraft });
   const prefs = { ...DEFAULT_PREFS, timeZone: isValidTimeZone(body.timeZone) ? body.timeZone : DEFAULT_PREFS.timeZone };
-  const [inserted] = await db
+  await db
     .insert(morningBriefs)
     .values({ userId, enabled: true, prefs, updatedAt: new Date() })
-    .onConflictDoNothing()
-    .returning({ userId: morningBriefs.userId });
-  return NextResponse.json({ enabled: true, turnedOn: Boolean(inserted), prefs, googleConnected: true, gmailCanDraft });
+    .onConflictDoUpdate({ target: morningBriefs.userId, set: { enabled: true, prefs, updatedAt: new Date() } });
+  return NextResponse.json({ enabled: true, turnedOn: true, prefs, googleConnected: true, gmailCanDraft });
 }

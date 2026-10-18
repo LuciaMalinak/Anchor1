@@ -19,7 +19,7 @@ import { HomeUpdates } from "./HomeUpdates";
 import { MorningBriefPrompt } from "./MorningBriefPrompt";
 import { getGoogleConnection } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
-import { normalizePrefs } from "@/lib/morningBriefPrefs";
+import { briefSettingsSaved, normalizePrefs } from "@/lib/morningBriefPrefs";
 import { WelcomeGate } from "./WelcomeGate";
 
 export default async function DashboardPage({
@@ -87,13 +87,12 @@ export default async function DashboardPage({
       getGoogleConnection(session.user.id).catch(() => null),
     ]);
     needsDraftsPermission = Boolean(
-      brief?.enabled &&
-        normalizePrefs(brief.prefs).draftReplies &&
+      normalizePrefs(brief?.prefs).draftReplies &&
         google &&
         !(google.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose)
     );
     briefOn = brief?.enabled ?? false;
-    briefNeverSetUp = brief === undefined;
+    briefNeverSetUp = !brief || (!brief.enabled && !briefSettingsSaved(brief.prefs));
     welcomeSeen = user?.welcomeSeen ?? true;
     isTeamOwner = team?.ownerUserId === session.user.id;
     sectionOrder = resolveDashboardOrder(user?.dashboardLayout);
