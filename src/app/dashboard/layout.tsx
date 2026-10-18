@@ -16,6 +16,7 @@ import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { COLOR_THEME_BY_KEY, isColorThemeKey } from "@/lib/colorThemes";
 import { LiveMeetingWatcher } from "@/components/LiveMeetingWatcher";
+import { MeetingSuggestionPopups } from "@/components/MeetingSuggestionPopups";
 import { isAppOwner } from "@/lib/appOwner";
 import { WhatsNewModal } from "@/components/WhatsNewModal";
 
@@ -245,6 +246,8 @@ export default async function DashboardLayout({
           on, not just when they happen to be sitting on that deal's
           During tab. */}
       {session?.user?.id && <LiveMeetingWatcher />}
+      {/* Times people suggested by email, to approve into a calendar. */}
+      {session?.user?.id && <MeetingSuggestionPopups />}
       {showWhatsNew && <WhatsNewModal />}
     </div>
   );
