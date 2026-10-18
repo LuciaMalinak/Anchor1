@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
-import { CallSpeakersRow, ListeningIndicator, LiveQuestionsBox, UpdatingBadge } from "@/components/LiveCoachingBits";
+import {
+  CallSpeakersRow,
+  CallSummary,
+  CoachingLists,
+  LiveQuestionsBox,
+  OffLimitsBox,
+  TranscriptStrip,
+} from "@/components/LiveCoachingBits";
 import { AskAnchorPanel } from "@/components/AskAnchorPanel";
 import { StopMeetingButton } from "@/components/StopMeetingButton";
 import { FOCUS_WIDGETS, type FocusWidgetKey } from "@/lib/focusWidgets";
@@ -311,7 +318,26 @@ export function FocusWindow({
           </div>
         )}
 
-        {widgets.has("keyFacts") && (dealName || primaryContactName || decisionBoundaries) && (
+        {/* Answers first and biggest, then what not to agree to, what's
+            left to cover, and short suggestions. */}
+        {widgets.has("coaching") && (
+          <div className="space-y-3">
+            <CallSpeakersRow speakers={speakers} onMark={markSpeaker} />
+            <LiveQuestionsBox
+              current={suggestions?.liveQuestion}
+              answered={answered}
+              onMarkMe={speakers.length ? (name) => markSpeaker(name, true) : undefined}
+              cardClassName="rounded-lg border border-brand/30 bg-brand/5"
+            />
+            <OffLimitsBox offLimits={suggestions?.offLimits} decisionBoundaries={decisionBoundaries} />
+            <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3">
+              <CallSummary summary={suggestions?.summary} />
+              <CoachingLists suggestions={suggestions} coachingError={coachingError} coachingRefreshing={coachingRefreshing} />
+            </section>
+          </div>
+        )}
+
+        {widgets.has("keyFacts") && (dealName || primaryContactName || (decisionBoundaries && !widgets.has("coaching"))) && (
           <section className="rounded-lg border border-slate-200 bg-white p-3">
             <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
               KEY FACTS
@@ -329,75 +355,14 @@ export function FocusWindow({
                   {primaryContactRole ? `, ${primaryContactRole}` : ""}
                 </p>
               )}
-              {decisionBoundaries && (
+              {/* Shown in the "Don't agree to" box instead when coaching is on. */}
+              {decisionBoundaries && !widgets.has("coaching") && (
                 <p className="text-xs text-slate-500">
                   <span className="font-medium text-slate-600">Can decide on your own: </span>
                   {decisionBoundaries}
                 </p>
               )}
             </div>
-          </section>
-        )}
-
-        {widgets.has("coaching") && (
-          <div className="space-y-2">
-            <CallSpeakersRow speakers={speakers} onMark={markSpeaker} />
-            <LiveQuestionsBox
-              current={suggestions?.liveQuestion}
-              answered={answered}
-              onMarkMe={speakers.length ? (name) => markSpeaker(name, true) : undefined}
-              cardClassName="rounded-lg border border-brand/30 bg-brand/5 p-3"
-            />
-          </div>
-        )}
-
-        {widgets.has("coaching") && (
-          <section className="rounded-lg border border-slate-200 bg-white p-3">
-            <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
-              SUGGESTIONS
-              <UpdatingBadge active={coachingRefreshing && Boolean(suggestions)} />
-            </p>
-            {!suggestions ? (
-              <p className={`text-sm ${coachingError ? "text-amber-600" : "text-slate-500"}`}>
-                {coachingError || "Preparing suggestions…"}
-              </p>
-            ) : suggestions.nudges.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                Nothing to go on yet for this deal — no prep notes, history, or conversation so
-                far. This fills in the moment any of those show up.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {suggestions.nudges.map((n, i) => (
-                  <li key={i} className="rounded-md bg-accent/10 px-3 py-2 text-sm text-slate-800">
-                    {n}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {suggestions && suggestions.checklist.length > 0 && (
-              <div className="mt-3">
-                <p className="mb-1.5 text-[11px] font-semibold tracking-[0.15em] text-accent">
-                  TO COVER
-                </p>
-                <ul className="flex flex-col gap-1.5">
-                  {suggestions.checklist.map((c, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span
-                        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${
-                          c.covered ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"
-                        }`}
-                      >
-                        {c.covered ? "✓" : ""}
-                      </span>
-                      <span className={c.covered ? "text-slate-400 line-through" : "text-slate-700"}>
-                        {c.label}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </section>
         )}
 
@@ -413,26 +378,7 @@ export function FocusWindow({
           ))}
 
         {widgets.has("transcript") && (
-          <section className="rounded-lg border border-slate-200 bg-white p-3">
-            <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
-              LIVE TRANSCRIPT
-            </p>
-            {segments.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                Waiting for the conversation to start — this fills in as people speak.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {segments.map((s) => (
-                  <p key={s.id} className="text-sm text-slate-700">
-                    {s.speakerName && <span className="font-medium text-slate-900">{s.speakerName}: </span>}
-                    {s.text}
-                  </p>
-                ))}
-              </div>
-            )}
-            {(status === "recording" || status === "joining") && <ListeningIndicator />}
-          </section>
+          <TranscriptStrip segments={segments} live={status === "recording" || status === "joining"} />
         )}
       </div>
     </div>

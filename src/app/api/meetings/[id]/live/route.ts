@@ -176,6 +176,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             ...context,
             recentTranscript: transcriptText.slice(-TRANSCRIPT_WINDOW_CHARS),
             priorChecklist,
+            priorOffLimits: meeting.liveSuggestions?.offLimits ?? null,
             updateChecklist,
           }));
           await saveCoaching(id, coaching, startedAt.getTime());
@@ -213,6 +214,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       relativeSeconds: s.relativeSeconds,
     })),
     liveSuggestions,
+    // What the deal owner said a teammate covering this call may and may
+    // not decide — shown as-is until coaching has turned it into the
+    // "Don't agree to" list (liveSuggestions.offLimits).
+    decisionBoundaries: deal?.decisionBoundaries?.trim() || null,
     // Every question answered so far this call, oldest first.
     liveQuestions: meeting.liveQuestions ?? [],
     // Who's speaking on this call, and which of them is the meeting's

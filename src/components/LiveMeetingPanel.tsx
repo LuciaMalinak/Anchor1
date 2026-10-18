@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
-import { CallSpeakersRow, ListeningIndicator, LiveQuestionsBox, UpdatingBadge } from "@/components/LiveCoachingBits";
+import {
+  CallSpeakersRow,
+  CallSummary,
+  CoachingLists,
+  LiveQuestionsBox,
+  OffLimitsBox,
+  TranscriptStrip,
+} from "@/components/LiveCoachingBits";
 import { requestFocusWindow } from "@/lib/focusWindowBus";
 import { StopMeetingButton } from "@/components/StopMeetingButton";
 
@@ -12,12 +18,20 @@ import { StopMeetingButton } from "@/components/StopMeetingButton";
 // focus-mode pop-out window (src/app/focus) can share it instead of
 // running a second, independent poll of the same endpoint.
 export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; title: string }) {
-  const { segments, suggestions, status, hasBot, isDesktop, error, coachingError, coachingRefreshing, answered, speakers, markSpeaker } = useLiveMeeting(meetingId);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
-  }, [segments.length]);
+  const {
+    segments,
+    suggestions,
+    status,
+    hasBot,
+    isDesktop,
+    error,
+    coachingError,
+    coachingRefreshing,
+    answered,
+    speakers,
+    markSpeaker,
+    decisionBoundaries,
+  } = useLiveMeeting(meetingId);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
@@ -52,99 +66,35 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
         </div>
       </div>
 
-      <div className="grid gap-0 sm:grid-cols-[1.3fr_1fr]">
-        <div className="flex max-h-72 flex-col overflow-y-auto border-b border-slate-100 px-5 py-4 sm:border-b-0 sm:border-r">
-          <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
-            LIVE TRANSCRIPT
-          </p>
-          {segments.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              Waiting for the conversation to start — this fills in as people speak.
+      {/* Answers first and biggest — that's what someone on a call needs
+          in the moment — then what not to agree to, what's left to
+          cover, and short suggestions. The transcript sits underneath,
+          small, for when it's needed. */}
+      <div className="grid gap-4 px-5 py-4 sm:grid-cols-[1.4fr_1fr]">
+        <div className="flex min-w-0 flex-col gap-3">
+          <CallSpeakersRow speakers={speakers} onMark={markSpeaker} />
+          <LiveQuestionsBox
+            current={suggestions?.liveQuestion}
+            answered={answered}
+            onMarkMe={speakers.length ? (name) => markSpeaker(name, true) : undefined}
+            cardClassName="rounded-lg border border-brand/30 bg-brand/5"
+          />
+          {!suggestions?.liveQuestion && !answered.length && (
+            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-400">
+              When they ask something, the answer shows up here.
             </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {segments.map((s) => (
-                <p key={s.id} className="text-sm text-slate-700">
-                  {s.speakerName && (
-                    <span className="font-medium text-slate-900">{s.speakerName}: </span>
-                  )}
-                  {s.text}
-                </p>
-              ))}
-              <div ref={bottomRef} />
-            </div>
           )}
-          {(status === "recording" || status === "joining") && <ListeningIndicator />}
-          {error && <p className="mt-2 text-xs text-amber-600">{error}</p>}
+          <CallSummary summary={suggestions?.summary} />
         </div>
 
-        <div className="flex flex-col gap-4 px-5 py-4">
-          {(
-            <div className="space-y-2">
-              <CallSpeakersRow speakers={speakers} onMark={markSpeaker} />
-              <LiveQuestionsBox
-                current={suggestions?.liveQuestion}
-                answered={answered}
-                onMarkMe={speakers.length ? (name) => markSpeaker(name, true) : undefined}
-                cardClassName="rounded-lg border border-brand/30 bg-brand/5 px-3 py-3"
-              />
-            </div>
-          )}
-
-          <div>
-            <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
-              SUGGESTIONS
-              <UpdatingBadge active={coachingRefreshing && Boolean(suggestions)} />
-            </p>
-            {!suggestions ? (
-              <p className={`text-sm ${coachingError ? "text-amber-600" : "text-slate-500"}`}>
-                {coachingError || "Preparing suggestions…"}
-              </p>
-            ) : suggestions.nudges.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                Nothing to go on yet for this deal — no prep notes, history, or conversation so
-                far. This fills in the moment any of those show up.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {suggestions.nudges.map((n, i) => (
-                  <li
-                    key={i}
-                    className="rounded-md bg-accent/10 px-3 py-2 text-sm text-slate-800"
-                  >
-                    {n}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {suggestions && suggestions.checklist.length > 0 && (
-            <div>
-              <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-accent">
-                TO COVER
-              </p>
-              <ul className="flex flex-col gap-1.5">
-                {suggestions.checklist.map((c, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <span
-                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${
-                        c.covered
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-100 text-slate-400"
-                      }`}
-                    >
-                      {c.covered ? "✓" : ""}
-                    </span>
-                    <span className={c.covered ? "text-slate-400 line-through" : "text-slate-700"}>
-                      {c.label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+        <div className="flex min-w-0 flex-col gap-4">
+          <OffLimitsBox offLimits={suggestions?.offLimits} decisionBoundaries={decisionBoundaries} />
+          <CoachingLists suggestions={suggestions} coachingError={coachingError} coachingRefreshing={coachingRefreshing} />
         </div>
+      </div>
+
+      <div className="px-5 pb-4">
+        <TranscriptStrip segments={segments} live={status === "recording" || status === "joining"} error={error} />
       </div>
     </div>
   );

@@ -22,13 +22,28 @@ export type LiveSuggestions = {
     answering?: boolean;
     askedBy?: string | null;
     links?: LiveLink[];
+    caution?: LiveCaution | null;
   } | null;
+  // Older rows (and the first moments of a call) don't have these yet.
+  summary?: string[];
+  offLimits?: { label: string; raised: boolean }[];
 } | null;
 
 export type LiveLink = { label: string; url: string };
 
+// red: answering straight would agree to something the person on the
+// call can't decide; amber: worth double-checking. See liveQuestion.ts.
+export type LiveCaution = { level: "red" | "amber"; reason: string };
+
 // One answered question from earlier in the call (meetings.liveQuestions).
-export type AnsweredQuestion = { question: string; answer: string; askedAt: number; askedBy: string | null; links: LiveLink[] };
+export type AnsweredQuestion = {
+  question: string;
+  answer: string;
+  askedAt: number;
+  askedBy: string | null;
+  links: LiveLink[];
+  caution?: LiveCaution | null;
+};
 
 // A speaker label on the call, and whether it's the person using Anchor.
 export type CallSpeaker = { name: string; isMe: boolean };
@@ -71,6 +86,7 @@ export function useLiveMeeting(meetingId: string) {
   const [coachingRefreshing, setCoachingRefreshing] = useState(false);
   const [answered, setAnswered] = useState<AnsweredQuestion[]>([]);
   const [speakers, setSpeakers] = useState<CallSpeaker[]>([]);
+  const [decisionBoundaries, setDecisionBoundaries] = useState<string | null>(null);
   const stoppedRef = useRef(false);
 
   useEffect(() => {
@@ -89,6 +105,7 @@ export function useLiveMeeting(meetingId: string) {
         setCoachingRefreshing(body.coachingRefreshing === true);
         setAnswered(Array.isArray(body.liveQuestions) ? body.liveQuestions : []);
         setSpeakers(Array.isArray(body.speakers) ? body.speakers : []);
+        setDecisionBoundaries(typeof body.decisionBoundaries === "string" ? body.decisionBoundaries : null);
         const question = body.liveSuggestions?.liveQuestion;
         if (question && (question.answering || !question.suggestedAnswer)) nextPollMs = FAST_POLL_MS;
         setStatus(body.status);
@@ -147,5 +164,6 @@ export function useLiveMeeting(meetingId: string) {
     answered,
     speakers,
     markSpeaker,
+    decisionBoundaries,
   };
 }
