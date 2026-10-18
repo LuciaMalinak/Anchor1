@@ -114,20 +114,75 @@ export function canUseWindowsWatchdog(): boolean {
 // isn't running. Rewritten on every launch (cheap, and follows the app if
 // it's reinstalled somewhere else); runs only while the person is signed
 // in, and needs no admin rights.
+//
+// Written as task XML rather than plain schtasks flags, because the
+// defaults those flags leave in place would undo the point of it on a
+// laptop: a task only starts on mains power, stops what it started when
+// the laptop goes onto battery or after 3 days, and runs it at
+// below-normal priority (bad for live audio).
+function windowsTaskXml(execPath: string): string {
+  const minutes = Math.max(1, Math.round(RESTART_CHECK_SECONDS / 60));
+  return `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Starts Anchor Desktop again if it isn't running, so it never misses a call. Turn off with "Always watch for calls" in Anchor's tray menu.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <TimeTrigger>
+      <Repetition>
+        <Interval>PT${minutes}M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <StartBoundary>2024-01-01T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>false</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>true</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>4</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>${escapeXml(execPath)}</Command>
+      <Arguments>${BACKGROUND_ARG}</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`;
+}
+
 export async function installWindowsWatchdog(): Promise<string | null> {
   if (!canUseWindowsWatchdog()) return null;
-  const result = await run("schtasks", [
-    "/Create",
-    "/F",
-    "/TN",
-    WINDOWS_TASK,
-    "/SC",
-    "MINUTE",
-    "/MO",
-    String(Math.max(1, Math.round(RESTART_CHECK_SECONDS / 60))),
-    "/TR",
-    `"${process.execPath}" ${BACKGROUND_ARG}`,
-  ]);
+  // schtasks wants the file in UTF-16 with a byte-order mark.
+  const xmlPath = path.join(app.getPath("temp"), "anchor-desktop-task.xml");
+  try {
+    fs.writeFileSync(xmlPath, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(windowsTaskXml(process.execPath), "utf16le")]));
+  } catch (err) {
+    return `Couldn't set Anchor to restart itself: ${err instanceof Error ? err.message : err}`;
+  }
+  const result = await run("schtasks", ["/Create", "/F", "/TN", WINDOWS_TASK, "/XML", xmlPath]);
+  fs.rmSync(xmlPath, { force: true });
   return result.ok ? null : `Couldn't set Anchor to restart itself: ${result.output}`;
 }
 
