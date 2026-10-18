@@ -12,12 +12,20 @@ export async function POST() {
   if (result.status === "failed") {
     return NextResponse.json({ error: "Couldn't put your brief together. Try again in a minute." }, { status: 502 });
   }
-  if (result.status === "empty") return NextResponse.json({ sent: false, text: null });
+  const found = {
+    googleConnected: result.snapshot.googleConnected,
+    emails: result.snapshot.emails.length,
+    replies: result.snapshot.emails.filter((e) => e.reply).length,
+    drafts: result.snapshot.emails.filter((e) => e.drafted).length,
+    problems: result.problems,
+  };
+  if (result.status === "empty") return NextResponse.json({ sent: false, text: null, ...found });
   return NextResponse.json({
     sent: result.delivery.sent,
     channel: result.delivery.channel,
     note: result.delivery.note ?? null,
     text: result.text,
+    ...found,
   });
 }
 

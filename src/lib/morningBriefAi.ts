@@ -117,12 +117,24 @@ const REPLY_TOOL: Anthropic.Tool = {
         description:
           "Plain-text reply body, professional and warm, ready to send: a short greeting by first name, 2-5 sentences that answer exactly what they asked (using the real facts given) and move the deal forward with a clear next step, and a sign-off with the sender's first name. Never invent prices, dates, features, commitments or facts that aren't given; where something must come from the sender, leave a clear [placeholder]. Never agree to anything the deal's decision boundaries say the sender can't decide — say you'll confirm and come back instead.",
       },
+      meeting: {
+        type: "object",
+        description:
+          "Only when the email asks to meet or proposes / agrees a specific day and time (or the reply should propose one they offered): the calendar event to suggest. Leave out otherwise. Never invent a time nobody mentioned.",
+        properties: {
+          title: { type: "string", description: "Short event title, e.g. 'Northwind – pricing call'." },
+          start: { type: "string", description: "Local start, YYYY-MM-DDTHH:MM, worked out from today's date given." },
+          durationMinutes: { type: "integer", description: "15-120; 30 if not said." },
+        },
+        required: ["title", "start", "durationMinutes"],
+      },
     },
     required: ["approach", "body"],
   },
 };
 
-export type DraftedReply = { body: string; approach: string };
+export type SuggestedMeeting = { title: string; start: string; durationMinutes: number };
+export type DraftedReply = { body: string; approach: string; meeting?: SuggestedMeeting | null };
 
 export async function draftReply(params: {
   senderName: string;
@@ -135,6 +147,8 @@ export async function draftReply(params: {
   examples?: { to: string; subject: string; text: string }[];
   // Anchor's earlier suggestions next to what they actually sent instead.
   corrections?: { suggested: string; sent: string }[];
+  // "Monday 2026-10-19", in the sender's time zone — to resolve "Thursday 10am".
+  today?: string;
 }): Promise<DraftedReply> {
   const examples = (params.examples ?? []).slice(0, 4);
   const corrections = (params.corrections ?? []).slice(0, 4);
@@ -165,7 +179,7 @@ export async function draftReply(params: {
         role: "user",
         content: `Draft ${params.senderName}'s reply to ${params.fromName}.\n\nSubject: ${params.subject}\n\nTheir message:\n${params.messageText}${
           params.dealContext ? `\n\nWhat Anchor knows about this deal and customer:\n${params.dealContext}` : ""
-        }${learned ? `\n\n${learned}` : ""}`,
+        }${learned ? `\n\n${learned}` : ""}${params.today ? `\n\nToday is ${params.today}.` : ""}`,
       },
     ],
   });
@@ -174,5 +188,15 @@ export async function draftReply(params: {
   const body = input?.body;
   if (typeof body !== "string" || !body.trim()) throw new Error("The model returned an empty reply.");
   const approach = typeof input?.approach === "string" ? input.approach.trim().slice(0, 160) : "";
-  return { body: body.trim(), approach };
+  return { body: body.trim(), approach, meeting: parseMeeting((input as { meeting?: unknown } | null)?.meeting) };
+}
+
+function parseMeeting(raw: unknown): SuggestedMeeting | null {
+  if (!raw || typeof raw !== "object") return null;
+  const m = raw as Record<string, unknown>;
+  const start = typeof m.start === "string" ? m.start.trim().slice(0, 16) : "";
+  const title = typeof m.title === "string" ? m.title.trim().slice(0, 120) : "";
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(start) || title.length < 3) return null;
+  const d = Number(m.durationMinutes);
+  return { title, start, durationMinutes: Number.isFinite(d) ? Math.min(120, Math.max(15, Math.round(d))) : 30 };
 }

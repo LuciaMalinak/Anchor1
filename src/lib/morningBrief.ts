@@ -66,7 +66,13 @@ async function buildSnapshot(params: {
   shown: ShownState;
   dismissed: Record<string, string>;
   localDate: string;
-}): Promise<{ snapshot: BriefSnapshot; candidateIds: string[]; draftTargets: { email: BriefEmail; messageId: string; messageIdHeader: string | null; dealId: string | null }[] }> {
+}): Promise<{
+  snapshot: BriefSnapshot;
+  candidateIds: string[];
+  draftTargets: { email: BriefEmail; messageId: string; messageIdHeader: string | null; dealId: string | null }[];
+  problems: string[];
+}> {
+  const problems: string[] = [];
   const { userId, user, prefs, shown, dismissed, localDate } = params;
   const access = await accessibleDealIds(userId);
   const visibleDeals = access
@@ -174,6 +180,7 @@ async function buildSnapshot(params: {
       }
     } catch (err) {
       console.error("[morningBrief] reading Gmail failed:", err);
+      problems.push(`Couldn't read your Gmail: ${errorText(err)}. Try reconnecting Google on the Integrations page.`);
     }
   }
 
@@ -229,7 +236,11 @@ async function buildSnapshot(params: {
     snapshot.quietDeals = staleDeals.slice(0, 3).map((d) => ({ name: d.name, days: d.daysSince }));
   }
 
-  return { snapshot, candidateIds, draftTargets };
+  return { snapshot, candidateIds, draftTargets, problems };
+}
+
+function errorText(err: unknown): string {
+  return (err instanceof Error ? err.message : String(err)).slice(0, 200);
 }
 
 // What a reply should be grounded in: the deal's stage, what the person
@@ -299,8 +310,10 @@ async function writeReplies(
   targets: { email: BriefEmail; messageId: string; messageIdHeader: string | null; dealId: string | null }[],
   shown: ShownState,
   saveToGmail: boolean,
-  localDate: string
-) {
+  localDate: string,
+  prefs: MorningBriefPrefs
+): Promise<string[]> {
+  const problems: string[] = [];
   const connection = saveToGmail ? await getGoogleConnection(userId) : null;
   const canDraftInGmail = Boolean(connection && (connection.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose));
   const [style, corrections] = await Promise.all([
@@ -310,6 +323,9 @@ async function writeReplies(
       return [];
     }),
   ]);
+  if (saveToGmail && connection && !canDraftInGmail) {
+    problems.push("Replies weren't saved to Gmail drafts: Anchor doesn't have permission to create drafts yet (the link is on Home).");
+  }
   for (const t of targets) {
     const kept = shown[t.email.threadId]?.reply;
     let reply = kept && kept.forMessage === t.messageId ? kept : null;
@@ -329,6 +345,10 @@ async function writeReplies(
           dealContext,
           examples,
           corrections,
+          today: (() => {
+            const { date, weekday } = localNow(prefs.timeZone);
+            return `${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][weekday]} ${date} (${prefs.timeZone})`;
+          })(),
         });
         reply = { forMessage: t.messageId, ...drafted };
         // A newer message: the Gmail draft for the old one doesn't count.
@@ -343,6 +363,7 @@ async function writeReplies(
       }
       t.email.reply = reply.body;
       t.email.approach = reply.approach || null;
+      t.email.meeting = reply.meeting ? { ...reply.meeting, timeZone: prefs.timeZone, added: shown[t.email.threadId]?.meetingAdded } : null;
       if (canDraftInGmail && !shown[t.email.threadId]?.drafted) {
         const subject = /^re:/i.test(t.email.subject) ? t.email.subject : `Re: ${t.email.subject}`;
         await createGmailDraft(
@@ -354,8 +375,10 @@ async function writeReplies(
       }
     } catch (err) {
       console.error(`[morningBrief] writing a reply for thread ${t.email.threadId} failed:`, err);
+      if (!problems.some((p) => p.startsWith("Couldn't write"))) problems.push(`Couldn't write or save a reply: ${errorText(err)}`);
     }
   }
+  return problems;
 }
 
 export type DeliveryResult = { sent: boolean; channel: BriefChannel; note?: string };
@@ -400,13 +423,13 @@ async function deliver(
     return { sent: true, channel: "email", note };
   } catch (err) {
     console.error("[morningBrief] email send failed:", err);
-    return { sent: false, channel: "email", note: "Couldn't send the email." };
+    return { sent: false, channel: "email", note: `Couldn't send the email: ${errorText(err)}` };
   }
 }
 
 export type RunResult =
-  | { status: "sent"; delivery: DeliveryResult; snapshot: BriefSnapshot; text: string }
-  | { status: "empty"; snapshot: BriefSnapshot }
+  | { status: "sent"; delivery: DeliveryResult; snapshot: BriefSnapshot; text: string; problems: string[] }
+  | { status: "empty"; snapshot: BriefSnapshot; problems: string[] }
   | { status: "failed"; error: string };
 
 // Builds and sends one person's brief now, and records what it showed.
@@ -423,8 +446,8 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
       const dismissed: Record<string, string> = { ...(row?.dismissed ?? {}) };
       const localDate = localNow(prefs.timeZone).date;
 
-      const { snapshot, candidateIds, draftTargets } = await buildSnapshot({ userId, user, prefs, shown, dismissed, localDate });
-      if (draftTargets.length) await writeReplies(userId, user, draftTargets, shown, prefs.draftReplies, localDate);
+      const { snapshot, candidateIds, draftTargets, problems } = await buildSnapshot({ userId, user, prefs, shown, dismissed, localDate });
+      if (draftTargets.length) problems.push(...(await writeReplies(userId, user, draftTargets, shown, prefs.draftReplies, localDate, prefs)));
 
       // Remember what was shown today (for "remind me every N days"), and
       // forget threads that have dropped out of the inbox window.
@@ -435,6 +458,7 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
           n: prev?.on === localDate ? prev.n : (prev?.n ?? 0) + 1,
           drafted: e.drafted || prev?.drafted,
           reply: prev?.reply,
+          meetingAdded: prev?.meetingAdded,
           sent: prev?.sent,
           sentCheckedOn: prev?.sentCheckedOn,
         };
@@ -456,10 +480,10 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
           set: { shown, dismissed, lastBrief: snapshot as unknown as Record<string, unknown>, updatedAt: new Date() },
         });
 
-      if (isEmptyBrief(snapshot) && !opts.sendWhenEmpty) return { status: "empty", snapshot };
+      if (isEmptyBrief(snapshot) && !opts.sendWhenEmpty) return { status: "empty", snapshot, problems };
       const link = briefLinkFor(userId);
       const delivery = await deliver(userId, user, prefs, snapshot, link);
-      return { status: "sent", delivery, snapshot, text: renderBriefText(snapshot, link) };
+      return { status: "sent", delivery, snapshot, text: renderBriefText(snapshot, link), problems };
     } catch (err) {
       console.error(`[morningBrief] run failed for ${userId}:`, err);
       return { status: "failed", error: err instanceof Error ? err.message : String(err) };
