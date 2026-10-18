@@ -50,7 +50,8 @@
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Anchor Desktop records your microphone during a call you choose to record.",
-        "NSAudioCaptureUsageDescription": "Anchor Desktop captures other participants' audio from your call so it can transcribe the conversation."
+        "NSAudioCaptureUsageDescription": "Anchor Desktop captures other participants' audio from your call so it can transcribe the conversation.",
+        "LSUIElement": true
       }
     },
     "afterSign": "build/afterSign.js",
@@ -64,7 +65,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh"
     }
   }
 }

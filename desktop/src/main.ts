@@ -45,8 +45,11 @@ import {
   BACKGROUND_ARG,
   canUseBackgroundAgent,
   installBackgroundAgent,
+  installWindowsWatchdog,
   isBackgroundAgentInstalled,
+  loadBackgroundAgentNow,
   removeBackgroundAgent,
+  removeWindowsWatchdog,
 } from "./backgroundAgent";
 
 // Started silently at login (or restarted after a crash) by the
@@ -1302,14 +1305,18 @@ function enableLaunchAtLogin() {
   if (canUseBackgroundAgent()) {
     if (installBackgroundAgent()) log("Set Anchor Desktop to start in the background at login.");
     if (app.getLoginItemSettings().openAtLogin) app.setLoginItemSettings({ openAtLogin: false });
-  } else if (!app.getLoginItemSettings().openAtLogin) {
+    void loadBackgroundAgentNow().then((msg) => msg && log(msg));
+  } else if (!app.getLoginItemSettings({ args: [BACKGROUND_ARG] }).openAtLogin) {
     app.setLoginItemSettings({ openAtLogin: true, args: [BACKGROUND_ARG] });
     log("Turned on launch at login.");
   }
+  // Starts it again within a few minutes whenever it isn't running.
+  void installWindowsWatchdog().then((msg) => msg && log(msg));
 }
 
 function disableLaunchAtLogin() {
   removeBackgroundAgent();
+  void removeWindowsWatchdog();
   app.setLoginItemSettings({ openAtLogin: false });
 }
 
@@ -1325,7 +1332,10 @@ function refreshTrayMenu() {
       { label: "Open Anchor Desktop", click: showWindow },
       { type: "separator" },
       {
-        label: "Launch at login",
+        // Starts with the computer, and starts again by itself if it's
+        // closed or stops — so a call is never missed. Unticking is the
+        // way to really turn it off.
+        label: "Always watch for calls",
         type: "checkbox",
         checked: openAtLogin,
         click: (item) => {
@@ -1336,7 +1346,7 @@ function refreshTrayMenu() {
       },
       { type: "separator" },
       {
-        label: "Quit Anchor Desktop",
+        label: openAtLogin ? "Quit for now (starts again in a few minutes)" : "Quit Anchor Desktop",
         click: () => {
           isQuitting = true;
           app.quit();
@@ -1418,7 +1428,11 @@ if (!gotSingleInstanceLock) {
     }
     const showOnStart = updateRestart ? updateRestart.windowWasVisible : !launchedInBackground;
     createWindow(showOnStart);
-    if (!showOnStart) app.dock?.hide();
+    // The app starts without a Dock icon (LSUIElement in package.json, so
+    // the background agent's restart checks never flash one); it gets one
+    // only while its window is open.
+    if (showOnStart) app.dock?.show();
+    else app.dock?.hide();
     createTray();
 
     // Same Windows/Linux deep-link case as the second-instance handler
