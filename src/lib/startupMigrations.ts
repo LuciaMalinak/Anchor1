@@ -36,6 +36,10 @@ const MIGRATIONS = [
     "lastBrief" jsonb,
     "updatedAt" timestamp NOT NULL DEFAULT now()
   )`,
+  // Every question asked during a call, and the names someone shows up as
+  // on calls (liveQuestion.ts, callIdentity.ts).
+  `ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "liveQuestions" jsonb`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "callNames" jsonb`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

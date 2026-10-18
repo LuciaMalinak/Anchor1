@@ -18,9 +18,25 @@ import type { AdapterAccountType } from "next-auth/adapters";
 // Auth.js tables (shape required by @auth/drizzle-adapter)
 // ---------------------------------------------------------------------------
 
+// One answered question in a meeting's liveQuestions.
+export type LiveQuestionRecord = {
+  question: string;
+  answer: string;
+  askedAt: number;
+  // The speaker label from the call, when it has them (desktop and bot
+  // calls do; an in-person recording doesn't).
+  askedBy: string | null;
+  links: { label: string; url: string }[];
+};
+
 export const users = pgTable("user", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name"),
+  // Other names this person shows up as on calls ("Lucia M", "Lucia's
+  // iPhone"), marked with "That's me" in the live panel, so their own
+  // questions aren't answered as if a client asked them (see
+  // src/lib/callIdentity.ts). Created on deploy by startupMigrations.ts.
+  callNames: jsonb("callNames").$type<string[]>(),
   email: text("email").unique().notNull(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
@@ -239,6 +255,11 @@ export const meetings = pgTable("meeting", {
     liveQuestion: { question: string; suggestedAnswer: string; askedAt?: number } | null;
   }>(),
   liveSuggestionsUpdatedAt: timestamp("liveSuggestionsUpdatedAt", { mode: "date" }),
+  // Every question the other side asked during the call and the answer
+  // Anchor suggested, oldest first (see src/lib/liveQuestion.ts). Kept
+  // apart from liveSuggestions, which each coaching refresh rewrites.
+  // Created on deploy by startupMigrations.ts.
+  liveQuestions: jsonb("liveQuestions").$type<LiveQuestionRecord[]>(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });

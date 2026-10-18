@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
-import { ListeningIndicator, LiveQuestionCard, UpdatingBadge } from "@/components/LiveCoachingBits";
+import { CallSpeakersRow, ListeningIndicator, LiveQuestionsBox, UpdatingBadge } from "@/components/LiveCoachingBits";
 import { AskAnchorPanel } from "@/components/AskAnchorPanel";
 import { StopMeetingButton } from "@/components/StopMeetingButton";
 import { FOCUS_WIDGETS, type FocusWidgetKey } from "@/lib/focusWidgets";
@@ -42,7 +42,7 @@ export function FocusWindow({
   // here would otherwise try to close the wrong window.
   onClose?: () => void;
 }) {
-  const { segments, suggestions, status, hasBot, isDesktop, coachingError, coachingRefreshing } = useLiveMeeting(meetingId);
+  const { segments, suggestions, status, hasBot, isDesktop, coachingError, coachingRefreshing, answered, speakers, markSpeaker } = useLiveMeeting(meetingId);
   const [widgets, setWidgets] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
@@ -339,8 +339,16 @@ export function FocusWindow({
           </section>
         )}
 
-        {widgets.has("coaching") && suggestions?.liveQuestion && (
-          <LiveQuestionCard question={suggestions.liveQuestion} className="rounded-lg border border-brand/30 bg-brand/5 p-3" />
+        {widgets.has("coaching") && (
+          <div className="space-y-2">
+            <CallSpeakersRow speakers={speakers} onMark={markSpeaker} />
+            <LiveQuestionsBox
+              current={suggestions?.liveQuestion}
+              answered={answered}
+              onMarkMe={speakers.length ? (name) => markSpeaker(name, true) : undefined}
+              cardClassName="rounded-lg border border-brand/30 bg-brand/5 p-3"
+            />
+          </div>
         )}
 
         {widgets.has("coaching") && (

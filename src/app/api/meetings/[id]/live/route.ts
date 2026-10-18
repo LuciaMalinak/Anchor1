@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { meetings, meetingLiveSegments, deals } from "@/db/schema";
+import { meetings, meetingLiveSegments, deals, users } from "@/db/schema";
 import { and, eq, asc, isNull, sql } from "drizzle-orm";
 import { generateLiveCoaching, describeCoachingError, type LiveCoaching } from "@/lib/liveCoaching";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { loadLiveDealContextCached } from "@/lib/liveContext";
 import { authenticateBearer } from "@/lib/apiToken";
 import { withAiUser } from "@/lib/aiUsage";
+import { isSelfSpeaker } from "@/lib/callIdentity";
 
 // When live coaching (nudges + checklist) regenerates. It used to run on
 // a flat 8s timer whether or not anyone had said anything, so a new
@@ -212,6 +213,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       relativeSeconds: s.relativeSeconds,
     })),
     liveSuggestions,
+    // Every question answered so far this call, oldest first.
+    liveQuestions: meeting.liveQuestions ?? [],
+    // Who's speaking on this call, and which of them is the meeting's
+    // owner, for the panel's "That's me" control. Empty for an in-person
+    // recording, which has no speaker labels.
+    speakers: await speakersOnCall(meeting.userId, segments),
     // Shown in place of "Preparing suggestions…" so a broken key/model
     // says so instead of looking like it's still loading forever.
     coachingError: isLive ? lastCoachingError.get(id) ?? null : null,
@@ -219,6 +226,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // an "updating" hint so the rep can see Anchor is reacting.
     coachingRefreshing: isLive && inFlight.has(id),
   });
+}
+
+async function speakersOnCall(ownerId: string, segments: { speakerName: string | null }[]) {
+  const names = [...new Set(segments.map((s) => s.speakerName).filter((n): n is string => Boolean(n)))];
+  if (!names.length) return [];
+  const [owner] = await db
+    .select({ name: users.name, email: users.email, callNames: users.callNames })
+    .from(users)
+    .where(eq(users.id, ownerId));
+  return names.map((name) => ({ name, isMe: owner ? isSelfSpeaker(name, owner) : false }));
 }
 
 // Writes a coaching refresh without clobbering a question the instant
