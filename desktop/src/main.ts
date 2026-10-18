@@ -417,6 +417,10 @@ function overlaySession() {
   return ses;
 }
 
+// See pushPartialTranscript.
+const PARTIAL_PUSH_MS = 700;
+const lastPartialPush = new Map<string, { text: string; at: number }>();
+
 const OVERLAY_WIDTH = 420;
 const OVERLAY_HEIGHT = 640;
 const OVERLAY_MARGIN = 16;
@@ -554,38 +558,47 @@ function notify(title: string, body: string) {
   n.show();
 }
 
-// Pushes live coaching (nudges, checklist, the one question that looks
-// unanswered) into the main window's own UI, not just the floating
-// overlay — the overlay shows the website's Focus page, but the main
-// window's Ask Anchor / suggestions / to-do panels are native to this
-// app, so they need their own feed. Mirrors the server's own ~8s
-// debounce (see AnchorApi.getLiveSuggestions) rather than polling
-// faster, since a shorter interval here would just re-fetch the same
-// cached answer. A no-op whenever nothing is actually recording.
-const LIVE_SUGGESTIONS_POLL_MS = 8000;
+// Pushes live coaching (the question they just asked and its answer,
+// what not to agree to, what's left to cover, suggestions) into the main
+// window's own UI, not just the floating overlay — the overlay shows the
+// website's Focus page, but the main window's panels are native to this
+// app, so they need their own feed. Used to poll every 8s, so an answer
+// the server had in a second showed up here up to 8s late; now about
+// once a second, and faster while an answer is still being written so it
+// appears as it's typed. Only sent on when something changed. A no-op
+// whenever nothing is actually recording.
+const LIVE_SUGGESTIONS_POLL_MS = 1200;
+const LIVE_SUGGESTIONS_FAST_POLL_MS = 400;
+const lastSuggestionsSent = new Map<string, string>();
 function startLiveSuggestionsPolling() {
-  setInterval(() => {
-    if (recordingWindowIds.size === 0) return;
-    let api: AnchorApi;
+  const tick = async () => {
+    let answering = false;
+    let api: AnchorApi | null = null;
     try {
-      api = getApi();
+      api = recordingWindowIds.size ? getApi() : null;
     } catch {
-      return; // No token saved yet — nothing to poll with.
+      api = null; // No token saved yet — nothing to poll with.
     }
-    for (const windowId of recordingWindowIds) {
-      const active = activeRecordings.get(windowId);
-      if (!active) continue;
-      api
-        .getLiveSuggestions(active.meetingId)
-        .then((suggestions) => {
+    if (api) {
+      await Promise.all(
+        [...recordingWindowIds].map(async (windowId) => {
+          const active = activeRecordings.get(windowId);
+          if (!active) return;
+          const suggestions = await api!.getLiveSuggestions(active.meetingId).catch(() => null);
+          if (!suggestions) return;
+          const q = suggestions.liveQuestion;
+          if (q && (q.answering || !q.suggestedAnswer)) answering = true;
+          const json = JSON.stringify(suggestions);
+          if (lastSuggestionsSent.get(windowId) === json) return;
+          lastSuggestionsSent.set(windowId, json);
+          if (lastSuggestionsSent.size > 50) lastSuggestionsSent.clear();
           send("live-suggestions-updated", { windowId, meetingId: active.meetingId, suggestions });
         })
-        .catch(() => {
-          // getLiveSuggestions already swallows its own errors and
-          // resolves null — this catch is just defensive.
-        });
+      );
     }
-  }, LIVE_SUGGESTIONS_POLL_MS);
+    setTimeout(tick, answering ? LIVE_SUGGESTIONS_FAST_POLL_MS : LIVE_SUGGESTIONS_POLL_MS);
+  };
+  void tick();
 }
 
 // Anchor's server is on a hosting plan that sleeps after ~15 idle
@@ -772,6 +785,7 @@ async function initSdk() {
       // its fresh entry wiped out by this stale timer.
       if (activeRecordings.get(windowId) === endedRecording) {
         activeRecordings.delete(windowId);
+        lastPartialPush.delete(windowId);
       }
     }, 5000);
     send("recording-ended", evt.window);
@@ -827,6 +841,10 @@ async function initSdk() {
   // an ordinary call once the shape is confirmed working.)
   RecallAiSdk.addEventListener("realtime-event", (evt) => {
     const active = activeRecordings.get(evt.window.id);
+    if (evt.event === "transcript.partial_data") {
+      pushPartialTranscript(evt.window.id, evt.data);
+      return;
+    }
     if (evt.event !== "transcript.data") {
       // Anything else (participant events, other providers' formats,
       // etc.) — just logged, not forwarded anywhere yet.
@@ -914,6 +932,32 @@ async function initSdk() {
       log(`Couldn't push live transcript line: ${err instanceof Error ? err.message : err}`);
     }
   });
+
+  // A line still being spoken (Recall's partial transcript): sent to
+  // Anchor only to be checked for a question, so the answer starts before
+  // the speaker has finished — the finished line still arrives as
+  // transcript.data and is what's stored. At most one per window every
+  // PARTIAL_PUSH_MS, and only once there's enough of it to be a question.
+  function pushPartialTranscript(windowId: string, raw: unknown) {
+    const active = activeRecordings.get(windowId);
+    if (!active) return;
+    type Partial = { words?: { text?: string }[]; participant?: { name?: string | null } };
+    const outer = raw as (Partial & { data?: Partial }) | undefined;
+    const data = outer && Array.isArray(outer.words) ? outer : outer?.data;
+    const text = (data?.words || []).map((w) => w.text || "").join(" ").trim();
+    if (text.split(/\s+/).length < 4) return;
+    const last = lastPartialPush.get(windowId);
+    const now = Date.now();
+    if (last && (last.text === text || now - last.at < PARTIAL_PUSH_MS)) return;
+    lastPartialPush.set(windowId, { text, at: now });
+    try {
+      getApi()
+        .pushLiveTranscript(active.meetingId, text, data?.participant?.name ?? null, null, { partial: true })
+        .catch(() => {});
+    } catch {
+      // No token yet — nothing to send with.
+    }
+  }
 
   RecallAiSdk.addEventListener("permission-status", (evt) => {
     log(`Permission "${evt.permission}": ${evt.status}`);

@@ -10,10 +10,25 @@ export type AnchorMeeting = {
   status: string;
 };
 
+// red: answering straight would agree to something the person on the
+// call can't decide on their own; amber: worth double-checking.
+export type LiveCaution = { level: "red" | "amber"; reason: string };
+
 export type LiveCoaching = {
   nudges: string[];
   checklist: { label: string; covered: boolean }[];
-  liveQuestion: { question: string; suggestedAnswer: string } | null;
+  liveQuestion: {
+    question: string;
+    suggestedAnswer: string;
+    answering?: boolean;
+    askedBy?: string | null;
+    caution?: LiveCaution | null;
+  } | null;
+  summary?: string[];
+  offLimits?: { label: string; raised: boolean }[];
+  // The deal owner's own words on what a stand-in may and may not
+  // decide, shown until coaching has turned them into offLimits.
+  decisionBoundaries?: string | null;
 };
 
 export type DealTask = {
@@ -96,11 +111,13 @@ export class AnchorApi {
     meetingId: string,
     text: string,
     speakerName?: string | null,
-    relativeSeconds?: number | null
+    relativeSeconds?: number | null,
+    // A line still being spoken: only checked for a question, not stored.
+    opts: { partial?: boolean } = {}
   ): Promise<void> {
     await this.request(`/api/meetings/${meetingId}/live-transcript`, {
       method: "POST",
-      body: JSON.stringify({ text, speakerName, relativeSeconds }),
+      body: JSON.stringify({ text, speakerName, relativeSeconds, ...(opts.partial ? { partial: true } : {}) }),
     }).catch(() => {
       // Best-effort — a dropped live-transcript line isn't worth
       // interrupting a recording over. The full audio still gets
@@ -119,7 +136,8 @@ export class AnchorApi {
       const res = await this.request(`/api/meetings/${meetingId}/live`);
       if (!res.ok) return null;
       const body = await res.json().catch(() => ({}));
-      return body.liveSuggestions ?? null;
+      if (!body.liveSuggestions) return null;
+      return { ...body.liveSuggestions, decisionBoundaries: body.decisionBoundaries ?? null };
     } catch {
       return null;
     }

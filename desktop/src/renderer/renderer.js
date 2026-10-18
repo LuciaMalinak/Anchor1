@@ -75,36 +75,69 @@ function appendLog(message) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-// Live suggestions as cards, like the website's: an unanswered question
-// first (copper "ASK" tag), then each nudge ("SUGGESTED"), then the
-// call's checklist.
-function renderSuggestionsHtml(suggestions) {
-  if (!suggestions) {
+const CAUTION = {
+  red: { cls: "red", label: "DON'T AGREE — DEFER IT" },
+  amber: { cls: "amber", label: "CHECK BEFORE PROMISING" },
+};
+
+// The main column while a call records, like the website's live panel:
+// the question they just asked with a ready-to-say answer (red when
+// answering straight would agree to something the person on the call
+// can't decide, amber when it needs checking), what not to agree to, and
+// a few lines on where the call stands.
+function renderAnswersHtml(s) {
+  let html = "";
+  const q = s && s.liveQuestion;
+  if (q) {
+    const caution = q.caution && CAUTION[q.caution.level];
+    const writing = q.answering || !q.suggestedAnswer;
+    html += `<div class="answer-card ${caution ? caution.cls : ""}"><div class="answer-head"><span class="tag">THEY JUST ASKED</span>${
+      writing ? '<span class="writing-dot" aria-hidden="true"></span>' : ""
+    }${q.askedBy ? `<span class="asked-by">${escapeHtml(q.askedBy)}</span>` : ""}</div><div class="answer-q">“${escapeHtml(q.question)}”</div>${
+      caution
+        ? `<div class="caution"><span class="caution-badge">${caution.label}</span>${escapeHtml(q.caution.reason || "")}</div>`
+        : ""
+    }<div class="answer-text">${q.suggestedAnswer ? escapeHtml(q.suggestedAnswer) : '<span class="hint">Writing an answer…</span>'}</div></div>`;
+  } else {
+    html += '<div class="answer-empty">When they ask something, the answer shows up here.</div>';
+  }
+
+  const limits = (s && s.offLimits) || [];
+  if (limits.length || (s && s.decisionBoundaries)) {
+    html += `<div class="off-limits"><p class="label red-label">Don't agree to on your own</p>${
+      limits.length
+        ? `<div class="chips">${limits
+            .map((c) => `<span class="chip ${c.raised ? "raised" : ""}">${c.raised ? "⚠ " : ""}${escapeHtml(c.label)}${c.raised ? " · they asked" : ""}</span>`)
+            .join("")}</div>`
+        : `<p class="boundaries"><strong>From the deal owner:</strong> ${escapeHtml(s.decisionBoundaries)}</p>`
+    }</div>`;
+  }
+
+  if (s && s.summary && s.summary.length) {
+    html += `<div class="so-far"><p class="label">So far</p><ul>${s.summary.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul></div>`;
+  }
+  return html;
+}
+
+// The side column: what's still to cover (amber) and what's done
+// (green), then one-line suggestions.
+function renderCoachingHtml(s) {
+  if (!s) {
     return '<p class="hint">Suggestions show up here once Anchor has enough of the call to work with.</p>';
   }
   let html = "";
-  if (suggestions.liveQuestion) {
-    html += `<div class="suggestion question"><span class="tag">THEY ASKED</span><div class="suggestion-text">${escapeHtml(
-      suggestions.liveQuestion.question
-    )}</div><div class="suggested-answer">${escapeHtml(suggestions.liveQuestion.suggestedAnswer)}</div></div>`;
+  const checklist = s.checklist || [];
+  if (checklist.length) {
+    const open = checklist.filter((c) => !c.covered);
+    const done = checklist.filter((c) => c.covered);
+    html += `<p class="label">To cover <span class="count">${done.length}/${checklist.length} done</span></p><ul class="checklist">${open
+      .map((c) => `<li class="open">${escapeHtml(c.label)}</li>`)
+      .join("")}${done.map((c) => `<li class="covered"><span aria-hidden="true">✓</span><span>${escapeHtml(c.label)}</span></li>`).join("")}</ul>`;
   }
-  if (suggestions.nudges && suggestions.nudges.length) {
-    html += suggestions.nudges
-      .map(
-        (n) =>
-          `<div class="suggestion"><span class="tag">SUGGESTION</span><div class="suggestion-text">${escapeHtml(n)}</div></div>`
-      )
-      .join("");
+  if (s.nudges && s.nudges.length) {
+    html += `<p class="label">Suggestions</p><ul class="nudges">${s.nudges.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
   }
-  if (suggestions.checklist && suggestions.checklist.length) {
-    html += `<ul class="checklist">${suggestions.checklist
-      .map((c) => `<li class="${c.covered ? "covered" : ""}"><span aria-hidden="true">${c.covered ? "✓" : "○"}</span><span>${escapeHtml(c.label)}</span></li>`)
-      .join("")}</ul>`;
-  }
-  if (!html) {
-    html = '<p class="hint">Nothing to flag yet — Anchor is listening.</p>';
-  }
-  return html;
+  return html || '<p class="hint">Nothing to flag yet — Anchor is listening.</p>';
 }
 
 function renderTasksHtml(m) {
@@ -136,9 +169,11 @@ function updateTasksPanel(windowId) {
 
 function updateSuggestionsPanel(windowId) {
   const m = meetings.get(windowId);
-  const container = document.getElementById(`suggestions-${windowId}`);
-  if (!m || !container) return;
-  container.innerHTML = renderSuggestionsHtml(m.suggestions);
+  if (!m) return;
+  const answers = document.getElementById(`answers-${windowId}`);
+  if (answers) answers.innerHTML = renderAnswersHtml(m.suggestions);
+  const coaching = document.getElementById(`coaching-${windowId}`);
+  if (coaching) coaching.innerHTML = renderCoachingHtml(m.suggestions);
 }
 
 function updateAskAnswer(windowId) {
@@ -235,11 +270,24 @@ function updateTranscriptPanel(windowId) {
   const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 40;
   container.innerHTML = renderTranscriptHtml(m);
   if (atBottom) container.scrollTop = container.scrollHeight;
+  const last = document.getElementById(`transcript-last-${windowId}`);
+  if (last) last.innerHTML = renderLastLineHtml(m);
 }
 
-// The live view while a call records, laid out like the product design:
-// the transcript on the left, suggestions (and this deal's to-dos) on the
-// right, and an "Ask Anchor" bar along the bottom.
+// The transcript strip's one-line preview while it's folded away.
+function renderLastLineHtml(m) {
+  const l = m.transcript && m.transcript[m.transcript.length - 1];
+  if (!l) return "Listening…";
+  return `${l.speaker ? `<strong>${escapeHtml(l.speaker)}:</strong> ` : ""}${escapeHtml(l.text)}`;
+}
+
+// The live view while a call records, laid out like the website's live
+// panel: the answer to what they just asked, what not to agree to and
+// where the call stands on the left; what's left to cover, suggestions
+// and this deal's to-dos on the right; the transcript folded into a
+// small strip underneath; and an "Ask Anchor" bar along the bottom.
+// Answers come from the call itself, so they show even when the call
+// isn't linked to a deal yet.
 function renderDealPanel(windowId, m) {
   const panel = document.createElement("div");
   panel.className = "deal-panel";
@@ -247,26 +295,32 @@ function renderDealPanel(windowId, m) {
   const grid = document.createElement("div");
   grid.className = "live-grid";
 
-  const transcriptCol = document.createElement("div");
-  transcriptCol.className = "live-col transcript-col";
-  transcriptCol.innerHTML = `<p class="label"><span class="live-dot" aria-hidden="true"></span>Live transcript</p><div id="transcript-${windowId}" class="transcript">${renderTranscriptHtml(m)}</div>`;
-  grid.appendChild(transcriptCol);
+  const mainCol = document.createElement("div");
+  mainCol.className = "live-col answers-col";
+  mainCol.innerHTML = `<div id="answers-${windowId}">${renderAnswersHtml(m.suggestions)}</div>`;
+  grid.appendChild(mainCol);
 
   const sideCol = document.createElement("div");
   sideCol.className = "live-col";
-  if (!m.dealId) {
-    sideCol.innerHTML =
-      '<p class="label">Suggestions</p><p class="hint">This call isn\'t linked to a deal yet. Link it from Anchor\'s website to see live suggestions, tasks and Ask Anchor here.</p>';
-  } else {
-    sideCol.innerHTML = `<p class="label">Suggestions</p><div id="suggestions-${windowId}">${renderSuggestionsHtml(
-      m.suggestions
-    )}</div><div class="panel-section"><p class="label">To do for this deal</p><div id="tasks-${windowId}">${renderTasksHtml(
-      m
-    )}</div></div>`;
-    attachTaskHandlers(windowId, sideCol);
-  }
+  sideCol.innerHTML = `<div id="coaching-${windowId}">${renderCoachingHtml(m.suggestions)}</div>${
+    m.dealId
+      ? `<div class="panel-section"><p class="label">To do for this deal</p><div id="tasks-${windowId}">${renderTasksHtml(m)}</div></div>`
+      : '<p class="hint panel-section">Link this call to a deal on Anchor\'s website to see its to-dos and Ask Anchor here.</p>'
+  }`;
+  if (m.dealId) attachTaskHandlers(windowId, sideCol);
   grid.appendChild(sideCol);
   panel.appendChild(grid);
+
+  const strip = document.createElement("details");
+  strip.className = "transcript-strip";
+  strip.innerHTML = `<summary><span class="live-dot" aria-hidden="true"></span><span class="strip-label">Transcript</span><span id="transcript-last-${windowId}" class="strip-last">${renderLastLineHtml(
+    m
+  )}</span></summary><div id="transcript-${windowId}" class="transcript">${renderTranscriptHtml(m)}</div>`;
+  strip.ontoggle = () => {
+    const t = document.getElementById(`transcript-${windowId}`);
+    if (strip.open && t) t.scrollTop = t.scrollHeight;
+  };
+  panel.appendChild(strip);
 
   if (m.dealId) {
     const askSection = document.createElement("div");

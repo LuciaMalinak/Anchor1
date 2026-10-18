@@ -88,7 +88,7 @@ export async function createBot(
       {
         type: "webhook",
         url: liveTranscriptWebhookUrl,
-        events: ["transcript.data"],
+        events: ["transcript.data", "transcript.partial_data"],
       },
     ];
   }
@@ -287,7 +287,7 @@ export async function createSdkUpload(): Promise<{ uploadToken: string; recordin
         realtime_endpoints: [
           {
             type: "desktop_sdk_callback",
-            events: ["transcript.data"],
+            events: ["transcript.data", "transcript.partial_data"],
           },
         ],
       },

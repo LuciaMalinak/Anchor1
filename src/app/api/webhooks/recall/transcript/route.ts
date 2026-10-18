@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { meetings, meetingLiveSegments } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
-import { onLiveSegment } from "@/lib/liveQuestion";
+import { extractQuestion, onLiveSegment } from "@/lib/liveQuestion";
 
 // Recall.ai calls this in real time (usually a few times a second) while
 // a "send Anchor to a live meeting" bot is on a call, once a finalized
@@ -11,10 +11,10 @@ import { onLiveSegment } from "@/lib/liveQuestion";
 // this URL gets registered per-bot and docs.recall.ai's Real-Time Event
 // Payloads page for the transcript.data shape this expects.
 //
-// Only transcript.data (finalized utterances) is requested — we don't
-// subscribe to transcript.partial_data, since partials would mean
-// rewriting/dedup logic here for not much benefit to a coaching panel
-// that already refreshes within seconds of each finalized utterance.
+// transcript.data is a finalized utterance and is stored.
+// transcript.partial_data (the same utterance while it's still being
+// spoken) is only checked for a question, so the answer starts before
+// the speaker has even finished — see onLiveSegment in liveQuestion.ts.
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret");
   // See the matching comment in ../route.ts — RECALL_WEBHOOK_SECRET is
@@ -28,7 +28,8 @@ export async function POST(req: NextRequest) {
   const event = payload?.event as string | undefined;
   const botId = payload?.data?.bot?.id as string | undefined;
 
-  if (event !== "transcript.data" || !botId) {
+  const partial = event === "transcript.partial_data";
+  if ((event !== "transcript.data" && !partial) || !botId) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
@@ -43,7 +44,9 @@ export async function POST(req: NextRequest) {
     .map((w) => w.text || "")
     .join(" ")
     .trim();
-  if (!text) {
+  // Partials arrive several times a second while someone talks; only
+  // ones that already contain a question are worth a database lookup.
+  if (!text || (partial && !extractQuestion(text))) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
@@ -63,6 +66,10 @@ export async function POST(req: NextRequest) {
   const relativeSeconds = utterance?.words?.[0]?.start_timestamp?.relative;
 
   const speakerName = utterance?.participant?.name || null;
+  if (partial) {
+    onLiveSegment(meeting.id, text, speakerName, { partial: true });
+    return NextResponse.json({ ok: true, partial: true });
+  }
   await db.insert(meetingLiveSegments).values({
     meetingId: meeting.id,
     speakerName,
