@@ -67,6 +67,9 @@ export type ShownState = Record<
     sent?: string;
     // The day the thread was last checked for what they sent.
     sentCheckedOn?: string;
+    // When a reply was put in Gmail drafts between briefs, for a thread
+    // not yet in a brief (whose `on` is still empty).
+    draftedOn?: string;
     // The suggested meeting was added to their calendar, or declined.
     meetingAdded?: boolean;
     meetingDeclined?: boolean;
@@ -86,7 +89,8 @@ export function shouldShowToday(
   if (d === "done") return false;
   if (d && d > localDate) return false; // snoozed until a later date
   const last = shown[threadId];
-  if (!last) return true;
+  // Not in a brief yet (only a reply drafted for it, see autoDraftReplies).
+  if (!last || !last.on) return true;
   if (last.on === localDate) return true; // same day (a "send me one now" re-run)
   return daysBetween(last.on, localDate) >= prefs.remindEveryDays;
 }

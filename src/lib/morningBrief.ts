@@ -59,22 +59,11 @@ function words(s: string): string[] {
   return s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
 
-async function buildSnapshot(params: {
-  userId: string;
-  user: typeof users.$inferSelect;
-  prefs: MorningBriefPrefs;
-  shown: ShownState;
-  dismissed: Record<string, string>;
-  localDate: string;
-}): Promise<{
-  snapshot: BriefSnapshot;
-  candidateIds: string[];
-  draftTargets: { email: BriefEmail; messageId: string; messageIdHeader: string | null; dealId: string | null }[];
-  problems: string[];
-}> {
-  const problems: string[] = [];
-  const { userId, user, prefs, shown, dismissed, localDate } = params;
+// The deals this person can see, and who's on each one by email: the
+// deal's main contact plus anyone Anchor has seen on its calls.
+async function dealContacts(userId: string) {
   const access = await accessibleDealIds(userId);
+
   const visibleDeals = access
     ? await db
         .select({ id: deals.id, name: deals.name, primaryContactEmail: deals.primaryContactEmail, leadUserId: deals.leadUserId })
@@ -83,8 +72,6 @@ async function buildSnapshot(params: {
     : [];
   const dealIds = visibleDeals.map((d) => d.id);
 
-  // Who's on which deal, by email: the deal's main contact plus anyone
-  // Anchor has seen on its calls.
   const dealByEmail = new Map<string, { id: string; name: string }>();
   for (const d of visibleDeals) if (d.primaryContactEmail) dealByEmail.set(d.primaryContactEmail.toLowerCase(), { id: d.id, name: d.name });
   if (dealIds.length) {
@@ -101,6 +88,27 @@ async function buildSnapshot(params: {
       }
     }
   }
+
+    return { access, visibleDeals, dealByEmail };
+}
+
+async function buildSnapshot(params: {
+  userId: string;
+  user: typeof users.$inferSelect;
+  prefs: MorningBriefPrefs;
+  shown: ShownState;
+  dismissed: Record<string, string>;
+  localDate: string;
+}): Promise<{
+  snapshot: BriefSnapshot;
+  candidateIds: string[];
+  draftTargets: { email: BriefEmail; messageId: string; messageIdHeader: string | null; dealId: string | null }[];
+  problems: string[];
+}> {
+  const problems: string[] = [];
+  const { userId, user, prefs, shown, dismissed, localDate } = params;
+  const { access, visibleDeals, dealByEmail } = await dealContacts(userId);
+  const dealIds = visibleDeals.map((d) => d.id);
 
   const snapshot: BriefSnapshot = {
     date: localDate,
@@ -476,7 +484,8 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
       for (const id of Object.keys(shown)) {
         // What they sent after a suggestion is kept longer: it's what later
         // replies learn from.
-        if (!keep.has(id) && daysBetween(shown[id].on, localDate) > (shown[id].sent ? 180 : 30)) delete shown[id];
+        const last = shown[id].on || shown[id].draftedOn || localDate;
+        if (!keep.has(id) && daysBetween(last, localDate) > (shown[id].sent ? 180 : 30)) delete shown[id];
       }
       for (const [id, until] of Object.entries(dismissed)) {
         if (until !== "done" && until < localDate && daysBetween(until, localDate) > 30) delete dismissed[id];
@@ -497,6 +506,95 @@ export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: bo
       console.error(`[morningBrief] run failed for ${userId}:`, err);
       return { status: "failed", error: err instanceof Error ? err.message : String(err) };
     }
+  });
+}
+
+// Between briefs: puts a reply in Gmail drafts for each new email that
+// needs one, so drafts are there as emails come in rather than only once
+// a day. Runs from the hourly job for everyone whose brief is on, who
+// has replies-to-drafts on and has given Anchor the Gmail drafts
+// permission. No AI call unless a new email has arrived since the last
+// run, and at most a few drafts an hour.
+const MAX_AUTO_DRAFTS_PER_RUN = 4;
+
+export async function autoDraftReplies(userId: string): Promise<number> {
+  return withAiUser({ userId }, async () => {
+    const [[user], row, connection] = await Promise.all([
+      db.select().from(users).where(eq(users.id, userId)),
+      getBriefRow(userId),
+      getGoogleConnection(userId),
+    ]);
+    const prefs = normalizePrefs(row?.prefs);
+    if (!user || !row?.enabled || !prefs.draftReplies || !prefs.include.emails) return 0;
+    if (!connection || !(connection.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose)) return 0;
+    const shown: ShownState = { ...((row.shown as ShownState) ?? {}) };
+    const dismissed = row.dismissed ?? {};
+    const localDate = localNow(prefs.timeZone).date;
+
+    const inbox = await fetchThreadsAwaitingReply(userId, { lookbackDays: 7, extraMyEmails: [user.email] });
+    const { dealByEmail } = await dealContacts(userId);
+    let open = inbox.threads.filter((t) => !dismissed[t.threadId]);
+    if (prefs.emailScope === "deals") open = open.filter((t) => dealByEmail.has(t.fromEmail));
+    const accountParam = inbox.account ? `?authuser=${encodeURIComponent(inbox.account)}` : "";
+    const target = (t: (typeof open)[number], summary: string, priority: 1 | 2 | 3) => {
+      const deal = dealByEmail.get(t.fromEmail) ?? null;
+      const email: BriefEmail = {
+        threadId: t.threadId,
+        fromName: t.fromName,
+        fromEmail: t.fromEmail,
+        subject: t.subject,
+        summary,
+        waitingDays: 0,
+        reminder: 1,
+        deal: deal?.name ?? null,
+        priority: deal ? 1 : priority,
+        gmailUrl: `https://mail.google.com/mail/u/0/${accountParam}#all/${t.threadId}`,
+        drafted: false,
+      };
+      return { email, messageId: t.messageId, messageIdHeader: t.messageIdHeader, dealId: deal?.id ?? null };
+    };
+    // A reply already written for the latest message (in a brief) but not
+    // yet in Gmail drafts — e.g. written before the permission was given.
+    const writtenNotSaved = open
+      .filter((t) => shown[t.threadId]?.reply?.forMessage === t.messageId && !shown[t.threadId]?.drafted)
+      .map((t) => target(t, t.subject, 2));
+    // New since Anchor last looked: no reply written for its latest message.
+    const fresh = open.filter((t) => shown[t.threadId]?.reply?.forMessage !== t.messageId).slice(0, 12);
+    if (!fresh.length && !writtenNotSaved.length) return 0;
+
+    const triage = !fresh.length ? [] : await triageEmails(
+      user.name || user.email,
+      fresh.map((t, i) => ({
+        id: i,
+        fromName: t.fromName,
+        fromEmail: t.fromEmail,
+        subject: t.subject,
+        snippet: t.snippet,
+        deal: dealByEmail.get(t.fromEmail)?.name ?? null,
+        waitingDays: 0,
+        addressedToMe: t.addressedToMe,
+      }))
+    );
+    const targets = [
+      ...writtenNotSaved,
+      ...triage
+        .filter((r) => r.needsReply && fresh[r.id])
+        .sort((a, b) => a.priority - b.priority)
+        .slice(0, MAX_AUTO_DRAFTS_PER_RUN)
+        .map((r) => target(fresh[r.id], r.summary || fresh[r.id].subject, r.priority)),
+    ];
+    if (!targets.length) return 0;
+
+    await writeReplies(userId, user, targets, shown, true, localDate, prefs);
+    let drafted = 0;
+    for (const t of targets) {
+      const s = shown[t.email.threadId];
+      if (!s) continue;
+      shown[t.email.threadId] = { ...s, drafted: s.drafted || t.email.drafted, draftedOn: s.on ? s.draftedOn : localDate };
+      if (t.email.drafted) drafted++;
+    }
+    await db.update(morningBriefs).set({ shown, updatedAt: new Date() }).where(eq(morningBriefs.userId, userId));
+    return drafted;
   });
 }
 
@@ -526,7 +624,7 @@ export async function runDueMorningBriefs(now: Date = new Date()) {
     .innerJoin(teams, eq(teams.id, users.teamId))
     .where(eq(morningBriefs.enabled, true));
 
-  const summary = { checked: rows.length, sent: 0, empty: 0, failed: 0 };
+  const summary = { checked: rows.length, sent: 0, empty: 0, failed: 0, drafted: 0 };
   for (const r of rows) {
     const prefs = normalizePrefs(r.prefs);
     const { due, localDate } = isBriefDue(prefs, r.lastSentOn, now);
@@ -548,6 +646,14 @@ export async function runDueMorningBriefs(now: Date = new Date()) {
     else {
       summary.failed++;
       await db.update(morningBriefs).set({ lastSentOn: r.lastSentOn }).where(eq(morningBriefs.userId, r.userId));
+    }
+  }
+  // Between briefs, everyone's new emails get their Gmail drafts too.
+  for (const r of rows) {
+    try {
+      summary.drafted += await autoDraftReplies(r.userId);
+    } catch (err) {
+      console.error(`[morningBrief] auto-drafting failed for ${r.userId}:`, err);
     }
   }
   return summary;

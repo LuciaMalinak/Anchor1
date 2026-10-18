@@ -17,6 +17,9 @@ import { DashboardCustomize } from "./DashboardCustomize";
 import { HomeTasks } from "./HomeTasks";
 import { HomeUpdates } from "./HomeUpdates";
 import { MorningBriefPrompt } from "./MorningBriefPrompt";
+import { getGoogleConnection } from "@/lib/integrations/google";
+import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
+import { normalizePrefs } from "@/lib/morningBriefPrefs";
 import { WelcomeGate } from "./WelcomeGate";
 
 export default async function DashboardPage({
@@ -67,18 +70,28 @@ export default async function DashboardPage({
   let colorTheme: string | null = null;
   let briefOn = true;
   let briefNeverSetUp = false;
+  // Brief on with replies-to-drafts, but Gmail hasn't let Anchor create
+  // drafts — so none can appear there until this is allowed.
+  let needsDraftsPermission = false;
 
   if (teamId && session?.user?.id) {
-    const [user, team, brief] = await Promise.all([
+    const [user, team, brief, google] = await Promise.all([
       db.select().from(users).where(eq(users.id, session.user.id)).then((r) => r[0]),
       db.select().from(teams).where(eq(teams.id, teamId)).then((r) => r[0]),
       db
-        .select({ enabled: morningBriefs.enabled })
+        .select({ enabled: morningBriefs.enabled, prefs: morningBriefs.prefs })
         .from(morningBriefs)
         .where(eq(morningBriefs.userId, session.user.id))
         .then((r) => r[0])
         .catch(() => undefined),
+      getGoogleConnection(session.user.id).catch(() => null),
     ]);
+    needsDraftsPermission = Boolean(
+      brief?.enabled &&
+        normalizePrefs(brief.prefs).draftReplies &&
+        google &&
+        !(google.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose)
+    );
     briefOn = brief?.enabled ?? false;
     briefNeverSetUp = brief === undefined;
     welcomeSeen = user?.welcomeSeen ?? true;
@@ -163,6 +176,23 @@ export default async function DashboardPage({
         />
       )}
       {teamId && !briefOn && <MorningBriefPrompt neverSetUp={briefNeverSetUp} />}
+      {needsDraftsPermission && (
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-6 py-5">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-amber-900">Let Anchor write replies straight into your Gmail drafts</h2>
+            <p className="mt-1 max-w-2xl text-sm text-amber-800">
+              As emails come in, Anchor drafts a reply the way you write and leaves it in Gmail, ready to send. Google needs you to allow
+              this once. Nothing is ever sent without you.
+            </p>
+          </div>
+          <a
+            href="/api/integrations/google/connect?add=gmail_compose&returnTo=%2Fdashboard"
+            className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
+          >
+            Allow Gmail drafts
+          </a>
+        </section>
+      )}
       {sectionOrder.map((key) => (
         <Fragment key={key}>{sectionByKey[key] ?? null}</Fragment>
       ))}
