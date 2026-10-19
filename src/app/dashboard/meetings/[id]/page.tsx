@@ -20,6 +20,7 @@ import { SuggestedInvites } from "./SuggestedInvites";
 import { isProviderConfigured } from "@/lib/integrations/config";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { MeetingDealPicker } from "./MeetingDealPicker";
+import { MeetingRetryButton } from "./MeetingRetryButton";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { AskAnchorScope } from "@/components/AskAnchorDock";
 import { CrmUpdateCard } from "./CrmUpdateCard";
@@ -173,7 +174,8 @@ export default async function MeetingDetailPage({
             <MeetingStatusPoller meetingId={id} initialStatus={meeting.status} />
           )}
           {isOwner && (meeting.status === "failed" || stuckJoining) && (
-            <div className="mt-5 flex justify-center">
+            <div className="mt-5 flex flex-wrap items-start justify-center gap-3">
+              {meeting.status === "failed" && <MeetingRetryButton meetingId={id} />}
               <MeetingDeleteButton meetingId={id} title={meeting.title} />
             </div>
           )}

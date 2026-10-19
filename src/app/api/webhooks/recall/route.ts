@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { downloadRecordingAudio, fatalBotMessage } from "@/lib/recall";
-import { saveMeetingAudio } from "@/lib/storage";
+import { fatalBotMessage } from "@/lib/recall";
 import { processMeeting } from "@/lib/processMeeting";
 import { ingestBotRecording } from "@/lib/botReconcile";
+import { fetchMissingRecording } from "@/lib/meetingRecovery";
 import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
 
 // Recall.ai calls this when a bot's recording is ready. Register this
@@ -79,28 +79,33 @@ export async function POST(req: NextRequest) {
       console.error(`[recall webhook] No meeting found for recording ${recordingId}`);
       return NextResponse.json({ ok: true, warning: "unknown recording id" });
     }
-    if (meeting.status === "ready" || meeting.status === "failed") {
+    // Already has its recording, or is being written up right now.
+    if (meeting.audioStoragePath || ["uploaded", "transcribing", "summarizing"].includes(meeting.status)) {
       return NextResponse.json({ ok: true, ignored: true });
     }
+    // Otherwise take it — even when the meeting was already finished
+    // from its live transcript (Stop pressed with the app closed) or
+    // failed: the real recording makes the better write-up.
     try {
-      const audio = await downloadRecordingAudio(recordingId);
-      const fileName = `${recordingId}.mp4`;
-      const storagePath = await saveMeetingAudio(meeting.id, fileName, audio);
-      await db
-        .update(meetings)
-        .set({ audioFileName: fileName, audioStoragePath: storagePath, status: "uploaded", updatedAt: new Date() })
-        .where(eq(meetings.id, meeting.id));
-      void processMeeting(meeting.id);
+      if (await fetchMissingRecording(meeting)) {
+        await db
+          .update(meetings)
+          .set({ status: "uploaded", errorMessage: null, updatedAt: new Date() })
+          .where(eq(meetings.id, meeting.id));
+        void processMeeting(meeting.id);
+      }
     } catch (err) {
       console.error(`[recall webhook] Failed to fetch desktop recording ${recordingId}:`, err);
-      await db
-        .update(meetings)
-        .set({
-          status: "failed",
-          errorMessage: err instanceof Error ? err.message : "Failed to download recording",
-          updatedAt: new Date(),
-        })
-        .where(eq(meetings.id, meeting.id));
+      if (meeting.status !== "ready") {
+        await db
+          .update(meetings)
+          .set({
+            status: "failed",
+            errorMessage: err instanceof Error ? err.message : "Failed to download recording",
+            updatedAt: new Date(),
+          })
+          .where(eq(meetings.id, meeting.id));
+      }
     }
     return NextResponse.json({ ok: true });
   }
