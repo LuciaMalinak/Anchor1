@@ -1,7 +1,7 @@
-import { and, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 import { db } from "@/db";
-import { meetings } from "@/db/schema";
-import { downloadBotAudio, fatalBotMessage, getBotStatus } from "@/lib/recall";
+import { meetingLiveSegments, meetings } from "@/db/schema";
+import { downloadBotAudio, fatalBotMessage, getBotStatus, leaveCall } from "@/lib/recall";
 import { saveMeetingAudio } from "@/lib/storage";
 import { processMeeting } from "@/lib/processMeeting";
 
@@ -133,4 +133,47 @@ export async function reconcileStaleBotMeetings(): Promise<number> {
     );
   for (const m of rows) await reconcileBotMeeting(m);
   return rows.length;
+}
+
+// A live meeting that has gone quiet this long is treated as over when
+// someone starts a new recording (see settleIfStale).
+const STALE_LIVE_MS = 15 * 60_000;
+
+// Called when starting a recording or sending the bot finds this person
+// already "live" for the same deal: an earlier meeting left live by
+// mistake (a closed tab, a stop that never landed, a lost webhook) used
+// to refuse every new recording with "Anchor's already in a live
+// meeting". Brings it up to date first — a bot call is checked with
+// Recall; anything with no new transcript for STALE_LIVE_MS is wrapped
+// up from what it has. Returns true if it's still genuinely live.
+export async function settleIfStale(meetingId: string): Promise<boolean> {
+  const [meeting] = await db.select().from(meetings).where(eq(meetings.id, meetingId));
+  if (!meeting || !(LIVE as readonly string[]).includes(meeting.status)) return false;
+  if (meeting.recallBotId) {
+    lastCheck.delete(meeting.id);
+    await reconcileBotMeeting(meeting);
+    const [after] = await db.select({ status: meetings.status }).from(meetings).where(eq(meetings.id, meetingId));
+    if (!after || !(LIVE as readonly string[]).includes(after.status)) return false;
+  }
+  const [lastLine] = await db
+    .select({ at: meetingLiveSegments.createdAt })
+    .from(meetingLiveSegments)
+    .where(eq(meetingLiveSegments.meetingId, meetingId))
+    .orderBy(desc(meetingLiveSegments.createdAt))
+    .limit(1);
+  const lastActivity = Math.max(meeting.updatedAt.getTime(), lastLine?.at.getTime() ?? 0);
+  if (Date.now() - lastActivity < STALE_LIVE_MS) return true;
+  if (meeting.recallBotId) {
+    // Recall still says it's in the call but nothing's been heard for a
+    // while: tell the bot to leave; its recording arrives as usual.
+    await leaveCall(meeting.recallBotId).catch(() => {});
+    return false;
+  }
+  const [ended] = await db
+    .update(meetings)
+    .set({ status: "uploaded", updatedAt: new Date() })
+    .where(and(eq(meetings.id, meetingId), inArray(meetings.status, [...LIVE])))
+    .returning({ id: meetings.id });
+  if (ended) void processMeeting(meetingId);
+  return false;
 }
