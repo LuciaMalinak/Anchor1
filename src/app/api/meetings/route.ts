@@ -23,7 +23,7 @@ export async function GET() {
 
   // Home polls this while a call is live: also catch a bot call up with
   // Recall if its "recording done" webhook never came (botReconcile.ts).
-  const live = rows.filter((m) => m.recallBotId && (m.status === "joining" || m.status === "recording"));
+  const live = rows.filter((m) => (m.recallBotId || m.stopRequestedAt) && (m.status === "joining" || m.status === "recording"));
   if (live.length) after(async () => {
     for (const m of live) await reconcileBotMeeting(m);
   });

@@ -209,6 +209,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // Anchor Desktop recordings stop from the desktop app itself; every
     // other live meeting (bot or in-person) can be stopped from the web.
     isDesktop: Boolean(meeting.recallRecordingId),
+    // Stop was pressed on the website for this desktop recording — the
+    // desktop app stops when it sees this.
+    stopRequested: isLive && Boolean(meeting.stopRequestedAt),
     segments: segments.map((s) => ({
       id: s.id,
       speakerName: s.speakerName,

@@ -29,6 +29,8 @@ export type LiveCoaching = {
   // The deal owner's own words on what a stand-in may and may not
   // decide, shown until coaching has turned them into offLimits.
   decisionBoundaries?: string | null;
+  // Stop was pressed on the website: this app should stop recording.
+  stopRequested?: boolean;
 };
 
 export type DealTask = {
@@ -136,6 +138,9 @@ export class AnchorApi {
       const res = await this.request(`/api/meetings/${meetingId}/live`);
       if (!res.ok) return null;
       const body = await res.json().catch(() => ({}));
+      if (body.stopRequested === true) {
+        return { nudges: [], checklist: [], liveQuestion: null, ...(body.liveSuggestions ?? {}), stopRequested: true };
+      }
       if (!body.liveSuggestions) return null;
       return { ...body.liveSuggestions, decisionBoundaries: body.decisionBoundaries ?? null };
     } catch {

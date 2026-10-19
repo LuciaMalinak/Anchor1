@@ -61,7 +61,7 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
               (without hanging up for anyone else), or an in-person
               recording stops and gets written up — see stopMeeting.ts.
               Anchor Desktop recordings stop from the desktop app. */}
-          {!isDesktop && <StopMeetingButton meetingId={meetingId} variant="light" inPerson={!hasBot} />}
+          <StopMeetingButton meetingId={meetingId} variant="light" inPerson={!hasBot && !isDesktop} desktop={isDesktop} />
           <span className="text-xs text-slate-200">{status === "joining" ? "Joining…" : "Live"}</span>
         </div>
       </div>

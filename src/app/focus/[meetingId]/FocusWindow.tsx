@@ -177,8 +177,8 @@ export function FocusWindow({
               recording stops and gets written up — see stopMeeting.ts.
               Only while still live; once it's ended the auto-close notice
               below takes over. */}
-          {!isDesktop && stillLive && status && (
-            <StopMeetingButton meetingId={meetingId} variant="solid" inPerson={!hasBot} />
+          {stillLive && status && (
+            <StopMeetingButton meetingId={meetingId} variant="solid" inPerson={!hasBot && !isDesktop} desktop={isDesktop} />
           )}
           <button
             type="button"
