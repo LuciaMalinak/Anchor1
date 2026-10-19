@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 type DealOption = { id: string; name: string };
 
@@ -17,8 +18,11 @@ export function MeetingDealAssign({
   meetingId: string;
   meetingTitle: string;
   deals: DealOption[];
-  onAssigned: (deal: DealOption) => void;
+  // Without it (the meeting's own page) the page reloads its data instead.
+  onAssigned?: (deal: DealOption) => void;
 }) {
+  const router = useRouter();
+  const done = (deal: DealOption) => (onAssigned ? onAssigned(deal) : router.refresh());
   const [mode, setMode] = useState<"idle" | "pick" | "create">("idle");
   const [name, setName] = useState(meetingTitle);
   const [busy, setBusy] = useState(false);
@@ -38,7 +42,7 @@ export function MeetingDealAssign({
       return;
     }
     const deal = deals.find((d) => d.id === dealId);
-    if (deal) onAssigned(deal);
+    if (deal) done(deal);
   }
 
   async function create() {
@@ -59,7 +63,7 @@ export function MeetingDealAssign({
       setError(body.error || "Couldn't create the deal.");
       return;
     }
-    onAssigned(body.deal);
+    done(body.deal);
   }
 
   const input = "rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:border-brand";

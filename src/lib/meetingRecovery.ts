@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { meetings, transcripts } from "@/db/schema";
 import { downloadBotAudio, downloadRecordingAudio } from "@/lib/recall";
 import { saveMeetingAudio } from "@/lib/storage";
-import { processMeeting } from "@/lib/processMeeting";
+import { processMeeting, whileFetchingAudio } from "@/lib/processMeeting";
 
 type MeetingRow = typeof meetings.$inferSelect;
 
@@ -15,6 +15,10 @@ type MeetingRow = typeof meetings.$inferSelect;
 // better. Returns false when Recall has nothing (yet).
 export async function fetchMissingRecording(meeting: MeetingRow): Promise<boolean> {
   if (meeting.audioStoragePath) return false;
+  return whileFetchingAudio(meeting.id, () => fetchRecording(meeting));
+}
+
+async function fetchRecording(meeting: MeetingRow): Promise<boolean> {
   let audio: Buffer | null = null;
   let fileName = "";
   if (meeting.recallRecordingId) {

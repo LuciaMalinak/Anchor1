@@ -21,6 +21,7 @@ import { isProviderConfigured } from "@/lib/integrations/config";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { MeetingDealPicker } from "./MeetingDealPicker";
 import { MeetingRetryButton } from "./MeetingRetryButton";
+import { MeetingDealAssign } from "@/components/MeetingDealAssign";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { AskAnchorScope } from "@/components/AskAnchorDock";
 import { CrmUpdateCard } from "./CrmUpdateCard";
@@ -115,7 +116,10 @@ export default async function MeetingDetailPage({
         .orderBy(deals.name);
     }
   }
-  const dealPicker = isOwner && (
+  // Not on a deal yet: add it to one, or start a new deal from it.
+  const dealPicker = isOwner && !meeting.dealId ? (
+    <MeetingDealAssign meetingId={id} meetingTitle={meeting.title} deals={dealOptions} />
+  ) : isOwner && (
     <MeetingDealPicker
       meetingId={id}
       currentDealId={meeting.dealId}

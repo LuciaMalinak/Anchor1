@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runDueMorningBriefs } from "@/lib/morningBrief";
-import { reconcileStaleBotMeetings } from "@/lib/botReconcile";
+import { recoverStuckMeetings } from "@/lib/stuckMeetings";
 
 // The hourly Morning brief job: sends everyone whose chosen time has come
 // (in their own time zone) and who hasn't had today's yet. Called every
@@ -12,11 +12,11 @@ async function handle(req: NextRequest) {
   if (!process.env.CRON_SECRET || key !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  // Also catches up any bot call still shown as live long after it should
-  // have ended (its "recording done" webhook never came).
-  const staleCalls = await reconcileStaleBotMeetings().catch((err) => {
-    console.error("[cron] catching up stale calls failed:", err);
-    return -1;
+  // Also finishes any meeting stuck on Home (stuckMeetings.ts) — the
+  // server runs this itself every few minutes too.
+  const staleCalls = await recoverStuckMeetings().catch((err) => {
+    console.error("[cron] recovering stuck meetings failed:", err);
+    return null;
   });
   const summary = await runDueMorningBriefs();
   return NextResponse.json({ ok: true, staleCalls, ...summary });

@@ -49,7 +49,36 @@ export const AI_SUMMARY_UNAVAILABLE =
 // ENGINEER_BRIEF.md) once usage or audio length grows, since a long
 // call can take minutes and an in-process job is lost if the server
 // restarts mid-run.
+// Meetings this server is writing up right now — so the stuck-meeting
+// sweep (stuckMeetings.ts) never restarts one that's merely slow, and two
+// triggers for the same meeting don't run it twice.
+const running = new Set<string>();
+// Meetings whose recording is still being fetched before the write-up
+// starts (a long call's audio can take minutes to download).
+const fetching = new Set<string>();
+export function isProcessing(meetingId: string) {
+  return running.has(meetingId) || fetching.has(meetingId);
+}
+export async function whileFetchingAudio<T>(meetingId: string, fn: () => Promise<T>): Promise<T> {
+  fetching.add(meetingId);
+  try {
+    return await fn();
+  } finally {
+    fetching.delete(meetingId);
+  }
+}
+
 export async function processMeeting(meetingId: string): Promise<void> {
+  if (running.has(meetingId)) return;
+  running.add(meetingId);
+  try {
+    await processMeetingNow(meetingId);
+  } finally {
+    running.delete(meetingId);
+  }
+}
+
+async function processMeetingNow(meetingId: string): Promise<void> {
   // Charge the transcription and every AI call below to the meeting's
   // owner (see aiUsage.ts) — this often runs in the background, outside
   // any signed-in request.

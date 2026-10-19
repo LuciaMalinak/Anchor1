@@ -1,9 +1,9 @@
-import { and, desc, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { meetingLiveSegments, meetings } from "@/db/schema";
 import { downloadBotAudio, fatalBotMessage, getBotStatus, leaveCall } from "@/lib/recall";
 import { saveMeetingAudio } from "@/lib/storage";
-import { processMeeting } from "@/lib/processMeeting";
+import { processMeeting, whileFetchingAudio } from "@/lib/processMeeting";
 
 // A bot-joined call only moved on (to transcribing, summarizing, ready)
 // when Recall's webhook said the recording was done. When that webhook
@@ -13,7 +13,7 @@ import { processMeeting } from "@/lib/processMeeting";
 // "recording", call over with the recording ready -> fetch it and run the
 // usual pipeline, couldn't join -> "failed" with the reason. Checked from
 // the pages that show the meeting (at most every CHECK_EVERY_MS per
-// meeting) and from the hourly job.
+// meeting) and from the stuck-meeting sweep (stuckMeetings.ts).
 
 const CHECK_EVERY_MS = 30_000;
 const lastCheck = new Map<string, number>();
@@ -29,6 +29,11 @@ export async function ingestBotRecording(meetingId: string, botId: string): Prom
     .where(and(eq(meetings.id, meetingId), inArray(meetings.status, [...LIVE])))
     .returning({ id: meetings.id });
   if (!claimed) return false;
+  await whileFetchingAudio(meetingId, () => fetchAndProcess(meetingId, botId));
+  return true;
+}
+
+async function fetchAndProcess(meetingId: string, botId: string) {
   try {
     const audio = await downloadBotAudio(botId);
     const fileName = `${botId}.mp4`;
@@ -45,7 +50,6 @@ export async function ingestBotRecording(meetingId: string, botId: string): Prom
       .set({ status: "failed", errorMessage: err instanceof Error ? err.message : "Couldn't download the recording", updatedAt: new Date() })
       .where(eq(meetings.id, meetingId));
   }
-  return true;
 }
 
 // Stop was pressed for a call Anchor Desktop is recording, but the app
@@ -109,30 +113,6 @@ export async function reconcileBotMeeting(meeting: {
   } catch (err) {
     console.error(`[botReconcile] couldn't check bot ${meeting.recallBotId}:`, err);
   }
-}
-
-// The hourly job: every bot call still shown as live after 20 minutes.
-export async function reconcileStaleBotMeetings(): Promise<number> {
-  const rows = await db
-    .select({
-      id: meetings.id,
-      status: meetings.status,
-      recallBotId: meetings.recallBotId,
-      recallRecordingId: meetings.recallRecordingId,
-      stopRequestedAt: meetings.stopRequestedAt,
-    })
-    .from(meetings)
-    .where(
-      and(
-        inArray(meetings.status, [...LIVE]),
-        or(
-          and(isNotNull(meetings.recallBotId), lt(meetings.updatedAt, new Date(Date.now() - 20 * 60_000))),
-          isNotNull(meetings.stopRequestedAt)
-        )
-      )
-    );
-  for (const m of rows) await reconcileBotMeeting(m);
-  return rows.length;
 }
 
 // A live meeting that has gone quiet this long is treated as over when
