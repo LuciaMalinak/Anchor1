@@ -31,6 +31,9 @@ export type LiveCoaching = {
   decisionBoundaries?: string | null;
   // Stop was pressed on the website: this app should stop recording.
   stopRequested?: boolean;
+  // The last couple of questions already answered this call, newest
+  // first — kept on screen under the current one.
+  earlierAnswers?: { question: string; answer: string; askedAt: number; caution?: LiveCaution | null }[];
 };
 
 export type DealTask = {
@@ -142,7 +145,18 @@ export class AnchorApi {
         return { nudges: [], checklist: [], liveQuestion: null, ...(body.liveSuggestions ?? {}), stopRequested: true };
       }
       if (!body.liveSuggestions) return null;
-      return { ...body.liveSuggestions, decisionBoundaries: body.decisionBoundaries ?? null };
+      const currentAskedAt = body.liveSuggestions.liveQuestion?.askedAt;
+      const earlierAnswers = (Array.isArray(body.liveQuestions) ? body.liveQuestions : [])
+        .filter((q: { askedAt?: number }) => q.askedAt !== currentAskedAt)
+        .slice(-2)
+        .reverse()
+        .map((q: { question: string; answer: string; askedAt: number; caution?: LiveCaution | null }) => ({
+          question: q.question,
+          answer: q.answer,
+          askedAt: q.askedAt,
+          caution: q.caution ?? null,
+        }));
+      return { ...body.liveSuggestions, decisionBoundaries: body.decisionBoundaries ?? null, earlierAnswers };
     } catch {
       return null;
     }

@@ -125,37 +125,59 @@ export function LiveQuestionsBox({
 }) {
   const earlier = answered.filter((q) => q.askedAt !== current?.askedAt).reverse();
   if (!current && !earlier.length) return null;
+  // The last couple of answers stay open under the current one, so a new
+  // question never takes an answer away before it's been read out.
+  const recent = earlier.slice(0, RECENT_ANSWERS_SHOWN);
+  const older = earlier.slice(RECENT_ANSWERS_SHOWN);
   return (
     <div className="space-y-2">
       {current && <LiveQuestionCard question={current} className={cardClassName} onMarkMe={onMarkMe} />}
-      {earlier.length > 0 && (
-        <details open={!current} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+      {recent.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-500">JUST ANSWERED</p>
+          <ul className="mt-2 space-y-3">
+            {recent.map((q) => (
+              <EarlierAnswer key={q.askedAt} q={q} onMarkMe={onMarkMe} />
+            ))}
+          </ul>
+        </div>
+      )}
+      {older.length > 0 && (
+        <details className="rounded-lg border border-slate-200 bg-white px-3 py-2">
           <summary className="cursor-pointer text-[11px] font-semibold tracking-[0.15em] text-slate-500">
-            EARLIER QUESTIONS ({earlier.length})
+            EARLIER QUESTIONS ({older.length})
           </summary>
           <ul className="mt-2 max-h-72 space-y-3 overflow-y-auto">
-            {earlier.map((q) => (
-              <li key={q.askedAt}>
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="flex items-baseline gap-1.5 text-xs italic text-slate-500">
-                    {q.caution && (
-                      <span
-                        title={q.caution.reason || CAUTION_STYLE[q.caution.level].label}
-                        className={`inline-block h-2 w-2 shrink-0 rounded-full ${q.caution.level === "red" ? "bg-red-500" : "bg-amber-400"}`}
-                      />
-                    )}
-                    &ldquo;{q.question}&rdquo;
-                  </p>
-                  <AskedBy name={q.askedBy} onMarkMe={onMarkMe} />
-                </div>
-                <p className="mt-0.5 text-sm text-slate-800">{q.answer}</p>
-                <QuestionLinks links={q.links} />
-              </li>
+            {older.map((q) => (
+              <EarlierAnswer key={q.askedAt} q={q} onMarkMe={onMarkMe} />
             ))}
           </ul>
         </details>
       )}
     </div>
+  );
+}
+
+const RECENT_ANSWERS_SHOWN = 2;
+
+function EarlierAnswer({ q, onMarkMe }: { q: AnsweredQuestion; onMarkMe?: (name: string) => void }) {
+  return (
+    <li>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="flex items-baseline gap-1.5 text-xs italic text-slate-500">
+          {q.caution && (
+            <span
+              title={q.caution.reason || CAUTION_STYLE[q.caution.level].label}
+              className={`inline-block h-2 w-2 shrink-0 rounded-full ${q.caution.level === "red" ? "bg-red-500" : "bg-amber-400"}`}
+            />
+          )}
+          &ldquo;{q.question}&rdquo;
+        </p>
+        <AskedBy name={q.askedBy} onMarkMe={onMarkMe} />
+      </div>
+      <p className="mt-0.5 text-sm text-slate-800">{q.answer}</p>
+      <QuestionLinks links={q.links} />
+    </li>
   );
 }
 

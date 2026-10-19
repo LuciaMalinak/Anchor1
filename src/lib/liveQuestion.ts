@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { deals, meetingLiveSegments, meetings, users, type LiveCaution, type LiveQuestionRecord } from "@/db/schema";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { loadLiveDealContextCached } from "@/lib/liveContext";
-import { LIVE_MODEL, liveClient, liveDealContextText } from "@/lib/liveCoaching";
+import { LIVE_MODEL, LIVE_THINKING, FALLBACK_LIVE_MODEL, liveClient, liveDealContextText, shouldFallBackLive } from "@/lib/liveCoaching";
 import { withAiUser } from "@/lib/aiUsage";
 import { isSelfSpeaker, type CallIdentity } from "@/lib/callIdentity";
 import { liveLinksFor, type LiveLink } from "@/lib/liveLinks";
@@ -41,7 +41,7 @@ const QUESTION_START =
 // each needs two words so a lone "what" or "how" inside a statement
 // doesn't count.
 const EMBEDDED_QUESTION =
-  /\b(?:how (?:much|many|long|soon|fast|often|does|do|did|would|will|can|could|is|are|should)|what (?:is|are|does|do|did|would|will|about|if|happens|kind|sort|type|level|options|timeline|price|pricing)|what's (?:the|your|our)|why (?:does|do|did|would|is|are|should)|when (?:can|will|would|do|does|did|is|are|should)|where (?:do|does|is|are|can|would)|who (?:is|are|would|will|else|owns|handles)|which (?:one|plan|option|version|tier)|do you (?:have|offer|support|guys|integrate|work|provide|handle|do|charge|think)|does (?:it|that|this|your)|can (?:you|we|it|i)|could (?:you|we|it)|would (?:you|it|that)|will (?:you|it|that|there)|is (?:there|it|that|this) (?:possible|included|something|a|an|any|going)|are (?:there|you|we) (?:able|planning|going|any)|i(?:'m| am| was) (?:wondering|curious)|i'd (?:like|love) to (?:know|understand|hear)|tell me (?:about|more|how|what|why|when)|walk (?:me|us) through|help (?:me|us) understand|any (?:idea|thoughts|update|chance|plans)|how about|what about|is it (?:possible|true|included|compatible|secure|hard|easy)|are (?:you|they) (?:able|compliant|certified)|(?:could|can) you (?:send|share|show|explain|clarify|confirm)|(?:send|share|show) (?:me|us) (?:the|a|your|how|what)|i (?:need|want|would like) to (?:know|understand|see)|we(?:'d| would) need to (?:know|understand|see)|(?:i'm|we're|i am|we are) (?:worried|concerned|not sure) (?:about|that|if|whether|how)|not sure (?:if|whether|how|what) (?:you|it|this|that|we)|what would it take|what's (?:included|the difference|the catch|the price|the cost)|how (?:does|would) (?:that|this|it) (?:work|compare))\b/i;
+  /\b(?:how (?:much|many|long|soon|fast|often|does|do|did|would|will|can|could|is|are|should)|what (?:is|are|does|do|did|would|will|about|if|happens|kind|sort|type|level|options|timeline|price|pricing)|what's (?:the|your|our)|why (?:does|do|did|would|is|are|should)|when (?:can|will|would|do|does|did|is|are|should)|where (?:do|does|is|are|can|would)|who (?:is|are|would|will|else|owns|handles)|which (?:one|plan|option|version|tier)|do you (?:have|offer|support|guys|integrate|work|provide|handle|do|charge|think)|does (?:it|that|this|your)|can (?:you|we|it|i)|could (?:you|we|it)|would (?:you|it|that)|will (?:you|it|that|there)|is (?:there|it|that|this) (?:possible|included|something|a|an|any|going)|are (?:there|you|we) (?:able|planning|going|any)|i(?:'m| am| was) (?:wondering|curious)|i'd (?:like|love) to (?:know|understand|hear)|tell me (?:about|more|how|what|why|when)|walk (?:me|us) through|help (?:me|us) understand|any (?:idea|thoughts|update|chance|plans)|how about|what about|is it (?:possible|true|included|compatible|secure|hard|easy)|are (?:you|they) (?:able|compliant|certified)|(?:could|can) you (?:send|share|show|explain|clarify|confirm)|(?:send|share|show) (?:me|us) (?:the|a|your|how|what)|i (?:need|want|would like) to (?:know|understand|see)|we(?:'d| would) need to (?:know|understand|see)|(?:i'm|we're|i am|we are) (?:worried|concerned|not sure) (?:about|that|if|whether|how)|not sure (?:if|whether|how|what) (?:you|it|this|that|we)|what would it take|what's (?:included|the difference|the catch|the price|the cost)|how (?:does|would) (?:that|this|it) (?:work|compare)|how (?:come|quickly|soon)|what (?:if|happens (?:if|when))|is there (?:a|any) way|any way (?:to|we|you)|would it be possible|(?:is it|be) possible to|can i|are you guys|do you guys|what's the (?:timeline|process|next step|turnaround|minimum|contract))\b/i;
 // "I know how…", "no matter what…" — a question word inside a statement.
 const STATEMENT_LEAD_IN =
   /\b(?:i|we|they|you|he|she) (?:know|knew|see|saw|understand|get|remember|told|showed|explained|decided|figured out|learned)\s*$|\b(?:no matter|regardless of|depends on|that's|thats|which is|exactly)\s*$/i;
@@ -315,6 +315,10 @@ async function answerLiveQuestion(
   // an answer" while the answer streams in below. Loaded alongside
   // everything the answer needs rather than one after another.
   const pending = { question, suggestedAnswer: "", askedAt, answering: true };
+  // The answer on screen before this line, put back if it turns out not
+  // to be a question for the rep to answer.
+  const before = meeting.liveSuggestions?.liveQuestion ?? null;
+  const previous = before?.suggestedAnswer && !("answering" in before && before.answering) ? before : null;
   const showPending = db
     .update(meetings)
     .set({
@@ -377,9 +381,12 @@ The answer: ground it only in the deal facts and transcript. Be specific and use
 
 Reply with exactly ${NOT_A_QUESTION} and nothing else if it isn't a real question needing an answer (rhetorical, small talk, "you know?", "can you hear me?") or it was already answered in the transcript.`;
 
-  const stream = withAiUser({ userId: meeting.userId, meetingId }, () => liveClient("live_questions").messages.stream({
-    model: LIVE_MODEL,
+  const startStream = (model: string) => withAiUser({ userId: meeting.userId, meetingId }, () => liveClient("live_questions").messages.stream({
+    model,
     max_tokens: ANSWER_MAX_TOKENS,
+    // No thinking first: the first words have to be on screen in about a
+    // second, and the answer is short and grounded in the facts given.
+    thinking: LIVE_THINKING,
     // The deal facts are the same for every question in this call, so
     // they're cached after the first one — later questions skip
     // re-reading them, which cuts time to first word.
@@ -398,6 +405,7 @@ The line that looked like a question${speakerName ? ` (speaker label: ${speakerN
     ],
   }));
 
+  let stream!: ReturnType<typeof startStream>;
   let raw = "";
   let lastFlush = 0;
   let flushing: Promise<unknown> = Promise.resolve();
@@ -425,17 +433,29 @@ The line that looked like a question${speakerName ? ` (speaker label: ${speakerN
       });
   };
 
-  stream.on("text", (delta) => {
-    raw += delta;
-    if (parseReply(raw).notAQuestion) {
-      stream.abort();
-      return;
-    }
-    if (Date.now() - lastFlush >= STREAM_FLUSH_MS) flush(false);
-  });
+  const run = async (model: string) => {
+    stream = startStream(model);
+    stream.on("text", (delta) => {
+      raw += delta;
+      if (parseReply(raw).notAQuestion) {
+        stream.abort();
+        return;
+      }
+      if (Date.now() - lastFlush >= STREAM_FLUSH_MS) flush(false);
+    });
+    await stream.finalMessage();
+  };
 
   try {
-    await stream.finalMessage();
+    try {
+      await run(LIVE_MODEL);
+    } catch (err) {
+      // The live model is unavailable or rejected the request before
+      // writing anything — answer on the fallback model instead.
+      if (raw || superseded || !shouldFallBackLive(err, LIVE_MODEL)) throw err;
+      console.warn(`[live question] ${LIVE_MODEL} failed, falling back to ${FALLBACK_LIVE_MODEL}:`, err);
+      await run(FALLBACK_LIVE_MODEL);
+    }
   } catch (err) {
     if (superseded || parseReply(raw).notAQuestion) {
       // Aborted on purpose — handled below.
@@ -449,9 +469,13 @@ The line that looked like a question${speakerName ? ` (speaker label: ${speakerN
   const parsed = parseReply(raw);
   if (parsed.askedByRep) noteSpeakerRole(meetingId, speakerName, "rep");
   if (parsed.notAQuestion || !parsed.answer) {
+    // Not one to answer after all — put back the answer that was on
+    // screen before this line came in, rather than blanking it.
     await db
       .update(meetings)
-      .set({ liveSuggestions: sql`${meetings.liveSuggestions} || '{"liveQuestion":null}'::jsonb` })
+      .set({
+        liveSuggestions: sql`${meetings.liveSuggestions} || jsonb_build_object('liveQuestion', ${JSON.stringify(previous)}::jsonb)`,
+      })
       .where(stillCurrent(meetingId, askedAt));
     return;
   }
@@ -497,7 +521,7 @@ The line that looked like a question${speakerName ? ` (speaker label: ${speakerN
 // shows under the current one so earlier answers don't vanish.
 // replacesAskedAt: the half-said version of this question, if that was
 // answered first, which this one takes the place of.
-async function saveToHistory(meetingId: string, record: LiveQuestionRecord, replacesAskedAt: number | null) {
+export async function saveToHistory(meetingId: string, record: LiveQuestionRecord, replacesAskedAt: number | null) {
   await db
     .update(meetings)
     .set({

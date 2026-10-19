@@ -253,6 +253,9 @@ export const meetings = pgTable("meeting", {
   // once the meeting finishes (only meaningful while "recording").
   liveSuggestions: jsonb("liveSuggestions").$type<{
     nudges: string[];
+    // When each nudge first showed (same order) — so a refresh keeps
+    // recent ones on screen (see saveCoaching in the live route).
+    nudgeAt?: number[];
     checklist: { label: string; covered: boolean }[];
     // The most recent question the other side asked that still looks
     // unanswered, plus a grounded suggested answer — an "interview AI"
