@@ -11,6 +11,7 @@ import { reconcileBotMeeting } from "@/lib/botReconcile";
 import { withAiUser } from "@/lib/aiUsage";
 import { isSelfSpeaker } from "@/lib/callIdentity";
 import { saveToHistory } from "@/lib/liveQuestion";
+import { noteLivePoll } from "@/lib/stuckMeetings";
 
 // When live coaching (nudges + checklist) regenerates. It used to run on
 // a flat 8s timer whether or not anyone had said anything, so a new
@@ -80,6 +81,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   after(() => reconcileBotMeeting(meeting));
+  // Someone's still on this call (see stuckMeetings.ts).
+  noteLivePoll(id);
   const isOwner = meeting.userId === userId;
   const dealRows = meeting.dealId
     ? await db.select().from(deals).where(eq(deals.id, meeting.dealId))

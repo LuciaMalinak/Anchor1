@@ -5,6 +5,7 @@ import { meetings, users, deals, teams, announcements, morningBriefs } from "@/d
 import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { getOrCreateTeamId } from "@/lib/team";
+import { accessibleDealIds, dealVisibilityWhere } from "@/lib/dealAccess";
 import { getHomeUpdates } from "@/lib/homeFeed";
 import { getHomeTasks } from "@/lib/homeTasks";
 import { isIndustryKey } from "@/lib/industries";
@@ -113,7 +114,14 @@ export default async function DashboardPage({
     const [updatesResult, tasksResult, dealsResult, announcementsResult] = await Promise.allSettled([
       getHomeUpdates({ teamId }),
       getHomeTasks({ teamId }),
-      db.select({ id: deals.id, name: deals.name }).from(deals).where(eq(deals.teamId, teamId)),
+      // Only deals this person can open — a member limited to some deals
+      // was offered the whole team's, and adding a meeting to one of the
+      // others failed.
+      accessibleDealIds(session.user.id).then((access) =>
+        access
+          ? db.select({ id: deals.id, name: deals.name }).from(deals).where(dealVisibilityWhere(access)).orderBy(deals.name)
+          : []
+      ),
       db
         .select({ announcement: announcements, author: users })
         .from(announcements)
