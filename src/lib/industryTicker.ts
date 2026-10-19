@@ -15,13 +15,13 @@ function client() {
   return new Anthropic({ apiKey, fetch: meteredFetch("industry_news") });
 }
 
-// Much shorter than dailyBriefing's 6 hours — this is the "small window
-// that updates nonstop" ticker, so it needs to actually feel live rather
-// than a once-a-shift roundup. 20 minutes is frequent enough to catch
-// same-day market moves without re-searching on every one of the (much
-// more frequent) client-side polls that read this — see the ticker API
-// route, which only ever triggers a rebuild, never blocks on one.
-const STALE_AFTER_MS = 20 * 60 * 1000;
+// Shorter than dailyBriefing's 6 hours, so the ticker still feels current.
+// Was 20 minutes, which made it the single biggest AI cost in Anchor
+// (a web search plus a Sonnet call roughly every 20 minutes that anyone
+// had a page open) for news that rarely changes that fast. Every 2 hours
+// is a sixth of that. The client-side polls only read this — see the
+// ticker API route, which only ever triggers a rebuild, never blocks on one.
+const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 
 export function isTickerStale(updatedAt: Date | null): boolean {
   if (!updatedAt) return true;
