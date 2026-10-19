@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { authorizeDeal } from "@/lib/dealAccess";
+import { settleIfStale } from "@/lib/botReconcile";
 
 // Starts an in-person ("Record in person") meeting's row the moment
 // recording actually begins, with status "recording" from the start —
@@ -47,7 +48,8 @@ export async function POST(req: NextRequest) {
       )
     )
     .limit(1);
-  if (existing) {
+  // An earlier meeting left "live" by mistake doesn't block this one.
+  if (existing && (await settleIfStale(existing.id))) {
     return NextResponse.json(
       {
         error: "Anchor's already in a live meeting here — check the During tab.",

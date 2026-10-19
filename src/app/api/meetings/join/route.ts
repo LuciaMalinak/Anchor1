@@ -6,6 +6,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { createBot, botDisplayName } from "@/lib/recall";
 import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
 import { authorizeDeal } from "@/lib/dealAccess";
+import { settleIfStale } from "@/lib/botReconcile";
 
 // Same fallback used elsewhere (OAuth callbacks, etc.) — prefer the
 // explicit URL when set (needed behind Render's proxy), otherwise derive
@@ -90,7 +91,8 @@ export async function POST(req: NextRequest) {
         )
       )
       .limit(1);
-    if (existing) {
+    // An earlier meeting left "live" by mistake doesn't block this one.
+    if (existing && (await settleIfStale(existing.id))) {
       return NextResponse.json(
         {
           error: "Anchor's already in a live meeting here — check the During tab.",
