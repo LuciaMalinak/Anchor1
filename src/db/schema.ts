@@ -20,6 +20,8 @@ import type { AdapterAccountType } from "next-auth/adapters";
 // ---------------------------------------------------------------------------
 
 // One answered question in a meeting's liveQuestions.
+export type CallFeedback = { rating?: "up" | "down"; note?: string; skipped?: boolean; at: number };
+
 export type LiveQuestionRecord = {
   question: string;
   answer: string;
@@ -283,6 +285,11 @@ export const meetings = pgTable("meeting", {
   // apart from liveSuggestions, which each coaching refresh rewrites.
   // Created on deploy by startupMigrations.ts.
   liveQuestions: jsonb("liveQuestions").$type<LiveQuestionRecord[]>(),
+  // The owner's feedback on Anchor after the call (CallFeedbackPopup):
+  // overall rating and a note for next time, or skipped. Null until they
+  // answer or skip. Notes feed later calls' live help (liveContext.ts).
+  // Created on deploy by startupMigrations.ts.
+  callFeedback: jsonb("callFeedback").$type<CallFeedback>(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });

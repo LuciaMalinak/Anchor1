@@ -227,6 +227,9 @@ function sanitizeLiveQuestion(raw: {
 // The deal-facts block shared by live coaching and live question answers
 // (liveQuestion.ts), so both are grounded in exactly the same material.
 export function liveDealContextText(params: LiveDealContext): string {
+  const feedbackText = params.feedbackNotes?.length
+    ? `\n\nWhat the person on this call told Anchor after their recent calls — follow it:\n${params.feedbackNotes.map((n) => `- ${n}`).join("\n")}`
+    : "";
   const leadStyleText = params.leadStyle
     ? `\n\nHow the deal lead actually operates — guidance should sound like it comes from them, not generic coaching: ${params.leadStyle}`
     : "";
@@ -260,7 +263,7 @@ export function liveDealContextText(params: LiveDealContext): string {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}`;
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}${feedbackText}`;
 }
 
 // Regenerates live coaching (nudges + checklist) for a meeting that's
