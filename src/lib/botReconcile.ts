@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { meetingLiveSegments, meetings } from "@/db/schema";
 import { downloadBotAudio, fatalBotMessage, getBotStatus, leaveCall } from "@/lib/recall";
 import { saveMeetingAudio } from "@/lib/storage";
-import { processMeeting, whileFetchingAudio } from "@/lib/processMeeting";
+import { goodLiveTranscript, processMeeting, whileFetchingAudio } from "@/lib/processMeeting";
 
 // A bot-joined call only moved on (to transcribing, summarizing, ready)
 // when Recall's webhook said the recording was done. When that webhook
@@ -29,11 +29,15 @@ export async function ingestBotRecording(meetingId: string, botId: string): Prom
     .where(and(eq(meetings.id, meetingId), inArray(meetings.status, [...LIVE])))
     .returning({ id: meetings.id });
   if (!claimed) return false;
-  await whileFetchingAudio(meetingId, () => fetchAndProcess(meetingId, botId));
+  // The call's live transcript is good enough: write it up now, and fetch
+  // the recording (for playback) alongside instead of waiting on it.
+  const live = Boolean(await goodLiveTranscript(meetingId));
+  if (live) void processMeeting(meetingId);
+  await whileFetchingAudio(meetingId, () => fetchAndProcess(meetingId, botId, !live));
   return true;
 }
 
-async function fetchAndProcess(meetingId: string, botId: string) {
+async function fetchAndProcess(meetingId: string, botId: string, process: boolean) {
   try {
     const audio = await downloadBotAudio(botId);
     const fileName = `${botId}.mp4`;
@@ -42,9 +46,12 @@ async function fetchAndProcess(meetingId: string, botId: string) {
       .update(meetings)
       .set({ audioFileName: fileName, audioStoragePath: storagePath, updatedAt: new Date() })
       .where(eq(meetings.id, meetingId));
-    void processMeeting(meetingId);
+    if (process) void processMeeting(meetingId);
   } catch (err) {
     console.error(`[botReconcile] couldn't fetch the recording for bot ${botId}:`, err);
+    // Written up from the live transcript already — only the playback
+    // copy is missing.
+    if (!process) return;
     await db
       .update(meetings)
       .set({ status: "failed", errorMessage: err instanceof Error ? err.message : "Couldn't download the recording", updatedAt: new Date() })

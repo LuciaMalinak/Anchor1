@@ -373,7 +373,7 @@ function BeforePanel({
           <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">
             GOING IN, REMEMBER
           </p>
-          <p className="mt-1 text-sm text-slate-700">{goingIn}</p>
+          <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{goingIn}</p>
         </div>
       ) : (
         <p className="text-sm text-slate-500">

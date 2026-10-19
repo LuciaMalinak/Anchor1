@@ -52,15 +52,19 @@ const SUMMARY_TOOL = {
       },
       overview: {
         type: "string",
-        description: "A 2-4 sentence plain-language overview of what the meeting was about and how it went.",
+        description:
+          "A 4-7 sentence plain-language overview: who was on the call and why, what was covered, what was decided or agreed, how the other side reacted, and where things stand now. Specific (names, numbers, dates), no filler.",
       },
       keyPoints: {
         type: "array",
         items: { type: "string" },
-        description: "3-6 concrete, specific points from the discussion. No generic filler.",
+        description:
+          "5-12 detailed points covering everything important for the next steps: what the other side needs and why, numbers (price, budget, seats, volumes), dates and deadlines, decisions made, commitments either side made, objections and how they were handled, open questions still to answer, and who else is involved in the decision. Start each with its topic (e.g. \"Pricing: …\", \"Timeline: …\"). Keep every specific — names, figures, dates — exactly as said. No generic filler.",
       },
       actionItems: {
         type: "array",
+        description:
+          "Every concrete next step either side committed to or that clearly has to happen for the deal to move — include the deadline in the text when one was said (\"Send the security questionnaire by Friday\").",
         items: {
           type: "object",
           properties: {
@@ -146,7 +150,7 @@ export async function summarizeMeeting(
     // crashed ("undefined is not iterable") — the meeting showed as failed.
     max_tokens: 8192,
     system:
-      "You summarize real business meeting transcripts accurately and conservatively. Never invent facts, names, or commitments that aren't in the transcript. If something is unclear, say so rather than guessing.",
+      "You write detailed, accurate summaries of real sales and business calls for the team that has to act on them next. Capture everything that matters for the next steps — needs, numbers, dates, decisions, commitments, objections, open questions — and nothing generic. The transcript may come from live speech-to-text: expect misheard words, missing punctuation and occasionally wrong speaker labels, and read through them using context (fix an obviously misheard product or company name; don't treat a garbled phrase as a fact). Never invent facts, names, or commitments that aren't in the transcript. If something is unclear, say so rather than guessing.",
     tools: [SUMMARY_TOOL],
     tool_choice: { type: "tool", name: SUMMARY_TOOL.name },
     messages: [
@@ -376,7 +380,7 @@ const DEAL_MEMORY_TOOL = {
       updatedMemory: {
         type: "string",
         description:
-          "A 3-6 sentence rolling summary of this deal — where it stands, what matters to the people on the other side, what's blocking or driving it forward — merging the prior memory with what was learned in this meeting. Keep it factual and current; drop details this meeting has superseded rather than piling everything on.",
+          "The deal's working memory — what anyone picking up the next call or next step needs, merging the prior memory with what was learned in this meeting. Short labelled lines, in this order, leaving out a line only when nothing is known: Status (stage, momentum, the next scheduled step); People (who's involved on their side, their role, what each cares about); Needs (what they're trying to solve and why); Numbers (price/budget/seats/volumes discussed, discounts offered); Commitments (what each side promised, with dates); Open questions (still unanswered, and who owes the answer); Risks (objections, competitors, blockers); Next steps. Factual, specific, current — keep every name, figure and date; drop what this meeting superseded rather than piling everything on. Up to about 250 words.",
       },
       keyChanges: {
         type: "array",
@@ -460,9 +464,9 @@ export async function mergeDealMemory(params: {
 
   const message = await createWithForcedTool(client(), {
     model: MODEL,
-    max_tokens: 512,
+    max_tokens: 1500,
     system:
-      "You maintain a concise, accurate rolling summary of a business deal/account across multiple meetings. Never invent details that weren't given to you.",
+      "You maintain the working memory of a sales deal across all its meetings, emails and notes — the one place the team (and Anchor's live call help) reads to know where the deal stands and what to do next. Keep it complete on what matters and accurate. Never invent details that weren't given to you.",
     tools: [DEAL_MEMORY_TOOL],
     tool_choice: { type: "tool", name: DEAL_MEMORY_TOOL.name },
     messages: [{ role: "user", content: promptBody }],

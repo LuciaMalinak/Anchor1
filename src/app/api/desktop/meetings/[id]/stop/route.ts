@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { authenticateBearer } from "@/lib/apiToken";
+import { goodLiveTranscript, processMeeting } from "@/lib/processMeeting";
 
 // Called by the desktop app right after it tells the local Recall SDK
 // to stop recording (RecallAiSdk.stopRecording — see desktop/). Unlike
@@ -57,5 +58,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .set({ status: "uploaded", stopRequestedAt: meeting.stopRequestedAt ?? new Date(), updatedAt: new Date() })
     .where(and(eq(meetings.id, id), inArray(meetings.status, ["joining", "recording"])))
     .returning();
+  // Most of the call came through live: write it up now rather than wait
+  // for the recording.
+  if (updated && (await goodLiveTranscript(id))) void processMeeting(id);
   return NextResponse.json({ ok: true, meeting: updated ?? meeting });
 }
