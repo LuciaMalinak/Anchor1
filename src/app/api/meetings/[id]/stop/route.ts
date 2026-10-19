@@ -63,10 +63,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   if (!meeting.recallBotId) {
     if (meeting.recallRecordingId) {
-      return NextResponse.json(
-        { error: "Anchor Desktop is recording this call — stop it from the desktop app." },
-        { status: 400 }
-      );
+      // Anchor Desktop is recording this call: ask it to stop. The app
+      // sees this on its next live poll (about a second), stops, and
+      // uploads the recording as usual. If it doesn't (closed, asleep,
+      // offline), the meeting is wrapped up from its live transcript a
+      // few minutes later instead of staying live (botReconcile.ts).
+      await db.update(meetings).set({ stopRequestedAt: new Date(), updatedAt: new Date() }).where(eq(meetings.id, id));
+      return NextResponse.json({ ok: true, desktop: true });
     }
     // An in-person recording. When the browser tab holding its audio is
     // the one asking, the client stops that recorder and uploads the

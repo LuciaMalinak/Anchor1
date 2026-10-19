@@ -574,6 +574,8 @@ function notify(title: string, body: string) {
 const LIVE_SUGGESTIONS_POLL_MS = 1200;
 const LIVE_SUGGESTIONS_FAST_POLL_MS = 400;
 const lastSuggestionsSent = new Map<string, string>();
+// Windows already being stopped because of a Stop on the website.
+const stopsFromWeb = new Set<string>();
 function startLiveSuggestionsPolling() {
   const tick = async () => {
     let answering = false;
@@ -590,6 +592,15 @@ function startLiveSuggestionsPolling() {
           if (!active) return;
           const suggestions = await api!.getLiveSuggestions(active.meetingId).catch(() => null);
           if (!suggestions) return;
+          // Stop pressed on the website (live panel / Focus window).
+          if (suggestions.stopRequested && !stopsFromWeb.has(windowId)) {
+            stopsFromWeb.add(windowId);
+            log(`Stopping the recording of "${active.title ?? "this call"}" — Stop was pressed on Anchor's website.`);
+            stopRecordingFor(windowId)
+              .catch((err) => log(`Couldn't stop the recording: ${err instanceof Error ? err.message : err}`))
+              .finally(() => setTimeout(() => stopsFromWeb.delete(windowId), 60_000));
+            return;
+          }
           const q = suggestions.liveQuestion;
           if (q && (q.answering || !q.suggestedAnswer)) answering = true;
           const json = JSON.stringify(suggestions);

@@ -14,7 +14,11 @@ export function StopMeetingButton({
   meetingId,
   variant = "light",
   inPerson = false,
+  desktop = false,
 }: {
+  // Anchor Desktop is recording it: Stop tells the desktop app to stop
+  // and upload (see the stop route).
+  desktop?: boolean;
   meetingId: string;
   // An in-person recording rather than a bot on a call: Stop ends the
   // recording itself and writes the meeting up (see stopMeeting.ts).
@@ -56,7 +60,9 @@ export function StopMeetingButton({
     return (
       <div className="flex flex-wrap items-center gap-2">
         <span className={`text-xs ${mutedText}`}>
-          {inPerson
+          {desktop
+            ? "Anchor Desktop stops recording and writes up the meeting — the call itself carries on."
+            : inPerson
             ? "Stops recording and writes up the meeting."
             : "Anchor leaves the call — doesn't end the meeting for anyone else."}
         </span>

@@ -267,6 +267,10 @@ export const meetings = pgTable("meeting", {
     offLimits?: { label: string; raised: boolean }[];
   }>(),
   liveSuggestionsUpdatedAt: timestamp("liveSuggestionsUpdatedAt", { mode: "date" }),
+  // Stop pressed on the website for a call Anchor Desktop is recording:
+  // the desktop app sees it on its next poll and stops (see the stop
+  // route). Created on deploy by startupMigrations.ts.
+  stopRequestedAt: timestamp("stopRequestedAt", { mode: "date" }),
   // Every question the other side asked during the call and the answer
   // Anchor suggested, oldest first (see src/lib/liveQuestion.ts). Kept
   // apart from liveSuggestions, which each coaching refresh rewrites.

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { downloadBotAudio, fatalBotMessage, getBotStatus } from "@/lib/recall";
@@ -48,8 +48,35 @@ export async function ingestBotRecording(meetingId: string, botId: string): Prom
   return true;
 }
 
-export async function reconcileBotMeeting(meeting: { id: string; status: string; recallBotId: string | null }): Promise<void> {
-  if (!meeting.recallBotId || !(LIVE as readonly string[]).includes(meeting.status)) return;
+// Stop was pressed for a call Anchor Desktop is recording, but the app
+// hasn't stopped it this long after (closed, asleep, offline): wrap the
+// meeting up from its live transcript (processMeeting falls back to it
+// with no audio) instead of leaving it live. If the app uploads the real
+// recording later, that meeting has already moved on.
+const DESKTOP_STOP_GRACE_MS = 3 * 60_000;
+
+async function reconcileDesktopStop(meeting: { id: string; status: string; stopRequestedAt?: Date | null }) {
+  if (!meeting.stopRequestedAt || Date.now() - meeting.stopRequestedAt.getTime() < DESKTOP_STOP_GRACE_MS) return;
+  const [ended] = await db
+    .update(meetings)
+    .set({ status: "uploaded", updatedAt: new Date() })
+    .where(and(eq(meetings.id, meeting.id), inArray(meetings.status, [...LIVE])))
+    .returning({ id: meetings.id });
+  if (ended) void processMeeting(meeting.id);
+}
+
+export async function reconcileBotMeeting(meeting: {
+  id: string;
+  status: string;
+  recallBotId: string | null;
+  recallRecordingId?: string | null;
+  stopRequestedAt?: Date | null;
+}): Promise<void> {
+  if (!(LIVE as readonly string[]).includes(meeting.status)) return;
+  if (!meeting.recallBotId) {
+    if (meeting.recallRecordingId) await reconcileDesktopStop(meeting);
+    return;
+  }
   const now = Date.now();
   if (now - (lastCheck.get(meeting.id) ?? 0) < CHECK_EVERY_MS) return;
   lastCheck.set(meeting.id, now);
@@ -87,9 +114,23 @@ export async function reconcileBotMeeting(meeting: { id: string; status: string;
 // The hourly job: every bot call still shown as live after 20 minutes.
 export async function reconcileStaleBotMeetings(): Promise<number> {
   const rows = await db
-    .select({ id: meetings.id, status: meetings.status, recallBotId: meetings.recallBotId })
+    .select({
+      id: meetings.id,
+      status: meetings.status,
+      recallBotId: meetings.recallBotId,
+      recallRecordingId: meetings.recallRecordingId,
+      stopRequestedAt: meetings.stopRequestedAt,
+    })
     .from(meetings)
-    .where(and(inArray(meetings.status, [...LIVE]), isNotNull(meetings.recallBotId), lt(meetings.updatedAt, new Date(Date.now() - 20 * 60_000))));
+    .where(
+      and(
+        inArray(meetings.status, [...LIVE]),
+        or(
+          and(isNotNull(meetings.recallBotId), lt(meetings.updatedAt, new Date(Date.now() - 20 * 60_000))),
+          isNotNull(meetings.stopRequestedAt)
+        )
+      )
+    );
   for (const m of rows) await reconcileBotMeeting(m);
   return rows.length;
 }

@@ -40,6 +40,7 @@ const MIGRATIONS = [
   // on calls (liveQuestion.ts, callIdentity.ts).
   `ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "liveQuestions" jsonb`,
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "callNames" jsonb`,
+  `ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "stopRequestedAt" timestamp`,
   // What was asked of Ask Anchor during a call (askLog in schema.ts).
   `CREATE TABLE IF NOT EXISTS "ask_log" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
