@@ -17,6 +17,7 @@ import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { COLOR_THEME_BY_KEY, isColorThemeKey } from "@/lib/colorThemes";
 import { LiveMeetingWatcher } from "@/components/LiveMeetingWatcher";
 import { MeetingSuggestionPopups } from "@/components/MeetingSuggestionPopups";
+import { CallFeedbackPopup } from "@/components/CallFeedbackPopup";
 import { isAppOwner } from "@/lib/appOwner";
 import { WhatsNewModal } from "@/components/WhatsNewModal";
 import { after } from "next/server";
@@ -144,7 +145,6 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/deals">Deals</NavLink>
               <NavLink href="/dashboard/insights">Insights</NavLink>
               <NavLink href="/dashboard/contacts">Contacts</NavLink>
-              <NavLink href="/dashboard/playbook">Playbook</NavLink>
               <NavLink href="/dashboard/team">Team</NavLink>
               <NavLink href="/dashboard/integrations">Integrations</NavLink>
               {/* Only the app owner ever sees this — everyone else's
@@ -200,7 +200,6 @@ export default async function DashboardLayout({
           <NavLink href="/dashboard/deals">Deals</NavLink>
           <NavLink href="/dashboard/insights">Insights</NavLink>
           <NavLink href="/dashboard/contacts">Contacts</NavLink>
-          <NavLink href="/dashboard/playbook">Playbook</NavLink>
           <NavLink href="/dashboard/team">Team</NavLink>
           <NavLink href="/dashboard/integrations">Integrations</NavLink>
           {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
@@ -256,6 +255,7 @@ export default async function DashboardLayout({
       {session?.user?.id && <LiveMeetingWatcher />}
       {/* Times people suggested by email, to approve into a calendar. */}
       {session?.user?.id && <MeetingSuggestionPopups />}
+      {session?.user?.id && <CallFeedbackPopup />}
       {showWhatsNew && <WhatsNewModal />}
     </div>
   );

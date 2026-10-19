@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { MorningBriefSettings } from "./MorningBriefSettings";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 
 type Profile = {
   id: string;
@@ -118,6 +119,20 @@ export function ProfileClient({ profile }: { profile: Profile }) {
       {/* First on the page so it's easy to find; Home links here
           (#morning-brief) until it's turned on. */}
       <MorningBriefSettings />
+
+      {/* The playbook isn't in the main menu — it's here for anyone who
+          wants to check or fix what Anchor has learned. */}
+      <section className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">What Anchor has learned</h2>
+          <p className="text-sm text-slate-500">
+            The answers Anchor uses on calls, learned from your team&apos;s calls and your feedback. Check, fix or add to them.
+          </p>
+        </div>
+        <Link href="/dashboard/playbook" className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-brand hover:bg-slate-50">
+          Open playbook
+        </Link>
+      </section>
 
       <form onSubmit={handleSave} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="h-24 bg-gradient-to-r from-brand to-brand-dark" />

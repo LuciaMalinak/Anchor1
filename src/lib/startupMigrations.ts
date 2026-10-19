@@ -66,6 +66,8 @@ const MIGRATIONS = [
     "updatedAt" timestamp NOT NULL DEFAULT now()
   )`,
   `CREATE INDEX IF NOT EXISTS "answer_playbook_teamId_idx" ON "answer_playbook" ("teamId", "updatedAt")`,
+  // Feedback on Anchor after each call (callFeedback in schema.ts).
+  `ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "callFeedback" jsonb`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

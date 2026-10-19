@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { meetings, summaries, dealFiles, deals } from "@/db/schema";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { summarizeDealFiles } from "@/lib/dealFilesContext";
 
@@ -8,6 +8,7 @@ import { summarizeDealFiles } from "@/lib/dealFilesContext";
 // in — same idea as assist/route.ts's recentReady, just smaller since
 // this runs every few seconds during a live call.
 const PAST_MEETINGS_LIMIT = 3;
+const FEEDBACK_NOTES_LIMIT = 5;
 
 export type LiveDealContext = {
   dealName: string | null;
@@ -19,6 +20,9 @@ export type LiveDealContext = {
   calendarContext: string | null;
   documentContext: string | null;
   attachedFiles: string | null;
+  // What the person on this call told Anchor after their recent calls
+  // ("too generic", "shorter answers"…) — see CallFeedbackPopup.
+  feedbackNotes: string[];
   pastMeetings: {
     title: string;
     occurredAt: string;
@@ -39,7 +43,7 @@ export async function loadLiveDealContext(
   // Never rebuilt synchronously here — this runs every few seconds
   // during a live call, so it reads whatever style profile already
   // exists (possibly a day stale) rather than ever waiting on a rebuild.
-  const [leadStyle, pastMeetingRows, fileRows] = await Promise.all([
+  const [leadStyle, pastMeetingRows, fileRows, feedbackRows] = await Promise.all([
     getDealLeadStyle(deal?.leadUserId ?? null, { allowSynchronousRebuild: false }),
     deal
       ? db
@@ -56,6 +60,17 @@ export async function loadLiveDealContext(
     // context" box (see DealContextBox.tsx) — a bounded digest, not the
     // full text (see dealFilesContext.ts for why).
     deal ? db.select().from(dealFiles).where(eq(dealFiles.dealId, deal.id)) : Promise.resolve([]),
+    db
+      .select({ feedback: meetings.callFeedback })
+      .from(meetings)
+      .where(
+        and(
+          eq(meetings.userId, sql`(select "userId" from "meeting" where "id" = ${meetingId})`),
+          sql`coalesce(${meetings.callFeedback}->>'note', '') <> ''`
+        )
+      )
+      .orderBy(desc(meetings.occurredAt))
+      .limit(FEEDBACK_NOTES_LIMIT),
   ]);
 
   return {
@@ -70,6 +85,7 @@ export async function loadLiveDealContext(
     calendarContext: deal?.calendarContext || null,
     documentContext: deal?.documentContext || null,
     attachedFiles: summarizeDealFiles(fileRows),
+    feedbackNotes: feedbackRows.map((r) => r.feedback?.note?.trim() ?? "").filter(Boolean),
     pastMeetings: pastMeetingRows.map((r) => ({
       title: r.meeting.title,
       occurredAt: r.meeting.occurredAt.toLocaleDateString(),
