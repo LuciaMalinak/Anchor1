@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { reconcileBotMeeting } from "@/lib/botReconcile";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
@@ -19,6 +20,13 @@ export async function GET() {
     .from(meetings)
     .where(eq(meetings.userId, session.user.id))
     .orderBy(desc(meetings.createdAt));
+
+  // Home polls this while a call is live: also catch a bot call up with
+  // Recall if its "recording done" webhook never came (botReconcile.ts).
+  const live = rows.filter((m) => m.recallBotId && (m.status === "joining" || m.status === "recording"));
+  if (live.length) after(async () => {
+    for (const m of live) await reconcileBotMeeting(m);
+  });
 
   return NextResponse.json({ meetings: rows });
 }

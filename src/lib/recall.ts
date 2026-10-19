@@ -213,6 +213,21 @@ export async function getBot(botId: string): Promise<RecallBot> {
   return res.json();
 }
 
+// Where a bot is at, from its latest status change (docs.recall.ai's Bot
+// Status Change Events: joining_call, in_waiting_room, in_call_recording,
+// call_ended, done, fatal, …), and whether its recording is ready.
+export async function getBotStatus(botId: string): Promise<{ code: string; subCode: string | null; hasRecording: boolean }> {
+  const bot = (await getBot(botId)) as RecallBot & {
+    status_changes?: { code?: string; sub_code?: string | null }[];
+  };
+  const last = bot.status_changes?.at(-1);
+  return {
+    code: last?.code ?? "unknown",
+    subCode: last?.sub_code ?? null,
+    hasRecording: Boolean(bot.media_shortcuts?.audio_mixed?.data?.download_url),
+  };
+}
+
 export async function downloadBotAudio(botId: string): Promise<Buffer> {
   const bot = await getBot(botId);
   const url = bot.media_shortcuts?.audio_mixed?.data?.download_url;

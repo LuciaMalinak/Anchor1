@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useMicRecorder, MicRecorderView } from "@/components/MicRecorder";
 import { TodayMeetings } from "@/components/TodayMeetings";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
+import { MeetingDealAssign } from "@/components/MeetingDealAssign";
 
 type Meeting = {
   id: string;
@@ -21,7 +22,10 @@ type Meeting = {
     | "failed";
   errorMessage: string | null;
   createdAt: string;
+  dealId: string | null;
 };
+
+type DealOption = { id: string; name: string };
 
 const STATUS_LABEL: Record<Meeting["status"], string> = {
   joining: "Joining meeting…",
@@ -47,9 +51,11 @@ function TrashIcon() {
   );
 }
 
-export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[] }) {
+export function DashboardClient({ initialMeetings, deals: initialDeals }: { initialMeetings: Meeting[]; deals: DealOption[] }) {
   const router = useRouter();
   const [meetings, setMeetings] = useState<Meeting[]>(initialMeetings);
+  const [deals, setDeals] = useState<DealOption[]>(initialDeals);
+  const dealName = (id: string | null) => deals.find((d) => d.id === id)?.name ?? null;
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -315,6 +321,23 @@ export function DashboardClient({ initialMeetings }: { initialMeetings: Meeting[
                 </button>
                 {m.status === "failed" && m.errorMessage && (
                   <p className="mt-1 px-1 text-xs text-red-600">{m.errorMessage}</p>
+                )}
+                {m.dealId ? (
+                  dealName(m.dealId) && (
+                    <Link href={`/dashboard/deals/${m.dealId}`} className="mt-1 block truncate px-1 text-xs text-slate-500 hover:text-brand">
+                      {dealName(m.dealId)}
+                    </Link>
+                  )
+                ) : (
+                  <MeetingDealAssign
+                    meetingId={m.id}
+                    meetingTitle={m.title}
+                    deals={deals}
+                    onAssigned={(deal) => {
+                      setDeals((list) => (list.some((d) => d.id === deal.id) ? list : [...list, deal]));
+                      setMeetings((list) => list.map((x) => (x.id === m.id ? { ...x, dealId: deal.id } : x)));
+                    }}
+                  />
                 )}
               </div>
             ))}
