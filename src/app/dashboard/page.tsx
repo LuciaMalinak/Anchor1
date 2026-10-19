@@ -43,7 +43,9 @@ export default async function DashboardPage({
     status: m.status,
     errorMessage: m.errorMessage,
     createdAt: m.createdAt.toISOString(),
+    dealId: m.dealId,
   }));
+
 
   const teamId = session?.user?.id ? await getOrCreateTeamId(session.user.id) : null;
 
@@ -138,7 +140,7 @@ export default async function DashboardPage({
   // show, even for a brand-new, team-less account — the other sections only
   // appear once there's a team.
   const sectionByKey: Partial<Record<DashboardSectionKey, ReactNode>> = {
-    meetings: <DashboardClient initialMeetings={serializable} />,
+    meetings: <DashboardClient initialMeetings={serializable} deals={dealOptions} />,
     ...(teamId && session?.user?.id
       ? {
           attention: <AttentionPanel teamId={teamId} userId={session.user.id} />,

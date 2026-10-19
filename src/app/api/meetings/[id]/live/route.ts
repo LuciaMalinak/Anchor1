@@ -7,6 +7,7 @@ import { generateLiveCoaching, describeCoachingError, type LiveCoaching } from "
 import { canAccessDeal } from "@/lib/dealAccess";
 import { loadLiveDealContextCached } from "@/lib/liveContext";
 import { authenticateBearer } from "@/lib/apiToken";
+import { reconcileBotMeeting } from "@/lib/botReconcile";
 import { withAiUser } from "@/lib/aiUsage";
 import { isSelfSpeaker } from "@/lib/callIdentity";
 
@@ -69,6 +70,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
 
+  after(() => reconcileBotMeeting(meeting));
   const isOwner = meeting.userId === userId;
   const dealRows = meeting.dealId
     ? await db.select().from(deals).where(eq(deals.id, meeting.dealId))

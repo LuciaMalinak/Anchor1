@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { reconcileBotMeeting } from "@/lib/botReconcile";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, transcripts, summaries, meetingParticipants, contacts, deals } from "@/db/schema";
@@ -20,6 +21,9 @@ export async function GET(
   if (!meeting) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  // The meeting page polls this; catch a bot call up with Recall if its
+  // webhook never came (botReconcile.ts).
+  after(() => reconcileBotMeeting(meeting));
 
   // Same visibility rule as everywhere else a meeting can be seen (the
   // deal page's During/After tabs, the Stop button, the Focus window

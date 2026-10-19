@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { downloadBotAudio, downloadRecordingAudio, fatalBotMessage } from "@/lib/recall";
+import { downloadRecordingAudio, fatalBotMessage } from "@/lib/recall";
 import { saveMeetingAudio } from "@/lib/storage";
 import { processMeeting } from "@/lib/processMeeting";
+import { ingestBotRecording } from "@/lib/botReconcile";
 import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
 
 // Recall.ai calls this when a bot's recording is ready. Register this
@@ -120,36 +121,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, warning: "unknown bot id" });
   }
 
-  try {
-    const audio = await downloadBotAudio(botId);
-    const fileName = `${botId}.mp4`;
-    const storagePath = await saveMeetingAudio(meeting.id, fileName, audio);
-
-    await db
-      .update(meetings)
-      .set({
-        audioFileName: fileName,
-        audioStoragePath: storagePath,
-        status: "uploaded",
-        updatedAt: new Date(),
-      })
-      .where(eq(meetings.id, meeting.id));
-
-    // Same fire-and-forget pattern as a manual upload — see the note in
-    // processMeeting.ts.
-    void processMeeting(meeting.id);
-  } catch (err) {
-    console.error(`[recall webhook] Failed to fetch recording for bot ${botId}:`, err);
-    await db
-      .update(meetings)
-      .set({
-        status: "failed",
-        errorMessage:
-          err instanceof Error ? err.message : "Failed to download recording",
-        updatedAt: new Date(),
-      })
-      .where(eq(meetings.id, meeting.id));
-  }
+  // Same download-and-process step the status check uses, done once
+  // whichever gets there first (see botReconcile.ts).
+  await ingestBotRecording(meeting.id, botId);
 
   return NextResponse.json({ ok: true });
 }
