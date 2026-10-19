@@ -12,6 +12,7 @@ import { aiUsage } from "@/db/schema";
 // Anthropic list prices, USD per million tokens. Most specific prefix
 // first. Cache writes cost 1.25x input and cache reads 0.1x input.
 const ANTHROPIC_PRICES: [prefix: string, input: number, output: number][] = [
+  ["claude-haiku-5", 0.1, 0.5], // Haiku 5 and 5.5
   ["claude-haiku-4-5", 1, 5],
   ["claude-haiku-3-5", 0.8, 4],
   ["claude-sonnet-5", 2, 10], // Sonnet 5 and 5.5

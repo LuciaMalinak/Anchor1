@@ -1,0 +1,34 @@
+# Shows where Anchor's AI money goes: spend per feature and model for the
+# last N days, and hours recorded by the bot / desktop app. Run it by
+# hand (Actions -> Usage report -> Run workflow). Totals only.
+name: Usage report
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "How many days back"
+        default: "30"
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    env:
+      SITE: ${{ vars.ANCHOR_URL || 'https://anchor-be6o.onrender.com' }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Report
+        run: |
+          curl -sS --max-time 180 --retry 3 --retry-all-errors -H "x-cron-key: $CRON_SECRET" "$SITE/api/cron/usage-report?days=${{ inputs.days }}" > report.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open("report.json"))
+          print(f"### Last {d['days']} days: ${d['totalAiUsd']} on AI/transcription, {d['members']} members\n")
+          print("| Feature | Model | Calls | Cost $ | Input tok | Cache-read tok | Output tok | Searches | Audio h |")
+          print("|---|---|---|---|---|---|---|---|---|")
+          for r in d["byFeature"]:
+              print(f"| {r['feature']} | {r['model'] or r['provider']} | {r['calls']} | {r['costUsd']} | {r['inputTokens']} | {r['cacheReadTokens']} | {r['outputTokens']} | {r['webSearches']} | {r['audioHours']} |")
+          print("\n| Recorded by | Meetings | Hours |\n|---|---|---|")
+          for r in d["recorded"]:
+              print(f"| {r['kind']} | {r['meetings']} | {r['hours']} |")
+          PY
