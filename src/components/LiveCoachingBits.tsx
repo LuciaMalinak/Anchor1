@@ -75,10 +75,14 @@ export function LiveQuestionCard({
   question,
   className,
   onMarkMe,
+  meetingId,
+  feedback,
 }: {
   question: LiveQuestion;
   className: string;
   onMarkMe?: (name: string) => void;
+  meetingId?: string;
+  feedback?: "up" | "down";
 }) {
   const writing = question.answering === true || !question.suggestedAnswer;
   const caution = question.caution;
@@ -106,6 +110,98 @@ export function LiveQuestionCard({
         )}
       </p>
       {!writing && <QuestionLinks links={question.links} />}
+      {!writing && meetingId && question.askedAt != null && (
+        <AnswerFeedback meetingId={meetingId} askedAt={question.askedAt} initial={feedback} />
+      )}
+    </div>
+  );
+}
+
+// Thumbs up / down on an answer. Up keeps it as the team's answer to that
+// question; down asks what it should have said and keeps that instead —
+// both go into Anchor's playbook, which the next answers use.
+export function AnswerFeedback({
+  meetingId,
+  askedAt,
+  initial,
+}: {
+  meetingId: string;
+  askedAt: number;
+  initial?: "up" | "down";
+}) {
+  const [rating, setRating] = useState<"up" | "down" | undefined>(initial);
+  const [fixing, setFixing] = useState(false);
+  const [correction, setCorrection] = useState("");
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  async function send(next: "up" | "down", text?: string) {
+    setState("saving");
+    const res = await fetch(`/api/meetings/${meetingId}/live-feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ askedAt, rating: next, correction: text || undefined }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setState("error");
+      return;
+    }
+    setRating(next);
+    setFixing(false);
+    setState("saved");
+  }
+
+  const btn = "rounded px-1.5 py-0.5 text-xs hover:bg-slate-100 disabled:opacity-50";
+  return (
+    <div className="mt-2 text-xs text-slate-500">
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          title="Good answer — answer like this next time"
+          disabled={state === "saving"}
+          onClick={() => send("up")}
+          className={`${btn} ${rating === "up" ? "bg-emerald-50 text-emerald-700" : ""}`}
+        >
+          👍
+        </button>
+        <button
+          type="button"
+          title="Not right — tell Anchor what to say instead"
+          disabled={state === "saving"}
+          onClick={() => setFixing((f) => !f)}
+          className={`${btn} ${rating === "down" ? "bg-red-50 text-red-700" : ""}`}
+        >
+          👎
+        </button>
+        {state === "saved" && (
+          <span className="text-emerald-700">{rating === "up" ? "Anchor will answer like this." : "Thanks — Anchor learned that."}</span>
+        )}
+        {state === "error" && <span className="text-red-600">Couldn&apos;t save — try again.</span>}
+      </div>
+      {fixing && (
+        <div className="mt-1.5 flex flex-col gap-1.5">
+          <textarea
+            autoFocus
+            value={correction}
+            onChange={(e) => setCorrection(e.target.value)}
+            rows={2}
+            placeholder="What should Anchor have said? (optional)"
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800 outline-none focus:border-brand"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={state === "saving"}
+              onClick={() => send("down", correction.trim())}
+              className="rounded-md bg-brand px-2.5 py-1 font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            >
+              {correction.trim() ? "Teach Anchor" : "Just mark it wrong"}
+            </button>
+            <button type="button" onClick={() => setFixing(false)} className="text-slate-400 hover:text-slate-600">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -117,11 +213,14 @@ export function LiveQuestionsBox({
   answered,
   onMarkMe,
   cardClassName,
+  meetingId,
 }: {
   current: LiveQuestion | null | undefined;
   answered: AnsweredQuestion[];
   onMarkMe?: (name: string) => void;
   cardClassName: string;
+  // Turns on the thumbs up / down under each answer.
+  meetingId?: string;
 }) {
   const earlier = answered.filter((q) => q.askedAt !== current?.askedAt).reverse();
   if (!current && !earlier.length) return null;
@@ -131,13 +230,21 @@ export function LiveQuestionsBox({
   const older = earlier.slice(RECENT_ANSWERS_SHOWN);
   return (
     <div className="space-y-2">
-      {current && <LiveQuestionCard question={current} className={cardClassName} onMarkMe={onMarkMe} />}
+      {current && (
+        <LiveQuestionCard
+          question={current}
+          className={cardClassName}
+          onMarkMe={onMarkMe}
+          meetingId={meetingId}
+          feedback={answered.find((q) => q.askedAt === current.askedAt)?.feedback}
+        />
+      )}
       {recent.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-500">JUST ANSWERED</p>
           <ul className="mt-2 space-y-3">
             {recent.map((q) => (
-              <EarlierAnswer key={q.askedAt} q={q} onMarkMe={onMarkMe} />
+              <EarlierAnswer key={q.askedAt} q={q} onMarkMe={onMarkMe} meetingId={meetingId} />
             ))}
           </ul>
         </div>
@@ -149,7 +256,7 @@ export function LiveQuestionsBox({
           </summary>
           <ul className="mt-2 max-h-72 space-y-3 overflow-y-auto">
             {older.map((q) => (
-              <EarlierAnswer key={q.askedAt} q={q} onMarkMe={onMarkMe} />
+              <EarlierAnswer key={q.askedAt} q={q} onMarkMe={onMarkMe} meetingId={meetingId} />
             ))}
           </ul>
         </details>
@@ -160,7 +267,15 @@ export function LiveQuestionsBox({
 
 const RECENT_ANSWERS_SHOWN = 2;
 
-function EarlierAnswer({ q, onMarkMe }: { q: AnsweredQuestion; onMarkMe?: (name: string) => void }) {
+function EarlierAnswer({
+  q,
+  onMarkMe,
+  meetingId,
+}: {
+  q: AnsweredQuestion;
+  onMarkMe?: (name: string) => void;
+  meetingId?: string;
+}) {
   return (
     <li>
       <div className="flex items-baseline justify-between gap-2">
@@ -177,6 +292,7 @@ function EarlierAnswer({ q, onMarkMe }: { q: AnsweredQuestion; onMarkMe?: (name:
       </div>
       <p className="mt-0.5 text-sm text-slate-800">{q.answer}</p>
       <QuestionLinks links={q.links} />
+      {meetingId && <AnswerFeedback meetingId={meetingId} askedAt={q.askedAt} initial={q.feedback} />}
     </li>
   );
 }

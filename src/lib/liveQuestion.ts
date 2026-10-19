@@ -8,6 +8,7 @@ import { LIVE_MODEL, LIVE_THINKING, FALLBACK_LIVE_MODEL, liveClient, liveDealCon
 import { withAiUser } from "@/lib/aiUsage";
 import { isSelfSpeaker, type CallIdentity } from "@/lib/callIdentity";
 import { liveLinksFor, type LiveLink } from "@/lib/liveLinks";
+import { playbookText, relevantAnswers } from "@/lib/answerPlaybook";
 
 // The instant path for "they just asked something": runs the moment a
 // transcript line that looks like a question lands (from Recall's
@@ -295,7 +296,7 @@ async function answerLiveQuestion(
   replacesAskedAt: number | null
 ) {
   const [row] = await db
-    .select({ meeting: meetings, ownerName: users.name, ownerEmail: users.email, ownerCallNames: users.callNames })
+    .select({ meeting: meetings, ownerName: users.name, ownerEmail: users.email, ownerCallNames: users.callNames, ownerTeamId: users.teamId })
     .from(meetings)
     .leftJoin(users, eq(users.id, meetings.userId))
     .where(eq(meetings.id, meetingId));
@@ -336,9 +337,10 @@ async function answerLiveQuestion(
   };
 
   let deal: typeof deals.$inferSelect | null = null;
-  const [, context, segments] = await Promise.all([
+  const dealLoad = loadDeal();
+  const [, context, segments, pastAnswers] = await Promise.all([
     showPending,
-    loadDeal().then((d) => {
+    dealLoad.then((d) => {
       deal = d;
       return loadLiveDealContextCached(meetingId, d);
     }),
@@ -347,6 +349,11 @@ async function answerLiveQuestion(
       .from(meetingLiveSegments)
       .where(eq(meetingLiveSegments.meetingId, meetingId))
       .orderBy(asc(meetingLiveSegments.createdAt)),
+    // How the team has answered this kind of question before (answerPlaybook.ts).
+    dealLoad.then((d) => {
+      const teamId = d?.teamId ?? row.ownerTeamId;
+      return teamId ? relevantAnswers(teamId, d?.id ?? null, question).catch(() => []) : [];
+    }),
   ]);
   const roleTag = (name: string) => {
     if (isSelfSpeaker(name, me)) return " (the rep)";
@@ -377,7 +384,7 @@ FLAG — check the question against the deal's decision boundaries and prep note
 - amber: the answer depends on something not in the facts given, or touches a commitment (price, dates, security claims) the boundaries don't cover — answer carefully and suggest confirming after the call.
 - none: everything else.
 
-The answer: ground it only in the deal facts and transcript. Be specific and use real numbers and names from the facts when they answer the question. If the real answer isn't known, say so plainly and offer to follow up — never invent a number, date, feature, or commitment.
+The answer: ground it only in the deal facts, the transcript, and the team's past answers (when given) — when one of those fits the question, answer the way the team did, in their wording. Be specific and use real numbers and names from the facts when they answer the question. If the real answer isn't known, say so plainly and offer to follow up — never invent a number, date, feature, or commitment.
 
 Reply with exactly ${NOT_A_QUESTION} and nothing else if it isn't a real question needing an answer (rhetorical, small talk, "you know?", "can you hear me?") or it was already answered in the transcript.`;
 
@@ -397,7 +404,7 @@ Reply with exactly ${NOT_A_QUESTION} and nothing else if it isn't a real questio
     messages: [
       {
         role: "user",
-        content: `Recent transcript:
+        content: `${pastAnswers.length ? `${playbookText(pastAnswers)}\n\n` : ""}Recent transcript:
 ${transcript || "(nothing transcribed yet)"}
 
 The line that looked like a question${speakerName ? ` (speaker label: ${speakerName}${roleTag(speakerName)})` : " (no speaker label)"}: "${question}"`,

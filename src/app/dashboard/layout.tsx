@@ -144,6 +144,7 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/deals">Deals</NavLink>
               <NavLink href="/dashboard/insights">Insights</NavLink>
               <NavLink href="/dashboard/contacts">Contacts</NavLink>
+              <NavLink href="/dashboard/playbook">Playbook</NavLink>
               <NavLink href="/dashboard/team">Team</NavLink>
               <NavLink href="/dashboard/integrations">Integrations</NavLink>
               {/* Only the app owner ever sees this — everyone else's
@@ -199,6 +200,7 @@ export default async function DashboardLayout({
           <NavLink href="/dashboard/deals">Deals</NavLink>
           <NavLink href="/dashboard/insights">Insights</NavLink>
           <NavLink href="/dashboard/contacts">Contacts</NavLink>
+          <NavLink href="/dashboard/playbook">Playbook</NavLink>
           <NavLink href="/dashboard/team">Team</NavLink>
           <NavLink href="/dashboard/integrations">Integrations</NavLink>
           {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}

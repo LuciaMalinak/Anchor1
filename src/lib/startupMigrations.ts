@@ -52,6 +52,20 @@ const MIGRATIONS = [
     "createdAt" timestamp NOT NULL DEFAULT now()
   )`,
   `CREATE INDEX IF NOT EXISTS "ask_log_meetingId_idx" ON "ask_log" ("meetingId", "createdAt")`,
+  // Answers Anchor has learned or been taught (answerPlaybook in schema.ts).
+  `CREATE TABLE IF NOT EXISTS "answer_playbook" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "teamId" uuid NOT NULL REFERENCES "team"("id") ON DELETE CASCADE,
+    "dealId" uuid REFERENCES "deal"("id") ON DELETE CASCADE,
+    "question" text NOT NULL,
+    "answer" text NOT NULL,
+    "source" text NOT NULL,
+    "meetingId" uuid REFERENCES "meeting"("id") ON DELETE SET NULL,
+    "userId" uuid REFERENCES "user"("id") ON DELETE SET NULL,
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "answer_playbook_teamId_idx" ON "answer_playbook" ("teamId", "updatedAt")`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

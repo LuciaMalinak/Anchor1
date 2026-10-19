@@ -78,6 +78,7 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
             answered={answered}
             onMarkMe={speakers.length ? (name) => markSpeaker(name, true) : undefined}
             cardClassName="rounded-lg border border-brand/30 bg-brand/5"
+            meetingId={meetingId}
           />
           {!suggestions?.liveQuestion && !answered.length && (
             <p className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-400">
