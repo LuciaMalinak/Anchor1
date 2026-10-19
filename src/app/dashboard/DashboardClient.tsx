@@ -8,6 +8,7 @@ import { useMicRecorder, MicRecorderView } from "@/components/MicRecorder";
 import { TodayMeetings } from "@/components/TodayMeetings";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
 import { MeetingDealAssign } from "@/components/MeetingDealAssign";
+import { MeetingRetryButton } from "./meetings/[id]/MeetingRetryButton";
 
 type Meeting = {
   id: string;
@@ -319,8 +320,11 @@ export function DashboardClient({ initialMeetings, deals: initialDeals }: { init
                 >
                   <TrashIcon />
                 </button>
-                {m.status === "failed" && m.errorMessage && (
-                  <p className="mt-1 px-1 text-xs text-red-600">{m.errorMessage}</p>
+                {m.status === "failed" && (
+                  <p className="mt-1 flex flex-wrap items-center gap-2 px-1 text-xs text-red-600">
+                    {m.errorMessage}
+                    <MeetingRetryButton meetingId={m.id} compact />
+                  </p>
                 )}
                 {m.dealId ? (
                   dealName(m.dealId) && (

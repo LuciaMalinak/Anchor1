@@ -141,7 +141,10 @@ export async function summarizeMeeting(
 
   const message = await createWithForcedTool(client(), {
     model: MODEL,
-    max_tokens: 2048,
+    // Was 2048: an hour-long call's summary ran past it, the reply was cut
+    // off mid-way and came back without its speakers list, and processing
+    // crashed ("undefined is not iterable") — the meeting showed as failed.
+    max_tokens: 8192,
     system:
       "You summarize real business meeting transcripts accurately and conservatively. Never invent facts, names, or commitments that aren't in the transcript. If something is unclear, say so rather than guessing.",
     tools: [SUMMARY_TOOL],
@@ -159,7 +162,31 @@ export async function summarizeMeeting(
     throw new Error("Model did not return a structured summary.");
   }
 
-  return toolUse.input as MeetingSummaryResult;
+  if (message.stop_reason === "max_tokens") {
+    console.warn("[summarize] summary hit max_tokens — using what came back");
+  }
+  return normalizeSummary(toolUse.input);
+}
+
+// A reply cut short, or one missing a field, still makes a usable summary
+// instead of crashing whatever reads it.
+function normalizeSummary(raw: unknown): MeetingSummaryResult {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof MeetingSummaryResult, unknown>>;
+  const list = <T,>(v: unknown, ok: (x: unknown) => boolean): T[] => (Array.isArray(v) ? (v.filter(ok) as T[]) : []);
+  const isObj = (x: unknown) => Boolean(x) && typeof x === "object";
+  return {
+    suggestedTitle: typeof r.suggestedTitle === "string" ? r.suggestedTitle : "",
+    overview: typeof r.overview === "string" && r.overview.trim() ? r.overview : "Summary unavailable — see the transcript.",
+    keyPoints: list<string>(r.keyPoints, (x) => typeof x === "string"),
+    actionItems: list<MeetingSummaryResult["actionItems"][number]>(
+      r.actionItems,
+      (x) => isObj(x) && typeof (x as { text?: unknown }).text === "string"
+    ).map((a) => ({ text: a.text, owner: typeof a.owner === "string" ? a.owner : null })),
+    speakers: list<SpeakerFinding>(r.speakers, (x) => isObj(x) && typeof (x as { speakerLabel?: unknown }).speakerLabel === "string").map(
+      (sp) => ({ speakerLabel: sp.speakerLabel, inferredName: typeof sp.inferredName === "string" ? sp.inferredName : null, note: typeof sp.note === "string" ? sp.note : "" })
+    ),
+    dealSignals: list<DealSignal>(r.dealSignals, isObj),
+  };
 }
 
 const MEMORY_TOOL = {
