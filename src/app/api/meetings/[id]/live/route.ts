@@ -223,7 +223,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     isDesktop: Boolean(meeting.recallRecordingId),
     // Stop was pressed on the website for this desktop recording — the
     // desktop app stops when it sees this.
-    stopRequested: isLive && Boolean(meeting.stopRequestedAt),
+    // Still true after the website has moved the meeting on, until its
+    // recording has arrived.
+    stopRequested:
+      Boolean(meeting.stopRequestedAt) && !meeting.audioStoragePath && (isLive || meeting.status === "uploaded"),
     segments: segments.map((s) => ({
       id: s.id,
       speakerName: s.speakerName,

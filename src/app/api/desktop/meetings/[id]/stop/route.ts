@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { authenticateBearer } from "@/lib/apiToken";
 
 // Called by the desktop app right after it tells the local Recall SDK
@@ -46,5 +46,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ ok: true, meeting: updated });
   }
 
-  return NextResponse.json({ ok: true, meeting });
+  // Stopped in the app (its Stop button, or the call ended): show it as
+  // over on the website straight away instead of "Recording…" until the
+  // recording finishes uploading. stopRequestedAt marks it as waiting for
+  // that recording — the webhook picks it up when it lands, and if it
+  // never does the meeting is written up from its live transcript
+  // (stuckMeetings.ts).
+  const [updated] = await db
+    .update(meetings)
+    .set({ status: "uploaded", stopRequestedAt: meeting.stopRequestedAt ?? new Date(), updatedAt: new Date() })
+    .where(and(eq(meetings.id, id), inArray(meetings.status, ["joining", "recording"])))
+    .returning();
+  return NextResponse.json({ ok: true, meeting: updated ?? meeting });
 }

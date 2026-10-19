@@ -79,20 +79,20 @@ export async function POST(req: NextRequest) {
       console.error(`[recall webhook] No meeting found for recording ${recordingId}`);
       return NextResponse.json({ ok: true, warning: "unknown recording id" });
     }
-    // Already has its recording, or is being written up right now.
-    if (meeting.audioStoragePath || ["uploaded", "transcribing", "summarizing"].includes(meeting.status)) {
+    // Already has its recording.
+    if (meeting.audioStoragePath) {
       return NextResponse.json({ ok: true, ignored: true });
     }
-    // Otherwise take it — even when the meeting was already finished
-    // from its live transcript (Stop pressed with the app closed) or
-    // failed: the real recording makes the better write-up.
+    // Otherwise take it — even when the meeting is being (or was already)
+    // written up from its live transcript, or failed: the real recording
+    // makes the better write-up.
     try {
       if (await fetchMissingRecording(meeting)) {
         await db
           .update(meetings)
           .set({ status: "uploaded", errorMessage: null, updatedAt: new Date() })
           .where(eq(meetings.id, meeting.id));
-        void processMeeting(meeting.id);
+        void processMeeting(meeting.id, { rerunIfBusy: true });
       }
     } catch (err) {
       console.error(`[recall webhook] Failed to fetch desktop recording ${recordingId}:`, err);
