@@ -3,6 +3,7 @@ import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
+import { isSelfSpeaker, type CallIdentity } from "@/lib/callIdentity";
 import { deals, dealMessages, meetingParticipants, meetings, summaries, transcripts, userStyleProfiles, users } from "@/db/schema";
 
 // Same model as the other batch/quality-sensitive features (summarize,
@@ -33,14 +34,22 @@ const MAX_SPOKEN_LINES = 60;
 const MAX_COMMITMENTS = 30;
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
+// Profiles built before the richer format (how they'd answer common
+// questions, in their own phrases) are rebuilt on next use.
+const FORMAT_SINCE = Date.parse("2026-10-19T20:00:00Z");
+
 export function isStyleProfileStale(updatedAt: Date | null | undefined): boolean {
-  if (!updatedAt) return true;
+  if (!updatedAt || updatedAt.getTime() < FORMAT_SINCE) return true;
   return Date.now() - updatedAt.getTime() > STALE_AFTER_MS;
 }
 
 async function gatherSourceMaterial(userId: string) {
-  const [me] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId));
+  const [me] = await db
+    .select({ name: users.name, email: users.email, callNames: users.callNames })
+    .from(users)
+    .where(eq(users.id, userId));
   const myName = me?.name?.trim() || null;
+  const identity: CallIdentity = { name: me?.name ?? null, email: me?.email ?? null, callNames: me?.callNames ?? null };
 
   const dealRows = await db
     .select({ name: deals.name, notes: deals.notes, decisionBoundaries: deals.decisionBoundaries })
@@ -58,13 +67,15 @@ async function gatherSourceMaterial(userId: string) {
     .orderBy(desc(dealMessages.createdAt))
     .limit(MAX_MESSAGES);
 
-  // Their own words on calls: only lines from a speaker whose resolved name
-  // is exactly this person's full name (speaker names are matched or fixed
-  // by hand on the meeting page), never a guess from a bare "Speaker A".
-  // And what they took on themselves: action items assigned to them.
+  // Their own words on calls: lines from a speaker who is this person —
+  // by the name the meeting page resolved for them, or the name the call
+  // itself showed (live transcripts carry it; see callIdentity.ts, which
+  // also knows the names they've marked "That's me") — never a guess from
+  // a bare "Speaker A". And what they took on themselves: action items
+  // assigned to them.
   const spokenLines: string[] = [];
   const commitments: string[] = [];
-  if (myName && myName.includes(" ")) {
+  if (myName || identity.callNames?.length) {
     const calls = await db
       .select({ id: meetings.id, title: meetings.title, utterances: transcripts.utterances, actionItems: summaries.actionItems })
       .from(meetings)
@@ -80,18 +91,19 @@ async function gatherSourceMaterial(userId: string) {
           .from(meetingParticipants)
           .where(inArray(meetingParticipants.meetingId, calls.map((c) => c.id)))
       : [];
-    const target = myName.toLowerCase();
-    const mine = new Set(
-      speakers.filter((s) => s.displayName?.replace(/\s*\(you\)\s*$/i, "").trim().toLowerCase() === target).map((s) => `${s.meetingId}:${s.speakerLabel}`)
-    );
+    const isMe = (name: string | null | undefined) =>
+      Boolean(name) && isSelfSpeaker(name!.replace(/\s*\(you\)\s*$/i, ""), identity);
+    const mine = new Set(speakers.filter((s) => isMe(s.displayName)).map((s) => `${s.meetingId}:${s.speakerLabel}`));
     for (const c of calls) {
       for (const u of c.utterances ?? []) {
         if (spokenLines.length >= MAX_SPOKEN_LINES) break;
-        if (mine.has(`${c.id}:${u.speakerLabel}`) && u.text.length >= 40) spokenLines.push(`(${c.title}) ${u.text}`);
+        if ((mine.has(`${c.id}:${u.speakerLabel}`) || isMe(u.speakerLabel)) && u.text.length >= 40) {
+          spokenLines.push(`(${c.title}) ${u.text}`);
+        }
       }
       for (const a of c.actionItems ?? []) {
         if (commitments.length >= MAX_COMMITMENTS) break;
-        if (a.owner?.trim().toLowerCase() === target) commitments.push(`(${c.title}) ${a.text}`);
+        if (isMe(a.owner)) commitments.push(`(${c.title}) ${a.text}`);
       }
     }
   }
@@ -109,7 +121,7 @@ const STYLE_TOOL = {
       profile: {
         type: "string",
         description:
-          "3-6 sentences, written in third person, describing how this specific person tends to negotiate, what they hold firm on vs. stay flexible on, how they make decisions, how they typically handle common moments (price pushback, delays, a new stakeholder, an objection), and their communication tone — grounded ONLY in the material given. Never invent a trait or preference that isn't evidenced. If the material is thin, say less rather than generalize.",
+          "Written in third person, up to about 200 words, so that someone covering a call for them (or Anchor suggesting what to say) can answer the way they would: how they negotiate, what they hold firm on vs. stay flexible on, how they decide; how they typically answer common moments (price pushback, discount requests, delays, a new stakeholder, an objection, a question about the product) — quoting short phrases they actually use where the material has them; and their tone (formal or casual, brief or detailed, how they open and close). Grounded ONLY in the material given. Never invent a trait, phrase or preference that isn't evidenced. If the material is thin, say less rather than generalize.",
       },
     },
     required: ["profile"],
@@ -143,7 +155,7 @@ export async function buildStyleProfile(
 
   const message = await createWithForcedTool(client(), {
     model: MODEL,
-    max_tokens: 600,
+    max_tokens: 1200,
     system:
       "You study a salesperson's own written material — never what other people said about them — to describe how they operate. Be specific and grounded only in what's given. Never invent a trait, preference, or habit that isn't evidenced in the material.",
     tools: [STYLE_TOOL],

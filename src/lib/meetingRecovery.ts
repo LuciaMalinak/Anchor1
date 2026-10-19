@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { meetings, transcripts } from "@/db/schema";
 import { downloadBotAudio, downloadRecordingAudio } from "@/lib/recall";
 import { saveMeetingAudio } from "@/lib/storage";
-import { processMeeting, whileFetchingAudio } from "@/lib/processMeeting";
+import { goodLiveTranscript, processMeeting, whileFetchingAudio } from "@/lib/processMeeting";
 
 type MeetingRow = typeof meetings.$inferSelect;
 
@@ -31,7 +31,11 @@ async function fetchRecording(meeting: MeetingRow): Promise<boolean> {
   if (!audio?.length) return false;
   const storagePath = await saveMeetingAudio(meeting.id, fileName, audio);
   await db.update(meetings).set({ audioFileName: fileName, audioStoragePath: storagePath, updatedAt: new Date() }).where(eq(meetings.id, meeting.id));
-  await db.delete(transcripts).where(and(eq(transcripts.meetingId, meeting.id), eq(transcripts.provider, "live")));
+  // A good live transcript (named speakers, most of the call) stays —
+  // the meeting is already written up from it.
+  if (!(await goodLiveTranscript(meeting.id))) {
+    await db.delete(transcripts).where(and(eq(transcripts.meetingId, meeting.id), eq(transcripts.provider, "live")));
+  }
   return true;
 }
 

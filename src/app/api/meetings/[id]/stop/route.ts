@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, deals } from "@/db/schema";
 import { and, eq, or } from "drizzle-orm";
-import { processMeeting } from "@/lib/processMeeting";
+import { goodLiveTranscript, processMeeting } from "@/lib/processMeeting";
 import { canAccessDeal } from "@/lib/dealAccess";
 import { leaveCall, cancelBot } from "@/lib/recall";
 
@@ -73,6 +73,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         .update(meetings)
         .set({ status: "uploaded", stopRequestedAt: new Date(), updatedAt: new Date() })
         .where(eq(meetings.id, id));
+      // Most of the call came through live: write it up now rather than
+      // wait for the recording.
+      if (await goodLiveTranscript(id)) void processMeeting(id);
       return NextResponse.json({ ok: true, desktop: true });
     }
     // An in-person recording. When the browser tab holding its audio is

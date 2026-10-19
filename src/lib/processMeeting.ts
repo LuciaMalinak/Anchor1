@@ -127,10 +127,19 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
       .select()
       .from(transcripts)
       .where(eq(transcripts.meetingId, meetingId));
+    const liveFirst = existingTranscript?.utterances?.length ? null : await goodLiveTranscript(meetingId);
     if (existingTranscript?.utterances?.length) {
       fullText = existingTranscript.fullText;
       utterances = existingTranscript.utterances;
       provider = existingTranscript.provider;
+    } else if (liveFirst) {
+      // A bot or desktop call already has a transcript, with real speaker
+      // names, from the call itself — write it up from that straight away
+      // instead of waiting minutes for the recording to upload and be
+      // transcribed all over again (and paying for it twice).
+      utterances = liveFirst;
+      fullText = utterances.map((u) => u.text).join(" ");
+      provider = "live";
     } else if (meeting.audioStoragePath) {
       const audioBuffer = await readStoredFile(meeting.audioStoragePath);
       if (!audioBuffer) {
@@ -490,6 +499,19 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
       })
       .where(eq(meetings.id, meetingId));
   }
+}
+
+// Enough of the call came through live, with speaker names (bot and
+// desktop calls have them; the in-person mic doesn't, so those still go
+// through full transcription, which works out who's speaking), to write
+// the meeting up from it. Null otherwise.
+const LIVE_MIN_LINES = 10;
+const LIVE_MIN_WORDS = 150;
+export async function goodLiveTranscript(meetingId: string): Promise<Utterance[] | null> {
+  const utterances = await liveTranscriptUtterances(meetingId);
+  const words = utterances.reduce((n, u) => n + u.text.split(/\s+/).length, 0);
+  const named = utterances.some((u) => u.speakerLabel !== "Speaker");
+  return utterances.length >= LIVE_MIN_LINES && words >= LIVE_MIN_WORDS && named ? utterances : null;
 }
 
 // Builds transcript utterances from the live transcript lines captured

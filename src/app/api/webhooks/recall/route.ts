@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { fatalBotMessage } from "@/lib/recall";
-import { processMeeting } from "@/lib/processMeeting";
+import { processMeeting, goodLiveTranscript } from "@/lib/processMeeting";
 import { ingestBotRecording } from "@/lib/botReconcile";
 import { fetchMissingRecording } from "@/lib/meetingRecovery";
 import { RECALL_WEBHOOK_SECRET } from "@/lib/recallWebhookSecret";
@@ -87,7 +87,11 @@ export async function POST(req: NextRequest) {
     // written up from its live transcript, or failed: the real recording
     // makes the better write-up.
     try {
-      if (await fetchMissingRecording(meeting)) {
+      // Already written up (or being written up) from a good live
+      // transcript: the recording is kept for playback, nothing to redo.
+      const writtenUpLive = async () =>
+        !["joining", "recording"].includes(meeting.status) && Boolean(await goodLiveTranscript(meeting.id));
+      if ((await fetchMissingRecording(meeting)) && !(await writtenUpLive())) {
         await db
           .update(meetings)
           .set({ status: "uploaded", errorMessage: null, updatedAt: new Date() })
