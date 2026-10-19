@@ -68,14 +68,22 @@ export async function whileFetchingAudio<T>(meetingId: string, fn: () => Promise
   }
 }
 
-export async function processMeeting(meetingId: string): Promise<void> {
-  if (running.has(meetingId)) return;
+// rerunIfBusy: if it's being written up right now (e.g. from the live
+// transcript), run it again once that finishes — for when the real
+// recording has just arrived and makes a better write-up.
+const rerun = new Set<string>();
+export async function processMeeting(meetingId: string, opts: { rerunIfBusy?: boolean } = {}): Promise<void> {
+  if (running.has(meetingId)) {
+    if (opts.rerunIfBusy) rerun.add(meetingId);
+    return;
+  }
   running.add(meetingId);
   try {
     await processMeetingNow(meetingId);
   } finally {
     running.delete(meetingId);
   }
+  if (rerun.delete(meetingId)) await processMeeting(meetingId);
 }
 
 async function processMeetingNow(meetingId: string): Promise<void> {

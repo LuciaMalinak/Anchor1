@@ -790,6 +790,19 @@ async function initSdk() {
     // recording webhook) isn't affected either way.
     const windowId = evt.window.id;
     const endedRecording = activeRecordings.get(windowId);
+    // The call can end without Stop being pressed (the meeting window
+    // closed, everyone left): tell Anchor either way, so the website stops
+    // showing it as live straight away. Harmless after a Stop, which
+    // already told it.
+    if (endedRecording) {
+      try {
+        getApi()
+          .stopMeeting(endedRecording.meetingId)
+          .catch((err) => log(`Couldn't tell Anchor the call ended: ${err instanceof Error ? err.message : err}`));
+      } catch {
+        // No token saved — nothing to tell.
+      }
+    }
     // Stopped some other way (the Stop button): nothing left for the
     // browser-call fallback to stop when the mic is released.
     if (windowId === browserCallWindowId) browserCallWindowId = null;

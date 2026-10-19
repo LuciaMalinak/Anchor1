@@ -63,7 +63,7 @@ export async function recoverStuckMeetings(): Promise<{ resumed: number; ended: 
 
   // 1. Write-ups that stopped part-way.
   const processing = await db
-    .select({ id: meetings.id, status: meetings.status, updatedAt: meetings.updatedAt, createdAt: meetings.createdAt })
+    .select()
     .from(meetings)
     .where(and(inArray(meetings.status, [...PROCESSING]), lt(meetings.updatedAt, new Date(now - STUCK_AFTER_MS.uploaded))));
   for (const m of processing) {
@@ -87,6 +87,12 @@ export async function recoverStuckMeetings(): Promise<{ resumed: number; ended: 
       .where(stillStuck(m.id, m.status, now))
       .returning({ id: meetings.id });
     if (!claimed) continue;
+    // Stopped from the desktop app or website and still waiting for the
+    // app's recording: use it if Recall has it, otherwise the write-up
+    // falls back to the live transcript.
+    if (m.status === "uploaded" && m.recallRecordingId && !m.audioStoragePath) {
+      await fetchMissingRecording(m).catch((err) => console.error(`[stuckMeetings] no recording for ${m.id} yet:`, err));
+    }
     console.log(`[stuckMeetings] resuming the write-up of ${m.id} (was "${m.status}")`);
     void processMeeting(m.id);
     resumed++;

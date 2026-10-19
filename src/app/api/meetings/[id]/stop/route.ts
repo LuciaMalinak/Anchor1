@@ -65,10 +65,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (meeting.recallRecordingId) {
       // Anchor Desktop is recording this call: ask it to stop. The app
       // sees this on its next live poll (about a second), stops, and
-      // uploads the recording as usual. If it doesn't (closed, asleep,
-      // offline), the meeting is wrapped up from its live transcript a
-      // few minutes later instead of staying live (botReconcile.ts).
-      await db.update(meetings).set({ stopRequestedAt: new Date(), updatedAt: new Date() }).where(eq(meetings.id, id));
+      // uploads the recording as usual. The website shows it as over
+      // right away. If the recording never arrives (app closed, asleep,
+      // offline), the meeting is written up from its live transcript
+      // instead (stuckMeetings.ts).
+      await db
+        .update(meetings)
+        .set({ status: "uploaded", stopRequestedAt: new Date(), updatedAt: new Date() })
+        .where(eq(meetings.id, id));
       return NextResponse.json({ ok: true, desktop: true });
     }
     // An in-person recording. When the browser tab holding its audio is
