@@ -1,0 +1,88 @@
+# Checks the live site from outside: that it's up, its main pages and
+# public endpoints answer, the database is reachable (through the hourly
+# job's endpoint), desktop downloads and updates are served, and that it
+# stays fast and error-free with many people using it at once. Run it by
+# hand (Actions -> Site check -> Run workflow); it also runs once a day.
+#
+# Uses the CRON_SECRET repository secret (same as Morning briefs) for the
+# database check; without it that one check is skipped.
+name: Site check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SITE: ${{ vars.ANCHOR_URL || 'https://anchor-be6o.onrender.com' }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Wake the site
+        run: |
+          start=$(date +%s)
+          curl -sS -o /dev/null --max-time 180 --retry 5 --retry-delay 10 --retry-all-errors "$SITE/api/version"
+          echo "Site answered after $(( $(date +%s) - start ))s" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Pages and endpoints
+        run: |
+          fail=0
+          check() { # path, expected status (regex)
+            code=$(curl -sS -o /tmp/body -w '%{http_code} %{time_total}' --max-time 60 "$SITE$1" || echo "000 0")
+            status=${code% *}; t=${code#* }
+            if [[ "$status" =~ ^($2)$ ]]; then mark="ok"; else mark="FAIL"; fail=1; fi
+            echo "| $mark | \`$1\` | $status | ${t}s |" >> "$GITHUB_STEP_SUMMARY"
+            echo "$mark $1 -> $status (${t}s)"
+          }
+          echo "### Pages and endpoints" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | Path | Status | Time |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          check / "200"
+          check /sign-in "200"
+          check /sign-up "200"
+          check /pricing "200"
+          check /api/version "200"
+          check /api/desktop/recall-region "200"
+          check /api/download/desktop-app/mac "30[1278]"
+          check /api/download/desktop-app/win "30[1278]"
+          check /api/desktop-app/updates/latest.yml "200"
+          check /api/desktop-app/updates/latest-mac.yml "200"
+          # Signed-out requests are refused, not crashing.
+          check /api/meetings "401"
+          check /dashboard "200|30[1278]"
+          exit $fail
+
+      - name: Database and background job
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "CRON_SECRET not set — skipped" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          body=$(curl -sS --max-time 300 -X POST -H "x-cron-key: $CRON_SECRET" "$SITE/api/cron/morning-brief")
+          echo "### Hourly job" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$body\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "$body"
+          echo "$body" | grep -q '"ok":true'
+
+      - name: Many people at once
+        run: |
+          # 30 simultaneous visitors, three rounds, a mix of pages and API.
+          paths=(/ /sign-in /api/version /api/desktop/recall-region /pricing /api/meetings)
+          : > /tmp/results
+          for round in 1 2 3; do
+            for i in $(seq 1 30); do
+              p=${paths[$(( (i + round) % ${#paths[@]} ))]}
+              ( curl -sS -o /dev/null -w "%{http_code} %{time_total}\n" --max-time 60 "$SITE$p" || echo "000 60" ) >> /tmp/results &
+            done
+            wait
+          done
+          total=$(wc -l < /tmp/results)
+          errors=$(awk '$1 ~ /^(5|0)/' /tmp/results | wc -l)
+          times=$(awk '{print $2}' /tmp/results | sort -n)
+          p50=$(echo "$times" | awk '{a[NR]=$1} END{print a[int(NR*0.5)]}')
+          p95=$(echo "$times" | awk '{a[NR]=$1} END{print a[int(NR*0.95)]}')
+          {
+            echo "### Many people at once"
+            echo "$total requests (30 at a time): **$errors errors**, median ${p50}s, 95% within ${p95}s"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$errors" -eq 0 ]
