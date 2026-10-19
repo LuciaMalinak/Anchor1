@@ -10,6 +10,7 @@ import { authenticateBearer } from "@/lib/apiToken";
 import { reconcileBotMeeting } from "@/lib/botReconcile";
 import { withAiUser } from "@/lib/aiUsage";
 import { isSelfSpeaker } from "@/lib/callIdentity";
+import { saveToHistory } from "@/lib/liveQuestion";
 
 // When live coaching (nudges + checklist) regenerates. It used to run on
 // a flat 8s timer whether or not anyone had said anything, so a new
@@ -24,22 +25,30 @@ import { isSelfSpeaker } from "@/lib/callIdentity";
 // about 80% of what a member's AI usage cost. Nudges don't need to change
 // every second (questions have their own instant path), so refresh at
 // most every 8s while people talk, and every 30s in silence.
-const MIN_REFRESH_MS = 8_000;
-const IDLE_REFRESH_MS = 30_000;
+// Live calls now run on Haiku 5.5, about a tenth of Haiku 4.5's price, so
+// suggestions can keep up twice as quickly for less than before.
+const MIN_REFRESH_MS = 4_000;
+const IDLE_REFRESH_MS = 20_000;
 // The checklist is the longest part of each reply and only changes when a
 // topic gets covered, so it's only rewritten this often; refreshes in
 // between keep the current one.
-const CHECKLIST_REFRESH_MS = 45_000;
+const CHECKLIST_REFRESH_MS = 30_000;
 const lastChecklistAt = new Map<string, number>();
 // How much of the transcript (from the end) to hand the model each time,
 // in characters — enough context without an ever-growing prompt as a
 // long call goes on.
 const TRANSCRIPT_WINDOW_CHARS = 4_000;
-// How long a question from the instant path is protected from being
-// cleared by a coaching refresh that doesn't see it as open — long
-// enough that a refresh racing the question doesn't make it flicker
-// away, short enough that it does go once the rep has answered it.
-const FAST_QUESTION_HOLD_MS = 15_000;
+// How long an answered question stays up before a coaching refresh that
+// no longer sees it as open may clear it. Was 15s, which often took the
+// answer away before the rep had finished reading it out. A newer
+// question still replaces it straight away, and every answer stays in
+// the call's question list either way.
+const QUESTION_HOLD_MS = 120_000;
+// Suggestions used to be swapped wholesale on every refresh (every ~8s
+// while people talk), so one could vanish mid-read. Now each stays at
+// least this long, with new ones added on top, up to MAX_NUDGES.
+const NUDGE_HOLD_MS = 90_000;
+const MAX_NUDGES = 4;
 // Why the most recent coaching refresh failed, per meeting — only the
 // request that wins the refresh lock actually sees the error, so it's
 // kept here for every other poll (and tab) to report until a refresh
@@ -248,6 +257,35 @@ async function speakersOnCall(ownerId: string, segments: { speakerName: string |
   return names.map((name) => ({ name, isMe: owner ? isSelfSpeaker(name, owner) : false }));
 }
 
+// Keeps suggestions still worth reading on screen: the refresh's new
+// ones first, then earlier ones shown less than NUDGE_HOLD_MS ago that it
+// didn't repeat. nudgeAt (parallel to nudges) is when each first showed.
+function mergeNudges(
+  fresh: string[],
+  prior: { nudges?: string[]; nudgeAt?: number[] } | null | undefined,
+  now: number
+) {
+  const key = (n: string) => n.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const priorAt = new Map<string, number>();
+  (prior?.nudges ?? []).forEach((n, i) => priorAt.set(key(n), prior?.nudgeAt?.[i] ?? now));
+  const out: { text: string; at: number }[] = [];
+  const seen = new Set<string>();
+  for (const n of fresh) {
+    if (seen.has(key(n))) continue;
+    seen.add(key(n));
+    out.push({ text: n, at: priorAt.get(key(n)) ?? now });
+  }
+  (prior?.nudges ?? []).forEach((n, i) => {
+    const at = prior?.nudgeAt?.[i] ?? now;
+    if (!seen.has(key(n)) && now - at < NUDGE_HOLD_MS) {
+      seen.add(key(n));
+      out.push({ text: n, at });
+    }
+  });
+  const kept = out.slice(0, MAX_NUDGES);
+  return { nudges: kept.map((n) => n.text), nudgeAt: kept.map((n) => n.at) };
+}
+
 // Writes a coaching refresh without clobbering a question the instant
 // path (liveQuestion.ts) put up meanwhile. Re-reads the current row
 // first since that path writes to the same column independently.
@@ -256,18 +294,23 @@ async function saveCoaching(id: string, coaching: LiveCoaching, startedAt: numbe
     .select({ liveSuggestions: meetings.liveSuggestions })
     .from(meetings)
     .where(eq(meetings.id, id));
+  const now = Date.now();
   const existing = current?.liveSuggestions?.liveQuestion ?? null;
-  const fastQuestionIsFresh =
-    existing?.askedAt != null &&
-    (existing.askedAt > startedAt || Date.now() - existing.askedAt < FAST_QUESTION_HOLD_MS);
+  const merged = { ...coaching, ...mergeNudges(coaching.nudges, current?.liveSuggestions, now) };
 
-  let liveQuestion = coaching.liveQuestion;
-  if (fastQuestionIsFresh) {
-    // Asked after this refresh started, or too recently to judge — keep it.
-    liveQuestion = existing;
-  } else if (coaching.liveQuestion && existing?.suggestedAnswer) {
-    // Still an open question — keep the answer already on screen rather
-    // than swapping in a reworded one mid-read.
+  // An answer on screen stays until a newer question replaces it, or it's
+  // been up QUESTION_HOLD_MS and coaching no longer sees anything open.
+  // One coaching itself spotted (no askedAt yet) is stamped now so the
+  // same rule applies to it.
+  const existingIsFresh =
+    existing != null &&
+    (existing.askedAt == null ? false : existing.askedAt > startedAt || now - existing.askedAt < QUESTION_HOLD_MS);
+  let liveQuestion: typeof existing = coaching.liveQuestion
+    ? { ...coaching.liveQuestion, askedAt: coaching.liveQuestion.askedAt ?? now }
+    : null;
+  if (existing && (existingIsFresh || (liveQuestion && existing.suggestedAnswer))) {
+    // Still within its hold, or still an open question — keep the answer
+    // already on screen rather than swapping in a reworded one mid-read.
     liveQuestion = existing;
   }
 
@@ -275,7 +318,7 @@ async function saveCoaching(id: string, coaching: LiveCoaching, startedAt: numbe
     // Keep whatever question is in the row at write time, not the copy
     // read above — the instant path may have streamed more of its answer
     // (or finished it) in between.
-    const { liveQuestion: _ignored, ...rest } = coaching;
+    const { liveQuestion: _ignored, ...rest } = merged;
     void _ignored;
     await db
       .update(meetings)
@@ -288,6 +331,15 @@ async function saveCoaching(id: string, coaching: LiveCoaching, startedAt: numbe
 
   await db
     .update(meetings)
-    .set({ liveSuggestions: { ...coaching, liveQuestion } })
+    .set({ liveSuggestions: { ...merged, liveQuestion } })
     .where(eq(meetings.id, id));
+  // A question only coaching caught goes in the call's question list
+  // too, so its answer is still there once a newer one replaces it.
+  if (liveQuestion && liveQuestion.askedAt === now) {
+    await saveToHistory(
+      id,
+      { question: liveQuestion.question, answer: liveQuestion.suggestedAnswer, askedAt: now, askedBy: null, links: [], caution: liveQuestion.caution ?? null },
+      null
+    );
+  }
 }

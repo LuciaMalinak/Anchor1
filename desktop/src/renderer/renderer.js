@@ -98,8 +98,20 @@ function renderAnswersHtml(s) {
         ? `<div class="caution"><span class="caution-badge">${caution.label}</span>${escapeHtml(q.caution.reason || "")}</div>`
         : ""
     }<div class="answer-text">${q.suggestedAnswer ? escapeHtml(q.suggestedAnswer) : '<span class="hint">Writing an answer…</span>'}</div></div>`;
-  } else {
+  } else if (!(s && s.earlierAnswers && s.earlierAnswers.length)) {
     html += '<div class="answer-empty">When they ask something, the answer shows up here.</div>';
+  }
+
+  // The last couple of answers stay up, so a new question never takes
+  // one away before it's been read out.
+  const earlier = (s && s.earlierAnswers) || [];
+  if (earlier.length) {
+    html += `<div class="earlier-answers"><p class="label">Just answered</p>${earlier
+      .map((e) => {
+        const dot = e.caution && CAUTION[e.caution.level] ? `<span class="dot ${CAUTION[e.caution.level].cls}"></span>` : "";
+        return `<div class="earlier"><div class="earlier-q">${dot}“${escapeHtml(e.question)}”</div><div class="earlier-a">${escapeHtml(e.answer)}</div></div>`;
+      })
+      .join("")}</div>`;
   }
 
   const limits = (s && s.offLimits) || [];

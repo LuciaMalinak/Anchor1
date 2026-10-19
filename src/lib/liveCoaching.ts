@@ -11,10 +11,25 @@ import type { LiveCaution } from "@/db/schema";
 // coaching inheriting a bigger model from it made suggestions and
 // question answers lag seconds behind the call. ANTHROPIC_LIVE_MODEL
 // overrides just the live features if that trade-off ever needs moving.
-export const DEFAULT_LIVE_MODEL = "claude-haiku-4-5-20251001";
+// Haiku 5.5 is both quicker and sharper at spotting and answering
+// questions than Haiku 4.5; it thinks before answering by default, which
+// live calls can't wait for, so thinking is switched off (LIVE_THINKING).
+// If it's ever unavailable (or rejects a request), live features drop
+// back to Haiku 4.5 rather than going dark mid-call.
+export const DEFAULT_LIVE_MODEL = "claude-haiku-5-5";
+export const FALLBACK_LIVE_MODEL = "claude-haiku-4-5-20251001";
 export const LIVE_MODEL = process.env.ANTHROPIC_LIVE_MODEL || DEFAULT_LIVE_MODEL;
-const DEFAULT_MODEL = DEFAULT_LIVE_MODEL;
+export const LIVE_THINKING = { type: "disabled" } as const;
 const MODEL = LIVE_MODEL;
+
+// Whether a failed live request is worth retrying once on the fallback
+// model: the model doesn't exist for this key, or rejected the request.
+export function shouldFallBackLive(err: unknown, model: string) {
+  return (
+    model !== FALLBACK_LIVE_MODEL &&
+    (err instanceof Anthropic.NotFoundError || err instanceof Anthropic.BadRequestError)
+  );
+}
 // Was 512 — too tight for 1-3 nudges + a full checklist + a suggested
 // answer, and newer models (which think by default when ANTHROPIC_MODEL
 // points at one) spend part of it reasoning first, so the tool call got
@@ -139,6 +154,7 @@ function requestCoaching(system: SystemPrompt, content: string, model: string = 
   return createWithForcedTool(liveClient(), {
     model,
     max_tokens: MAX_TOKENS,
+    thinking: LIVE_THINKING,
     system,
     tools: [LIVE_COACHING_TOOL],
     tool_choice: { type: "tool", name: LIVE_COACHING_TOOL.name },
@@ -157,9 +173,9 @@ async function requestCoachingWithFallbacks(system: SystemPrompt, content: strin
   try {
     return await requestCoaching(system, content);
   } catch (err) {
-    if (err instanceof Anthropic.NotFoundError && MODEL !== DEFAULT_MODEL) {
-      console.warn(`[live coaching] model ${MODEL} not found, falling back to ${DEFAULT_MODEL}`);
-      return await requestCoaching(system, content, DEFAULT_MODEL);
+    if (shouldFallBackLive(err, MODEL)) {
+      console.warn(`[live coaching] ${MODEL} failed, falling back to ${FALLBACK_LIVE_MODEL}:`, err);
+      return await requestCoaching(system, content, FALLBACK_LIVE_MODEL);
     }
     throw err;
   }

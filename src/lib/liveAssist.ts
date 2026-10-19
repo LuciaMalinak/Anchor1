@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
-import { LIVE_MODEL } from "./liveCoaching";
+import { FALLBACK_LIVE_MODEL } from "./liveCoaching";
 
 // Same pattern as summarize.ts, but conversational rather than
 // tool-forced structured output: this is "Ask Anchor", including during
@@ -11,8 +11,10 @@ import { LIVE_MODEL } from "./liveCoaching";
 // which is set to a bigger, slower model for summaries and memory, so
 // every Ask Anchor answer quietly inherited that model's lag.
 // ANTHROPIC_ASK_MODEL overrides just Ask Anchor if that trade-off ever
-// needs to move the other way.
-const MODEL = process.env.ANTHROPIC_ASK_MODEL || LIVE_MODEL;
+// needs to move the other way. Stays on Haiku 4.5 while live calls move
+// to Haiku 5.5: Ask Anchor's multi-step tool and web-search rounds
+// haven't been checked against a model that thinks by default.
+const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_LIVE_MODEL || FALLBACK_LIVE_MODEL;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
