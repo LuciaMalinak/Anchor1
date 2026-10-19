@@ -43,6 +43,7 @@ export type AnsweredQuestion = {
   askedBy: string | null;
   links: LiveLink[];
   caution?: LiveCaution | null;
+  feedback?: "up" | "down";
 };
 
 // A speaker label on the call, and whether it's the person using Anchor.

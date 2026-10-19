@@ -23,6 +23,10 @@ import type { AdapterAccountType } from "next-auth/adapters";
 export type LiveQuestionRecord = {
   question: string;
   answer: string;
+  // How the person on the call rated the answer (thumbs up / down), and
+  // what they said it should have been — fed into answerPlaybook.
+  feedback?: "up" | "down";
+  correction?: string;
   askedAt: number;
   // The speaker label from the call, when it has them (desktop and bot
   // calls do; an in-person recording doesn't).
@@ -932,4 +936,31 @@ export const askLog = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   },
   (t) => [index("ask_log_meetingId_idx").on(t.meetingId, t.createdAt)]
+);
+
+// Answers Anchor has learned for questions clients ask — from how the
+// team actually answered them on past calls (learned after each call,
+// see answerPlaybook.ts) and from answers people approved or corrected
+// during a call or on the Playbook page ("taught"). Live question answers
+// use the closest ones. dealId null: applies to the whole team. Created
+// on deploy by startupMigrations.ts.
+export const answerPlaybook = pgTable(
+  "answer_playbook",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    teamId: uuid("teamId")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    dealId: uuid("dealId").references(() => deals.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    // "call": learned from what the team said on a call; "taught": a
+    // person approved, corrected or wrote it — trusted most.
+    source: text("source").$type<"call" | "taught">().notNull(),
+    meetingId: uuid("meetingId").references(() => meetings.id, { onDelete: "set null" }),
+    userId: uuid("userId").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("answer_playbook_teamId_idx").on(t.teamId, t.updatedAt)]
 );

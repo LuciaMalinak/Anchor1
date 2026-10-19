@@ -26,6 +26,7 @@ import { getOrCreateTeamId } from "./team";
 import { withRetry } from "./retry";
 import { summarizeDealFiles } from "./dealFilesContext";
 import { matchDealFromText } from "./dealMatch";
+import { learnFromCall } from "./answerPlaybook";
 
 // Every Nth memory update re-derives the summary from actual raw history
 // instead of just trusting the current (possibly drifted) summary text —
@@ -407,6 +408,10 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(meetings.id, meetingId));
+
+    // Anchor trains itself: keep how the team actually answered the
+    // client's questions on this call, for the next one (answerPlaybook.ts).
+    void learnFromCall(meetingId, utterances);
 
     // Deal-level memory — the same rolling-summary idea as contact
     // memory above, but for the deal as a whole. Best-effort: a failure
