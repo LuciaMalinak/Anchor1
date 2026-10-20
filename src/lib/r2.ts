@@ -7,6 +7,7 @@ import {
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { Readable } from "stream";
 
 // Cloudflare R2 is S3-compatible, so the regular AWS S3 SDK works against
 // it unchanged — just pointed at R2's endpoint instead of AWS's. This is
@@ -44,6 +45,20 @@ function bucket(): string {
 export async function r2Put(key: string, data: Buffer, contentType?: string): Promise<void> {
   await client().send(
     new PutObjectCommand({ Bucket: bucket(), Key: key, Body: data, ContentType: contentType })
+  );
+}
+
+// Streams a large file in without holding it in memory (a desktop call's
+// recording can be hundreds of MB). R2 needs the length up front.
+export async function r2PutStream(key: string, body: ReadableStream, contentLength: number, contentType?: string): Promise<void> {
+  await client().send(
+    new PutObjectCommand({
+      Bucket: bucket(),
+      Key: key,
+      Body: Readable.fromWeb(body as import("stream/web").ReadableStream),
+      ContentLength: contentLength,
+      ContentType: contentType,
+    })
   );
 }
 

@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   // Desktop-SDK (no-bot) recording finished uploading/processing. Kept as
   // a separate branch from the bot flow below since it looks the meeting
   // up by recallRecordingId instead of recallBotId, and downloads the
-  // audio via getRecording/downloadRecordingAudio instead of getBot. Any
+  // audio via getRecording/recordingMediaUrl instead of getBot. Any
   // event name is accepted here as long as it comes with a recording id
   // we recognize and no bot id — logging the raw payload either way so
   // the real event name can be confirmed off Render's logs the first

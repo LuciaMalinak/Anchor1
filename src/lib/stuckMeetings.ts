@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, lt, max } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, max } from "drizzle-orm";
 import { db } from "@/db";
 import { meetingLiveSegments, meetings } from "@/db/schema";
 import { isProcessing, processMeeting } from "@/lib/processMeeting";
@@ -41,6 +41,12 @@ export function noteLivePoll(meetingId: string) {
 }
 
 const PROCESSING = ["uploaded", "transcribing", "summarizing"] as const;
+// Recall keeps recordings about a week by default.
+const RECORDING_CATCH_UP_MS = 7 * 24 * 60 * 60_000;
+const RECORDINGS_PER_SWEEP = 2;
+// Tried this run of the server and Recall had nothing — not asked again
+// until a restart.
+const triedRecording = new Set<string>();
 
 // Still on the same step with no progress since the sweep looked — the
 // claim, so a second server (or sweep) that read the same row doesn't
@@ -98,7 +104,44 @@ export async function recoverStuckMeetings(): Promise<{ resumed: number; ended: 
     resumed++;
   }
 
-  // 2. Calls still shown as live.
+  // 2. Desktop recordings Anchor never got (it only looked for an audio
+  // file Recall doesn't make for them) — fetched now while Recall still
+  // has them, a couple per sweep. A meeting that failed for want of its
+  // recording is written up again; one already written up from its live
+  // transcript just gets the recording kept.
+  const missing = await db
+    .select()
+    .from(meetings)
+    .where(
+      and(
+        inArray(meetings.status, ["ready", "failed"]),
+        isNotNull(meetings.recallRecordingId),
+        isNull(meetings.audioStoragePath),
+        gt(meetings.createdAt, new Date(now - RECORDING_CATCH_UP_MS))
+      )
+    )
+    .orderBy(desc(meetings.createdAt))
+    .limit(20);
+  let fetched = 0;
+  for (const m of missing) {
+    if (fetched >= RECORDINGS_PER_SWEEP || triedRecording.has(m.id) || isProcessing(m.id)) continue;
+    triedRecording.add(m.id);
+    const got = await fetchMissingRecording(m).catch((err) => {
+      console.error(`[stuckMeetings] couldn't fetch the recording for ${m.id}:`, err);
+      return false;
+    });
+    if (!got) continue;
+    fetched++;
+    triedRecording.delete(m.id);
+    console.log(`[stuckMeetings] saved the missing recording for ${m.id}`);
+    if (m.status === "failed") {
+      await db.update(meetings).set({ status: "uploaded", errorMessage: null, updatedAt: new Date() }).where(eq(meetings.id, m.id));
+      void processMeeting(m.id);
+      resumed++;
+    }
+  }
+
+  // 3. Calls still shown as live.
   const live = await db
     .select()
     .from(meetings)

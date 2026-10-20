@@ -22,6 +22,7 @@ import {
   type MeetingSummaryResult,
 } from "./summarize";
 import { readStoredFile } from "./storage";
+import { isR2Configured, r2PresignedGetUrl } from "./r2";
 import { getOrCreateTeamId } from "./team";
 import { withRetry } from "./retry";
 import { summarizeDealFiles } from "./dealFilesContext";
@@ -142,12 +143,18 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
       fullText = utterances.map((u) => u.text).join(" ");
       provider = "live";
     } else if (meeting.audioStoragePath) {
-      const audioBuffer = await readStoredFile(meeting.audioStoragePath);
-      if (!audioBuffer) {
+      // Stored in R2: hand the transcription service a short-lived link
+      // to the file instead of loading it here — a desktop call's
+      // recording is a video, too big to hold in this server's memory.
+      const source: Buffer | string | null =
+        isR2Configured() && meeting.audioStoragePath.startsWith("meetings/")
+          ? await r2PresignedGetUrl(meeting.audioStoragePath, 6 * 60 * 60)
+          : await readStoredFile(meeting.audioStoragePath);
+      if (!source) {
         throw new Error("The audio file for this meeting is missing from storage.");
       }
       ({ fullText, utterances } = await withRetry(
-        () => transcribeAudioFile(audioBuffer),
+        () => transcribeAudioFile(source),
         { label: `transcribe ${meetingId}` }
       ));
       provider = "assemblyai";
