@@ -365,3 +365,35 @@ export async function downloadRecordingAudio(recordingId: string): Promise<Buffe
   }
   return Buffer.from(await audioRes.arrayBuffer());
 }
+
+// Support check (user-health): what Recall itself has for a desktop
+// recording Anchor never got the audio for — looked up both as a
+// recording and as an sdk_upload, since which id the app was given has
+// varied. Statuses and media names only.
+export async function inspectDesktopRecording(id: string) {
+  const look = async (path: string) => {
+    try {
+      const res = await fetch(`${BASE_URL}/${path}/${id}/`, { headers: authHeaders() });
+      if (!res.ok) return { http: res.status };
+      const body = (await res.json()) as Record<string, unknown> & {
+        status?: { code?: string };
+        status_changes?: { code?: string }[];
+        media_shortcuts?: Record<string, { status?: { code?: string }; data?: { download_url?: string } } | null>;
+        recording_id?: string | null;
+      };
+      const media = Object.fromEntries(
+        Object.entries(body.media_shortcuts ?? {}).map(([k, v]) => [k, v ? `${v.status?.code ?? "?"}${v.data?.download_url ? " (downloadable)" : ""}` : "none"])
+      );
+      return {
+        http: 200,
+        status: body.status?.code ?? body.status_changes?.at(-1)?.code ?? null,
+        media,
+        recordingId: body.recording_id ?? null,
+      };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+  const [asRecording, asSdkUpload] = await Promise.all([look("recording"), look("sdk_upload")]);
+  return { asRecording, asSdkUpload };
+}

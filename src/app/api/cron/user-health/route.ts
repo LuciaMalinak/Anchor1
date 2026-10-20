@@ -16,6 +16,7 @@ import {
   userStyleProfiles,
   users,
 } from "@/db/schema";
+import { inspectDesktopRecording } from "@/lib/recall";
 
 // A health check of one person's Anchor, for support: is their account,
 // desktop app, Google connection, morning brief and recent meetings all
@@ -88,6 +89,15 @@ export async function GET(req: NextRequest) {
     const provider = new Map(transcriptRows.map((t) => [t.id, t.provider]));
     const summarized = new Set(summaryRows.map((s) => s.id));
 
+    // What Recall has for desktop recordings Anchor never got audio for.
+    const recallChecks = new Map(
+      await Promise.all(
+        recent
+          .filter((m) => m.recallRecordingId && !m.audioStoragePath)
+          .slice(0, 3)
+          .map(async (m) => [m.id, await inspectDesktopRecording(m.recallRecordingId!)] as const)
+      )
+    );
     const meetingRows = recent.map((m) => {
       const age = now - m.updatedAt.getTime();
       const live = m.status === "joining" || m.status === "recording";
@@ -98,6 +108,7 @@ export async function GET(req: NextRequest) {
       if (m.status === "failed") problems.push(`failed: ${m.errorMessage ?? "no reason saved"}`);
       if (m.status === "ready" && !summarized.has(m.id)) problems.push("ready but no summary");
       if (m.status === "ready" && !m.dealId) problems.push("not on a deal");
+      if (m.recallRecordingId && !m.audioStoragePath && !live) problems.push("desktop recording never arrived");
       return {
         created: m.createdAt.toISOString().slice(0, 16),
         kind: m.recallBotId ? "bot" : m.recallRecordingId ? "desktop" : m.audioStoragePath ? "upload/mic" : "mic",
@@ -108,6 +119,7 @@ export async function GET(req: NextRequest) {
         transcript: provider.get(m.id) ?? null,
         audio: Boolean(m.audioStoragePath),
         feedback: m.callFeedback ? (m.callFeedback.skipped ? "skipped" : m.callFeedback.rating ?? "note") : null,
+        recall: recallChecks.get(m.id) ?? undefined,
         problems,
       };
     });
