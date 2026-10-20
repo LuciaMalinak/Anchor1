@@ -5,6 +5,7 @@ import { formatDocumentContext, MAX_SEARCH_TERMS, type DocumentContextItem } fro
 import { randomUUID } from "crypto";
 import type { ServerTool } from "@/lib/liveAssist";
 import { buildModelWorkbook, type ModelSpec } from "@/lib/spreadsheetModel";
+import { buildDeck, type DeckSpec } from "@/lib/presentationDeck";
 import { saveExport } from "@/lib/storage";
 
 // Live lookups Ask Anchor can run mid-answer for the person asking (see
@@ -73,6 +74,80 @@ Lay it out like a banker's model:
 - "Sources" sheet: every source used, with links.
 Cell positions are exact: rows[0] is Excel row 1 and column 0 is column A, so check every formula's references against where you put things. Use fmt (currency, percent, number, integer, multiple) on every number. After creating it, reply in a few lines: what the model covers, the 3–5 inputs that drive it and where each came from, what was assumed, and the download link exactly as the tool returned it. Don't quote calculated results you didn't work out yourself; point to the file for those.`;
 
+// Decks the same way: the deal's facts, then market data, then labelled
+// assumptions — written the way a banker builds a client deck.
+export const DECK_RULES = `When the person asks for a presentation, deck, slides, pitch, PowerPoint or board/client update, build it with create_presentation. Source the content exactly as for a model: this deal's own calls, emails and files first (search_drive / search_dropbox when connected), then market data from web pages you actually opened, then clearly labelled assumptions. Write it like an investment banker's client deck:
+- Every slide title is the takeaway as a full sentence ("Akoya can reach $1.2M ARR by 2028 with 3 hotels"), not a topic label ("Revenue").
+- One message per slide; 3-5 short bullets at most, each with a specific fact or number.
+- Usual flow: cover, executive summary (the answer up front), the situation / what we heard from the client, the numbers (a chart or metrics slide), options or recommendation, risks, next steps with owners and dates, sources.
+- Use a chart slide for any series of numbers and a metrics slide for 2-4 headline figures; tables only for comparisons.
+- Put each slide's sources in its source field (call and date, file name, website). Mark assumptions as assumptions.
+Afterwards reply in a few lines: what the deck covers, its main message, what was assumed, and the download link exactly as the tool returned it.`;
+
+function presentationTool(userId: string): ServerTool {
+  return {
+    tool: {
+      name: "create_presentation",
+      description:
+        "Create a PowerPoint (.pptx) deck for the person — a client or board presentation, pitch, deal review or update — with action titles, charts, tables and sources on every slide. Returns a download link to give them. Follow the deck rules in the system prompt.",
+      input_schema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Deck title for the cover." },
+          subtitle: { type: "string", description: "Cover subtitle, e.g. the client and date." },
+          slides: {
+            type: "array",
+            minItems: 1,
+            maxItems: 30,
+            items: {
+              type: "object",
+              properties: {
+                layout: { type: "string", enum: ["title", "section", "bullets", "two_column", "metrics", "table", "chart"] },
+                title: { type: "string", description: "The takeaway as a sentence." },
+                subtitle: { type: "string" },
+                bullets: { type: "array", items: { type: "string" } },
+                left: { type: "object", properties: { heading: { type: "string" }, bullets: { type: "array", items: { type: "string" } } } },
+                right: { type: "object", properties: { heading: { type: "string" }, bullets: { type: "array", items: { type: "string" } } } },
+                metrics: {
+                  type: "array",
+                  items: { type: "object", properties: { value: { type: "string" }, label: { type: "string" } }, required: ["value", "label"] },
+                },
+                table: { type: "array", description: "Rows of cells; the first row is the header.", items: { type: "array", items: { type: "string" } } },
+                chart: {
+                  type: "object",
+                  properties: {
+                    type: { type: "string", enum: ["bar", "line", "pie", "stacked_bar"] },
+                    categories: { type: "array", items: { type: "string" } },
+                    series: {
+                      type: "array",
+                      items: { type: "object", properties: { name: { type: "string" }, values: { type: "array", items: { type: "number" } } }, required: ["name", "values"] },
+                    },
+                    valueFormat: { type: "string", enum: ["currency", "percent", "number"] },
+                  },
+                  required: ["type", "categories", "series"],
+                },
+                source: { type: "string", description: "Where this slide's facts came from." },
+                notes: { type: "string", description: "Speaker notes." },
+              },
+              required: ["layout", "title"],
+            },
+          },
+        },
+        required: ["title", "slides"],
+      },
+    },
+    async run(input) {
+      const spec = input as unknown as DeckSpec;
+      if (!spec?.title || !Array.isArray(spec.slides) || !spec.slides.length) return "No slides given — nothing was created.";
+      const data = await buildDeck(spec);
+      const fileId = `${randomUUID()}.pptx`;
+      await saveExport(userId, fileId, data);
+      const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor deck";
+      return `Created "${name}.pptx" (${spec.slides.length + 1} slides including the cover). Give the person this link exactly: [Download ${name}.pptx](/api/exports/${fileId}?name=${encodeURIComponent(name)})`;
+    },
+  };
+}
+
 function spreadsheetTool(userId: string): ServerTool {
   return {
     tool: {
@@ -125,7 +200,7 @@ export async function loadAskTools(userId: string): Promise<{ serverTools: Serve
     getGoogleConnection(userId).catch(() => null),
     getDropboxConnection(userId).catch(() => null),
   ]);
-  const serverTools: ServerTool[] = [spreadsheetTool(userId)];
+  const serverTools: ServerTool[] = [spreadsheetTool(userId), presentationTool(userId)];
   const connected: string[] = [];
   const missing: string[] = [];
 
@@ -160,7 +235,7 @@ export async function loadAskTools(userId: string): Promise<{ serverTools: Serve
     missing.push("Dropbox");
   }
 
-  const rules: string[] = [MODEL_RULES];
+  const rules: string[] = [MODEL_RULES, DECK_RULES];
   if (connected.length) {
     rules.push(
       `Connected file storage: ${connected.join("; ")}. Search it whenever the question could be answered by a file${
