@@ -1,0 +1,326 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  :root { --navy:#12294a; --navy-d:#0b1930; --accent:#b4531f; --bg:#eef1f6; --ink:#12294a; --muted:#5b6b82; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { width:1080px; height:1920px; overflow:hidden; background:var(--bg); font-family:"Inter", sans-serif; -webkit-font-smoothing:antialiased; }
+  .scene { position:absolute; inset:0; opacity:0; }
+  .light { background:var(--bg); }
+  .dark { background:radial-gradient(120% 80% at 50% 35%, #1d3a66 0%, #12294a 45%, #0b1930 100%); }
+  .kicker { position:absolute; left:0; right:0; top:150px; text-align:center; font-family:"DejaVu Sans Mono", monospace; font-size:22px; letter-spacing:.32em; color:var(--accent); text-transform:uppercase; }
+  .head { position:absolute; left:40px; right:40px; top:196px; text-align:center; font-family:"Inter Display","Inter",sans-serif; font-weight:600; font-size:62px; line-height:1.08; letter-spacing:-.02em; color:var(--ink); }
+  .sub { position:absolute; left:80px; right:80px; top:345px; text-align:center; font-size:26px; line-height:1.35; color:var(--muted); }
+  .win { position:absolute; left:40px; width:1000px; border-radius:18px; overflow:hidden; background:#fff; box-shadow:0 30px 70px rgba(18,41,74,.22), 0 4px 14px rgba(18,41,74,.10); }
+  .bar { height:44px; background:#f4f6f9; border-bottom:1px solid #e3e7ee; display:flex; align-items:center; padding:0 18px; position:relative; }
+  .bar .dots { display:flex; gap:9px; } .bar .dots i { width:13px; height:13px; border-radius:50%; display:block; }
+  .bar .dots i:nth-child(1){background:#ff5f57}.bar .dots i:nth-child(2){background:#febc2e}.bar .dots i:nth-child(3){background:#28c840}
+  .bar .url { position:absolute; left:50%; transform:translateX(-50%); font-size:17px; color:#6b778a; background:#fff; border:1px solid #e3e7ee; border-radius:8px; padding:4px 26px; white-space:nowrap; }
+  .vp { position:relative; overflow:hidden; background:#fff; }
+  .vp img { position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
+  .trafficdesk { position:absolute; left:18px; top:16px; display:flex; gap:9px; z-index:5; } .trafficdesk i{width:13px;height:13px;border-radius:50%;display:block}
+  .trafficdesk i:nth-child(1){background:#ff5f57}.trafficdesk i:nth-child(2){background:#febc2e}.trafficdesk i:nth-child(3){background:#28c840}
+  .chip { position:absolute; display:flex; align-items:center; gap:12px; background:#fff; color:var(--ink); font-weight:600; font-size:25px; padding:14px 24px 14px 16px; border-radius:999px; box-shadow:0 14px 34px rgba(18,41,74,.22); white-space:nowrap; opacity:0; }
+  .chip .ic { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; color:#fff; font-size:19px; font-weight:700; }
+  /* zoom mock */
+  .zoom { position:absolute; left:40px; width:1000px; height:360px; border-radius:16px; background:#1b1d22; box-shadow:0 24px 60px rgba(0,0,0,.25); overflow:hidden; }
+  .zoom .zt { height:40px; display:flex; align-items:center; justify-content:center; color:#d6d9df; font-size:17px; position:relative; }
+  .zoom .zt .dots { position:absolute; left:16px; display:flex; gap:8px; } .zoom .zt .dots i{width:12px;height:12px;border-radius:50%;display:block}
+  .zoom .zt .dots i:nth-child(1){background:#ff5f57}.zoom .zt .dots i:nth-child(2){background:#febc2e}.zoom .zt .dots i:nth-child(3){background:#28c840}
+  .tiles { display:flex; gap:10px; padding:4px 12px; }
+  .tile { flex:1; height:240px; border-radius:10px; position:relative; overflow:hidden; border:3px solid transparent; }
+  .tile .hd { position:absolute; left:50%; top:46px; width:84px; height:84px; margin-left:-42px; border-radius:50%; background:rgba(0,0,0,.38); }
+  .tile .bd { position:absolute; left:50%; top:140px; width:170px; height:150px; margin-left:-85px; border-radius:85px 85px 0 0; background:rgba(0,0,0,.38); }
+  .tile .nm { position:absolute; left:10px; bottom:10px; background:rgba(0,0,0,.55); color:#fff; font-size:16px; padding:4px 10px; border-radius:6px; }
+  .zb { height:66px; display:flex; align-items:center; justify-content:center; gap:16px; position:relative; }
+  .zb span { width:40px; height:40px; border-radius:50%; background:#33363d; display:block; }
+  .zb b { background:#e5483b; color:#fff; font-size:16px; padding:9px 18px; border-radius:8px; font-weight:600; }
+  .zb .cnt { position:absolute; left:18px; color:#9aa0aa; font-size:15px; }
+  /* deck + excel */
+  .card { position:absolute; left:40px; width:1000px; border-radius:18px; overflow:hidden; background:#fff; box-shadow:0 30px 70px rgba(18,41,74,.25); }
+  .filebar { display:flex; align-items:center; gap:14px; padding:16px 22px; border-bottom:1px solid #e3e7ee; font-size:22px; font-weight:600; color:var(--ink); }
+  .filebar .badge { width:44px; height:44px; border-radius:9px; color:#fff; display:grid; place-items:center; font-weight:800; font-size:20px; }
+  .filebar small { margin-left:auto; color:#8a95a8; font-weight:500; font-size:18px; }
+  .slides { position:relative; height:562px; background:#fff; }
+  .slides img { position:absolute; inset:0; width:100%; height:100%; opacity:0; }
+  .xl { font-family:"Calibri","Carlito","Inter",sans-serif; font-size:23px; color:#1f2937; }
+  .xl .fx { display:flex; border-bottom:1px solid #d9dde3; font-size:21px; }
+  .xl .fx div { padding:10px 14px; } .xl .fx .nm { width:90px; border-right:1px solid #d9dde3; color:#555; } .xl .fx .f { font-family:"DejaVu Sans Mono",monospace; color:#1f2937; font-size:19px; }
+  .xl table { border-collapse:collapse; width:100%; }
+  .xl td, .xl th { border:1px solid #e1e5ea; padding:12px 14px; height:56px; }
+  .xl th { background:#f3f4f6; color:#6b7280; font-weight:500; font-size:19px; height:38px; padding:4px; }
+  .xl td.rh { background:#f3f4f6; color:#6b7280; width:50px; text-align:center; font-size:19px; }
+  .xl td.n { text-align:right; }
+  .xl tr.h td:not(.rh) { background:#12294a; color:#fff; font-weight:600; }
+  .xl .sel { outline:3px solid #1d7a46; outline-offset:-3px; }
+  .xl .tabs { display:flex; gap:2px; background:#f3f4f6; padding:0 10px; border-top:1px solid #d9dde3; font-size:19px; }
+  .xl .tabs span { padding:10px 20px; color:#555; } .xl .tabs span.on { background:#fff; color:#1d7a46; font-weight:700; border-bottom:3px solid #1d7a46; }
+  .pills { position:absolute; left:40px; right:40px; display:flex; flex-wrap:wrap; gap:14px; justify-content:center; }
+  .pill { background:#fff; border:1px solid #dfe4ec; color:var(--ink); font-size:24px; font-weight:600; padding:12px 22px; border-radius:999px; box-shadow:0 6px 16px rgba(18,41,74,.08); opacity:0; }
+  .mini { position:absolute; width:490px; border-radius:14px; overflow:hidden; background:#fff; box-shadow:0 20px 44px rgba(18,41,74,.2); opacity:0; }
+  .mini .vp { height:590px; }
+  .mini .lab { position:absolute; left:14px; bottom:14px; background:var(--navy); color:#fff; font-size:22px; font-weight:600; padding:9px 16px; border-radius:10px; }
+  /* intro/outro */
+  .bigline { position:absolute; left:60px; right:60px; text-align:center; font-family:"Inter Display","Inter",sans-serif; font-weight:600; font-size:76px; line-height:1.1; letter-spacing:-.02em; color:#fff; opacity:0; }
+  .rule { position:absolute; left:50%; width:90px; height:3px; margin-left:-45px; background:var(--accent); opacity:0; }
+  .word { position:absolute; left:0; right:0; text-align:center; font-family:"Inter Display","Inter",sans-serif; font-weight:700; font-size:150px; letter-spacing:.02em; color:#fff; }
+  .btn { position:absolute; font-size:30px; font-weight:600; padding:22px 44px; border-radius:14px; }
+  .glow { position:absolute; width:420px; height:420px; left:50%; margin-left:-210px; border-radius:50%; background:radial-gradient(circle, rgba(180,83,31,.35), rgba(180,83,31,0) 65%); }
+  .ring { position:absolute; left:50%; border:2px solid rgba(255,255,255,.35); border-radius:50%; }
+  .net { position:absolute; inset:0; }
+</style></head>
+<body>
+
+<!-- S0 intro -->
+<div class="scene dark" id="s0">
+  <svg class="net" id="net0" width="1080" height="1920"></svg>
+  <div class="bigline" id="i1" style="top:700px">You can't be in<br>every meeting.</div>
+  <div class="bigline" id="i2" style="top:900px;color:#e08a55">Your knowledge can.</div>
+  <div class="rule" id="i3" style="top:1040px"></div>
+</div>
+
+<!-- S1 landing -->
+<div class="scene light" id="s1">
+  <div class="kicker">Meet Anchor</div>
+  <div class="head">Meeting intelligence<br>for every team.</div>
+  <div class="win" id="w1" style="top:400px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">anchor — your knowledge in the room</div></div><div class="vp" style="height:1300px"><img><img></div></div>
+</div>
+
+<!-- S2 morning brief -->
+<div class="scene light" id="s2">
+  <div class="kicker">01 · Before your day</div>
+  <div class="head">Your morning brief,<br>replies already written.</div>
+  <div class="win" id="w2" style="top:400px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Anchor — Morning brief</div></div><div class="vp" style="height:1250px"><img><img></div></div>
+  <div class="chip" id="c2a" style="left:560px;top:1560px"><span class="ic" style="background:#ea4335">M</span>Reply saved to Gmail drafts</div>
+  <div class="chip" id="c2b" style="left:120px;top:1660px"><span class="ic" style="background:#4285f4">31</span>Meeting added to your calendar</div>
+</div>
+
+<!-- S3 home -->
+<div class="scene light" id="s3">
+  <div class="kicker">02 · Home</div>
+  <div class="head">Everything waiting on you,<br>in one place.</div>
+  <div class="win" id="w3" style="top:400px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Anchor — Home</div></div><div class="vp" style="height:1250px"><img><img></div></div>
+  <div class="chip" id="c3a" style="left:90px;top:1600px"><span class="ic" style="background:#b4531f">!</span>Deals going quiet, flagged</div>
+  <div class="chip" id="c3b" style="left:470px;top:1700px"><span class="ic" style="background:#12294a">✓</span>Every promise becomes a to-do</div>
+</div>
+
+<!-- S4 prep -->
+<div class="scene light" id="s4">
+  <div class="kicker">03 · Before the call</div>
+  <div class="head">“Prep me for<br>the next call.”</div>
+  <div class="win" id="w4" style="top:400px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Anchor — Acme Robotics</div></div><div class="vp" style="height:1250px"><img><img></div></div>
+</div>
+
+<!-- S5 live desktop -->
+<div class="scene light" id="s5">
+  <div class="kicker" id="k5">04 · Live, no bot in the call</div>
+  <div class="head" id="h5a">Answers while they're<br>still asking.</div>
+  <div class="head" id="h5b" style="opacity:0">Ask anything,<br>mid-call.</div>
+  <div class="zoom" id="zoom" style="top:395px">
+    <div class="zt"><div class="dots"><i></i><i></i><i></i></div>Acme Robotics — EMEA expansion · Zoom</div>
+    <div class="tiles">
+      <div class="tile" id="t1" style="background:linear-gradient(160deg,#4a5a6e,#2c3644)"><div class="hd"></div><div class="bd"></div><div class="nm">Jordan Weiss</div></div>
+      <div class="tile" id="t2" style="background:linear-gradient(160deg,#6b5a4a,#3b3028)"><div class="hd"></div><div class="bd"></div><div class="nm">Priya Shah</div></div>
+      <div class="tile" id="t3" style="background:linear-gradient(160deg,#4f6559,#2d3a33)"><div class="hd"></div><div class="bd"></div><div class="nm">Sam Rivera (you)</div></div>
+    </div>
+    <div class="zb"><div class="cnt">3 participants</div><span></span><span></span><span></span><b>Leave</b></div>
+  </div>
+  <div class="win" id="w5" style="top:790px;border-radius:14px"><div class="trafficdesk"><i></i><i></i><i></i></div><div class="vp" style="height:837px"><img><img></div></div>
+  <div class="chip" id="c5a" style="left:600px;top:745px"><span class="ic" style="background:#12294a">⚓</span>Nobody joins your call</div>
+</div>
+
+<!-- S6 after -->
+<div class="scene light" id="s6">
+  <div class="kicker">05 · After the call</div>
+  <div class="head">Recap done.<br>Your tools updated.</div>
+  <div class="win" id="w6" style="top:400px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Anchor — EMEA Expansion Discussion</div></div><div class="vp" style="height:1250px"><img><img></div></div>
+  <div class="chip" id="c6a" style="left:330px;top:1700px"><span class="ic" style="background:#ea4335">M</span>Follow-up in Gmail drafts</div>
+  <div class="chip" id="c6b" style="left:300px;top:1700px"><span class="ic" style="background:#4285f4">31</span>Next meeting, one click away</div>
+  <div class="chip" id="c6c" style="left:320px;top:1700px"><span class="ic" style="background:#00a1e0">☁</span>Salesforce, updated for you</div>
+</div>
+
+<!-- S7 ask anchor -->
+<div class="scene light" id="s7">
+  <div class="kicker">06 · Ask Anchor</div>
+  <div class="head" id="h7a">Ask it anything.<br>Or have it build it.</div>
+  <div class="win" id="w7" style="top:400px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Anchor — Ask Anchor, on every page</div></div><div class="vp" style="height:1250px"><img><img></div></div>
+  <div class="card" id="deck" style="top:520px;opacity:0">
+    <div class="filebar"><span class="badge" style="background:#c43e1c">P</span>Acme Robotics — EMEA expansion.pptx<small>PowerPoint · 4 slides</small></div>
+    <div class="slides"><img src="a/deck-1.png"><img src="a/deck-2.png"><img src="a/deck-3.png"><img src="a/deck-4.png"></div>
+  </div>
+  <div class="card xl" id="xl" style="top:1120px;opacity:0">
+    <div class="filebar" style="font-family:Inter"><span class="badge" style="background:#1d7a46">X</span>EMEA expansion model.xlsx<small>Excel · live formulas</small></div>
+    <div class="fx"><div class="nm">B4</div><div class="f">=B2*B3</div></div>
+    <table>
+      <tr><th></th><th style="width:300px">A</th><th>B</th><th>C</th><th>D</th></tr>
+      <tr class="h"><td class="rh">1</td><td></td><td class="n">Year 1</td><td class="n">Year 2</td><td class="n">Year 3</td></tr>
+      <tr><td class="rh">2</td><td>Seats</td><td class="n">10</td><td class="n">13</td><td class="n">16</td></tr>
+      <tr><td class="rh">3</td><td>Price per seat</td><td class="n">$6,200</td><td class="n">$6,200</td><td class="n">$6,200</td></tr>
+      <tr><td class="rh">4</td><td><b>Revenue</b></td><td class="n sel"><b>$62,000</b></td><td class="n"><b>$80,600</b></td><td class="n"><b>$99,200</b></td></tr>
+      <tr><td class="rh">5</td><td>Cumulative revenue</td><td class="n">$62,000</td><td class="n">$142,600</td><td class="n">$241,800</td></tr>
+    </table>
+    <div class="tabs"><span>Cover</span><span>Assumptions</span><span class="on">Model</span></div>
+  </div>
+</div>
+
+<!-- S8 integrations -->
+<div class="scene light" id="s8">
+  <div class="kicker">07 · Connected</div>
+  <div class="head">Works with the tools<br>you already use.</div>
+  <div class="win" id="w8" style="top:400px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Anchor — Integrations</div></div><div class="vp" style="height:980px"><img><img></div></div>
+  <div class="pills" style="top:1450px" id="p8">
+    <span class="pill">Gmail</span><span class="pill">Google Calendar</span><span class="pill">Google Drive</span><span class="pill">Outlook</span><span class="pill">Microsoft Teams</span><span class="pill">Slack</span><span class="pill">Salesforce</span><span class="pill">HubSpot</span><span class="pill">Dropbox</span><span class="pill">Zoom</span><span class="pill">Google Meet</span><span class="pill">PowerPoint</span><span class="pill">Excel</span>
+  </div>
+</div>
+
+<!-- S9 more -->
+<div class="scene light" id="s9">
+  <div class="kicker">08 · And more</div>
+  <div class="head">Your whole team,<br>on the same page.</div>
+  <div class="mini" id="m1" style="left:40px;top:430px"><div class="vp"><img src="a/insights.png"></div><div class="lab">Insights</div></div>
+  <div class="mini" id="m2" style="left:550px;top:430px"><div class="vp"><img src="a/contacts.png"></div><div class="lab">Contacts</div></div>
+  <div class="mini" id="m3" style="left:40px;top:1050px"><div class="vp"><img src="a/deal-share.png"></div><div class="lab">Share next steps</div></div>
+  <div class="mini" id="m4" style="left:550px;top:1050px"><div class="vp"><img src="a/deals.png"></div><div class="lab">Every deal</div></div>
+</div>
+
+<!-- S10 outro -->
+<div class="scene dark" id="s10">
+  <svg class="net" id="net1" width="1080" height="1920"></svg>
+  <div class="glow" style="top:470px"></div>
+  <div class="ring" id="ring"></div>
+  <svg id="omark" style="position:absolute;left:470px;top:560px" width="140" height="140" viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="7.5" r="2.25"/><path d="M16 9.75V24.5"/><path d="M11 13.5H21" stroke="#e08a55"/><path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5"/><path d="M8 18.5L6 15.8M8 18.5L10.3 17"/><path d="M24 18.5L26 15.8M24 18.5L21.7 17"/></svg>
+  <div class="word" id="oword" style="top:730px">ANCHOR</div>
+  <div class="bigline" id="otag" style="top:930px;font-size:44px;font-weight:500;color:#dbe3ef">Your knowledge in the room.<br>Without you in the room.</div>
+  <div class="btn" id="ob1" style="left:300px;top:1110px;background:#b4531f;color:#fff;opacity:0">Get started</div>
+  <div class="btn" id="ob2" style="left:555px;top:1110px;border:2px solid rgba(255,255,255,.45);color:#fff;opacity:0">Download app</div>
+  <div class="kicker" id="omono" style="top:1270px;color:#8fa3c0;font-size:20px;opacity:0">Web · Mac · Windows</div>
+</div>
+
+<script>
+const clamp = (x, a=0, b=1) => Math.max(a, Math.min(b, x));
+const ease = x => x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3) / 2;
+const eout = x => 1 - Math.pow(1 - x, 3);
+const prog = (t, a, d) => clamp((t - a) / d);
+const $ = id => document.getElementById(id);
+const imgCache = {};
+
+// network lines (like the site's hero)
+function net(svg, seed) {
+  let s = seed; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const pts = Array.from({ length: 14 }, () => [r() * 1080, r() * 1920]);
+  let h = "";
+  pts.forEach((p, i) => { const q = pts[(i * 5 + 3) % pts.length]; h += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="rgba(255,255,255,.08)" stroke-width="1.5"/>`; });
+  pts.forEach((p, i) => { h += `<circle cx="${p[0]}" cy="${p[1]}" r="${i % 3 ? 3 : 5}" fill="${i % 3 ? "rgba(255,255,255,.25)" : "#d9773f"}"/>`; });
+  svg.innerHTML = h;
+}
+net($("net0"), 7); net($("net1"), 11);
+
+// Scenes [id, start, end]
+const SCENES = [["s0",0,3.6],["s1",3.6,7.6],["s2",7.6,11.6],["s3",11.6,15.6],["s4",15.6,19.6],["s5",19.6,31.2],["s6",31.2,38.4],["s7",38.4,50.2],["s8",50.2,53.6],["s9",53.6,56.6],["s10",56.6,60.5]];
+const FADE = 0.35;
+
+// Camera keyframes per window: {t, src, x, y, w, d} — at time t start moving (over d sec) to show image region (x,y) of width w.
+const NW = { desk: 1720 };
+const CAM = {
+  w1: [ {t:0, src:"landing-hero", x:0, y:0, w:2400}, {t:5.3, src:"landing-hero", x:0, y:560, w:2400, d:1.2}, {t:6.5, src:"landing-what", x:150, y:330, w:2100, d:.35} ],
+  w2: [ {t:0, src:"brief", x:500, y:80, w:1400}, {t:8.6, src:"brief", x:500, y:1200, w:1400, d:2.6} ],
+  w3: [ {t:0, src:"home", x:0, y:0, w:2400}, {t:12.7, src:"home", x:0, y:1080, w:1900, d:1.8} ],
+  w4: [ {t:0, src:"deal-brief", x:0, y:0, w:2400}, {t:16.4, src:"deal-brief", x:0, y:1500, w:1900, d:1.6} ],
+  w5: [],
+  w6: [ {t:0, src:"m-top", x:0, y:0, w:1900}, {t:32.6, src:"m-email", x:0, y:60, w:1900, d:.35}, {t:34.7, src:"m-invites", x:0, y:60, w:1900, d:.35}, {t:36.5, src:"m-crm", x:0, y:60, w:1900, d:.35} ],
+  w7: [], w8: [ {t:0, src:"integrations", x:0, y:60, w:1920}, {t:51.3, src:"integrations", x:0, y:1300, w:1920, d:1.6} ],
+};
+// desktop app sequence
+const D = [["d0-idle",19.6],["d1-detected",20.6],["d2-recording",21.9],["d3-writing",23.4],["d4-answer",24.2],["d6-type-1",27.8],["d6-type-2",28.0],["d6-type-3",28.2],["d6-type-4",28.4],["d6-type-5",28.6],["d6-type-6",28.8],["d7-asked",29.5]];
+D.forEach(([src, t], i) => CAM.w5.push({ t, src, x: 0, y: 0, w: 1720, d: i ? (src.startsWith("d6") ? 0 : .3) : 0 }));
+// zoom in on the answer card and back
+CAM.w5.push({ t:25.0, src:"d4-answer", x:60, y:480, w:1000, d:.8 });
+CAM.w5.push({ t:27.2, src:"d4-answer", x:0, y:0, w:1720, d:.6 });
+CAM.w5.sort((a, b) => a.t - b.t);
+// fix: typing frames come after the zoom-out
+// ask anchor sequence on home page
+const ASK = [];
+for (let i = 1; i <= 10; i++) ASK.push({ t: 39.9 + i * 0.16, src: "ask-type-" + String(i).padStart(2, "0"), x: 1560, y: 1950, w: 840, d: 0 });
+CAM.w7 = [ {t:0, src:"home", x:0, y:0, w:2400}, {t:39.1, src:"home", x:1560, y:1950, w:840, d:.8}, ...ASK, {t:41.8, src:"ask-thinking", x:1560, y:1950, w:840, d:0}, {t:42.2, src:"ask-answer", x:1560, y:60, w:840, d:.3}, {t:42.7, src:"ask-answer", x:1560, y:480, w:840, d:1.2} ];
+
+function setLayer(img, src, x, y, w, vw, op) {
+  if (img.dataset.src !== src) { img.src = "a/" + src + ".png"; img.dataset.src = src; }
+  const s = vw / w;
+  img.style.transform = `translate(${-x * s}px, ${-y * s}px) scale(${s})`;
+  img.style.opacity = op;
+}
+function camera(id, t) {
+  const win = $(id); const vp = win.querySelector(".vp"); const [a, b] = vp.querySelectorAll("img");
+  const kfs = CAM[id]; let i = 0;
+  for (let k = 0; k < kfs.length; k++) if (kfs[k].t <= t) i = k;
+  const cur = kfs[i], prev = kfs[Math.max(0, i - 1)];
+  const p = cur.d ? ease(prog(t, cur.t, cur.d)) : 1;
+  const vw = vp.clientWidth || 1000;
+  if (prev.src === cur.src) {
+    const L = (k) => prev[k] + (cur[k] - prev[k]) * p;
+    setLayer(a, cur.src, L("x"), L("y"), L("w"), vw, 1); b.style.opacity = 0;
+  } else {
+    setLayer(a, prev.src, prev.x, prev.y, prev.w, vw, 1);
+    setLayer(b, cur.src, cur.x, cur.y, cur.w, vw, p);
+    if (p >= 1) { setLayer(a, cur.src, cur.x, cur.y, cur.w, vw, 1); b.style.opacity = 0; }
+  }
+}
+function pop(el, t, a, b = 99, base = "") {
+  const pi = eout(prog(t, a, .4)), po = prog(t, b, .3);
+  el.style.opacity = pi * (1 - po);
+  el.style.transform = `${base} translateY(${(1 - pi) * 24}px) scale(${.94 + .06 * pi})`;
+}
+
+function render(t) {
+  for (const [id, a, b] of SCENES) {
+    const el = $(id);
+    const op = clamp(Math.min((t - a) / FADE + 1, (b - t) / FADE + 1)) * (t >= a - FADE && t <= b + FADE ? 1 : 0);
+    const vis = t >= a - 0.001 && t < b + FADE;
+    el.style.opacity = id === "s0" ? (t < b ? 1 : clamp(1 - (t - b) / FADE)) : (vis ? clamp((t - a) / FADE) * clamp((b + FADE - t) / FADE) : 0);
+    el.style.display = (t > a - 0.01 && t < b + FADE + 0.01) || (id === "s0" && t < b + FADE) ? "block" : "none";
+    // headline/window entrance
+    const k = el.querySelector(".kicker"), h = el.querySelector(".head");
+    if (k && id !== "s10") { const p = eout(prog(t, a + .05, .5)); k.style.opacity = p; k.style.transform = `translateY(${(1 - p) * 16}px)`; }
+    if (h) { const p = eout(prog(t, a + .12, .55)); if (!h.id || h.id.endsWith("a")) { h.style.opacity = p * (h.style.opacity === "" ? 1 : 1); h.style.transform = `translateY(${(1 - p) * 22}px)`; } }
+    el.querySelectorAll(".win, .zoom").forEach((w) => { const p = eout(prog(t, a + .2, .7)); w.style.transform = `translateY(${(1 - p) * 70}px)`; });
+  }
+  for (const id of Object.keys(CAM)) if (CAM[id].length) camera(id, t);
+
+  // S0 intro
+  pop($("i1"), t, .3); pop($("i2"), t, 1.5); { const p = eout(prog(t, 2.1, .5)); $("i3").style.opacity = p; $("i3").style.transform = `scaleX(${p})`; }
+  // chips
+  pop($("c2a"), t, 9.0); pop($("c2b"), t, 9.7);
+  pop($("c3a"), t, 13.4); pop($("c3b"), t, 14.1);
+  pop($("c5a"), t, 20.9, 23.2);
+  pop($("c6a"), t, 33.0, 34.6); pop($("c6b"), t, 35.0, 36.4); pop($("c6c"), t, 36.9);
+  // S5 speaker highlight + headline swap
+  const spk = t < 22.5 ? "t1" : t < 26 ? "t2" : t < 28 ? "t3" : "t2";
+  ["t1","t2","t3"].forEach(id => $(id).style.borderColor = id === spk ? "#e08a55" : "transparent");
+  { const p = prog(t, 27.4, .4); $("h5a").style.opacity = Math.min(parseFloat($("h5a").style.opacity || 1), 1 - p); $("h5b").style.opacity = p; $("h5b").style.transform = `translateY(${(1 - eout(p)) * 22}px)`; }
+  // S7 files
+  { const pd = eout(prog(t, 43.9, .5)), pdo = prog(t, 49.9, .3);
+    $("deck").style.opacity = pd; $("deck").style.transform = `translateY(${(1 - pd) * 60}px) scale(${.96 + .04 * pd})`;
+    const imgs = $("deck").querySelectorAll("img"); const si = clamp(Math.floor((t - 44.2) / .85), 0, 3);
+    imgs.forEach((im, i) => im.style.opacity = i === si ? 1 : (i === si - 1 ? clamp(1 - (t - 44.2 - si * .85) / .25) : 0));
+    const px = eout(prog(t, 46.6, .5)); $("xl").style.opacity = px; $("xl").style.transform = `translateY(${(1 - px) * 60}px) scale(${.96 + .04 * px})`;
+    const dim = clamp(pd * .85); $("w7").style.filter = `blur(${dim * 6}px)`; $("w7").style.opacity = 1 - dim * .55;
+  }
+  // S8 pills
+  $("p8").querySelectorAll(".pill").forEach((el, i) => pop(el, t, 50.7 + i * .12));
+  // S9 minis
+  ["m1","m2","m3","m4"].forEach((id, i) => pop($(id), t, 53.9 + i * .22));
+  const MO = { m1:[0,110], m2:[0,110], m3:[560,110], m4:[0,110] };
+  for (const [id, [mx, my]] of Object.entries(MO)) { const s = 490 / 1400; $(id).querySelector("img").style.transform = `translate(${-mx * s}px, ${-my * s}px) scale(${s})`; }
+  // S10 outro
+  { const a = 56.6; const pm = eout(prog(t, a + .2, .6));
+    $("omark").style.opacity = pm; $("omark").style.transform = `scale(${.6 + .4 * pm})`;
+    const rp = prog(t, a + .45, 1.4); const R = 80 + 260 * rp; Object.assign($("ring").style, { width: 2*R+"px", height: 2*R+"px", marginLeft: -R+"px", top: (630 - R) + "px", opacity: (1 - rp) * .9 });
+    const pw = eout(prog(t, a + .7, .6)); $("oword").style.opacity = pw; $("oword").style.letterSpacing = (0.02 + (1 - pw) * .25) + "em";
+    pop($("otag"), t, a + 1.2); pop($("ob1"), t, a + 1.7); pop($("ob2"), t, a + 1.85); pop($("omono"), t, a + 2.1);
+  }
+}
+window.render = render;
+window.ready = Promise.all([...new Set(Object.values(CAM).flat().map(k => k.src)), "deck-1","deck-2","deck-3","deck-4","insights","contacts","deal-share","deals"]
+  .map(s => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = "a/" + s + ".png"; imgCache[s] = i; })));
+render(0);
+</script>
+</body></html>
