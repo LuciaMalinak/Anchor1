@@ -2,7 +2,10 @@ import { getGoogleConnection } from "@/lib/integrations/google";
 import { fetchRelevantDriveDocuments, hasDriveAccess } from "@/lib/integrations/drive";
 import { fetchRelevantDropboxDocuments, getDropboxConnection } from "@/lib/integrations/dropbox";
 import { formatDocumentContext, MAX_SEARCH_TERMS, type DocumentContextItem } from "@/lib/integrations/documentSearch";
+import { randomUUID } from "crypto";
 import type { ServerTool } from "@/lib/liveAssist";
+import { buildModelWorkbook, type ModelSpec } from "@/lib/spreadsheetModel";
+import { saveExport } from "@/lib/storage";
 
 // Live lookups Ask Anchor can run mid-answer for the person asking (see
 // ServerTool in liveAssist.ts), plus the system prompt lines that tell it
@@ -56,12 +59,73 @@ function fileSearchTool(params: {
   };
 }
 
+// How Ask Anchor builds a model: the way an investment banker would —
+// the deal's own facts first, then market data, then labelled assumptions,
+// every input in one place with its source, everything else formulas.
+export const MODEL_RULES = `When the person asks for a model, forecast, projection, budget, valuation, pricing or ROI analysis, comparison table, or anything "in Excel" or "as a spreadsheet", build it with create_spreadsheet — never paste a large table into the chat instead. Work like an investment banker building a client model:
+1. Facts first: gather the real numbers from this deal's calls, emails and files before anything else (the context below, and search_drive / search_dropbox when they're connected — search for the forecast, budget, pricing, P&L, or the company's name). Use their numbers exactly.
+2. Then market data: for anything the material doesn't give (market size, growth rates, comparable companies' multiples, industry margins, prices), search the web and use figures from sources you actually opened.
+3. Only then assumptions: where neither has it, make a reasonable, conservative assumption and label it as one.
+Lay it out like a banker's model:
+- "Assumptions" sheet: every input in one place, one per row: Input | Value | Unit | Source type (Call, Email, File, Market data, Assumption) | Source (the call and date, the file name, or the web page). Inputs are plain numbers.
+- "Model" sheet: periods across the top (e.g. 2026, 2027, 2028 or Q1–Q4), line items down the side, units in the labels. Every number here is an Excel formula built from the Assumptions sheet ('Assumptions'!B5) or from rows above it — never a typed-in result — so changing an input updates everything.
+- "Summary" sheet: the key outputs (revenue, margin, cash, valuation, payback…) as formulas pointing at the Model, plus a base / upside / downside case when it's a forecast or valuation.
+- "Sources" sheet: every source used, with links.
+Cell positions are exact: rows[0] is Excel row 1 and column 0 is column A, so check every formula's references against where you put things. Use fmt (currency, percent, number, integer, multiple) on every number. After creating it, reply in a few lines: what the model covers, the 3–5 inputs that drive it and where each came from, what was assumed, and the download link exactly as the tool returned it. Don't quote calculated results you didn't work out yourself; point to the file for those.`;
+
+function spreadsheetTool(userId: string): ServerTool {
+  return {
+    tool: {
+      name: "create_spreadsheet",
+      description:
+        "Create an Excel (.xlsx) file for the person — a financial model, forecast, budget, valuation, pricing or ROI analysis, or a comparison table — with real formulas and banker formatting (inputs blue, formulas black). Returns a download link to give them. Follow the modeling rules in the system prompt.",
+      input_schema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "File title, e.g. \"Akoya Hospitality — 3-year revenue model\"." },
+          summary: { type: "string", description: "2-4 sentences for the cover sheet: what it models and the main assumptions." },
+          sheets: {
+            type: "array",
+            minItems: 1,
+            maxItems: 12,
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Sheet tab name (≤31 characters), e.g. Assumptions, Model, Summary, Sources." },
+                headerRows: { type: "integer", description: "How many top rows are headers (bold, shaded, frozen). Default 1." },
+                columnWidths: { type: "array", items: { type: "number" } },
+                rows: {
+                  type: "array",
+                  description:
+                    "The sheet, row by row; rows[0] is Excel row 1, and in each row column 0 is A. A cell is a string, a number, null (empty), or an object {v?: value, f?: \"=Excel formula\", fmt?: \"currency\"|\"currency2\"|\"percent\"|\"number\"|\"integer\"|\"multiple\"|\"date\", input?: true for a hard-coded input, bold?: true, note?: \"cell comment\"}. Percentages as fractions (0.25 = 25%).",
+                  items: { type: "array", items: { type: ["string", "number", "boolean", "null", "object"] } },
+                },
+              },
+              required: ["name", "rows"],
+            },
+          },
+        },
+        required: ["title", "sheets"],
+      },
+    },
+    async run(input) {
+      const spec = input as unknown as ModelSpec;
+      if (!spec?.title || !Array.isArray(spec.sheets) || !spec.sheets.length) return "No sheets given — nothing was created.";
+      const data = await buildModelWorkbook(spec);
+      const fileId = `${randomUUID()}.xlsx`;
+      await saveExport(userId, fileId, data);
+      const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor model";
+      return `Created "${name}.xlsx" (${spec.sheets.length + 1} sheets including the cover). Give the person this link exactly: [Download ${name}.xlsx](/api/exports/${fileId}?name=${encodeURIComponent(name)})`;
+    },
+  };
+}
+
 export async function loadAskTools(userId: string): Promise<{ serverTools: ServerTool[]; toolRules: string }> {
   const [google, dropbox] = await Promise.all([
     getGoogleConnection(userId).catch(() => null),
     getDropboxConnection(userId).catch(() => null),
   ]);
-  const serverTools: ServerTool[] = [];
+  const serverTools: ServerTool[] = [spreadsheetTool(userId)];
   const connected: string[] = [];
   const missing: string[] = [];
 
@@ -96,7 +160,7 @@ export async function loadAskTools(userId: string): Promise<{ serverTools: Serve
     missing.push("Dropbox");
   }
 
-  const rules: string[] = [];
+  const rules: string[] = [MODEL_RULES];
   if (connected.length) {
     rules.push(
       `Connected file storage: ${connected.join("; ")}. Search it whenever the question could be answered by a file${

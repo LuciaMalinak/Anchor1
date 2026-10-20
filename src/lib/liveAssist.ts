@@ -15,6 +15,16 @@ import { FALLBACK_LIVE_MODEL } from "./liveCoaching";
 // to Haiku 5.5: Ask Anchor's multi-step tool and web-search rounds
 // haven't been checked against a model that thinks by default.
 const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_LIVE_MODEL || FALLBACK_LIVE_MODEL;
+// Building a model or spreadsheet (create_spreadsheet in askTools.ts) is
+// careful, long work — formulas across sheets — so those questions go to
+// the stronger model, with room for the whole workbook.
+const MODEL_BUILDER_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL_BUILDER_MAX_TOKENS = 16_000;
+const MODEL_REQUEST =
+  /\b(excel|spreadsheet|xlsx|sheet|model|modell?ing|forecast|projection|budget|valuation|dcf|p&l|pnl|financials?|roi|payback|unit economics|pro ?forma|scenario|sensitivity)\b/i;
+export function wantsSpreadsheet(question: string): boolean {
+  return MODEL_REQUEST.test(question);
+}
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -368,7 +378,7 @@ export type ServerTool = {
 
 // A few search-and-read rounds are plenty for one question (e.g. "2027
 // forecast", then just the company name); more would only slow it down.
-const MAX_TOOL_ROUNDS = 3;
+const MAX_TOOL_ROUNDS = 5;
 
 // Streams an answer, running any server tools the model calls and
 // continuing until it answers. Text from every round streams straight
@@ -567,6 +577,7 @@ export async function* askAnchorStream(params: {
   serverTools?: ServerTool[];
   toolRules?: string;
 }): AsyncGenerator<string> {
+  const heavy = wantsSpreadsheet(params.question);
   const contextBlock = buildContextBlock(params.context);
   const mode = params.mode ?? "live";
   const actions = params.actions;
@@ -576,8 +587,8 @@ export async function* askAnchorStream(params: {
   const message = yield* streamWithServerTools(
     (withSearch, messages) =>
       client().messages.stream({
-        model: MODEL,
-        max_tokens: mode === "live" ? 700 : 1500,
+        model: heavy ? MODEL_BUILDER_MODEL : MODEL,
+        max_tokens: heavy ? MODEL_BUILDER_MAX_TOKENS : mode === "live" ? 700 : 1500,
         // The deal context in the system prompt is large and identical
         // for every follow-up question (and every tool round within one
         // answer), so cache it — later turns start answering sooner.
@@ -663,11 +674,12 @@ export async function* askWorkspaceStream(params: {
   toolRules?: string;
 }): AsyncGenerator<string> {
   const serverTools = params.serverTools ?? [];
+  const heavy = wantsSpreadsheet(params.question);
   yield* streamWithServerTools(
     (withSearch, messages) =>
       client().messages.stream({
-        model: MODEL,
-        max_tokens: 1500,
+        model: heavy ? MODEL_BUILDER_MODEL : MODEL,
+        max_tokens: heavy ? MODEL_BUILDER_MAX_TOKENS : 1500,
         cache_control: { type: "ephemeral" },
         ...(withSearch || serverTools.length
           ? { tools: [...(withSearch ? [webSearchTool(5)] : []), ...serverTools.map((t) => t.tool)] }
