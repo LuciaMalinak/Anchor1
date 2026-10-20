@@ -46,7 +46,9 @@ export type DealTask = {
 export class AnchorApi {
   constructor(
     private apiBase: string,
-    private token: string
+    private token: string,
+    // Sent with every request so Anchor can tell who's on an old copy.
+    private appVersion?: string
   ) {}
 
   private async request(path: string, init?: RequestInit): Promise<Response> {
@@ -55,6 +57,7 @@ export class AnchorApi {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.token}`,
+        ...(this.appVersion ? { "X-Anchor-Desktop-Version": this.appVersion, "X-Anchor-Desktop-Platform": process.platform } : {}),
         ...(init?.headers ?? {}),
       },
     });
