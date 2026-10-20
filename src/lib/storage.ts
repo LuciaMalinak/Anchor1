@@ -1,6 +1,9 @@
 import fs from "fs/promises";
 import path from "path";
-import { isR2Configured, r2Put, r2Get, r2Delete, r2DeletePrefix, r2FirstKey } from "./r2";
+import { createWriteStream } from "fs";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
+import { isR2Configured, r2Put, r2PutStream, r2Get, r2Delete, r2DeletePrefix, r2FirstKey } from "./r2";
 
 // Local disk storage — the original MVP-only implementation. Fine for one
 // server instance, but does NOT survive a redeploy or restart on Render's
@@ -38,6 +41,28 @@ export async function saveMeetingAudio(
   await fs.mkdir(dir, { recursive: true });
   const filePath = path.join(dir, fileName);
   await fs.writeFile(filePath, data);
+  return filePath;
+}
+
+// Saves a recording straight from a download link (Recall's) into
+// storage, streaming it rather than loading it into memory — a desktop
+// call's recording is a video file, often hundreds of MB. Same return
+// value as saveMeetingAudio.
+export async function saveMeetingMediaFromUrl(meetingId: string, fileName: string, url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok || !res.body) throw new Error(`Failed to download the recording (${res.status})`);
+  const length = Number(res.headers.get("content-length")) || 0;
+  const type = res.headers.get("content-type") || undefined;
+  if (isR2Configured()) {
+    const key = `meetings/${meetingId}/${fileName}`;
+    if (length > 0) await r2PutStream(key, res.body, length, type);
+    else await r2Put(key, Buffer.from(await res.arrayBuffer()), type);
+    return key;
+  }
+  const dir = path.join(STORAGE_ROOT, meetingId);
+  await fs.mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, fileName);
+  await pipeline(Readable.fromWeb(res.body as import("stream/web").ReadableStream), createWriteStream(filePath));
   return filePath;
 }
 

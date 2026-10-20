@@ -351,19 +351,19 @@ export async function getRecording(recordingId: string): Promise<RecallRecording
   return res.json();
 }
 
-export async function downloadRecordingAudio(recordingId: string): Promise<Buffer> {
-  const recording = await getRecording(recordingId);
-  const url = recording.media_shortcuts?.audio_mixed?.data?.download_url || recording.download_url;
-  if (!url) {
-    throw new Error(
-      "Recall.ai desktop recording finished but Anchor couldn't find a download URL in the response — check Render logs."
-    );
-  }
-  const audioRes = await fetch(url);
-  if (!audioRes.ok) {
-    throw new Error(`Failed to download recording audio (${audioRes.status})`);
-  }
-  return Buffer.from(await audioRes.arrayBuffer());
+// Where to download a desktop recording from. Recall makes a mixed video
+// for desktop recordings and often no separate audio file (audio_mixed
+// came back "none" even though Anchor asks for it) — so Anchor never
+// fetched any desktop recording. Prefer the audio when it exists, else
+// the video. Null when there's nothing downloadable (yet).
+export async function recordingMediaUrl(recordingId: string): Promise<{ url: string; ext: string } | null> {
+  const recording = (await getRecording(recordingId)) as RecallRecording & {
+    media_shortcuts?: { video_mixed?: { data?: { download_url?: string } } };
+  };
+  const audio = recording.media_shortcuts?.audio_mixed?.data?.download_url;
+  if (audio) return { url: audio, ext: "mp4" };
+  const video = recording.media_shortcuts?.video_mixed?.data?.download_url || recording.download_url;
+  return video ? { url: video, ext: "mp4" } : null;
 }
 
 // Support check (user-health): what Recall itself has for a desktop

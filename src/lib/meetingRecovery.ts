@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { meetings, transcripts } from "@/db/schema";
-import { downloadBotAudio, downloadRecordingAudio } from "@/lib/recall";
-import { saveMeetingAudio } from "@/lib/storage";
+import { downloadBotAudio, recordingMediaUrl } from "@/lib/recall";
+import { saveMeetingAudio, saveMeetingMediaFromUrl } from "@/lib/storage";
 import { goodLiveTranscript, processMeeting, whileFetchingAudio } from "@/lib/processMeeting";
 
 type MeetingRow = typeof meetings.$inferSelect;
@@ -19,17 +19,20 @@ export async function fetchMissingRecording(meeting: MeetingRow): Promise<boolea
 }
 
 async function fetchRecording(meeting: MeetingRow): Promise<boolean> {
-  let audio: Buffer | null = null;
+  let storagePath: string | null = null;
   let fileName = "";
   if (meeting.recallRecordingId) {
-    audio = await downloadRecordingAudio(meeting.recallRecordingId);
-    fileName = `${meeting.recallRecordingId}.mp4`;
+    const media = await recordingMediaUrl(meeting.recallRecordingId);
+    if (!media) return false;
+    fileName = `${meeting.recallRecordingId}.${media.ext}`;
+    storagePath = await saveMeetingMediaFromUrl(meeting.id, fileName, media.url);
   } else if (meeting.recallBotId) {
-    audio = await downloadBotAudio(meeting.recallBotId);
+    const audio = await downloadBotAudio(meeting.recallBotId);
+    if (!audio?.length) return false;
     fileName = `${meeting.recallBotId}.mp4`;
+    storagePath = await saveMeetingAudio(meeting.id, fileName, audio);
   }
-  if (!audio?.length) return false;
-  const storagePath = await saveMeetingAudio(meeting.id, fileName, audio);
+  if (!storagePath) return false;
   await db.update(meetings).set({ audioFileName: fileName, audioStoragePath: storagePath, updatedAt: new Date() }).where(eq(meetings.id, meeting.id));
   // A good live transcript (named speakers, most of the call) stays —
   // the meeting is already written up from it.
