@@ -202,7 +202,7 @@ function getApi(): AnchorApi {
   if (!config.token) {
     throw new Error("No Anchor desktop token saved yet — paste one in from the Integrations page first.");
   }
-  return new AnchorApi(config.apiBase || DEFAULT_API_BASE, config.token);
+  return new AnchorApi(config.apiBase || DEFAULT_API_BASE, config.token, app.getVersion());
 }
 
 // windowId -> the in-flight beginRecording() promise for that window, if

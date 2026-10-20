@@ -65,9 +65,11 @@ export async function authenticateBearerFromHeaders(headers: HeaderReader): Prom
     return null;
   }
 
+  const version = headers.get("x-anchor-desktop-version")?.slice(0, 40) || null;
+  const platform = headers.get("x-anchor-desktop-platform")?.slice(0, 20) || null;
   void db
     .update(apiTokens)
-    .set({ lastUsedAt: new Date() })
+    .set({ lastUsedAt: new Date(), ...(version ? { clientVersion: version, clientPlatform: platform } : {}) })
     .where(eq(apiTokens.id, row.id))
     .then(
       () => {},

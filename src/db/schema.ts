@@ -326,6 +326,11 @@ export const apiTokens = pgTable("api_token", {
   tokenHash: text("tokenHash").notNull().unique(),
   label: text("label").notNull(),
   lastUsedAt: timestamp("lastUsedAt", { mode: "date" }),
+  // The desktop app's version and OS the last time it used this token
+  // (it sends them as headers) — to spot someone stuck on an old copy.
+  // Created on deploy by startupMigrations.ts.
+  clientVersion: text("clientVersion"),
+  clientPlatform: text("clientPlatform"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 

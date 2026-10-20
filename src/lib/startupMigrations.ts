@@ -68,6 +68,9 @@ const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS "answer_playbook_teamId_idx" ON "answer_playbook" ("teamId", "updatedAt")`,
   // Feedback on Anchor after each call (callFeedback in schema.ts).
   `ALTER TABLE "meeting" ADD COLUMN IF NOT EXISTS "callFeedback" jsonb`,
+  // Desktop app version per token (apiTokens in schema.ts).
+  `ALTER TABLE "api_token" ADD COLUMN IF NOT EXISTS "clientVersion" text`,
+  `ALTER TABLE "api_token" ADD COLUMN IF NOT EXISTS "clientPlatform" text`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

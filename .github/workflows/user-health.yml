@@ -1,0 +1,38 @@
+# Checks one person's Anchor end to end — account, desktop app version,
+# Google connection, morning brief and their recent meetings — and lists
+# anything that looks broken. Run it by hand (Actions -> User health ->
+# Run workflow) with part of their name or email. Statuses only: no
+# meeting titles or content.
+name: User health
+
+on:
+  workflow_dispatch:
+    inputs:
+      who:
+        description: "Part of their name or email"
+        required: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      SITE: ${{ vars.ANCHOR_URL || 'https://anchor-be6o.onrender.com' }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      WHO: ${{ inputs.who }}
+    steps:
+      - name: Check
+        run: |
+          curl -sS --max-time 180 --retry 3 --retry-all-errors -G -H "x-cron-key: $CRON_SECRET" --data-urlencode "q=$WHO" "$SITE/api/cron/user-health" > report.json
+          curl -sS --max-time 60 "$SITE/api/desktop-app/updates/latest.yml" | sed -n 's/^version: //p' > latest.txt || true
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open("report.json"))
+          latest = open("latest.txt").read().strip() or "unknown"
+          if "error" in d:
+              print("Error:", d["error"]); raise SystemExit(1)
+          print(f"### {d['found']} match(es) for '{d['q']}' — newest desktop app: {latest}\n")
+          for r in d["report"]:
+              print("```json")
+              print(json.dumps(r, indent=2))
+              print("```")
+          PY
