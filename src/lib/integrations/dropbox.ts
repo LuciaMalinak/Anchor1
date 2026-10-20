@@ -7,7 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { integrationConnections } from "@/db/schema";
 import { extractTextFromFile } from "@/lib/extractText";
-import { PROVIDERS } from "./config";
+import { DROPBOX_EXTRA_SCOPES, PROVIDERS, hasScopes } from "./config";
 import {
   MAX_DOCUMENTS,
   MAX_DOWNLOAD_BYTES,
@@ -200,4 +200,58 @@ export async function fetchRelevantDropboxDocuments(
     }
   }
   return items;
+}
+
+// Thrown when the Dropbox connection is read-only (connected before saving
+// recaps existed), so the meeting page can ask for write access.
+export class NeedsDropboxPermissionError extends Error {}
+
+// Dropbox wants non-ASCII in its JSON header escaped.
+function dropboxArg(arg: unknown): string {
+  return JSON.stringify(arg).replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
+// A file or folder name Dropbox will take: no slashes or characters
+// Windows can't sync, no trailing dots or spaces.
+export function dropboxSafeName(name: string): string {
+  return name.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().replace(/[.\s]+$/, "").slice(0, 200) || "Untitled";
+}
+
+// Saves `content` as a new file in `folder` (created if missing). Never
+// overwrites: a clash gets " (1)" added by Dropbox. Returns where it went
+// and a link that opens the file on dropbox.com.
+export async function saveDropboxFile(
+  userId: string,
+  params: { folder: string; fileName: string; content: string }
+): Promise<{ path: string; link: string }> {
+  const connection = await getDropboxConnection(userId);
+  if (!connection) throw new Error("Dropbox isn't connected yet — connect it from the Integrations page first.");
+  if (!hasScopes(connection.scope, DROPBOX_EXTRA_SCOPES.files_write)) {
+    throw new NeedsDropboxPermissionError("Anchor needs permission to save files to Dropbox.");
+  }
+  const folder = "/" + params.folder.split("/").map((p) => p.trim()).filter(Boolean).map(dropboxSafeName).join("/");
+  const filePath = `${folder === "/" ? "" : folder}/${dropboxSafeName(params.fileName)}`;
+  let saved: DropboxFile;
+  try {
+    const { res } = await dropboxFetch(connection, connection.accessToken, "https://content.dropboxapi.com/2/files/upload", {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Dropbox-API-Arg": dropboxArg({ path: filePath, mode: "add", autorename: true, mute: false }),
+      },
+      body: params.content,
+    });
+    saved = (await res.json()) as DropboxFile;
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("missing_scope")) {
+      throw new NeedsDropboxPermissionError("Anchor needs permission to save files to Dropbox.");
+    }
+    throw err;
+  }
+  const shown = saved.path_display ?? filePath;
+  return {
+    path: shown,
+    link: `https://www.dropbox.com/home${encodeURI(path.posix.dirname(shown)).replace(/\/$/, "")}?preview=${encodeURIComponent(
+      path.posix.basename(shown)
+    )}`,
+  };
 }

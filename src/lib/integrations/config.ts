@@ -108,7 +108,7 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     key: "dropbox",
     name: "Dropbox",
     description:
-      "Find the decks, proposals and notes about a deal in your Dropbox, so Ask Anchor and briefings can draw on them.",
+      "Find the decks, proposals and notes about a deal in your Dropbox, so Ask Anchor and briefings can draw on them — and save each call's recap into the deal's folder.",
     // Read-only: list/search files and read their contents, plus the
     // account email shown on this card.
     scopes: ["account_info.read", "files.metadata.read", "files.content.read"],
@@ -152,6 +152,40 @@ export type HubspotExtraScopeKey = keyof typeof HUBSPOT_EXTRA_SCOPES;
 
 export function isHubspotExtraScopeKey(value: string | null): value is HubspotExtraScopeKey {
   return value !== null && value in HUBSPOT_EXTRA_SCOPES;
+}
+
+// Posting a call recap to a Slack channel from the meeting page. The
+// default Slack scopes can DM a teammate but can't list channels or post
+// in one the Anchor app hasn't been invited to; asked for the first time
+// someone posts, via /api/integrations/slack/connect?add=post_channels.
+// (The Slack app also needs these two scopes added in its OAuth settings.)
+export const SLACK_EXTRA_SCOPES = {
+  post_channels: "channels:read chat:write.public",
+} as const;
+export type SlackExtraScopeKey = keyof typeof SLACK_EXTRA_SCOPES;
+
+export function isSlackExtraScopeKey(value: string | null): value is SlackExtraScopeKey {
+  return value !== null && value in SLACK_EXTRA_SCOPES;
+}
+
+// Saving a call recap into the deal's Dropbox folder. Dropbox connects
+// read-only; write access is asked for the first time someone saves, via
+// /api/integrations/dropbox/connect?add=files_write. (The Dropbox app also
+// needs files.content.write ticked on its Permissions tab.)
+export const DROPBOX_EXTRA_SCOPES = {
+  files_write: "files.content.write",
+} as const;
+export type DropboxExtraScopeKey = keyof typeof DROPBOX_EXTRA_SCOPES;
+
+export function isDropboxExtraScopeKey(value: string | null): value is DropboxExtraScopeKey {
+  return value !== null && value in DROPBOX_EXTRA_SCOPES;
+}
+
+// Whether a stored connection's granted scopes include all of `wanted`.
+// Slack stores them comma-separated, everyone else space-separated.
+export function hasScopes(granted: string | null | undefined, wanted: string): boolean {
+  const have = new Set((granted ?? "").split(/[\s,]+/).filter(Boolean));
+  return wanted.split(/\s+/).every((s) => have.has(s));
 }
 
 export function isProviderConfigured(key: ProviderKey): boolean {
