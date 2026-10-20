@@ -194,9 +194,15 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
       }
     }
 
+    // How long the call was, from the transcript, when nothing set it.
+    const lastMs = utterances.reduce((n, u) => Math.max(n, u.endMs ?? 0), 0);
     await db
       .update(meetings)
-      .set({ status: "summarizing", updatedAt: new Date() })
+      .set({
+        status: "summarizing",
+        updatedAt: new Date(),
+        ...(meeting.durationSeconds == null && lastMs > 0 ? { durationSeconds: Math.round(lastMs / 1000) } : {}),
+      })
       .where(eq(meetings.id, meetingId));
 
     // If Claude can't summarize (out of API credits, an outage), the
