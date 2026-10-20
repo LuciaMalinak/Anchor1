@@ -17,12 +17,22 @@ type ChatTurn = { role: "user" | "assistant"; content: string };
 // what it did before.
 // **bold** and [label](https://link) — e.g. news articles Ask Anchor
 // suggests. Only http(s) links are made clickable; they open in a new tab.
+// Plus download links to files Ask Anchor made (/api/exports/…).
 function renderInline(text: string, keyPrefix: string): ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).filter((p) => p.length > 0);
+  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\((?:https?:\/\/|\/api\/exports\/)[^\s)]+\))/g).filter((p) => p.length > 0);
   return parts.map((part, i) => {
     const key = `${keyPrefix}-${i}`;
     if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
       return <strong key={key}>{part.slice(2, -2)}</strong>;
+    }
+    // Files Ask Anchor made (an Excel model) download from Anchor itself.
+    const file = part.match(/^\[([^\]]+)\]\((\/api\/exports\/[^\s)]+)\)$/);
+    if (file) {
+      return (
+        <a key={key} href={file[2]} download className="font-medium underline underline-offset-2 hover:opacity-80">
+          {file[1]}
+        </a>
+      );
     }
     const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
     if (link) {

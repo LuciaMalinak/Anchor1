@@ -222,3 +222,22 @@ export async function readStoredFile(storagePath: string): Promise<Buffer | null
   }
   return fs.readFile(storagePath).catch(() => null);
 }
+
+// Files Ask Anchor makes for someone (an Excel model, say), kept under
+// their own id so only they can download them (see /api/exports/[id]).
+const EXPORT_STORAGE_ROOT = path.join(process.cwd(), "storage", "exports");
+
+export async function saveExport(userId: string, fileId: string, data: Buffer): Promise<void> {
+  if (isR2Configured()) {
+    await r2Put(`exports/${userId}/${fileId}`, data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return;
+  }
+  const dir = path.join(EXPORT_STORAGE_ROOT, userId);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, fileId), data);
+}
+
+export async function readExport(userId: string, fileId: string): Promise<Buffer | null> {
+  if (isR2Configured()) return r2Get(`exports/${userId}/${fileId}`);
+  return fs.readFile(path.join(EXPORT_STORAGE_ROOT, userId, fileId)).catch(() => null);
+}
