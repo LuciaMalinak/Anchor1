@@ -14,6 +14,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { integrationConnections } from "@/db/schema";
+import { SLACK_EXTRA_SCOPES, hasScopes } from "./config";
 
 type Connection = typeof integrationConnections.$inferSelect;
 
@@ -106,4 +107,81 @@ export async function sendSlackDirectMessage(
     channel: channel.id,
     text: params.text,
   });
+}
+
+// Thrown when the Slack connection predates channel posting, so the
+// meeting page can send them to Slack to add it (SLACK_EXTRA_SCOPES).
+export class NeedsSlackPermissionError extends Error {}
+
+async function postingConnection(userId: string): Promise<Connection> {
+  const connection = await getSlackConnection(userId);
+  if (!connection) {
+    throw new Error("Slack isn't connected yet — connect it from the Integrations page first.");
+  }
+  if (!hasScopes(connection.scope, SLACK_EXTRA_SCOPES.post_channels)) {
+    throw new NeedsSlackPermissionError("Anchor needs permission to post in Slack channels.");
+  }
+  return connection;
+}
+
+export type SlackChannel = { id: string; name: string };
+
+// Public channels in the connected workspace, by name — what the recap
+// card lets someone pick from.
+export async function listSlackChannels(userId: string): Promise<SlackChannel[]> {
+  const connection = await postingConnection(userId);
+  const channels: SlackChannel[] = [];
+  let cursor = "";
+  // A few pages is plenty for a picker; very large workspaces get the
+  // first 600 channels Slack returns.
+  for (let page = 0; page < 3; page++) {
+    const res = await fetch(
+      `https://slack.com/api/conversations.list?types=public_channel&exclude_archived=true&limit=200${
+        cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
+      }`,
+      { headers: { Authorization: `Bearer ${connection.accessToken}` } }
+    );
+    const json = await res.json().catch(() => ({}));
+    if (json.ok !== true) {
+      if (json.error === "missing_scope") throw new NeedsSlackPermissionError("Anchor needs permission to list Slack channels.");
+      throw new Error(typeof json.error === "string" ? json.error : "Slack couldn't list channels.");
+    }
+    for (const c of (json.channels ?? []) as { id?: string; name?: string }[]) {
+      if (c.id && c.name) channels.push({ id: c.id, name: c.name });
+    }
+    cursor = json.response_metadata?.next_cursor ?? "";
+    if (!cursor) break;
+  }
+  return channels.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Posts `text` (Slack mrkdwn) to a public channel. chat:write.public lets
+// the Anchor app post without being invited to the channel first.
+// Returns a link to the message when Slack gives one.
+export async function postSlackChannelMessage(
+  userId: string,
+  params: { channelId: string; text: string }
+): Promise<{ permalink: string | null }> {
+  const connection = await postingConnection(userId);
+  let posted: Record<string, unknown>;
+  try {
+    posted = await slackCall(connection.accessToken, "chat.postMessage", {
+      channel: params.channelId,
+      text: params.text,
+      unfurl_links: false,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "missing_scope") {
+      throw new NeedsSlackPermissionError("Anchor needs permission to post in Slack channels.");
+    }
+    throw err;
+  }
+  const res = await fetch(
+    `https://slack.com/api/chat.getPermalink?channel=${encodeURIComponent(params.channelId)}&message_ts=${encodeURIComponent(
+      String(posted.ts ?? "")
+    )}`,
+    { headers: { Authorization: `Bearer ${connection.accessToken}` } }
+  );
+  const link = await res.json().catch(() => ({}));
+  return { permalink: link.ok === true && typeof link.permalink === "string" ? link.permalink : null };
 }

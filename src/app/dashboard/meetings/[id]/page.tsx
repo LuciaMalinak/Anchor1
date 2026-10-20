@@ -27,6 +27,10 @@ import { AskAnchorScope } from "@/components/AskAnchorDock";
 import { CrmUpdateCard } from "./CrmUpdateCard";
 import { authorizeMeeting } from "@/lib/meetingAccess";
 import { CRM_NAME, crmTargetFor } from "@/lib/integrations/crmWrite";
+import { SlackPostCard } from "./SlackPostCard";
+import { DropboxSaveCard } from "./DropboxSaveCard";
+import { getSlackConnection } from "@/lib/integrations/slack";
+import { getDropboxConnection, dropboxSafeName } from "@/lib/integrations/dropbox";
 
 // Kept as a plain helper outside the component — same reasoning as
 // isResearchStale() in companyResearch.ts: reading Date.now() directly
@@ -96,6 +100,14 @@ export default async function MeetingDetailPage({
     if (target.provider) crmName = CRM_NAME[target.provider];
     else if (target.reason === "not_connected" && target.linkedTo) crmHint = CRM_NAME[target.linkedTo];
   }
+
+  // "Post to Slack" / "Save to Dropbox": shown to whoever has that tool
+  // connected; each asks for its extra permission on first use.
+  const [slackConnection, dropboxConnection] = await Promise.all([
+    isProviderConfigured("slack") ? getSlackConnection(session.user.id) : null,
+    isProviderConfigured("dropbox") ? getDropboxConnection(session.user.id) : null,
+  ]);
+  const dropboxFolder = `/Anchor/${dropboxSafeName(meetingAccess?.deal?.name ?? "Meetings")}`;
 
   // Only the owner gets to reassign this meeting's deal (see the PATCH
   // route's comment) — a teammate viewing a shared meeting gets read-only
@@ -346,6 +358,10 @@ export default async function MeetingDetailPage({
       {summary && transcript && googleConfigured && <SuggestedInvites meetingId={id} />}
 
       {summary && crmName && <CrmUpdateCard meetingId={id} crmName={crmName} />}
+      {summary && slackConnection && <SlackPostCard meetingId={id} dealId={meetingAccess?.deal?.id ?? null} />}
+
+      {summary && dropboxConnection && <DropboxSaveCard meetingId={id} defaultFolder={dropboxFolder} />}
+
       {summary && !crmName && crmHint && (
         <p className="text-xs text-slate-500">
           This deal is linked to {crmHint}.{" "}

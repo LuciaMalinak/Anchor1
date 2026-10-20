@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
+  DROPBOX_EXTRA_SCOPES,
   GOOGLE_EXTRA_SCOPES,
   HUBSPOT_EXTRA_SCOPES,
   PROVIDERS,
+  SLACK_EXTRA_SCOPES,
+  isDropboxExtraScopeKey,
   isGoogleExtraScopeKey,
   isHubspotExtraScopeKey,
   isProviderConfigured,
   isProviderKey,
+  isSlackExtraScopeKey,
 } from "@/lib/integrations/config";
 import { safeReturnTo } from "@/lib/integrations/returnTo";
 import crypto from "crypto";
@@ -56,13 +60,19 @@ export async function GET(
   // ?add=gmail_compose / calendar_events asks for one extra Google
   // permission on top of the default read-only ones (see config.ts).
   const add = req.nextUrl.searchParams.get("add");
-  // ?add=deals_write on HubSpot does the same for updating deals.
+  // ?add=deals_write on HubSpot does the same for updating deals,
+  // ?add=post_channels on Slack for posting recaps to a channel, and
+  // ?add=files_write on Dropbox for saving recaps to a deal's folder.
   const scopes =
     provider === "google" && isGoogleExtraScopeKey(add)
       ? [...cfg.scopes, GOOGLE_EXTRA_SCOPES[add]]
       : provider === "hubspot" && isHubspotExtraScopeKey(add)
         ? [...cfg.scopes, HUBSPOT_EXTRA_SCOPES[add]]
-        : cfg.scopes;
+        : provider === "slack" && isSlackExtraScopeKey(add)
+          ? [...cfg.scopes, ...SLACK_EXTRA_SCOPES[add].split(" ")]
+          : provider === "dropbox" && isDropboxExtraScopeKey(add)
+            ? [...cfg.scopes, DROPBOX_EXTRA_SCOPES[add]]
+            : cfg.scopes;
 
   const url = new URL(cfg.authorizeUrl);
   url.searchParams.set("client_id", clientId);
