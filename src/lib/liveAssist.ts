@@ -15,13 +15,14 @@ import { FALLBACK_LIVE_MODEL } from "./liveCoaching";
 // to Haiku 5.5: Ask Anchor's multi-step tool and web-search rounds
 // haven't been checked against a model that thinks by default.
 const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_LIVE_MODEL || FALLBACK_LIVE_MODEL;
-// Building a model or spreadsheet (create_spreadsheet in askTools.ts) is
+// Building a model, spreadsheet or deck (create_spreadsheet /
+// create_presentation in askTools.ts) is
 // careful, long work — formulas across sheets — so those questions go to
 // the stronger model, with room for the whole workbook.
 const MODEL_BUILDER_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 const MODEL_BUILDER_MAX_TOKENS = 16_000;
 const MODEL_REQUEST =
-  /\b(excel|spreadsheet|xlsx|sheet|model|modell?ing|forecast|projection|budget|valuation|dcf|p&l|pnl|financials?|roi|payback|unit economics|pro ?forma|scenario|sensitivity)\b/i;
+  /\b(excel|spreadsheet|xlsx|sheet|model|modell?ing|forecast|projection|budget|valuation|dcf|p&l|pnl|financials?|roi|payback|unit economics|pro ?forma|scenario|sensitivity|powerpoint|pptx|deck|slides?|presentation|pitch)\b/i;
 export function wantsSpreadsheet(question: string): boolean {
   return MODEL_REQUEST.test(question);
 }

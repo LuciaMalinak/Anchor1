@@ -223,13 +223,18 @@ export async function readStoredFile(storagePath: string): Promise<Buffer | null
   return fs.readFile(storagePath).catch(() => null);
 }
 
-// Files Ask Anchor makes for someone (an Excel model, say), kept under
+export const EXPORT_TYPES: Record<string, string> = {
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+};
+
+// Files Ask Anchor makes for someone (an Excel model, a deck), kept under
 // their own id so only they can download them (see /api/exports/[id]).
 const EXPORT_STORAGE_ROOT = path.join(process.cwd(), "storage", "exports");
 
 export async function saveExport(userId: string, fileId: string, data: Buffer): Promise<void> {
   if (isR2Configured()) {
-    await r2Put(`exports/${userId}/${fileId}`, data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    await r2Put(`exports/${userId}/${fileId}`, data, EXPORT_TYPES[fileId.split(".").pop() ?? ""]);
     return;
   }
   const dir = path.join(EXPORT_STORAGE_ROOT, userId);

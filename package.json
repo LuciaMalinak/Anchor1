@@ -23,6 +23,7 @@
     "next-auth": "^5.0.0-beta.32",
     "pdf-parse": "^2.4.5",
     "postgres": "^3.4.9",
+    "pptxgenjs": "^3.12.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "^4.6.5"
