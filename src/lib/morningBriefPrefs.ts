@@ -99,10 +99,12 @@ export function localNow(timeZone: string, now: Date = new Date()): { date: stri
   };
 }
 
-// Due once per local day, at or after the chosen time (the hourly job can
-// run a little late), on the chosen days, and never twice the same day.
-// A brief that's more than 3 hours late is skipped rather than sent at
-// lunchtime.
+// Due once per local day, at or after the chosen time, on the chosen days,
+// and never twice the same day. The server checks every few minutes, but
+// can be late (asleep, restarting): a late brief still goes out the same
+// day, up to 12 hours after its time, instead of being skipped.
+const LATEST_MINUTES_LATE = 12 * 60;
+
 export function isBriefDue(prefs: MorningBriefPrefs, lastSentOn: string | null, now: Date = new Date()) {
   const local = localNow(prefs.timeZone, now);
   const target = prefs.hour * 60 + prefs.minute;
@@ -111,7 +113,7 @@ export function isBriefDue(prefs: MorningBriefPrefs, lastSentOn: string | null, 
     lastSentOn !== local.date &&
     !(prefs.days === "weekdays" && isWeekend) &&
     local.minutes >= target &&
-    local.minutes < target + 180;
+    local.minutes < target + LATEST_MINUTES_LATE;
   return { due, localDate: local.date };
 }
 

@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { runDueMorningBriefs } from "@/lib/morningBrief";
 import { recoverStuckMeetings } from "@/lib/stuckMeetings";
 
-// The hourly Morning brief job: sends everyone whose chosen time has come
-// (in their own time zone) and who hasn't had today's yet. Called every
-// hour by .github/workflows/morning-brief.yml with ?key=CRON_SECRET; this
-// app has no scheduler of its own. Safe to call more often or twice: each
-// person gets at most one brief a day.
+// Sends everyone whose Morning brief time has come (in their own time
+// zone) and who hasn't had today's yet. The server already checks every
+// five minutes by itself (instrumentation.ts); this route is the backup
+// that .github/workflows/morning-brief.yml (or any outside scheduler)
+// calls with ?key=CRON_SECRET, and it wakes a sleeping server. Safe to
+// call more often or twice: each person gets at most one brief a day.
 async function handle(req: NextRequest) {
   const key = req.nextUrl.searchParams.get("key") ?? req.headers.get("x-cron-key");
   if (!process.env.CRON_SECRET || key !== process.env.CRON_SECRET) {

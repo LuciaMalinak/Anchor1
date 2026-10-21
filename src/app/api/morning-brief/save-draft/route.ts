@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { NeedsGooglePermissionError } from "@/lib/integrations/google";
 import { createGmailDraft } from "@/lib/integrations/gmailDraft";
+import { replyDraft } from "@/lib/integrations/gmailMime";
 import { briefActor, loadBriefEmail, saveBriefEmail, validThreadId } from "@/lib/briefActions";
 
 // "Save to Gmail drafts" on one email in the Morning brief: puts the
@@ -14,12 +15,7 @@ export async function POST(req: Request) {
   const { brief, email, shown } = await loadBriefEmail(userId, threadId);
   if (!brief || !email?.reply) return NextResponse.json({ error: "That reply isn't in your latest brief." }, { status: 404 });
   try {
-    const subject = /^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`;
-    const result = await createGmailDraft(
-      userId,
-      { to: [email.fromEmail], subject, body: email.reply, inReplyTo: email.replyToHeader ?? undefined },
-      { threadId }
-    );
+    const result = await createGmailDraft(userId, replyDraft(email, email.reply), { threadId });
     await saveBriefEmail(userId, brief, shown, threadId, { email: { drafted: true }, shown: { drafted: true } });
     return NextResponse.json({ ok: true, openUrl: result.openUrl });
   } catch (err) {

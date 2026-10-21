@@ -1,6 +1,6 @@
 // Guardrails for the meeting page's Gmail drafts and suggested invites.
 // Run: npx tsx scripts/test-next-steps.ts
-import { buildMime } from "@/lib/integrations/gmailMime";
+import { buildMime, replyDraft } from "@/lib/integrations/gmailMime";
 import { suggestInvites, endISO } from "@/lib/suggestInvites";
 import { safeReturnTo } from "@/lib/integrations/returnTo";
 import { createShareToken, readShareToken } from "@/lib/shareLink";
@@ -47,7 +47,8 @@ const thu = (utcHour: number, utcMin = 0) => new Date(Date.UTC(2026, 9, 15, utcH
 assert(!isBriefDue(nyPrefs, null, thu(11, 59)).due, "not due at 7:59 local");
 assert(isBriefDue(nyPrefs, null, thu(12, 5)).due && isBriefDue(nyPrefs, null, thu(12, 5)).localDate === "2026-10-15", "due at 8:05 local, dated the local day");
 assert(!isBriefDue(nyPrefs, "2026-10-15", thu(13)).due, "never twice the same day");
-assert(!isBriefDue(nyPrefs, null, thu(15, 30)).due, "skipped if more than 3 hours late");
+assert(isBriefDue(nyPrefs, null, thu(16, 48)).due, "still sent the same day when the check runs hours late");
+assert(!isBriefDue(nyPrefs, null, new Date(Date.UTC(2026, 9, 16, 0, 30))).due, "not sent more than 12 hours late (8:30 pm local)");
 assert(!isBriefDue(nyPrefs, null, new Date(Date.UTC(2026, 9, 17, 12, 5))).due, "weekdays-only skips Saturday");
 assert(isBriefDue(normalizePrefs({ ...nyPrefs, days: "everyday" }), null, new Date(Date.UTC(2026, 9, 17, 12, 5))).due, "every-day includes Saturday");
 assert(isBriefDue(normalizePrefs({ hour: 8, timeZone: "Europe/Berlin" }), null, thu(6, 10)).due, "Berlin 8:00 is 6:00 UTC");
@@ -112,7 +113,7 @@ import("@/lib/integrations/documentSearch").then(({ dealSearchTerm, formatDocume
 }).catch((err) => { console.error("FAIL documentSearch tests", err); process.exit(1); });
 
 // Which inbox threads still need a reply, on headers alone.
-import("@/lib/integrations/gmailHeaders").then(({ looksAwaitingReply, parseAddress }) => {
+import("@/lib/integrations/gmailHeaders").then(({ looksAwaitingReply, parseAddress, replyAllFor }) => {
   const me = new Set(["lucia@acme.com"]);
   const msg = (headers: Record<string, string>, labelIds: string[] = ["INBOX"]) => ({
     labelIds,
@@ -124,4 +125,10 @@ import("@/lib/integrations/gmailHeaders").then(({ looksAwaitingReply, parseAddre
   assert(!looksAwaitingReply(msg({ From: "no-reply@zoom.us", To: "lucia@acme.com" }), me), "no-reply senders skipped");
   assert(!looksAwaitingReply(msg({ From: "dana@northwind.com", To: "team@acme.com" }), me), "mail only to a group list skipped");
   assert(parseAddress('"Ruiz, Dana" <Dana@Northwind.com>').email === "dana@northwind.com", "parses sender address");
+  const answered = msg({ From: "Dana <dana@northwind.com>", To: "lucia@acme.com, sam@northwind.com", Cc: "legal@northwind.com, Lucia@Acme.com", Subject: "RE: Pricing", "Message-Id": "<m3@nw>", References: "<m1@acme> <m2@nw>" });
+  const all = replyAllFor(answered, me);
+  assert(all.to.join() === "dana@northwind.com,sam@northwind.com" && all.cc.join() === "legal@northwind.com", "reply-all keeps everyone on the chain but me");
+  assert(all.subject === "RE: Pricing" && all.references === "<m1@acme> <m2@nw> <m3@nw>", "reply stays in the same conversation");
+  const draft = buildMime(replyDraft({ fromEmail: "dana@northwind.com", subject: "Pricing", replyToHeader: "<m3@nw>", replyAll: all }, "Thanks"));
+  assert(draft.includes("To: dana@northwind.com, sam@northwind.com\r\nCc: legal@northwind.com") && draft.includes("References: <m1@acme> <m2@nw> <m3@nw>"), "reply-all draft headers");
 }).catch((err) => { console.error("FAIL gmailHeaders tests", err); process.exit(1); });
