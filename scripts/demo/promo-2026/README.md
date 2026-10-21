@@ -35,3 +35,19 @@ earlier promo cut, extended to 60 s.
 
 `composer.html` holds the whole timeline: scene times in `SCENES`, camera
 moves over each screenshot in `CAM`, and copy in the markup.
+
+## v2: the knowledge-handoff cut
+
+Output: `../out/anchor-promo-2026-v2.mp4` — 84 s, same format. Leads with what
+makes Anchor different: someone else goes into the meeting carrying your
+knowledge and judgment (handoff briefing, live answers in the owner's words,
+"how would Sam handle it?", memory that stays with the company). Slower,
+with every headline held long enough to read.
+
+- `composer-v2.html` is the timeline for this cut.
+- `capture-handoff.cjs`, `capture-recap-tools.cjs` and
+  `capture-desktop-backup.cjs` capture its screens. Pages are captured at a
+  560 px wide window and the desktop app at 620 px, so text stays readable
+  in a vertical frame (change the viewport in each script).
+- The demo deal needs a teammate set as Backup (the cut uses a fictional
+  "Maya Chen" in the same team as the demo account).

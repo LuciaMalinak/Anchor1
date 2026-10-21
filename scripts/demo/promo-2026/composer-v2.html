@@ -1,0 +1,247 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  :root { --navy:#12294a; --accent:#b4531f; --bg:#eef1f6; --ink:#12294a; --muted:#56657c; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { width:1080px; height:1920px; overflow:hidden; background:var(--bg); font-family:"Inter", sans-serif; -webkit-font-smoothing:antialiased; }
+  .scene { position:absolute; inset:0; opacity:0; display:none; }
+  .light { background:var(--bg); }
+  .dark { background:radial-gradient(120% 80% at 50% 35%, #1d3a66 0%, #12294a 45%, #0b1930 100%); }
+  .kicker { position:absolute; left:0; right:0; top:120px; text-align:center; font-family:"DejaVu Sans Mono", monospace; font-size:24px; letter-spacing:.3em; color:var(--accent); text-transform:uppercase; }
+  .head { position:absolute; left:40px; right:40px; top:166px; text-align:center; font-family:"Inter Display","Inter",sans-serif; font-weight:600; font-size:64px; line-height:1.08; letter-spacing:-.02em; color:var(--ink); }
+  .sub { position:absolute; left:70px; right:70px; top:318px; text-align:center; font-size:31px; line-height:1.35; color:var(--muted); }
+  .win { position:absolute; left:40px; width:1000px; border-radius:18px; overflow:hidden; background:#fff; box-shadow:0 30px 70px rgba(18,41,74,.22), 0 4px 14px rgba(18,41,74,.10); }
+  .bar { height:44px; background:#f4f6f9; border-bottom:1px solid #e3e7ee; display:flex; align-items:center; padding:0 18px; position:relative; }
+  .dots { display:flex; gap:9px; } .dots i { width:13px; height:13px; border-radius:50%; display:block; }
+  .dots i:nth-child(1){background:#ff5f57}.dots i:nth-child(2){background:#febc2e}.dots i:nth-child(3){background:#28c840}
+  .bar .url { position:absolute; left:50%; transform:translateX(-50%); font-size:17px; color:#6b778a; background:#fff; border:1px solid #e3e7ee; border-radius:8px; padding:4px 26px; white-space:nowrap; }
+  .vp { position:relative; overflow:hidden; background:#fff; }
+  .vp img { position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
+  .trafficdesk { position:absolute; left:18px; top:16px; display:flex; gap:9px; z-index:5; }
+  .chip { position:absolute; display:flex; align-items:center; gap:12px; background:#fff; color:var(--ink); font-weight:600; font-size:27px; padding:15px 26px 15px 16px; border-radius:999px; box-shadow:0 14px 34px rgba(18,41,74,.24); white-space:nowrap; opacity:0; z-index:10; }
+  .chip .ic { width:36px; height:36px; border-radius:50%; display:grid; place-items:center; color:#fff; font-size:19px; font-weight:700; }
+  .zoom { position:absolute; left:40px; width:1000px; height:330px; border-radius:16px; background:#1b1d22; box-shadow:0 24px 60px rgba(0,0,0,.25); overflow:hidden; }
+  .zoom .zt { height:40px; display:flex; align-items:center; justify-content:center; color:#d6d9df; font-size:17px; position:relative; }
+  .zoom .zt .dots { position:absolute; left:16px; }
+  .tiles { display:flex; gap:10px; padding:4px 12px; }
+  .tile { flex:1; height:220px; border-radius:10px; position:relative; overflow:hidden; border:3px solid transparent; }
+  .tile .hd { position:absolute; left:50%; top:40px; width:80px; height:80px; margin-left:-40px; border-radius:50%; background:rgba(0,0,0,.38); }
+  .tile .bd { position:absolute; left:50%; top:130px; width:160px; height:140px; margin-left:-80px; border-radius:80px 80px 0 0; background:rgba(0,0,0,.38); }
+  .tile .nm { position:absolute; left:10px; bottom:10px; background:rgba(0,0,0,.55); color:#fff; font-size:17px; padding:4px 10px; border-radius:6px; }
+  .zb { height:60px; display:flex; align-items:center; justify-content:center; gap:16px; position:relative; }
+  .zb span { width:38px; height:38px; border-radius:50%; background:#33363d; display:block; }
+  .zb b { background:#e5483b; color:#fff; font-size:16px; padding:8px 18px; border-radius:8px; font-weight:600; }
+  .zb .cnt { position:absolute; left:18px; color:#9aa0aa; font-size:15px; }
+  .line { position:absolute; left:70px; right:70px; text-align:center; font-family:"Inter Display","Inter",sans-serif; font-weight:600; font-size:70px; line-height:1.12; letter-spacing:-.02em; color:#fff; opacity:0; }
+  .line.sm { font-size:46px; font-weight:500; color:#c9d5e6; }
+  .line.or { color:#e08a55; }
+  .rule { position:absolute; left:50%; width:90px; height:3px; margin-left:-45px; background:var(--accent); opacity:0; }
+  .word { position:absolute; left:0; right:0; text-align:center; font-family:"Inter Display","Inter",sans-serif; font-weight:700; font-size:150px; letter-spacing:.02em; color:#fff; opacity:0; }
+  .btn { position:absolute; font-size:32px; font-weight:600; padding:22px 48px; border-radius:14px; opacity:0; }
+  .glow { position:absolute; width:440px; height:440px; left:50%; margin-left:-220px; border-radius:50%; background:radial-gradient(circle, rgba(180,83,31,.35), rgba(180,83,31,0) 65%); }
+  .ring { position:absolute; left:50%; border:2px solid rgba(255,255,255,.35); border-radius:50%; }
+  .net { position:absolute; inset:0; }
+  .mono { position:absolute; left:40px; right:40px; text-align:center; font-family:"DejaVu Sans Mono", monospace; letter-spacing:.18em; text-transform:uppercase; color:#a8b8d0; font-size:23px; opacity:0; }
+</style></head>
+<body>
+
+<!-- S0: the problem today -->
+<div class="scene dark" id="s0">
+  <svg class="net" id="net0" width="1080" height="1920"></svg>
+  <div class="line" id="a1" style="top:560px">You can't be in every client meeting.</div>
+  <div class="line sm" id="a2" style="top:800px">So someone goes in for you —</div>
+  <div class="line sm or" id="a3" style="top:870px;color:#e08a55">after a five-minute hallway briefing.</div>
+  <div class="rule" id="a4" style="top:1010px"></div>
+</div>
+
+<!-- S1: the turn -->
+<div class="scene dark" id="s1">
+  <svg class="net" id="net1" width="1080" height="1920"></svg>
+  <div class="line" id="b1" style="top:540px">Anchor sends <span style="color:#e08a55">your knowledge</span> in with them.</div>
+  <div class="line sm" id="b2" style="top:860px">Your history.</div>
+  <div class="line sm" id="b3" style="top:930px">Your relationships.</div>
+  <div class="line sm" id="b4" style="top:1000px">Your judgment.</div>
+  <div class="line sm" id="b5" style="top:1070px">Your limits.</div>
+</div>
+
+<!-- S2: the handoff -->
+<div class="scene light" id="s2">
+  <div class="kicker">01 · The handoff</div>
+  <div class="head">Hand off the deal,<br>not just the notes.</div>
+  <div class="sub">Pick who's stepping in. Anchor briefs them on everything you know — and how you'd play it.</div>
+  <div class="win" id="w2" style="top:470px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Anchor — Acme Robotics</div></div><div class="vp" style="height:1360px"><img><img></div></div>
+  <div class="chip" id="c2a" style="left:180px;top:1842px"><span class="ic" style="background:#12294a">⚓</span>How Sam plays it — not just facts</div>
+  <div class="chip" id="c2b" style="left:250px;top:1842px"><span class="ic" style="background:#4a154b">#</span>Sent to Maya on Slack</div>
+</div>
+
+<!-- S3: live, in the room -->
+<div class="scene light" id="s3">
+  <div class="kicker">02 · In the room, without you</div>
+  <div class="head">They answer<br>the way you would.</div>
+  <div class="sub">Live on the call: your answers, your words, your limits.</div>
+  <div class="zoom" id="zoom" style="top:470px">
+    <div class="zt"><div class="dots"><i></i><i></i><i></i></div>Acme Robotics — EMEA expansion · Zoom</div>
+    <div class="tiles">
+      <div class="tile" id="t1" style="background:linear-gradient(160deg,#4a5a6e,#2c3644)"><div class="hd"></div><div class="bd"></div><div class="nm">Jordan Weiss</div></div>
+      <div class="tile" id="t2" style="background:linear-gradient(160deg,#6b5a4a,#3b3028)"><div class="hd"></div><div class="bd"></div><div class="nm">Priya Shah</div></div>
+      <div class="tile" id="t3" style="background:linear-gradient(160deg,#4f6559,#2d3a33)"><div class="hd"></div><div class="bd"></div><div class="nm">Maya Chen (you)</div></div>
+    </div>
+    <div class="zb"><div class="cnt">3 participants</div><span></span><span></span><span></span><b>Leave</b></div>
+  </div>
+  <div class="win" id="w3" style="top:830px;border-radius:14px"><div class="bar" style="background:#0b1930;border:0"><div class="dots"><i></i><i></i><i></i></div><div class="url" style="background:none;border:0;color:#c9d5e6">Anchor Desktop</div></div><div class="vp" style="height:1000px"><img><img></div></div>
+  <div class="chip" id="c3a" style="left:330px;top:780px"><span class="ic" style="background:#12294a">⚓</span>No bot joins the call</div>
+  <div class="chip" id="c3b" style="left:250px;top:1842px"><span class="ic" style="background:#dc2626">!</span>Sam's limits, flagged live</div>
+</div>
+
+<!-- S4: judgment, mid-call -->
+<div class="scene light" id="s4">
+  <div class="kicker">03 · Your judgment, on call</div>
+  <div class="head">Not just facts.<br>How you'd handle it.</div>
+  <div class="sub">Maya asks what Sam would do — and gets Sam's playbook, mid-call.</div>
+  <div class="win" id="w4" style="top:470px;border-radius:14px"><div class="bar" style="background:#0b1930;border:0"><div class="dots"><i></i><i></i><i></i></div><div class="url" style="background:none;border:0;color:#c9d5e6">Anchor Desktop</div></div><div class="vp" style="height:1360px"><img><img></div></div>
+</div>
+
+<!-- S5: memory -->
+<div class="scene light" id="s5">
+  <div class="kicker">04 · Knowledge that stays</div>
+  <div class="head">Every call becomes<br>the company's memory.</div>
+  <div class="sub">Institutional knowledge, not one person's head. When people move on, what they knew stays.</div>
+  <div class="win" id="w5" style="top:470px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Anchor — Acme Robotics</div></div><div class="vp" style="height:1360px"><img><img></div></div>
+</div>
+
+<!-- S6: tools updated -->
+<div class="scene light" id="s6">
+  <div class="kicker">05 · Everyone updated</div>
+  <div class="head">Recap done.<br>Your tools updated.</div>
+  <div class="sub">Salesforce, Slack, Dropbox and Gmail — nothing goes out until you approve it.</div>
+  <div class="win" id="w6" style="top:470px"><div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Anchor — EMEA Expansion Discussion</div></div><div class="vp" style="height:1360px"><img><img></div></div>
+  <div class="chip" id="c6a" style="left:260px;top:1842px"><span class="ic" style="background:#00a1e0">☁</span>Salesforce, updated</div>
+  <div class="chip" id="c6b" style="left:240px;top:1842px"><span class="ic" style="background:#4a154b">#</span>Posted to #acme-robotics</div>
+  <div class="chip" id="c6c" style="left:250px;top:1842px"><span class="ic" style="background:#0061fe">◆</span>Saved to the deal's Dropbox</div>
+</div>
+
+<!-- S7: who it's for -->
+<div class="scene dark" id="s7">
+  <svg class="net" id="net2" width="1080" height="1920"></svg>
+  <div class="line" id="g1" style="top:620px">Built for leaders whose clients expect them in every room —</div>
+  <div class="line or" id="g2" style="top:960px;color:#e08a55">and the people who go in their place.</div>
+</div>
+
+<!-- S8: outro -->
+<div class="scene dark" id="s8">
+  <svg class="net" id="net3" width="1080" height="1920"></svg>
+  <div class="glow" style="top:450px"></div>
+  <div class="ring" id="ring"></div>
+  <svg id="omark" style="position:absolute;left:470px;top:540px;opacity:0" width="140" height="140" viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="7.5" r="2.25"/><path d="M16 9.75V24.5"/><path d="M11 13.5H21" stroke="#e08a55"/><path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5"/><path d="M8 18.5L6 15.8M8 18.5L10.3 17"/><path d="M24 18.5L26 15.8M24 18.5L21.7 17"/></svg>
+  <div class="word" id="oword" style="top:710px">ANCHOR</div>
+  <div class="line sm" id="otag" style="top:910px;color:#dbe3ef;font-size:46px">Your knowledge in the room.<br>Without you in the room.</div>
+  <div class="btn" id="ob1" style="left:380px;top:1100px;background:#b4531f;color:#fff">Get started</div>
+  <div class="mono" id="omono" style="top:1270px">Knowledge travels with the company,<br>not the person.</div>
+</div>
+
+<script>
+const clamp = (x, a=0, b=1) => Math.max(a, Math.min(b, x));
+const ease = x => x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3) / 2;
+const eout = x => 1 - Math.pow(1 - x, 3);
+const prog = (t, a, d) => clamp((t - a) / d);
+const $ = id => document.getElementById(id);
+
+function net(svg, seed) {
+  let s = seed; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const pts = Array.from({ length: 14 }, () => [r() * 1080, r() * 1920]);
+  let h = "";
+  pts.forEach((p, i) => { const q = pts[(i * 5 + 3) % pts.length]; h += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="rgba(255,255,255,.08)" stroke-width="1.5"/>`; });
+  pts.forEach((p, i) => { h += `<circle cx="${p[0]}" cy="${p[1]}" r="${i % 3 ? 3 : 5}" fill="${i % 3 ? "rgba(255,255,255,.25)" : "#d9773f"}"/>`; });
+  svg.innerHTML = h;
+}
+["net0","net1","net2","net3"].forEach((id, i) => net($(id), 7 + i * 4));
+
+const SCENES = [["s0",0,7.5],["s1",7.5,14],["s2",14,27],["s3",27,41],["s4",41,51.5],["s5",51.5,61],["s6",61,70],["s7",70,76],["s8",76,85]];
+const FADE = 0.5;
+
+// Camera keyframes: at time t start moving (over d sec) to show image region (x, y) of width w.
+const CAM = {
+  w2: [ {t:0, src:"deal-team", x:0, y:0, w:1120}, {t:15.6, src:"deal-team", x:0, y:900, w:1120, d:1.6},
+        {t:19.0, src:"handoff-briefing", x:0, y:140, w:1120, d:.5}, {t:22.2, src:"handoff-briefing", x:0, y:520, w:1120, d:2.2},
+        {t:25.2, src:"handoff-sent", x:0, y:520, w:1120, d:.35} ],
+  w3: [], w4: [],
+  w5: [ {t:0, src:"deal-team", x:0, y:1880, w:1120}, {t:56.2, src:"r-top", x:0, y:120, w:1120, d:.5} ],
+  w6: [ {t:0, src:"r-crm", x:0, y:120, w:1120}, {t:64.0, src:"r-slack", x:0, y:120, w:1120, d:.45}, {t:67.0, src:"r-dropbox", x:0, y:120, w:1120, d:.45} ],
+};
+// desktop app, live call (narrow window: 1240 px wide images)
+[["n-d1-detected",27],["n-d2-recording",28.8],["n-d3-writing",30.2],["n-d4-answer",31.0]].forEach(([src, t], i) => CAM.w3.push({ t, src, x:0, y:0, w:1240, d: i ? .3 : 0 }));
+CAM.w3.push({ t:32.2, src:"n-d4-answer", x:60, y:470, w:1120, d:1.0 });   // the answer card
+CAM.w3.push({ t:36.2, src:"n-d4-answer", x:60, y:820, w:1120, d:1.0 });   // don't agree to on your own
+// judgment question, typed then answered
+CAM.w4.push({ t:0, src:"n-d5-askpanel", x:0, y:0, w:1240 });
+CAM.w4.push({ t:42.0, src:"n-d5-askpanel", x:40, y:420, w:1160, d:.9 });
+for (let i = 1; i <= 8; i++) CAM.w4.push({ t: 43.0 + i * 0.22, src: "n-d6-type-" + i, x:40, y:420, w:1160, d:0 });
+CAM.w4.push({ t:45.4, src:"n-d7-asked", x:40, y:420, w:1160, d:.35 });
+CAM.w4.push({ t:46.4, src:"n-d7-asked", x:40, y:430, w:1160, d:1.0 });
+
+function setLayer(img, src, x, y, w, vw, op) {
+  if (img.dataset.src !== src) { img.src = "a/" + src + ".png"; img.dataset.src = src; }
+  const s = vw / w;
+  img.style.transform = `translate(${-x * s}px, ${-y * s}px) scale(${s})`;
+  img.style.opacity = op;
+}
+function camera(id, t) {
+  const vp = $(id).querySelector(".vp"); const [a, b] = vp.querySelectorAll("img");
+  const kfs = CAM[id]; let i = 0;
+  for (let k = 0; k < kfs.length; k++) if (kfs[k].t <= t) i = k;
+  const cur = kfs[i], prev = kfs[Math.max(0, i - 1)];
+  const p = cur.d ? ease(prog(t, cur.t, cur.d)) : 1;
+  const vw = 1000;
+  if (prev.src === cur.src) {
+    const L = (k) => prev[k] + (cur[k] - prev[k]) * p;
+    setLayer(a, cur.src, L("x"), L("y"), L("w"), vw, 1); b.style.opacity = 0;
+  } else if (p >= 1) {
+    setLayer(a, cur.src, cur.x, cur.y, cur.w, vw, 1); b.style.opacity = 0;
+  } else {
+    setLayer(a, prev.src, prev.x, prev.y, prev.w, vw, 1);
+    setLayer(b, cur.src, cur.x, cur.y, cur.w, vw, p);
+  }
+}
+function pop(el, t, a, b = 999, base = "") {
+  const pi = eout(prog(t, a, .5)), po = prog(t, b, .4);
+  el.style.opacity = pi * (1 - po);
+  el.style.transform = `${base} translateY(${(1 - pi) * 26}px) scale(${.95 + .05 * pi})`;
+}
+
+function render(t) {
+  for (const [id, a, b] of SCENES) {
+    const el = $(id);
+    const on = t >= a - 0.001 && t < b + FADE;
+    el.style.display = on ? "block" : "none";
+    if (!on) continue;
+    el.style.opacity = (id === "s0" ? 1 : clamp((t - a) / FADE)) * clamp((b + FADE - t) / FADE);
+    const k = el.querySelector(".kicker"), h = el.querySelector(".head"), s = el.querySelector(".sub");
+    if (k) { const p = eout(prog(t, a + .1, .6)); k.style.opacity = p; k.style.transform = `translateY(${(1 - p) * 16}px)`; }
+    if (h) { const p = eout(prog(t, a + .2, .7)); h.style.opacity = p; h.style.transform = `translateY(${(1 - p) * 22}px)`; }
+    if (s) { const p = eout(prog(t, a + .7, .7)); s.style.opacity = p; s.style.transform = `translateY(${(1 - p) * 18}px)`; }
+    el.querySelectorAll(".win, .zoom").forEach((w) => { const p = eout(prog(t, a + 1.0, .9)); w.style.opacity = p; w.style.transform = `translateY(${(1 - p) * 80}px)`; });
+  }
+  for (const id of Object.keys(CAM)) if (CAM[id].length) camera(id, t);
+
+  pop($("a1"), t, .4); pop($("a2"), t, 2.6); pop($("a3"), t, 4.0);
+  { const p = eout(prog(t, 4.8, .6)); $("a4").style.opacity = p; $("a4").style.transform = `scaleX(${p})`; }
+  pop($("b1"), t, 7.9); pop($("b2"), t, 9.6); pop($("b3"), t, 10.3); pop($("b4"), t, 11.0); pop($("b5"), t, 11.7);
+  pop($("c2a"), t, 20.0, 24.6); pop($("c2b"), t, 25.5);
+  pop($("c3a"), t, 28.2, 31.0); pop($("c3b"), t, 36.8);
+  const spk = t < 29.5 ? "t1" : t < 33 ? "t2" : "t3";
+  ["t1","t2","t3"].forEach(id => $(id).style.borderColor = id === spk ? "#e08a55" : "transparent");
+  pop($("c6a"), t, 62.4, 63.8); pop($("c6b"), t, 64.6, 66.8); pop($("c6c"), t, 67.6);
+  pop($("g1"), t, 70.4); pop($("g2"), t, 72.2);
+  { const a = 76; const pm = eout(prog(t, a + .2, .7));
+    $("omark").style.opacity = pm; $("omark").style.transform = `scale(${.6 + .4 * pm})`;
+    const rp = prog(t, a + .5, 1.6); const R = 80 + 260 * rp; Object.assign($("ring").style, { width: 2*R+"px", height: 2*R+"px", marginLeft: -R+"px", top: (610 - R) + "px", opacity: (1 - rp) * .9 });
+    const pw = eout(prog(t, a + .8, .7)); $("oword").style.opacity = pw; $("oword").style.letterSpacing = (0.02 + (1 - pw) * .25) + "em";
+    pop($("otag"), t, a + 1.5); pop($("ob1"), t, a + 2.3); pop($("omono"), t, a + 2.9);
+  }
+}
+window.render = render;
+window.ready = Promise.all([...new Set(Object.values(CAM).flat().map(k => k.src))]
+  .map(s => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = "a/" + s + ".png"; })));
+render(0);
+</script>
+</body></html>
