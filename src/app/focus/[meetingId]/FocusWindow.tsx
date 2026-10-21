@@ -30,6 +30,7 @@ export function FocusWindow({
   decisionBoundaries,
   initialWidgets,
   onClose,
+  hostWindow,
 }: {
   meetingId: string;
   meetingTitle: string;
@@ -48,6 +49,9 @@ export function FocusWindow({
   // realm when portaled into a PiP window, so a bare window.close() in
   // here would otherwise try to close the wrong window.
   onClose?: () => void;
+  // The window this is showing in, for Minimize to resize. Same reason as
+  // onClose: in Picture-in-Picture, the bare `window` is the opener's.
+  hostWindow?: Window;
 }) {
   const { segments, suggestions, status, hasBot, isDesktop, coachingError, coachingRefreshing, answered, speakers, markSpeaker } = useLiveMeeting(meetingId);
   const [widgets, setWidgets] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
@@ -56,6 +60,10 @@ export function FocusWindow({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [closeCancelled, setCloseCancelled] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Window height before minimizing, to go back to on Expand.
+  const fullHeightRef = useRef<number | null>(null);
 
   // "This call didn't match any deal — want to create one?" — shown
   // right in this same end-of-meeting banner, since a desktop-detected
@@ -98,6 +106,40 @@ export function FocusWindow({
     const t = setTimeout(() => (closeRef.current ?? (() => window.close()))(), AUTO_CLOSE_MS);
     return () => clearTimeout(t);
   }, [autoClosing, needsDealDecision]);
+
+  // Minimized, the window shrinks to fit just the header and the current
+  // answer, and keeps fitting it as the answer streams in. Resizing is
+  // best-effort: a browser can refuse it (Picture-in-Picture outside a
+  // click), in which case the content is still cut down.
+  const showMinimized = minimized && !autoClosing;
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!showMinimized || !el) return;
+    const win = hostWindow ?? window;
+    const fit = () => {
+      try {
+        const chrome = win.outerHeight - win.innerHeight;
+        win.resizeTo(win.outerWidth, Math.ceil(el.getBoundingClientRect().height) + chrome);
+      } catch {}
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showMinimized, hostWindow]);
+
+  function toggleMinimized() {
+    const win = hostWindow ?? window;
+    if (!minimized) {
+      fullHeightRef.current = win.outerHeight;
+      setCustomizing(false);
+    } else if (fullHeightRef.current) {
+      try {
+        win.resizeTo(win.outerWidth, fullHeightRef.current);
+      } catch {}
+    }
+    setMinimized(!minimized);
+  }
 
   async function handleCreateDeal() {
     const trimmed = draftDealName.trim();
@@ -163,7 +205,7 @@ export function FocusWindow({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
+    <div ref={rootRef} className={`flex flex-col bg-slate-50 text-slate-900 ${showMinimized ? "" : "min-h-screen"}`}>
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-900">{meetingTitle}</p>
@@ -180,17 +222,45 @@ export function FocusWindow({
           {stillLive && status && (
             <StopMeetingButton meetingId={meetingId} variant="solid" inPerson={!hasBot && !isDesktop} desktop={isDesktop} />
           )}
-          <button
-            type="button"
-            onClick={openCustomize}
-            className="shrink-0 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700"
-          >
-            Customize
-          </button>
+          {!showMinimized && (
+            <button
+              type="button"
+              onClick={openCustomize}
+              className="shrink-0 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700"
+            >
+              Customize
+            </button>
+          )}
+          {!autoClosing && (
+            <button
+              type="button"
+              onClick={toggleMinimized}
+              title={minimized ? "Show everything again" : "Shrink to just the current answer"}
+              className="shrink-0 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700"
+            >
+              {minimized ? "Expand" : "Minimize"}
+            </button>
+          )}
         </div>
       </header>
 
-      {customizing && (
+      {/* Minimized: just the question they asked and its answer. */}
+      {showMinimized && (
+        <div className="p-3">
+          {suggestions?.liveQuestion ? (
+            <LiveQuestionsBox
+              current={suggestions.liveQuestion}
+              answered={answered.filter((q) => q.askedAt === suggestions.liveQuestion?.askedAt)}
+              cardClassName="rounded-lg border border-brand/30 bg-brand/5"
+              meetingId={meetingId}
+            />
+          ) : (
+            <p className="text-xs text-slate-400">Answers show up here when they ask something.</p>
+          )}
+        </div>
+      )}
+
+      {!showMinimized && customizing && (
         <div className="border-b border-slate-200 bg-white px-4 py-4">
           <p className="mb-3 text-xs font-medium text-slate-500">
             Show in this window — just for you, doesn&apos;t change anyone else&apos;s.
@@ -232,7 +302,7 @@ export function FocusWindow({
         </div>
       )}
 
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+      <div className={`flex flex-1 flex-col gap-4 overflow-y-auto p-4 ${showMinimized ? "hidden" : ""}`}>
         {autoClosing && (
           <div
             className={`rounded-lg border px-3 py-3 ${

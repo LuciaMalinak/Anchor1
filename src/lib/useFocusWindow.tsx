@@ -232,6 +232,7 @@ export function useFocusWindow() {
           decisionBoundaries={session.context.decisionBoundaries}
           initialWidgets={session.context.initialWidgets}
           onClose={() => session.pipWindow.close()}
+          hostWindow={session.pipWindow}
         />
       ) : (
         // Pre-opened via openPending() and still waiting on attach() —
