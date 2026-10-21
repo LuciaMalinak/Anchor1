@@ -464,6 +464,7 @@ function ensureOverlayWindow(): BrowserWindow {
     // (e.g. Zoom in fullscreen gallery view) — otherwise macOS would
     // treat the overlay as belonging to a different Space and hide it.
     overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    overlayWindow.setContentProtection(hiddenFromScreenShare());
     overlayWindow.on("closed", () => {
       overlayWindow = null;
       overlayShowing = null;
@@ -1182,7 +1183,17 @@ function handleDeepLinkSafely(url: string) {
 function registerIpcHandlers() {
   ipcMain.handle("get-config", () => {
     const config = loadConfig();
-    return { apiBase: config.apiBase, hasToken: Boolean(config.token), accountEmail: config.accountEmail ?? null };
+    return {
+      apiBase: config.apiBase,
+      hasToken: Boolean(config.token),
+      accountEmail: config.accountEmail ?? null,
+      hiddenFromScreenShare: config.showInScreenShare !== true,
+    };
+  });
+
+  ipcMain.handle("set-hidden-from-screen-share", (_evt, hidden: boolean) => {
+    setHiddenFromScreenShare(hidden === true);
+    return { hidden: hidden === true };
   });
 
   ipcMain.handle("set-token", async (_evt, token: string, apiBase?: string) => {
@@ -1250,6 +1261,23 @@ function registerIpcHandlers() {
 const TITLEBAR_HEIGHT = 52;
 const BRAND_NAVY = "#12294a";
 
+// Anchor's windows stay on your own screen but are left out of screen
+// shares and recordings (Zoom, Teams, Meet, OBS…), so a call's live
+// answers and notes are never shown to the people on it. On by default;
+// "Hide from screen sharing" in the window and the tray menu turns it off.
+function hiddenFromScreenShare(): boolean {
+  return loadConfig().showInScreenShare !== true;
+}
+
+function setHiddenFromScreenShare(hidden: boolean) {
+  saveConfig({ ...loadConfig(), showInScreenShare: !hidden });
+  for (const win of [mainWindow, overlayWindow]) {
+    if (win && !win.isDestroyed()) win.setContentProtection(hidden);
+  }
+  refreshTrayMenu();
+  mainWindow?.webContents.send("screen-share-changed", hidden);
+}
+
 function createWindow(show = true) {
   const isMac = process.platform === "darwin";
   mainWindow = new BrowserWindow({
@@ -1277,6 +1305,7 @@ function createWindow(show = true) {
   // still work in the window's fields without one). macOS keeps its app
   // menu in the system menu bar, where it belongs.
   if (!isMac) mainWindow.removeMenu();
+  mainWindow.setContentProtection(hiddenFromScreenShare());
   mainWindow.loadFile(path.join(__dirname, "..", "src", "renderer", "index.html"));
 
   // Closing the window (the red dot) should not stop Anchor from watching
@@ -1368,6 +1397,12 @@ function refreshTrayMenu() {
           else disableLaunchAtLogin();
           saveConfig({ ...loadConfig(), launchAtLoginOptOut: !item.checked });
         },
+      },
+      {
+        label: "Hide from screen sharing",
+        type: "checkbox",
+        checked: hiddenFromScreenShare(),
+        click: (item) => setHiddenFromScreenShare(item.checked),
       },
       { type: "separator" },
       {

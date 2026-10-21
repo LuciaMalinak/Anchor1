@@ -30,6 +30,10 @@ type Config = {
   // installUpdateWhenIdle in main.ts), so the relaunch can stay in the
   // menu bar instead of popping its window open when it wasn't open before.
   restartedForUpdate?: { windowWasVisible: boolean } | null;
+  // Set when the person turns "Hide from screen sharing" off. Anchor's
+  // windows are left out of screen shares and recordings unless this is
+  // true (see applyScreenShareProtection in main.ts).
+  showInScreenShare?: boolean;
 };
 
 function configPath(): string {
@@ -55,6 +59,7 @@ export function loadConfig(): Config {
         parsed.restartedForUpdate && typeof parsed.restartedForUpdate.windowWasVisible === "boolean"
           ? { windowWasVisible: parsed.restartedForUpdate.windowWasVisible }
           : null,
+      showInScreenShare: parsed.showInScreenShare === true,
     };
   } catch {
     return { apiBase: DEFAULT_API_BASE, token: null };
