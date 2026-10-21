@@ -46,6 +46,14 @@ const EMBEDDED_QUESTION =
 // "I know how…", "no matter what…" — a question word inside a statement.
 const STATEMENT_LEAD_IN =
   /\b(?:i|we|they|you|he|she) (?:know|knew|see|saw|understand|get|remember|told|showed|explained|decided|figured out|learned)\s*$|\b(?:no matter|regardless of|depends on|that's|thats|which is|exactly)\s*$/i;
+// Proposals and asks for a concession said as statements ("We'd need 20%
+// off", "If you can do net 60 we'll sign") — not questions, but the person
+// covering the call still needs a careful reply, and the answer call flags
+// them for sign-off (see FLAG in the instructions). Matched anywhere in the
+// last couple of sentences, like EMBEDDED_QUESTION.
+const PROPOSAL =
+  /\b(?:we(?:'d| would)? (?:need|want|like|expect|require|propose|ask for|be looking for|want to see)|we(?:'re| are) (?:looking for|asking for|proposing|expecting|hoping for)|we were (?:thinking|hoping)|(?:if|as long as) you (?:can|could) (?:do|give|offer|include|match|meet|drop|lower|waive|throw in|extend|move|push|guarantee)|(?:we'll|we will|we'd|we would|we can|we could) (?:sign|commit|move forward|go ahead|close|buy|renew)\b.{0,30}\b(?:if|once|provided)|our (?:budget|offer|counter(?:offer)?|ceiling|max|limit) is|meet (?:us|in the middle)|throw in|waive|price match|best (?:and final|you can do)|\d+\s?(?:%|percent) (?:off|discount)|net[\s-]?\d{2}\b|lock (?:in )?(?:the |that |this )?(?:price|rate)|push (?:back )?(?:the )?(?:start|date|deadline|go-?live|launch)|extend (?:the )?(?:trial|pilot|deadline|payment terms))/i;
+
 // Short tag questions that aren't asking anything.
 const NOT_REALLY_ASKING = /^(?:right|you know|okay|ok|yeah|correct|make sense|makes sense|see|huh|really|no|yes|sorry|pardon|what|hello|anyone|can you hear me|can you see my screen|you there|am i on mute)\??$/i;
 
@@ -103,6 +111,10 @@ export function extractQuestion(text: string): string | null {
     const candidate = tail.slice(match.index).trim();
     if (candidate.split(/\s+/).length >= 3) return candidate;
   }
+  // A proposal: answered like a question, from the start of its sentence.
+  const lastTwo = sentences.slice(-2);
+  const proposal = lastTwo.findLastIndex((x) => PROPOSAL.test(x));
+  if (proposal >= 0) return lastTwo.slice(proposal).join(" ").trim();
   return null;
 }
 
@@ -365,7 +377,7 @@ async function answerLiveQuestion(
     .join("\n")
     .slice(-TRANSCRIPT_WINDOW_CHARS);
 
-  const instructions = `You help the person representing the seller on a live sales call (the "rep" — the deal owner or a teammate covering for them) answer what the other side (the client/prospect) just asked. Speed matters: reply straight away, nothing extra.
+  const instructions = `You help the person representing the seller on a live sales call (the "rep" — the deal owner or a teammate covering for them) answer what the other side (the client/prospect) just asked or proposed. Speed matters: reply straight away, nothing extra.
 
 Reply in exactly this format:
 WHO: client or rep
@@ -382,11 +394,14 @@ If WHO is rep, stop after the WHO line.
 FLAG — check the question against the deal's decision boundaries and prep notes:
 - red: a straight answer would agree to, promise, or disclose something the rep isn't allowed to decide or discuss (e.g. a discount past the limit, custom work, contract or legal terms, roadmap dates, anything the boundaries rule out). The answer must NOT agree — give a polite, confident line that defers it ("Let me take that back to <owner/team> and come back to you by tomorrow") without saying "I'm not allowed".
 - amber: the answer depends on something not in the facts given, or touches a commitment (price, dates, security claims) the boundaries don't cover — answer carefully and suggest confirming after the call.
+- amber, with exactly the reason "Client proposal — get sign-off first": the client proposes or asks for a commitment — a price, discount, payment or contract terms, dates, scope, custom work or extras — and no decision boundaries are given, or they don't cover it. The answer acknowledges it positively and confirms the next step without agreeing ("Understood — let me confirm that and come back to you by tomorrow").
 - none: everything else.
 
 The answer: ground it only in the deal facts, the transcript, and the team's past answers (when given) — when one of those fits the question, answer the way the team did, in their wording. Be specific and use real numbers and names from the facts when they answer the question. If the real answer isn't known, say so plainly and offer to follow up — never invent a number, date, feature, or commitment.
 
-Reply with exactly ${NOT_A_QUESTION} and nothing else if it isn't a real question needing an answer (rhetorical, small talk, "you know?", "can you hear me?") or it was already answered in the transcript.`;
+A proposal or request said as a statement ("We'd need 20% off", "If you can do net 60 we'll sign") counts as needing an answer.
+
+Reply with exactly ${NOT_A_QUESTION} and nothing else if it isn't a real question or proposal needing an answer (rhetorical, small talk, "you know?", "can you hear me?") or it was already answered in the transcript.`;
 
   const startStream = (model: string) => withAiUser({ userId: meeting.userId, meetingId }, () => liveClient("live_questions").messages.stream({
     model,
@@ -407,7 +422,7 @@ Reply with exactly ${NOT_A_QUESTION} and nothing else if it isn't a real questio
         content: `${pastAnswers.length ? `${playbookText(pastAnswers)}\n\n` : ""}Recent transcript:
 ${transcript || "(nothing transcribed yet)"}
 
-The line that looked like a question${speakerName ? ` (speaker label: ${speakerName}${roleTag(speakerName)})` : " (no speaker label)"}: "${question}"`,
+The line that looked like a question or proposal${speakerName ? ` (speaker label: ${speakerName}${roleTag(speakerName)})` : " (no speaker label)"}: "${question}"`,
       },
     ],
   }));
