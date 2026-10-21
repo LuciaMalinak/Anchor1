@@ -27,6 +27,9 @@ export type AwaitingThread = {
 };
 
 const MAX_THREADS = 30;
+const METADATA_QUERY = ["From", "To", "Cc", "Reply-To", "Subject", "Date", "Message-ID", "References", "In-Reply-To", "List-Unsubscribe", "List-Id", "Precedence", "Auto-Submitted"]
+  .map((h) => `metadataHeaders=${encodeURIComponent(h)}`)
+  .join("&");
 const CONCURRENCY = 5;
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -65,9 +68,7 @@ export async function fetchThreadsAwaitingReply(
     ? (list.json.threads as { id?: string }[]).map((t) => t.id).filter((id): id is string => Boolean(id))
     : [];
 
-  const metadata = ["From", "To", "Cc", "Reply-To", "Subject", "Date", "Message-ID", "References", "In-Reply-To", "List-Unsubscribe", "List-Id", "Precedence", "Auto-Submitted"]
-    .map((h) => `metadataHeaders=${encodeURIComponent(h)}`)
-    .join("&");
+  const metadata = METADATA_QUERY;
 
   const threads = await mapLimit(ids, CONCURRENCY, async (id): Promise<AwaitingThread | null> => {
     try {
@@ -107,6 +108,36 @@ export async function fetchThreadsAwaitingReply(
     connected: true,
     account: connection.externalAccountEmail,
     threads: threads.filter((t): t is AwaitingThread => t !== null),
+  };
+}
+
+// Everyone a reply-all goes to right now, read from the thread itself:
+// for saving a reply written earlier (a brief from before replyAll was
+// recorded, or people added to the thread since). Null when the thread
+// can't be read.
+export async function fetchReplyAll(
+  userId: string,
+  threadId: string,
+  extraMyEmails: string[] = []
+): Promise<{ replyAll: ReplyAll; messageIdHeader: string | null } | null> {
+  const connection = await getGoogleConnection(userId);
+  if (!connection) return null;
+  const myEmails = new Set(
+    [connection.externalAccountEmail, ...extraMyEmails].filter((e): e is string => Boolean(e)).map((e) => e.toLowerCase())
+  );
+  const { json } = await googleGet(
+    connection,
+    connection.accessToken,
+    `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=metadata&${METADATA_QUERY}`
+  );
+  const messages = ((Array.isArray(json.messages) ? json.messages : []) as GmailMessage[]).filter(
+    (m) => !(m.labelIds ?? []).includes("DRAFT")
+  );
+  const last = messages[messages.length - 1];
+  if (!last) return null;
+  return {
+    replyAll: replyAllFor(last, myEmails, header(messages[0], "Subject")),
+    messageIdHeader: header(last, "Message-ID") || null,
   };
 }
 

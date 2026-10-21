@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { NeedsGooglePermissionError } from "@/lib/integrations/google";
 import { createGmailDraft } from "@/lib/integrations/gmailDraft";
 import { replyDraft } from "@/lib/integrations/gmailMime";
+import { fetchReplyAll } from "@/lib/integrations/gmailInbox";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { users } from "@/db/schema";
 import { briefActor, loadBriefEmail, saveBriefEmail, validThreadId } from "@/lib/briefActions";
 
 // "Save to Gmail drafts" on one email in the Morning brief: puts the
@@ -15,7 +19,16 @@ export async function POST(req: Request) {
   const { brief, email, shown } = await loadBriefEmail(userId, threadId);
   if (!brief || !email?.reply) return NextResponse.json({ error: "That reply isn't in your latest brief." }, { status: 404 });
   try {
-    const result = await createGmailDraft(userId, replyDraft(email, email.reply), { threadId });
+    // Recipients and threading from the thread as it is now, so the draft
+    // replies to everyone on it even for a brief saved before that was
+    // recorded, or with people added since.
+    const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId));
+    const live = await fetchReplyAll(userId, threadId, user ? [user.email] : []).catch((err) => {
+      console.error("[morning-brief save-draft] reading the thread failed:", err);
+      return null;
+    });
+    const target = live ? { ...email, replyAll: live.replyAll, replyToHeader: live.messageIdHeader ?? email.replyToHeader } : email;
+    const result = await createGmailDraft(userId, replyDraft(target, email.reply), { threadId });
     await saveBriefEmail(userId, brief, shown, threadId, { email: { drafted: true }, shown: { drafted: true } });
     return NextResponse.json({ ok: true, openUrl: result.openUrl });
   } catch (err) {
