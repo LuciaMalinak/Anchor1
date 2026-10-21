@@ -51,3 +51,12 @@ with every headline held long enough to read.
   in a vertical frame (change the viewport in each script).
 - The demo deal needs a teammate set as Backup (the cut uses a fictional
   "Maya Chen" in the same team as the demo account).
+
+## v3: demo-video cut
+
+Output: `../out/anchor-promo-2026-v3.mp4` — 71 s. Same story as v2, a little
+shorter, without the "hallway briefing" line, and with a "Meet Anchor" scene
+right after the opening that says what the product is (listens, remembers,
+briefs whoever goes in; web and desktop). `composer-v3.html` reuses v2's
+scenes and retimes them through `MAP` (new time → v2 time); it needs
+`landing-hero.png` from the v1 captures in `a/`.
