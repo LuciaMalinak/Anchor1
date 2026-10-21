@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld("anchor", {
   getConfig: () => ipcRenderer.invoke("get-config"),
   setToken: (token: string, apiBase?: string) => ipcRenderer.invoke("set-token", token, apiBase),
   startSignIn: () => ipcRenderer.invoke("start-sign-in"),
+  // Leave Anchor's windows out of screen shares and recordings (on by default).
+  setHiddenFromScreenShare: (hidden: boolean) => ipcRenderer.invoke("set-hidden-from-screen-share", hidden),
+  onScreenShareChanged: (cb: (hidden: boolean) => void) =>
+    ipcRenderer.on("screen-share-changed", (_evt, hidden) => cb(hidden)),
   startRecording: (windowId: string, title: string) => ipcRenderer.invoke("start-recording", windowId, title),
   stopRecording: (windowId: string) => ipcRenderer.invoke("stop-recording", windowId),
 

@@ -16,6 +16,7 @@ const meetingsEl = document.getElementById("meetings");
 const logEl = document.getElementById("log");
 const accountAvatarEl = document.getElementById("account-avatar");
 const footEl = document.getElementById("foot");
+const hideFromShareEl = document.getElementById("hide-from-share");
 
 // Same window on macOS and Windows; only the room left for the OS window
 // controls (see .titlebar in index.html) and a few words differ.
@@ -461,6 +462,7 @@ async function refreshStatus() {
   const config = await window.anchor.getConfig();
   isConnected = config.hasToken;
   accountEmailEl.textContent = config.accountEmail || config.apiBase;
+  hideFromShareEl.checked = config.hiddenFromScreenShare !== false;
   accountAvatarEl.textContent = ((config.accountEmail || "A").trim()[0] || "A").toUpperCase();
   signedOutEl.hidden = config.hasToken;
   signedInEl.hidden = !config.hasToken;
@@ -488,6 +490,15 @@ async function beginSignIn() {
 }
 
 signInBtn.onclick = beginSignIn;
+
+hideFromShareEl.onchange = async () => {
+  const hidden = hideFromShareEl.checked;
+  await window.anchor.setHiddenFromScreenShare(hidden);
+  appendLog(hidden ? "Anchor is hidden from screen sharing." : "Anchor now shows up when you share your screen.");
+};
+window.anchor.onScreenShareChanged((hidden) => {
+  hideFromShareEl.checked = hidden;
+});
 switchAccountBtn.onclick = beginSignIn;
 
 saveTokenBtn.onclick = async () => {
