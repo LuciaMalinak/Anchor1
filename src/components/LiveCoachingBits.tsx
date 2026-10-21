@@ -214,6 +214,7 @@ export function LiveQuestionsBox({
   onMarkMe,
   cardClassName,
   meetingId,
+  minimizeRecent,
 }: {
   current: LiveQuestion | null | undefined;
   answered: AnsweredQuestion[];
@@ -221,7 +222,11 @@ export function LiveQuestionsBox({
   cardClassName: string;
   // Turns on the thumbs up / down under each answer.
   meetingId?: string;
+  // Starts "Just answered" minimized to its header (click to open), so a
+  // small window like focus mode keeps room for the current answer.
+  minimizeRecent?: boolean;
 }) {
+  const [recentOpen, setRecentOpen] = useState(false);
   const earlier = answered.filter((q) => q.askedAt !== current?.askedAt).reverse();
   if (!current && !earlier.length) return null;
   // The last couple of answers stay open under the current one, so a new
@@ -239,7 +244,23 @@ export function LiveQuestionsBox({
           feedback={answered.find((q) => q.askedAt === current.askedAt)?.feedback}
         />
       )}
-      {recent.length > 0 && (
+      {recent.length > 0 && minimizeRecent && (
+        <details
+          open={recentOpen}
+          onToggle={(e) => setRecentOpen(e.currentTarget.open)}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2"
+        >
+          <summary className="cursor-pointer text-[11px] font-semibold tracking-[0.15em] text-slate-500">
+            JUST ANSWERED ({recent.length})
+          </summary>
+          <ul className="mt-2 space-y-3">
+            {recent.map((q) => (
+              <EarlierAnswer key={q.askedAt} q={q} onMarkMe={onMarkMe} meetingId={meetingId} />
+            ))}
+          </ul>
+        </details>
+      )}
+      {recent.length > 0 && !minimizeRecent && (
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
           <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-500">JUST ANSWERED</p>
           <ul className="mt-2 space-y-3">

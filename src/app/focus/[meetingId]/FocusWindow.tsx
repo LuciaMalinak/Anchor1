@@ -329,6 +329,7 @@ export function FocusWindow({
               onMarkMe={speakers.length ? (name) => markSpeaker(name, true) : undefined}
               cardClassName="rounded-lg border border-brand/30 bg-brand/5"
               meetingId={meetingId}
+              minimizeRecent
             />
             <OffLimitsBox offLimits={suggestions?.offLimits} decisionBoundaries={decisionBoundaries} />
             <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3">
