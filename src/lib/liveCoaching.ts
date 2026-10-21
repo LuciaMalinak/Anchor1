@@ -121,7 +121,7 @@ const LIVE_COACHING_TOOL = {
       questionAsked: {
         type: "boolean",
         description:
-          "True if the OTHER side (never the rep) has asked something in the transcript that still looks unanswered as of the very end of the transcript — a real question needing a real answer, not a rhetorical one or small talk. Stays true across updates for the same still-open question even if it was asked a little earlier in the window, as long as the rep hasn't visibly addressed it yet. Flip to false the moment the transcript shows the rep answered it (even roughly) or a newer open question replaces it.",
+          "True if the OTHER side (never the rep) has asked something — or proposed or asked for a commitment, like a discount, terms or a date — in the transcript that still looks unanswered as of the very end of the transcript — a real question needing a real answer, not a rhetorical one or small talk. Stays true across updates for the same still-open question even if it was asked a little earlier in the window, as long as the rep hasn't visibly addressed it yet. Flip to false the moment the transcript shows the rep answered it (even roughly) or a newer open question replaces it.",
       },
       question: {
         type: "string",
@@ -137,7 +137,7 @@ const LIVE_COACHING_TOOL = {
         type: "string",
         enum: ["none", "amber", "red"],
         description:
-          "For the open question: red if a straight answer would agree to or disclose something in offLimits / outside the decision boundaries (suggestedAnswer must then defer it, not agree); amber if it depends on something not known or a commitment the boundaries don't cover; otherwise none.",
+          "For the open question: red if a straight answer would agree to or disclose something in offLimits / outside the decision boundaries (suggestedAnswer must then defer it, not agree); amber if it depends on something not known or a commitment the boundaries don't cover — including any proposal or request from the client for a price, discount, payment or contract terms, dates, scope, custom work or extras when no decision boundaries are recorded (cautionReason then exactly 'Client proposal — get sign-off first', and suggestedAnswer acknowledges it without agreeing); otherwise none.",
       },
       cautionReason: {
         type: "string",
