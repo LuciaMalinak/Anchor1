@@ -55,3 +55,37 @@ export function looksAwaitingReply(m: GmailMessage, myEmails: Set<string>): bool
   return recipients.some((r) => myEmails.has(r));
 }
 
+
+// Who a reply-all goes to and the headers that keep it in the same Gmail
+// conversation, worked out from the message being answered. Mirrors
+// Gmail's own Reply all: the sender (or their Reply-To) and everyone else
+// on To go in To, everyone on Cc stays on Cc, and the person replying is
+// left off both.
+export type ReplyAll = {
+  to: string[];
+  cc: string[];
+  // The answered message's subject with one "Re: " in front — Gmail only
+  // files a draft into an existing conversation when the subject matches.
+  subject: string;
+  // Every Message-ID in the conversation so far, ending with the answered
+  // one (RFC 5322 References), so mail apps thread the reply correctly.
+  references: string | null;
+};
+
+export function replyAllFor(last: GmailMessage, myEmails: Set<string>, fallbackSubject = ""): ReplyAll {
+  const seen = new Set(myEmails);
+  const take = (list: string[]) =>
+    list.filter((a) => {
+      if (seen.has(a)) return false;
+      seen.add(a);
+      return true;
+    });
+  const replyTo = addresses(header(last, "Reply-To"));
+  const to = take([...(replyTo.length ? replyTo : addresses(header(last, "From"))), ...addresses(header(last, "To"))]);
+  const cc = take(addresses(header(last, "Cc")));
+  const subject = (header(last, "Subject") || fallbackSubject || "").trim();
+  const messageId = header(last, "Message-ID").trim();
+  const earlier = (header(last, "References") || header(last, "In-Reply-To")).trim();
+  const references = [earlier, messageId].filter(Boolean).join(" ").replace(/\s+/g, " ").trim() || null;
+  return { to, cc, subject: /^re:/i.test(subject) ? subject : `Re: ${subject || "(no subject)"}`, references };
+}

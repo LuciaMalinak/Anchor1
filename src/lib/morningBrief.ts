@@ -6,6 +6,7 @@ import { getAttentionItems } from "@/lib/attention";
 import { fetchTodaysDealMeetings } from "@/lib/integrations/calendar";
 import { fetchMessageText, fetchMyReplyInThread, fetchMySentReplies, fetchThreadsAwaitingReply } from "@/lib/integrations/gmailInbox";
 import { createGmailDraft } from "@/lib/integrations/gmailDraft";
+import { replyDraft } from "@/lib/integrations/gmailMime";
 import { getGoogleConnection } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
 import { sendEmail } from "@/lib/email";
@@ -179,6 +180,7 @@ async function buildSnapshot(params: {
             priority: deal ? 1 : r.priority,
             gmailUrl: `https://mail.google.com/mail/u/0/${accountParam}#all/${t.threadId}`,
             drafted: Boolean(shown[t.threadId]?.drafted),
+            replyAll: t.replyAll,
           },
         });
       });
@@ -385,12 +387,7 @@ async function writeReplies(
         : null;
       t.email.replyToHeader = t.messageIdHeader;
       if (canDraftInGmail && !shown[t.email.threadId]?.drafted) {
-        const subject = /^re:/i.test(t.email.subject) ? t.email.subject : `Re: ${t.email.subject}`;
-        await createGmailDraft(
-          userId,
-          { to: [t.email.fromEmail], subject, body: reply.body, inReplyTo: t.messageIdHeader ?? undefined },
-          { threadId: t.email.threadId }
-        );
+        await createGmailDraft(userId, replyDraft(t.email, reply.body), { threadId: t.email.threadId });
         t.email.drafted = true;
       }
     } catch (err) {
@@ -583,6 +580,7 @@ export async function autoDraftReplies(userId: string, opts: { everything?: bool
         priority: deal ? 1 : priority,
         gmailUrl: `https://mail.google.com/mail/u/0/${accountParam}#all/${t.threadId}`,
         drafted: false,
+        replyAll: t.replyAll,
       };
       return { email, messageId: t.messageId, messageIdHeader: t.messageIdHeader, dealId: deal?.id ?? null };
     };
@@ -680,11 +678,25 @@ export async function dismissBriefItem(userId: string, threadId: string, action:
   return until;
 }
 
-// The hourly job: everyone whose brief is due right now (see isBriefDue).
+// Sends everyone whose brief is due right now (see isBriefDue), then
+// drafts replies to new emails. Runs every few minutes on the server (see
+// instrumentation.ts) and whenever /api/cron/morning-brief is called.
 // Claims each person's day before sending, so an overlapping or retried
 // run never sends twice; gives the day back if the send fails, so the next
-// hourly run tries again.
-export async function runDueMorningBriefs(now: Date = new Date()) {
+// run tries again. One run at a time per server: a call while one is going
+// waits for it instead of starting a second (which could draft twice).
+let running: Promise<RunSummary> | null = null;
+type RunSummary = Awaited<ReturnType<typeof runDueMorningBriefsNow>>;
+
+export function runDueMorningBriefs(opts: { draftReplies?: boolean } = {}): Promise<RunSummary> {
+  if (running) return running;
+  running = runDueMorningBriefsNow(new Date(), opts.draftReplies ?? true).finally(() => {
+    running = null;
+  });
+  return running;
+}
+
+async function runDueMorningBriefsNow(now: Date, draftReplies: boolean) {
   const rows = await db
     .select({ userId: morningBriefs.userId, prefs: morningBriefs.prefs, lastSentOn: morningBriefs.lastSentOn })
     .from(morningBriefs)
@@ -716,6 +728,7 @@ export async function runDueMorningBriefs(now: Date = new Date()) {
       await db.update(morningBriefs).set({ lastSentOn: r.lastSentOn }).where(eq(morningBriefs.userId, r.userId));
     }
   }
+  if (!draftReplies) return summary;
   // Between briefs, new emails get their Gmail drafts too — for everyone
   // who has let Anchor create Gmail drafts, brief on or not.
   const drafters = await db

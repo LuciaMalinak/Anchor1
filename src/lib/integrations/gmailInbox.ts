@@ -5,7 +5,7 @@
 // the gmail.readonly scope the Google connection already has.
 import { getGoogleConnection, googleGet } from "./google";
 import { extractBody, stripQuotedReply, type GmailPart } from "./gmail";
-import { addresses, decodeEntities, header, looksAwaitingReply, parseAddress, type GmailMessage } from "./gmailHeaders";
+import { addresses, decodeEntities, header, looksAwaitingReply, parseAddress, replyAllFor, type GmailMessage, type ReplyAll } from "./gmailHeaders";
 
 export { looksAwaitingReply, parseAddress };
 
@@ -22,6 +22,8 @@ export type AwaitingThread = {
   snippet: string;
   addressedToMe: boolean;
   messageCount: number;
+  // Recipients and threading headers for a reply-all to the latest message.
+  replyAll: ReplyAll;
 };
 
 const MAX_THREADS = 30;
@@ -63,7 +65,7 @@ export async function fetchThreadsAwaitingReply(
     ? (list.json.threads as { id?: string }[]).map((t) => t.id).filter((id): id is string => Boolean(id))
     : [];
 
-  const metadata = ["From", "To", "Cc", "Subject", "Date", "Message-ID", "List-Unsubscribe", "List-Id", "Precedence", "Auto-Submitted"]
+  const metadata = ["From", "To", "Cc", "Reply-To", "Subject", "Date", "Message-ID", "References", "In-Reply-To", "List-Unsubscribe", "List-Id", "Precedence", "Auto-Submitted"]
     .map((h) => `metadataHeaders=${encodeURIComponent(h)}`)
     .join("&");
 
@@ -93,6 +95,7 @@ export async function fetchThreadsAwaitingReply(
         snippet: decodeEntities(last.snippet ?? "").slice(0, 400),
         addressedToMe: addresses(header(last, "To")).some((a) => myEmails.has(a)),
         messageCount: real.length,
+        replyAll: replyAllFor(last, myEmails, firstSubject),
       };
     } catch (err) {
       console.error(`[gmailInbox] couldn't read thread ${id}:`, err);

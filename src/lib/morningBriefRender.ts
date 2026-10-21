@@ -3,6 +3,7 @@
 // message, an email and a Slack message. Kept free of database imports so
 // scripts/test-next-steps.ts can run it.
 import { daysBetween, type MorningBriefPrefs } from "./morningBriefPrefs";
+import type { ReplyAll } from "./integrations/gmailHeaders";
 
 export type BriefEmail = {
   threadId: string;
@@ -35,6 +36,9 @@ export type BriefEmail = {
   // The latest message's Message-ID header, so a reply saved to Gmail
   // drafts from the brief threads under it.
   replyToHeader?: string | null;
+  // Everyone a reply-all goes to, and the headers that keep it in this
+  // conversation (see replyAllFor in gmailHeaders.ts).
+  replyAll?: ReplyAll | null;
 };
 
 export type BriefSnapshot = {

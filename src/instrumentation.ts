@@ -6,6 +6,7 @@ export async function register() {
   const { runStartupMigrations } = await import("@/lib/startupMigrations");
   await runStartupMigrations();
   startStuckMeetingSweep();
+  if (process.env.NODE_ENV === "production") startMorningBriefSchedule();
 }
 
 // A restart (every deploy is one) stops any meeting write-up in progress,
@@ -30,4 +31,30 @@ function startStuckMeetingSweep() {
     void sweep();
     setInterval(sweep, SWEEP_EVERY_MS).unref();
   }, SWEEP_FIRST_MS).unref();
+}
+
+// Morning briefs go out within a few minutes of each person's chosen time
+// (see runDueMorningBriefs). The server checks itself rather than waiting
+// on the hourly GitHub workflow, which GitHub often runs hours late.
+// Replies to new emails are drafted once an hour, as before.
+const BRIEF_CHECK_FIRST_MS = 60_000;
+const BRIEF_CHECK_EVERY_MS = 5 * 60_000;
+const BRIEF_CHECKS_PER_DRAFT_RUN = 12;
+
+function startMorningBriefSchedule() {
+  let checks = 0;
+  const check = async () => {
+    const draftReplies = checks++ % BRIEF_CHECKS_PER_DRAFT_RUN === 0;
+    try {
+      const { runDueMorningBriefs } = await import("@/lib/morningBrief");
+      const result = await runDueMorningBriefs({ draftReplies });
+      if (result.sent || result.failed || result.drafted) console.log("[morningBrief] scheduled check:", result);
+    } catch (err) {
+      console.error("[morningBrief] scheduled check failed:", err);
+    }
+  };
+  setTimeout(() => {
+    void check();
+    setInterval(check, BRIEF_CHECK_EVERY_MS).unref();
+  }, BRIEF_CHECK_FIRST_MS).unref();
 }
