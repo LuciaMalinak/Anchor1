@@ -186,7 +186,11 @@ export function TeamClient({
                 style={{ backgroundColor: INDUSTRY_BY_KEY[industry].accent }}
                 aria-hidden="true"
               />
-              {INDUSTRY_BY_KEY[industry].label} — set when your team signed up.
+              {INDUSTRY_BY_KEY[industry].label} — Anchor coaches calls and writes summaries for this
+              business.{" "}
+              <a href={`/industries/${industry}`} target="_blank" className="font-medium text-brand hover:underline">
+                What that means
+              </a>
             </p>
             {isOwner && (
               <button
@@ -202,8 +206,8 @@ export function TeamClient({
           <>
             <p className="mt-1 text-sm text-slate-500">
               {isOwner
-                ? "Pick the closest match — it gives the dashboard a small accent to match, and it's what future industry-specific Anchor features will build on."
-                : "Set by your team owner — gives the dashboard a small accent to match."}
+                ? "Pick the closest match. Anchor then coaches your calls the way an expert in that business would, fills in that industry's deal sheet after each call, and flags the rules it can't let you break."
+                : "Set by your team owner. Anchor uses it to coach calls, fill in the deal sheet and flag industry rules."}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button

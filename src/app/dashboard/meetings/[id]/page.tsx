@@ -291,6 +291,39 @@ export default async function MeetingDetailPage({
             </div>
           )}
 
+          {/* Industry rules this call touched (industryPlaybooks.ts) —
+              above everything else, since some need action today. */}
+          {summary.complianceFlags.length > 0 && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-red-700">
+                Needs review
+              </p>
+              <ul className="mt-1.5 space-y-1.5 text-sm text-red-900">
+                {summary.complianceFlags.map((flag, i) => (
+                  <li key={i}>
+                    <span className="font-medium">{flag.rule}:</span> {flag.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {summary.industryFacts.length > 0 && (
+            <>
+              <h3 className="mt-5 text-xs font-medium uppercase tracking-wide text-slate-500">
+                Deal sheet
+              </h3>
+              <dl className="mt-2 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[minmax(0,10rem)_1fr]">
+                {summary.industryFacts.map((fact, i) => (
+                  <div key={i} className="contents">
+                    <dt className="font-medium text-slate-500">{fact.label}</dt>
+                    <dd className="text-slate-700">{fact.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          )}
+
           <h3 className="mt-5 text-xs font-medium uppercase tracking-wide text-slate-500">
             Key points
           </h3>

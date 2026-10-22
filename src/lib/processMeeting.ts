@@ -12,6 +12,7 @@ import {
   tasks,
   dealFiles,
   meetingLiveSegments,
+  teams,
 } from "@/db/schema";
 import { transcribeAudioFile, type Utterance } from "./transcribe";
 import { withAiUser } from "./aiUsage";
@@ -28,6 +29,7 @@ import { withRetry } from "./retry";
 import { summarizeDealFiles } from "./dealFilesContext";
 import { matchDealFromText } from "./dealMatch";
 import { learnFromCall } from "./answerPlaybook";
+import { isIndustryKey } from "./industries";
 
 // Every Nth memory update re-derives the summary from actual raw history
 // instead of just trusting the current (possibly drifted) summary text —
@@ -219,12 +221,19 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
     // summary, so they're skipped for this meeting.
     let result: MeetingSummaryResult;
     let aiSummary = true;
+    // The team's industry brings its deal sheet and rules into the summary.
+    const [teamRow] = await db
+      .select({ industry: teams.industry })
+      .from(teams)
+      .where(eq(teams.id, deal?.teamId ?? (await getOrCreateTeamId(meeting.userId))));
+    const industry = teamRow?.industry && isIndustryKey(teamRow.industry) ? teamRow.industry : null;
     try {
       result = await withRetry(
         () =>
           summarizeMeeting(
             utterances,
-            deal ? { memory: deal.memory, emailContext: deal.emailContext } : null
+            deal ? { memory: deal.memory, emailContext: deal.emailContext } : null,
+            industry
           ),
         { label: `summarize ${meetingId}` }
       );
@@ -238,6 +247,8 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
         actionItems: [],
         speakers: [],
         dealSignals: [],
+        industryFacts: [],
+        complianceFlags: [],
       };
     }
 
@@ -388,6 +399,8 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
       actionItems: result.actionItems,
       continuityNote: continuityLines.length > 0 ? continuityLines.join(" ") : null,
       dealSignals: result.dealSignals,
+      industryFacts: result.industryFacts,
+      complianceFlags: result.complianceFlags,
     });
 
     // Materialize each action item as its own task row — feeds the home
@@ -476,7 +489,9 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
                 priorMemory: deal.memory,
                 newSummary: {
                   overview: result.overview,
-                  keyPoints: result.keyPoints,
+                  // The industry deal sheet too, so the deal's memory keeps
+                  // its price, terms and dates as the deal moves.
+                  keyPoints: [...result.keyPoints, ...result.industryFacts.map((f) => `${f.label}: ${f.value}`)],
                   actionItems: result.actionItems,
                 },
                 manualNotes: deal.notes,

@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { meetings, summaries, dealFiles, deals } from "@/db/schema";
+import { meetings, summaries, dealFiles, deals, teams } from "@/db/schema";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { summarizeDealFiles } from "@/lib/dealFilesContext";
+import { isIndustryKey, type IndustryKey } from "@/lib/industries";
 
 // How many of this deal's past FINISHED meetings to ground live coaching
 // in — same idea as assist/route.ts's recentReady, just smaller since
@@ -23,6 +24,9 @@ export type LiveDealContext = {
   // What the person on this call told Anchor after their recent calls
   // ("too generic", "shorter answers"…) — see CallFeedbackPopup.
   feedbackNotes: string[];
+  // The team's industry (Team page), which brings in that industry's
+  // playbook: its checklist, rules and jargon (industryPlaybooks.ts).
+  industry: IndustryKey | null;
   pastMeetings: {
     title: string;
     occurredAt: string;
@@ -43,7 +47,7 @@ export async function loadLiveDealContext(
   // Never rebuilt synchronously here — this runs every few seconds
   // during a live call, so it reads whatever style profile already
   // exists (possibly a day stale) rather than ever waiting on a rebuild.
-  const [leadStyle, pastMeetingRows, fileRows, feedbackRows] = await Promise.all([
+  const [leadStyle, pastMeetingRows, fileRows, feedbackRows, teamRows] = await Promise.all([
     getDealLeadStyle(deal?.leadUserId ?? null, { allowSynchronousRebuild: false }),
     deal
       ? db
@@ -71,7 +75,18 @@ export async function loadLiveDealContext(
       )
       .orderBy(desc(meetings.occurredAt))
       .limit(FEEDBACK_NOTES_LIMIT),
+    // The deal's team, or the team of whoever's on the call when there's no deal.
+    db
+      .select({ industry: teams.industry })
+      .from(teams)
+      .where(
+        deal
+          ? eq(teams.id, deal.teamId)
+          : sql`${teams.id} = (select u."teamId" from "user" u join "meeting" m on m."userId" = u."id" where m."id" = ${meetingId})`
+      )
+      .limit(1),
   ]);
+  const industry = teamRows[0]?.industry;
 
   return {
     dealName: deal?.name || null,
@@ -86,6 +101,7 @@ export async function loadLiveDealContext(
     documentContext: deal?.documentContext || null,
     attachedFiles: summarizeDealFiles(fileRows),
     feedbackNotes: feedbackRows.map((r) => r.feedback?.note?.trim() ?? "").filter(Boolean),
+    industry: industry && isIndustryKey(industry) ? industry : null,
     pastMeetings: pastMeetingRows.map((r) => ({
       title: r.meeting.title,
       occurredAt: r.meeting.occurredAt.toLocaleDateString(),

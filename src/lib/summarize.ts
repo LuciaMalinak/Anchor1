@@ -2,6 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import type { Utterance } from "./transcribe";
+import type { IndustryKey } from "./industries";
+import { industrySummaryText } from "./industryPlaybooks";
 
 // Centralized so it's a one-line change if this needs to point at a
 // different model later.
@@ -38,6 +40,8 @@ export type MeetingSummaryResult = {
   actionItems: { text: string; owner: string | null }[];
   speakers: SpeakerFinding[];
   dealSignals: DealSignal[];
+  industryFacts: { label: string; value: string }[];
+  complianceFlags: { rule: string; detail: string }[];
 };
 
 const SUMMARY_TOOL = {
@@ -117,6 +121,32 @@ const SUMMARY_TOOL = {
           required: ["type", "detail"],
         },
       },
+      industryFacts: {
+        type: "array",
+        description:
+          "Only when deal-sheet fields for this team's industry are given: one entry per field the call actually covered, using the field's label exactly, with what was said (specific: names, figures, dates). Leave out fields the call didn't touch. Empty when no fields are given.",
+        items: {
+          type: "object",
+          properties: {
+            label: { type: "string" },
+            value: { type: "string" },
+          },
+          required: ["label", "value"],
+        },
+      },
+      complianceFlags: {
+        type: "array",
+        description:
+          "Only when industry rules are given: each moment on this call that broke, came close to, or triggers follow-up under one of them (e.g. a patient side effect that must be reported, a buyer told another bidder's price, steering language). rule is the rule's label; detail says what was said and what to do now, in one sentence. Empty when nothing on the call touched a rule — never pad it.",
+        items: {
+          type: "object",
+          properties: {
+            rule: { type: "string" },
+            detail: { type: "string" },
+          },
+          required: ["rule", "detail"],
+        },
+      },
     },
     required: ["suggestedTitle", "overview", "keyPoints", "actionItems", "speakers", "dealSignals"],
   },
@@ -132,7 +162,9 @@ export async function summarizeMeeting(
   // ONLY: the model is still asked to ground everything in the
   // transcript, never to invent an action item purely from an email that
   // was never mentioned on the call.
-  dealContext?: { memory?: string | null; emailContext?: string | null } | null
+  dealContext?: { memory?: string | null; emailContext?: string | null } | null,
+  // The team's industry, for its deal sheet fields and rules.
+  industry?: IndustryKey | null
 ): Promise<MeetingSummaryResult> {
   const transcriptText = transcriptToPlainText(utterances);
 
@@ -156,7 +188,7 @@ export async function summarizeMeeting(
     messages: [
       {
         role: "user",
-        content: `Here is a meeting transcript with speakers separated. Summarize it.\n\n${transcriptText}${dealContextBlock}`,
+        content: `Here is a meeting transcript with speakers separated. Summarize it.\n\n${transcriptText}${dealContextBlock}${industrySummaryText(industry)}`,
       },
     ],
   });
@@ -190,6 +222,14 @@ function normalizeSummary(raw: unknown): MeetingSummaryResult {
       (sp) => ({ speakerLabel: sp.speakerLabel, inferredName: typeof sp.inferredName === "string" ? sp.inferredName : null, note: typeof sp.note === "string" ? sp.note : "" })
     ),
     dealSignals: list<DealSignal>(r.dealSignals, isObj),
+    industryFacts: list<{ label: string; value: string }>(
+      r.industryFacts,
+      (x) => isObj(x) && typeof (x as { label?: unknown }).label === "string" && typeof (x as { value?: unknown }).value === "string"
+    ).filter((f) => f.value.trim()),
+    complianceFlags: list<{ rule: string; detail: string }>(
+      r.complianceFlags,
+      (x) => isObj(x) && typeof (x as { rule?: unknown }).rule === "string" && typeof (x as { detail?: unknown }).detail === "string"
+    ),
   };
 }
 

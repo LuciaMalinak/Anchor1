@@ -428,6 +428,15 @@ export const summaries = pgTable("summary", {
     .$type<{ type: "buying_signal" | "risk" | "blocker"; detail: string }[]>()
     .default([])
     .notNull(),
+  // The industry deal sheet for this call: the fields the team's industry
+  // tracks (property, valuation, room block, MEDDPICC…), filled only from
+  // what was said. Empty when the team has no industry set. See
+  // src/lib/industryPlaybooks.ts.
+  industryFacts: jsonb("industryFacts").$type<{ label: string; value: string }[]>().default([]).notNull(),
+  // Moments on this call that touched one of the industry's rules (an
+  // adverse event mentioned, a disclosure before an NDA, steering
+  // language) and need someone to look at them.
+  complianceFlags: jsonb("complianceFlags").$type<{ rule: string; detail: string }[]>().default([]).notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -529,10 +538,10 @@ export const teams = pgTable("team", {
   industryTickerUpdatedAt: timestamp("industryTickerUpdatedAt", { mode: "date" }),
   // Optional industry "subsector" the team owner picks on the Team page
   // (see src/lib/industries.ts for the fixed list). Null means no
-  // preference set — the default look and generic AI behavior. Currently
-  // drives the landing page's industry section and a small accent-color
-  // reskin in the dashboard; industry-tuned AI prompts are a later step,
-  // not built on top of this yet.
+  // preference set — the default look and generic AI behavior. Drives a
+  // small accent-color reskin in the dashboard and the industry-tuned AI:
+  // live coaching, live answers and call summaries use the industry's
+  // playbook (src/lib/industryPlaybooks.ts).
   industry: text("industry"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });

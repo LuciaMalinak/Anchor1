@@ -414,9 +414,9 @@ export default async function Home() {
       </section>
 
       {/* Industry section — the fixed list a team can pick from on the
-          Team page (src/lib/industries.ts). Positioning/copy only for
-          now: same Anchor, same AI, under every card — industry-tuned AI
-          behavior is a later project, not implied here. */}
+          Team page (src/lib/industries.ts). Each card opens that
+          industry's page, built from the same playbook the AI uses
+          (src/lib/industryPlaybooks.ts). */}
       <section className="border-t border-slate-100 bg-slate-50 px-6 py-24">
         <div className="mx-auto max-w-5xl">
           <p className="text-center text-xs font-semibold tracking-[0.2em] text-accent">
@@ -426,21 +426,22 @@ export default async function Home() {
             Anchor speaks your industry
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-sm leading-relaxed text-slate-500">
-            Set your team&apos;s industry on the Team page and Anchor carries it through the
-            product — starting with a look that matches.
+            Set your team&apos;s industry and Anchor joins every call knowing your business: what
+            the call has to cover, the jargon, the deal sheet you track, and the lines you can&apos;t
+            cross.
           </p>
           <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {INDUSTRIES.map((ind) => (
               <Link
                 key={ind.key}
-                href={`/sign-up?industry=${ind.key}`}
+                href={`/industries/${ind.key}`}
                 className="reveal group block rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 style={{ borderTopWidth: "3px", borderTopColor: ind.accent }}
               >
                 <p className="text-base font-semibold text-slate-900">Anchor for {ind.label}</p>
                 <p className="mt-2 text-sm leading-relaxed text-slate-500">{ind.blurb}</p>
                 <span className="mt-3 inline-block text-xs font-medium text-accent">
-                  Get started →
+                  See how it works →
                 </span>
               </Link>
             ))}
@@ -493,7 +494,7 @@ export default async function Home() {
             {INDUSTRIES.map((ind) => (
               <Link
                 key={ind.key}
-                href={`/sign-up?industry=${ind.key}`}
+                href={`/industries/${ind.key}`}
                 className="text-sm font-medium text-brand hover:underline"
               >
                 {ind.label}
