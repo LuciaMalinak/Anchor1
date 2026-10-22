@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { INDUSTRIES, INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { INDUSTRY_PLAYBOOKS } from "@/lib/industryPlaybooks";
+import { toolsForIndustry } from "@/lib/industryTools";
 
 export async function generateMetadata({ params }: { params: Promise<{ key: string }> }): Promise<Metadata> {
   const { key } = await params;
@@ -24,6 +25,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
   const industry = INDUSTRY_BY_KEY[key];
   const p = INDUSTRY_PLAYBOOKS[key];
   const accent = { color: industry.accent };
+  const tools = toolsForIndustry(key).filter((t) => t.industries !== "all");
 
   return (
     <main className="flex min-h-screen flex-col bg-white">
@@ -114,7 +116,26 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
         </div>
       </section>
 
-      <section className="mx-auto grid w-full max-w-5xl gap-10 px-6 py-16 sm:px-8 md:grid-cols-2">
+      <section className="mx-auto w-full max-w-5xl px-6 py-16 sm:px-8">
+        <h2 className="text-2xl font-semibold tracking-tight text-brand">The reports you make by hand, made for you</h2>
+        <p className="mt-2 max-w-2xl text-sm text-slate-500">
+          One click on any deal and Anchor writes them from every call, file and email on it. Whatever
+          they&apos;re still missing becomes your checklist on the next call, so they finish themselves.
+        </p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {tools.map((t) => (
+            <div key={t.id} className="rounded-xl border border-slate-200 bg-white p-5">
+              <p className="text-[11px] font-semibold tracking-[0.15em]" style={accent}>
+                {t.phase === "before" ? "BEFORE THE CALL" : "AFTER THE CALL"}
+              </p>
+              <p className="mt-1.5 text-sm font-semibold text-slate-900">{t.name}</p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-500">{t.outcome}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto grid w-full max-w-5xl gap-10 border-t border-slate-100 px-6 py-16 sm:px-8 md:grid-cols-2">
         <div>
           <h2 className="text-lg font-semibold text-brand">Lines Anchor watches for you</h2>
           <p className="mt-2 text-sm text-slate-500">

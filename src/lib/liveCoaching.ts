@@ -256,6 +256,9 @@ export function liveDealContextText(params: LiveDealContext): string {
   const calendarContextText = params.calendarContext
     ? `\n\nRecent and upcoming calendar meetings with people on this deal: ${params.calendarContext}`
     : "";
+  const toolGapsText = params.toolGaps?.length
+    ? `\n\nStill missing from this deal's reports — the person on the call wants these answered, so work them into the checklist and nudges when the moment fits:\n${params.toolGaps.map((g) => `- ${g.gap} (for the ${g.tool})`).join("\n")}`
+    : "";
   const attachedFilesText = params.attachedFiles
     ? `\n\nFiles/voice notes attached to this deal ahead of the call:\n${params.attachedFiles}`
     : "";
@@ -264,7 +267,7 @@ export function liveDealContextText(params: LiveDealContext): string {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}${feedbackText}${industryLiveText(params.industry)}`;
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}${feedbackText}${toolGapsText}${industryLiveText(params.industry)}`;
 }
 
 // Regenerates live coaching (nudges + checklist) for a meeting that's

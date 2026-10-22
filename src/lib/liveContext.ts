@@ -4,12 +4,14 @@ import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { summarizeDealFiles } from "@/lib/dealFilesContext";
 import { isIndustryKey, type IndustryKey } from "@/lib/industries";
+import { TOOL_BY_ID } from "@/lib/industryTools";
 
 // How many of this deal's past FINISHED meetings to ground live coaching
 // in — same idea as assist/route.ts's recentReady, just smaller since
 // this runs every few seconds during a live call.
 const PAST_MEETINGS_LIMIT = 3;
 const FEEDBACK_NOTES_LIMIT = 5;
+const TOOL_GAPS_LIMIT = 8;
 
 export type LiveDealContext = {
   dealName: string | null;
@@ -27,6 +29,9 @@ export type LiveDealContext = {
   // The team's industry (Team page), which brings in that industry's
   // playbook: its checklist, rules and jargon (industryPlaybooks.ts).
   industry: IndustryKey | null;
+  // What the deal's industry reports (buyer log, VAC packet, MEDDPICC…)
+  // are still missing, so the call can fill it in (industryTools.ts).
+  toolGaps: { tool: string; gap: string }[];
   pastMeetings: {
     title: string;
     occurredAt: string;
@@ -102,6 +107,12 @@ export async function loadLiveDealContext(
     attachedFiles: summarizeDealFiles(fileRows),
     feedbackNotes: feedbackRows.map((r) => r.feedback?.note?.trim() ?? "").filter(Boolean),
     industry: industry && isIndustryKey(industry) ? industry : null,
+    toolGaps: Object.entries(deal?.toolReports ?? {})
+      .sort(([, a], [, b]) => b.generatedAt.localeCompare(a.generatedAt))
+      .flatMap(([toolId, saved]) =>
+        saved.report.gaps.slice(0, 3).map((gap) => ({ tool: TOOL_BY_ID[toolId]?.name ?? saved.report.title, gap }))
+      )
+      .slice(0, TOOL_GAPS_LIMIT),
     pastMeetings: pastMeetingRows.map((r) => ({
       title: r.meeting.title,
       occurredAt: r.meeting.occurredAt.toLocaleDateString(),

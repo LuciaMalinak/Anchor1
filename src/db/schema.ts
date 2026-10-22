@@ -1,3 +1,4 @@
+import type { SavedToolReport } from "../lib/industryTools";
 import {
   pgTable,
   text,
@@ -621,6 +622,10 @@ export const deals = pgTable("deal", {
   // and Dropbox (see dealIntegrationContext.ts). Refreshed alongside the
   // email/calendar context above.
   documentContext: text("documentContext"),
+  // The latest report from each industry tool run on this deal, keyed by
+  // tool id (see src/lib/industryTools.ts). Their gaps feed the next live
+  // call's checklist.
+  toolReports: jsonb("toolReports").$type<Record<string, SavedToolReport>>(),
   integrationContextUpdatedAt: timestamp("integrationContextUpdatedAt", { mode: "date" }),
   // What a teammate covering this deal's meeting is allowed to decide on
   // their own (e.g. "can offer up to 10% discount, can't commit to custom
