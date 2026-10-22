@@ -6,6 +6,7 @@ import {
   HUBSPOT_EXTRA_SCOPES,
   PROVIDERS,
   SLACK_EXTRA_SCOPES,
+  SLACK_USER_SCOPES,
   isDropboxExtraScopeKey,
   isGoogleExtraScopeKey,
   isHubspotExtraScopeKey,
@@ -83,6 +84,9 @@ export async function GET(
   for (const [k, v] of Object.entries(cfg.extraAuthorizeParams || {})) {
     url.searchParams.set(k, v);
   }
+  // ?add=read_dms on Slack: the person's own DMs, as user scopes (see
+  // SLACK_USER_SCOPES), alongside the bot scopes.
+  if (provider === "slack" && add === "read_dms") url.searchParams.set("user_scope", SLACK_USER_SCOPES.join(","));
 
   return NextResponse.redirect(url.toString());
 }

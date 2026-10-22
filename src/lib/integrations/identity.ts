@@ -50,6 +50,12 @@ export async function fetchIdentityLabel(
       const body = await res.json();
       return typeof body.email === "string" ? body.email : null;
     }
+    if (key === "zoom") {
+      const res = await fetch("https://api.zoom.us/v2/users/me", { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!res.ok) return null;
+      const body = await res.json();
+      return typeof body.email === "string" ? body.email : null;
+    }
     if (key === "hubspot") {
       // HubSpot's one-call way to identify a token: no separate
       // "userinfo" endpoint, just this lookup by the token itself, which

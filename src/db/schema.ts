@@ -1,3 +1,4 @@
+import type { SavedToolReport } from "../lib/industryTools";
 import {
   pgTable,
   text,
@@ -621,6 +622,10 @@ export const deals = pgTable("deal", {
   // and Dropbox (see dealIntegrationContext.ts). Refreshed alongside the
   // email/calendar context above.
   documentContext: text("documentContext"),
+  // The latest report from each industry tool run on this deal, keyed by
+  // tool id (see src/lib/industryTools.ts). Their gaps feed the next live
+  // call's checklist.
+  toolReports: jsonb("toolReports").$type<Record<string, SavedToolReport>>(),
   integrationContextUpdatedAt: timestamp("integrationContextUpdatedAt", { mode: "date" }),
   // What a teammate covering this deal's meeting is allowed to decide on
   // their own (e.g. "can offer up to 10% discount, can't commit to custom
@@ -788,6 +793,7 @@ export const integrationProviderEnum = pgEnum("integration_provider", [
   "salesforce",
   "hubspot",
   "dropbox",
+  "zoom",
 ]);
 
 export const integrationConnections = pgTable(
@@ -814,6 +820,9 @@ export const integrationConnections = pgTable(
     // call has to go to this org's instance instead of a shared endpoint.
     // Unused by other providers.
     instanceUrl: text("instanceUrl"),
+    // Slack only: the person's own user token (from user_scope), for
+    // reading their direct messages. accessToken stays the bot token.
+    userAccessToken: text("userAccessToken"),
     connectedAt: timestamp("connectedAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
@@ -936,6 +945,13 @@ export const morningBriefs = pgTable("morning_brief", {
   dismissed: jsonb("dismissed").$type<Record<string, string>>().notNull().default({}),
   // The last brief as sent, for its web page (Done / Snooze buttons).
   lastBrief: jsonb("lastBrief").$type<Record<string, unknown>>(),
+  // When the person switched their brief off themselves. Everyone else's
+  // brief is on by default (see shouldAutoEnableBrief).
+  turnedOffAt: timestamp("turnedOffAt", { mode: "date" }),
+  // Switched on by the server before the person ever opened Anchor, with
+  // a time zone guessed from their calendar (or the default); corrected
+  // from their browser the first time they open Home.
+  timeZoneGuessed: boolean("timeZoneGuessed").notNull().default(false),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -984,4 +1000,36 @@ export const answerPlaybook = pgTable(
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
   (t) => [index("answer_playbook_teamId_idx").on(t.teamId, t.updatedAt)]
+);
+
+// A meeting Anchor noticed someone should set up, from a Slack message
+// (meetingProposals.ts). Email requests come from the Morning brief
+// instead. "open" until set up ("scheduled", with what was created in
+// result) or dismissed; Slack messages that don't need a meeting are kept
+// as "none" so they aren't read again.
+export const meetingProposals = pgTable(
+  "meeting_proposal",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    source: text("source").$type<"slack">().notNull(),
+    // Slack: "<channel>:<ts of the latest message read>".
+    sourceKey: text("sourceKey").notNull(),
+    sourceUrl: text("sourceUrl"),
+    fromName: text("fromName").notNull(),
+    title: text("title").notNull(),
+    reason: text("reason").notNull(),
+    // Local wall time "YYYY-MM-DDTHH:MM" in timeZone, when one was proposed.
+    start: text("start"),
+    durationMinutes: integer("durationMinutes").notNull().default(30),
+    timeZone: text("timeZone").notNull(),
+    attendees: jsonb("attendees").$type<{ name: string | null; email: string }[]>().notNull().default([]),
+    status: text("status").$type<"open" | "scheduled" | "dismissed" | "none">().notNull().default("open"),
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("meeting_proposal_source_idx").on(t.userId, t.source, t.sourceKey)]
 );

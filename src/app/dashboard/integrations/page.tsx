@@ -47,7 +47,26 @@ export default async function IntegrationsPage() {
     disconnectable: false,
     connectedNote: "Uses your Google connection. Disconnect Google to remove it.",
   };
-  const providers = providerCards.flatMap((card) => (card.key === "google" ? [card, driveCard] : [card]));
+  // Meeting requests in Slack DMs: the person's own Slack user token on
+  // top of the Slack connection (SLACK_USER_SCOPES), so Anchor can spot
+  // "let's find time" and offer to set the meeting up (meetingProposals.ts).
+  const slack = byProvider.get("slack");
+  const slackDmsCard = {
+    key: "slack_dms",
+    name: "Meeting requests in Slack",
+    description:
+      "Anchor reads your Slack direct messages for people asking to meet, and offers to set the meeting up for you: Zoom, Teams, Google Meet or in person, with everyone invited.",
+    configured: isProviderConfigured("slack"),
+    connected: Boolean(slack?.userAccessToken),
+    connectedLabel: slack?.externalAccountEmail ?? null,
+    connectedAt: slack?.updatedAt ? slack.updatedAt.toISOString() : null,
+    connectHref: `/api/integrations/slack/connect?add=read_dms&returnTo=${encodeURIComponent("/dashboard/integrations?connected=slack_dms")}`,
+    disconnectable: false,
+    connectedNote: "Uses your Slack connection. Disconnect Slack to remove it.",
+  };
+  const providers = providerCards.flatMap((card) =>
+    card.key === "google" ? [card, driveCard] : card.key === "slack" ? [card, slackDmsCard] : [card]
+  );
 
   return (
     <Suspense fallback={null}>

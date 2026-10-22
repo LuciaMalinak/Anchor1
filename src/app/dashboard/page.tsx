@@ -20,7 +20,7 @@ import { HomeUpdates } from "./HomeUpdates";
 import { MorningBriefPrompt } from "./MorningBriefPrompt";
 import { getGoogleConnection } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
-import { briefSettingsSaved, normalizePrefs } from "@/lib/morningBriefPrefs";
+import { normalizePrefs, shouldAutoEnableBrief } from "@/lib/morningBriefPrefs";
 import { WelcomeGate } from "./WelcomeGate";
 
 export default async function DashboardPage({
@@ -82,7 +82,13 @@ export default async function DashboardPage({
       db.select().from(users).where(eq(users.id, session.user.id)).then((r) => r[0]),
       db.select().from(teams).where(eq(teams.id, teamId)).then((r) => r[0]),
       db
-        .select({ enabled: morningBriefs.enabled, prefs: morningBriefs.prefs })
+        .select({
+          enabled: morningBriefs.enabled,
+          prefs: morningBriefs.prefs,
+          lastSentOn: morningBriefs.lastSentOn,
+          turnedOffAt: morningBriefs.turnedOffAt,
+          timeZoneGuessed: morningBriefs.timeZoneGuessed,
+        })
         .from(morningBriefs)
         .where(eq(morningBriefs.userId, session.user.id))
         .then((r) => r[0])
@@ -95,7 +101,9 @@ export default async function DashboardPage({
         !(google.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose)
     );
     briefOn = brief?.enabled ?? false;
-    briefNeverSetUp = !brief || (!brief.enabled && !briefSettingsSaved(brief.prefs));
+    // Also when the server switched it on with a guessed time zone, so the
+    // prompt can set their real one (and say the brief is on).
+    briefNeverSetUp = shouldAutoEnableBrief(brief ?? null) || Boolean(brief?.timeZoneGuessed);
     welcomeSeen = user?.welcomeSeen ?? true;
     isTeamOwner = team?.ownerUserId === session.user.id;
     sectionOrder = resolveDashboardOrder(user?.dashboardLayout);
@@ -184,7 +192,7 @@ export default async function DashboardPage({
           initialColorTheme={colorTheme && isColorThemeKey(colorTheme) ? colorTheme : null}
         />
       )}
-      {teamId && !briefOn && <MorningBriefPrompt neverSetUp={briefNeverSetUp} />}
+      {teamId && (!briefOn || briefNeverSetUp) && <MorningBriefPrompt neverSetUp={briefNeverSetUp} />}
       {needsDraftsPermission && (
         <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-6 py-5">
           <div className="min-w-0">

@@ -12,6 +12,7 @@ import { HEALTH_LABEL, HEALTH_BADGE_CLASSES, HEALTH_DOT_CLASSES, type DealHealth
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { AskAnchorScope } from "@/components/AskAnchorDock";
 import { PreCallBrief } from "@/components/PreCallBrief";
+import { IndustryToolsPanel } from "@/components/IndustryToolsPanel";
 import { ShareNextSteps } from "@/components/ShareNextSteps";
 import { DealContextBox } from "@/components/DealContextBox";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
@@ -381,6 +382,7 @@ function BeforePanel({
         </p>
       )}
       <PreCallBrief dealId={dealId} dealName={dealName} />
+      <IndustryToolsPanel dealId={dealId} phase="before" />
       {upcoming.map((m) => (
         <div
           key={m.id}
@@ -1865,59 +1867,62 @@ function AfterPanel({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-      <div className="flex flex-col gap-4">
-        {readyMeetings.length === 0 ? (
-          <p className="text-sm text-slate-500">No finished meetings on this deal yet.</p>
-        ) : (
-          readyMeetings.map((m) => (
-            <div key={m.id} className="rounded-lg border border-slate-200">
-              <div className="flex items-center justify-between rounded-t-lg bg-brand px-5 py-3 text-white">
-                <span className="text-sm font-semibold">{m.title}</span>
-                <Link href={`/dashboard/meetings/${m.id}`} className="text-xs text-slate-300 hover:text-white">
-                  Full transcript →
-                </Link>
-              </div>
-              {m.summary && (
-                <div className="space-y-3 px-5 py-4">
-                  <p className="text-sm text-slate-700">{m.summary.overview}</p>
-                  {m.summary.actionItems.length > 0 && (
-                    <div className="divide-y divide-slate-100 text-sm">
-                      {m.summary.actionItems.map((a, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5">
-                          <span className="text-slate-700">{a.text}</span>
-                          {a.owner && <span className="text-slate-500">{a.owner}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+    <div className="flex flex-col gap-6">
+      <IndustryToolsPanel dealId={dealId} phase="after" />
+      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <div className="flex flex-col gap-4">
+          {readyMeetings.length === 0 ? (
+            <p className="text-sm text-slate-500">No finished meetings on this deal yet.</p>
+          ) : (
+            readyMeetings.map((m) => (
+              <div key={m.id} className="rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between rounded-t-lg bg-brand px-5 py-3 text-white">
+                  <span className="text-sm font-semibold">{m.title}</span>
+                  <Link href={`/dashboard/meetings/${m.id}`} className="text-xs text-slate-300 hover:text-white">
+                    Full transcript →
+                  </Link>
                 </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <div className="rounded-lg border border-slate-200 px-5 py-5">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">SHARE THIS RECAP</p>
-          <p className="mt-2 text-sm text-slate-600">
-            Send the latest recap to all {teamSize} team member{teamSize === 1 ? "" : "s"}.
-          </p>
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={sending || readyMeetings.length === 0}
-            className="mt-4 w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-50"
-          >
-            {sending ? "Sending…" : "Send summary to team"}
-          </button>
-          {sendResult && <p className="mt-2 text-xs text-slate-600">{sendResult}</p>}
+                {m.summary && (
+                  <div className="space-y-3 px-5 py-4">
+                    <p className="text-sm text-slate-700">{m.summary.overview}</p>
+                    {m.summary.actionItems.length > 0 && (
+                      <div className="divide-y divide-slate-100 text-sm">
+                        {m.summary.actionItems.map((a, i) => (
+                          <div key={i} className="flex items-center justify-between py-1.5">
+                            <span className="text-slate-700">{a.text}</span>
+                            {a.owner && <span className="text-slate-500">{a.owner}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
 
-        <ShareNextSteps dealId={dealId} disabled={readyMeetings.length === 0} />
+        <div className="flex flex-col gap-4">
+          <div className="rounded-lg border border-slate-200 px-5 py-5">
+            <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">SHARE THIS RECAP</p>
+            <p className="mt-2 text-sm text-slate-600">
+              Send the latest recap to all {teamSize} team member{teamSize === 1 ? "" : "s"}.
+            </p>
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={sending || readyMeetings.length === 0}
+              className="mt-4 w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-50"
+            >
+              {sending ? "Sending…" : "Send summary to team"}
+            </button>
+            {sendResult && <p className="mt-2 text-xs text-slate-600">{sendResult}</p>}
+          </div>
 
-        <FilesSection dealId={dealId} files={files} />
+          <ShareNextSteps dealId={dealId} disabled={readyMeetings.length === 0} />
+
+          <FilesSection dealId={dealId} files={files} />
+        </div>
       </div>
     </div>
   );

@@ -11,6 +11,8 @@ export type EventInput = {
   endISO: string;
   timeZone: string; // IANA, e.g. America/New_York
   attendees: string[];
+  // A place, or another meeting's link (Zoom) — shown as the location.
+  location?: string;
   addMeetLink: boolean;
   sendInvites: boolean; // false = only on the user's calendar; true = Google emails the attendees
 };
@@ -28,6 +30,7 @@ export async function createCalendarEvent(userId: string, e: EventInput) {
       start: { dateTime: e.startISO, timeZone: e.timeZone },
       end: { dateTime: e.endISO, timeZone: e.timeZone },
       attendees: e.attendees.map((email) => ({ email })),
+      ...(e.location ? { location: e.location } : {}),
       ...(e.addMeetLink
         ? {
             conferenceData: {
@@ -38,5 +41,8 @@ export async function createCalendarEvent(userId: string, e: EventInput) {
       reminders: { useDefault: true },
     }
   );
-  return { openUrl: typeof event.htmlLink === "string" ? event.htmlLink : null };
+  return {
+    openUrl: typeof event.htmlLink === "string" ? event.htmlLink : null,
+    joinUrl: typeof event.hangoutLink === "string" ? event.hangoutLink : null,
+  };
 }

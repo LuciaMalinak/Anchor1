@@ -95,14 +95,16 @@ export function MorningBriefSettings() {
     slack: setup.slackConnected ? "As a Slack message to you" : "Connect Slack on the Integrations page first; until then it comes by email.",
   };
 
-  async function save(nextEnabled = enabled) {
+  // `nextEnabled` only when the On/Off switch changed; otherwise the
+  // saved on/off state is left alone.
+  async function save(nextEnabled?: boolean) {
     setSaving(true);
     setError(null);
     try {
       const res = await fetch("/api/morning-brief", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: nextEnabled, prefs }),
+        body: JSON.stringify(nextEnabled === undefined ? { prefs } : { enabled: nextEnabled, prefs }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Couldn't save");
@@ -350,6 +352,11 @@ export function MorningBriefSettings() {
             {preview.note ? ` ${preview.note}` : ""}
           </p>
           <p className="mt-1 text-xs text-slate-500">{preview.summary}</p>
+          {!enabled && (
+            <p className="mt-1 text-xs font-medium text-amber-700">
+              Your daily brief is off, so this was a one-off. Switch it on above to get it every morning.
+            </p>
+          )}
           {preview.problems.map((p) => (
             <p key={p} className="mt-1 text-xs text-red-600">
               {p}

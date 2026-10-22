@@ -46,10 +46,20 @@ export async function PUT(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const body = await req.json().catch(() => ({}));
   const prefs = normalizePrefs(body.prefs);
-  const enabled = body.enabled === true;
+  // Only the On/Off switch sends `enabled`. Saving settings any other way
+  // ("Send me one now" saves first) keeps it as it is: it used to save
+  // whatever the switch showed, so trying a brief while it was off turned
+  // it off for good, and auto-enable then left it off as a choice.
+  const enabled = typeof body.enabled === "boolean" ? body.enabled : ((await getBriefRow(session.user.id))?.enabled ?? false);
+  // Switching it off is a choice to remember (auto-enable respects it);
+  // switching it on clears it.
+  const turnedOffAt = typeof body.enabled === "boolean" ? (body.enabled ? null : new Date()) : undefined;
   await db
     .insert(morningBriefs)
-    .values({ userId: session.user.id, enabled, prefs, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: morningBriefs.userId, set: { enabled, prefs, updatedAt: new Date() } });
+    .values({ userId: session.user.id, enabled, prefs, turnedOffAt, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: morningBriefs.userId,
+      set: { enabled, prefs, timeZoneGuessed: false, updatedAt: new Date(), ...(turnedOffAt !== undefined ? { turnedOffAt } : {}) },
+    });
   return NextResponse.json(await status(session.user.id));
 }

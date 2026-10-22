@@ -41,6 +41,20 @@ export function briefSettingsSaved(raw: unknown): boolean {
   return Boolean(raw && typeof raw === "object" && Object.keys(raw).length > 0);
 }
 
+// The Morning brief is on for every member by default, at 8am in their own
+// time zone. It stays off only for someone who switched it off themselves
+// (turnedOffAt). Rows from before turnedOffAt existed can't tell "switched
+// off" from "saved while off" (trying a brief used to save it off), so an
+// off brief that has never been sent is turned on; one that was sent and
+// then stopped is left alone.
+export function shouldAutoEnableBrief(
+  row: { enabled: boolean; prefs: unknown; lastSentOn: string | null; turnedOffAt: Date | null } | null
+): boolean {
+  if (!row) return true;
+  if (row.enabled || row.turnedOffAt) return false;
+  return !briefSettingsSaved(row.prefs) || !row.lastSentOn;
+}
+
 export function isValidTimeZone(tz: unknown): tz is string {
   if (typeof tz !== "string" || !tz || tz.length > 64) return false;
   try {

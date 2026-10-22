@@ -152,7 +152,14 @@ export async function GET(req: NextRequest) {
           }
         : null,
       morningBrief: brief[0]
-        ? { enabled: brief[0].enabled, lastSentOn: brief[0].lastSentOn, draftReplies: (brief[0].prefs as { draftReplies?: boolean })?.draftReplies ?? true }
+        ? {
+            enabled: brief[0].enabled,
+            lastSentOn: brief[0].lastSentOn,
+            draftReplies: (brief[0].prefs as { draftReplies?: boolean })?.draftReplies ?? true,
+            // Off is a valid choice, but it's the usual answer to "why
+            // didn't my brief come?", so say it plainly.
+            ...(brief[0].enabled ? {} : { problem: "switched off, so no scheduled brief is sent" }),
+          }
         : null,
       styleProfile: style[0] ? { built: Boolean(style[0].profile), sources: style[0].sourceCount, updated: style[0].updatedAt.toISOString().slice(0, 10) } : null,
       dealsLed: ledDeals[0]?.n ?? 0,
