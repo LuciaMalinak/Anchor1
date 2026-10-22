@@ -8,7 +8,7 @@
 // so a single Azure AD app registration (one client ID/secret) covers
 // both with different scopes. Presenting them as two separate "connect"
 // buttons would just mean asking for the same credentials twice.
-export type ProviderKey = "google" | "microsoft" | "slack" | "salesforce" | "hubspot" | "dropbox";
+export type ProviderKey = "google" | "microsoft" | "slack" | "salesforce" | "hubspot" | "dropbox" | "zoom";
 
 export type ProviderConfig = {
   key: ProviderKey;
@@ -20,6 +20,9 @@ export type ProviderConfig = {
   clientIdEnv: string;
   clientSecretEnv: string;
   extraAuthorizeParams?: Record<string, string>;
+  // How the client credentials go to the token URL: in the form body
+  // (most providers) or as HTTP Basic auth (Zoom requires it).
+  tokenAuth?: "body" | "basic";
 };
 
 export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
@@ -49,7 +52,10 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     name: "Microsoft 365 (Outlook + Teams)",
     description:
       "One Microsoft sign-in covers both Outlook email/calendar and Teams messages tied to a deal.",
-    scopes: ["offline_access", "User.Read", "Mail.Read", "Calendars.Read", "Chat.Read"],
+    // Calendars.ReadWrite (not just Read) so Anchor can create Teams and
+    // in-person meetings on the Outlook calendar and invite people (see
+    // meetingScheduler.ts). Connections made before that need reconnecting.
+    scopes: ["offline_access", "User.Read", "Mail.Read", "Calendars.ReadWrite", "Chat.Read"],
     authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
     tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
     clientIdEnv: "MICROSOFT_INTEGRATION_CLIENT_ID",
@@ -120,7 +126,29 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     // refresh token so the connection keeps working (see dropbox.ts).
     extraAuthorizeParams: { token_access_type: "offline" },
   },
+  zoom: {
+    key: "zoom",
+    name: "Zoom",
+    description:
+      "Set up Zoom meetings straight from Anchor: when an email or Slack message asks to meet, Anchor creates the Zoom link and sends the invites.",
+    // Zoom takes the scopes set on the app in its Marketplace; these are
+    // the ones to add there (create meetings, and read the account email
+    // shown on this card).
+    scopes: ["meeting:write:meeting", "user:read:user"],
+    authorizeUrl: "https://zoom.us/oauth/authorize",
+    tokenUrl: "https://zoom.us/oauth/token",
+    clientIdEnv: "ZOOM_INTEGRATION_CLIENT_ID",
+    clientSecretEnv: "ZOOM_INTEGRATION_CLIENT_SECRET",
+    tokenAuth: "basic",
+  },
 };
+
+// Reading the person's own Slack direct messages, so Anchor can notice
+// when someone asks to meet (meetingProposals.ts). These are Slack *user*
+// scopes (user_scope), unlike the bot scopes above, and give a separate
+// user token (integration_connection.userAccessToken). Asked for with
+// /api/integrations/slack/connect?add=read_dms.
+export const SLACK_USER_SCOPES = ["im:history", "mpim:history", "im:read", "mpim:read", "users:read", "users:read.email"];
 
 // Write access for the meeting page's "Save to Gmail drafts" and "Add to
 // calendar" buttons. Deliberately NOT in the default Google scopes above:

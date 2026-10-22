@@ -59,7 +59,7 @@ export async function PUT(req: NextRequest) {
     .values({ userId: session.user.id, enabled, prefs, turnedOffAt, updatedAt: new Date() })
     .onConflictDoUpdate({
       target: morningBriefs.userId,
-      set: { enabled, prefs, updatedAt: new Date(), ...(turnedOffAt !== undefined ? { turnedOffAt } : {}) },
+      set: { enabled, prefs, timeZoneGuessed: false, updatedAt: new Date(), ...(turnedOffAt !== undefined ? { turnedOffAt } : {}) },
     });
   return NextResponse.json(await status(session.user.id));
 }

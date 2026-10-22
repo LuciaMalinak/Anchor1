@@ -77,6 +77,16 @@ services:
         sync: false
       - key: DROPBOX_INTEGRATION_CLIENT_SECRET
         sync: false
+      # Zoom — create a "General app" (user-managed OAuth) at
+      # marketplace.zoom.us, add
+      # https://<your-app>.onrender.com/api/integrations/zoom/callback as
+      # the redirect URL, and add the scopes meeting:write:meeting and
+      # user:read:user. Lets people set up Zoom meetings from Anchor (see
+      # src/lib/meetingScheduler.ts).
+      - key: ZOOM_INTEGRATION_CLIENT_ID
+        sync: false
+      - key: ZOOM_INTEGRATION_CLIENT_SECRET
+        sync: false
       - key: SALESFORCE_INTEGRATION_CLIENT_ID
         sync: false
       - key: SALESFORCE_INTEGRATION_CLIENT_SECRET

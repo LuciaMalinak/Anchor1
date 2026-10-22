@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, like, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, like, or } from "drizzle-orm";
 import { db } from "@/db";
 import { contacts, deals, integrationConnections, meetingParticipants, meetings, morningBriefs, summaries, tasks, teams, users } from "@/db/schema";
 import { accessibleDealIds, dealVisibilityWhere } from "@/lib/dealAccess";
@@ -7,16 +7,28 @@ import { fetchTodaysDealMeetings } from "@/lib/integrations/calendar";
 import { fetchMessageText, fetchMyReplyInThread, fetchMySentReplies, fetchThreadsAwaitingReply } from "@/lib/integrations/gmailInbox";
 import { createGmailDraft } from "@/lib/integrations/gmailDraft";
 import { replyDraft } from "@/lib/integrations/gmailMime";
-import { getGoogleConnection } from "@/lib/integrations/google";
+import { getGoogleConnection, googleGet } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
 import { sendEmail } from "@/lib/email";
 import { sendSms, isSmsConfigured } from "@/lib/sms";
 import { sendSlackDirectMessage, getSlackConnection } from "@/lib/integrations/slack";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { withAiUser } from "@/lib/aiUsage";
+import { scanSlackForEveryone } from "@/lib/meetingProposals";
 import { createBriefToken } from "@/lib/briefLink";
 import { draftReply, triageEmails } from "@/lib/morningBriefAi";
-import { daysBetween, isBriefDue, localNow, normalizePrefs, type BriefChannel, type MorningBriefPrefs } from "@/lib/morningBriefPrefs";
+import {
+  DEFAULT_PREFS,
+  briefSettingsSaved,
+  daysBetween,
+  isBriefDue,
+  isValidTimeZone,
+  localNow,
+  normalizePrefs,
+  shouldAutoEnableBrief,
+  type BriefChannel,
+  type MorningBriefPrefs,
+} from "@/lib/morningBriefPrefs";
 import {
   briefHeadline,
   isEmptyBrief,
@@ -696,7 +708,54 @@ export function runDueMorningBriefs(opts: { draftReplies?: boolean } = {}): Prom
   return running;
 }
 
+// A member's time zone without them ever opening Anchor: their Google
+// Calendar's setting when connected, otherwise the default.
+async function guessTimeZone(userId: string): Promise<string> {
+  try {
+    const google = await getGoogleConnection(userId);
+    if (google) {
+      const { json } = await googleGet(google, google.accessToken, "https://www.googleapis.com/calendar/v3/users/me/settings/timezone");
+      if (isValidTimeZone(json.value)) return json.value;
+    }
+  } catch (err) {
+    console.error(`[morningBrief] couldn't read ${userId}'s calendar time zone:`, err);
+  }
+  return DEFAULT_PREFS.timeZone;
+}
+
+// Every member gets the brief without having to open Anchor first: the
+// server switches it on for anyone who hasn't switched it off themselves
+// (see shouldAutoEnableBrief), at the time they picked or 8am in their
+// time zone. Checked at most hourly.
+const AUTO_ENABLE_EVERY_MS = 60 * 60_000;
+let lastAutoEnableAt = 0;
+
+export async function autoEnableBriefsForEveryone(): Promise<number> {
+  if (Date.now() - lastAutoEnableAt < AUTO_ENABLE_EVERY_MS) return 0;
+  lastAutoEnableAt = Date.now();
+  const rows = await db
+    .select({ userId: users.id, brief: morningBriefs })
+    .from(users)
+    .innerJoin(teams, eq(teams.id, users.teamId))
+    .leftJoin(morningBriefs, eq(morningBriefs.userId, users.id));
+  let turnedOn = 0;
+  for (const { userId, brief } of rows) {
+    if (!shouldAutoEnableBrief(brief)) continue;
+    const keepSaved = brief && briefSettingsSaved(brief.prefs);
+    const prefs = keepSaved ? normalizePrefs(brief.prefs) : { ...DEFAULT_PREFS, timeZone: await guessTimeZone(userId) };
+    const timeZoneGuessed = !keepSaved;
+    await db
+      .insert(morningBriefs)
+      .values({ userId, enabled: true, prefs, timeZoneGuessed, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: morningBriefs.userId, set: { enabled: true, prefs, timeZoneGuessed, updatedAt: new Date() } });
+    turnedOn++;
+  }
+  if (turnedOn) console.log(`[morningBrief] switched the brief on for ${turnedOn} member(s)`);
+  return turnedOn;
+}
+
 async function runDueMorningBriefsNow(now: Date, draftReplies: boolean) {
+  await autoEnableBriefsForEveryone().catch((err) => console.error("[morningBrief] auto-enable failed:", err));
   const rows = await db
     .select({ userId: morningBriefs.userId, prefs: morningBriefs.prefs, lastSentOn: morningBriefs.lastSentOn })
     .from(morningBriefs)
@@ -743,5 +802,12 @@ async function runDueMorningBriefsNow(now: Date, draftReplies: boolean) {
       console.error(`[morningBrief] auto-drafting failed for ${r.userId}:`, err);
     }
   }
-  return summary;
+  // Meetings people asked for in Slack DMs, for everyone who let Anchor
+  // read them (meetingProposals.ts). Email requests come with the brief.
+  const slackReaders = await db
+    .select({ userId: integrationConnections.userId })
+    .from(integrationConnections)
+    .where(and(eq(integrationConnections.provider, "slack"), isNotNull(integrationConnections.userAccessToken)));
+  const meetingRequests = await scanSlackForEveryone(slackReaders.map((r) => r.userId));
+  return { ...summary, meetingRequests };
 }

@@ -75,15 +75,19 @@ export async function GET(
   const redirectUri = `${baseUrl(req)}/api/integrations/${provider}/callback`;
 
   try {
+    const basicAuth = cfg.tokenAuth === "basic";
     const tokenRes = await fetch(cfg.tokenUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+        ...(basicAuth ? { Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}` } : {}),
+      },
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code,
         redirect_uri: redirectUri,
-        client_id: clientId,
-        client_secret: clientSecret,
+        ...(basicAuth ? {} : { client_id: clientId, client_secret: clientSecret }),
       }),
     });
     const tokenBody = await tokenRes.json().catch(() => ({}));
@@ -114,6 +118,13 @@ export async function GET(
     // refresh token with null — that used to leave a connection looking
     // "Connected" in the UI while quietly unable to refresh once its
     // access token expired.
+    // Slack hands back the person's own token alongside the bot token when
+    // user scopes were asked for (?add=read_dms); kept separately, and never
+    // cleared by a later bot-only reconnect.
+    const authedUser = tokenBody.authed_user as { access_token?: unknown } | undefined;
+    const userAccessToken = typeof authedUser?.access_token === "string" ? authedUser.access_token : null;
+    const userTokenUpdate = userAccessToken ? { userAccessToken } : {};
+
     const refreshTokenUpdate =
       typeof tokenBody.refresh_token === "string" && tokenBody.refresh_token
         ? { refreshToken: tokenBody.refresh_token }
@@ -132,6 +143,7 @@ export async function GET(
         tokenExpiresAt: expiresAt,
         scope: typeof tokenBody.scope === "string" ? tokenBody.scope : cfg.scopes.join(" "),
         instanceUrl,
+        userAccessToken,
       })
       .onConflictDoUpdate({
         target: [integrationConnections.userId, integrationConnections.provider],
@@ -139,6 +151,7 @@ export async function GET(
           externalAccountEmail: identityLabel,
           accessToken,
           ...refreshTokenUpdate,
+          ...userTokenUpdate,
           tokenExpiresAt: expiresAt,
           scope: typeof tokenBody.scope === "string" ? tokenBody.scope : cfg.scopes.join(" "),
           instanceUrl,

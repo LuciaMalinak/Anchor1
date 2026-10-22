@@ -78,6 +78,30 @@ const MIGRATIONS = [
   `ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "toolReports" jsonb`,
   // Morning brief switched off by the person themselves (morningBriefPrefs.ts).
   `ALTER TABLE "morning_brief" ADD COLUMN IF NOT EXISTS "turnedOffAt" timestamp`,
+  `ALTER TABLE "morning_brief" ADD COLUMN IF NOT EXISTS "timeZoneGuessed" boolean NOT NULL DEFAULT false`,
+  // Zoom connections, Slack user tokens, and meetings to set up from email
+  // and Slack (meetingProposals.ts, meetingScheduler.ts).
+  `ALTER TYPE "integration_provider" ADD VALUE IF NOT EXISTS 'zoom'`,
+  `ALTER TABLE "integration_connection" ADD COLUMN IF NOT EXISTS "userAccessToken" text`,
+  `CREATE TABLE IF NOT EXISTS "meeting_proposal" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "userId" uuid NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+    "source" text NOT NULL,
+    "sourceKey" text NOT NULL,
+    "sourceUrl" text,
+    "fromName" text NOT NULL,
+    "title" text NOT NULL,
+    "reason" text NOT NULL,
+    "start" text,
+    "durationMinutes" integer NOT NULL DEFAULT 30,
+    "timeZone" text NOT NULL,
+    "attendees" jsonb NOT NULL DEFAULT '[]'::jsonb,
+    "status" text NOT NULL DEFAULT 'open',
+    "result" jsonb,
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "meeting_proposal_source_idx" ON "meeting_proposal" ("userId", "source", "sourceKey")`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

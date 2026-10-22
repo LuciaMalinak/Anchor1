@@ -793,6 +793,7 @@ export const integrationProviderEnum = pgEnum("integration_provider", [
   "salesforce",
   "hubspot",
   "dropbox",
+  "zoom",
 ]);
 
 export const integrationConnections = pgTable(
@@ -819,6 +820,9 @@ export const integrationConnections = pgTable(
     // call has to go to this org's instance instead of a shared endpoint.
     // Unused by other providers.
     instanceUrl: text("instanceUrl"),
+    // Slack only: the person's own user token (from user_scope), for
+    // reading their direct messages. accessToken stays the bot token.
+    userAccessToken: text("userAccessToken"),
     connectedAt: timestamp("connectedAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
@@ -944,6 +948,10 @@ export const morningBriefs = pgTable("morning_brief", {
   // When the person switched their brief off themselves. Everyone else's
   // brief is on by default (see shouldAutoEnableBrief).
   turnedOffAt: timestamp("turnedOffAt", { mode: "date" }),
+  // Switched on by the server before the person ever opened Anchor, with
+  // a time zone guessed from their calendar (or the default); corrected
+  // from their browser the first time they open Home.
+  timeZoneGuessed: boolean("timeZoneGuessed").notNull().default(false),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -992,4 +1000,36 @@ export const answerPlaybook = pgTable(
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
   (t) => [index("answer_playbook_teamId_idx").on(t.teamId, t.updatedAt)]
+);
+
+// A meeting Anchor noticed someone should set up, from a Slack message
+// (meetingProposals.ts). Email requests come from the Morning brief
+// instead. "open" until set up ("scheduled", with what was created in
+// result) or dismissed; Slack messages that don't need a meeting are kept
+// as "none" so they aren't read again.
+export const meetingProposals = pgTable(
+  "meeting_proposal",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    source: text("source").$type<"slack">().notNull(),
+    // Slack: "<channel>:<ts of the latest message read>".
+    sourceKey: text("sourceKey").notNull(),
+    sourceUrl: text("sourceUrl"),
+    fromName: text("fromName").notNull(),
+    title: text("title").notNull(),
+    reason: text("reason").notNull(),
+    // Local wall time "YYYY-MM-DDTHH:MM" in timeZone, when one was proposed.
+    start: text("start"),
+    durationMinutes: integer("durationMinutes").notNull().default(30),
+    timeZone: text("timeZone").notNull(),
+    attendees: jsonb("attendees").$type<{ name: string | null; email: string }[]>().notNull().default([]),
+    status: text("status").$type<"open" | "scheduled" | "dismissed" | "none">().notNull().default("open"),
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("meeting_proposal_source_idx").on(t.userId, t.source, t.sourceKey)]
 );

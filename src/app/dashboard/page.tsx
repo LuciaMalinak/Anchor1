@@ -87,6 +87,7 @@ export default async function DashboardPage({
           prefs: morningBriefs.prefs,
           lastSentOn: morningBriefs.lastSentOn,
           turnedOffAt: morningBriefs.turnedOffAt,
+          timeZoneGuessed: morningBriefs.timeZoneGuessed,
         })
         .from(morningBriefs)
         .where(eq(morningBriefs.userId, session.user.id))
@@ -100,7 +101,9 @@ export default async function DashboardPage({
         !(google.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose)
     );
     briefOn = brief?.enabled ?? false;
-    briefNeverSetUp = shouldAutoEnableBrief(brief ?? null);
+    // Also when the server switched it on with a guessed time zone, so the
+    // prompt can set their real one (and say the brief is on).
+    briefNeverSetUp = shouldAutoEnableBrief(brief ?? null) || Boolean(brief?.timeZoneGuessed);
     welcomeSeen = user?.welcomeSeen ?? true;
     isTeamOwner = team?.ownerUserId === session.user.id;
     sectionOrder = resolveDashboardOrder(user?.dashboardLayout);
@@ -189,7 +192,7 @@ export default async function DashboardPage({
           initialColorTheme={colorTheme && isColorThemeKey(colorTheme) ? colorTheme : null}
         />
       )}
-      {teamId && !briefOn && <MorningBriefPrompt neverSetUp={briefNeverSetUp} />}
+      {teamId && (!briefOn || briefNeverSetUp) && <MorningBriefPrompt neverSetUp={briefNeverSetUp} />}
       {needsDraftsPermission && (
         <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-6 py-5">
           <div className="min-w-0">
