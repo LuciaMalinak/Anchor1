@@ -51,11 +51,13 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     key: "microsoft",
     name: "Microsoft 365 (Outlook + Teams)",
     description:
-      "One Microsoft sign-in covers both Outlook email/calendar and Teams messages tied to a deal.",
-    // Calendars.ReadWrite (not just Read) so Anchor can create Teams and
-    // in-person meetings on the Outlook calendar and invite people (see
-    // meetingScheduler.ts). Connections made before that need reconnecting.
-    scopes: ["offline_access", "User.Read", "Mail.Read", "Calendars.ReadWrite", "Chat.Read"],
+      "Set up Teams and Outlook meetings from Anchor: it creates the meeting in your Outlook calendar and sends everyone the invitation.",
+    // Only what Anchor uses: who you are, and your Outlook calendar, so it
+    // can create Teams and in-person meetings and invite people (see
+    // meetingScheduler.ts). Mail.Read and Chat.Read were asked for but
+    // never used, and Chat.Read stops personal Microsoft accounts from
+    // connecting at all. Connections made before need reconnecting.
+    scopes: ["offline_access", "User.Read", "Calendars.ReadWrite"],
     authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
     tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
     clientIdEnv: "MICROSOFT_INTEGRATION_CLIENT_ID",
