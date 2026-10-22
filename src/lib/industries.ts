@@ -1,8 +1,9 @@
 // Shared registry of the industry "subsectors" a team can pick for
 // itself on the Team page — drives the landing page's industry section,
-// the small accent-color reskin in the dashboard, and (not built yet —
-// a phase-2 project) industry-tuned AI prompts. One list, reused
-// everywhere, so adding a seventh vertical later is a one-file change.
+// the /industries pages, the small accent-color reskin in the dashboard,
+// and the industry-tuned AI (each one's playbook is in
+// industryPlaybooks.ts). Adding a seventh vertical means an entry here
+// and a playbook there.
 export type IndustryKey =
   | "real_estate"
   | "finance"
@@ -14,10 +15,9 @@ export type IndustryKey =
 export type Industry = {
   key: IndustryKey;
   label: string;
-  // A short, honest blurb for the landing page — describes what Anchor's
-  // existing memory/handoff/follow-up features mean for this kind of
-  // work, without claiming compliance certifications or capabilities
-  // that don't exist yet.
+  // A short, honest blurb for the landing page — what Anchor does for
+  // this kind of work (see its playbook), without claiming compliance
+  // certifications or capabilities that don't exist.
   blurb: string;
   accent: string;
   accentDark: string;
@@ -28,7 +28,7 @@ export const INDUSTRIES: Industry[] = [
     key: "real_estate",
     label: "Real Estate",
     blurb:
-      "Every showing, negotiation, and closing call in one thread — so nothing about a buyer or listing gets lost between agents.",
+      "Buyer agreements, compensation talks, contingency deadlines and every buyer's must-haves, caught on the call, with fair-housing language flagged before it's a problem.",
     accent: "#B2472F",
     accentDark: "#8C371F",
   },
@@ -36,7 +36,7 @@ export const INDUSTRIES: Industry[] = [
     key: "finance",
     label: "Finance",
     blurb:
-      "Client commitments and numbers captured the moment they're said, with a clean handoff whenever someone else picks up the account.",
+      "A buyer log that fills itself in: valuation, structure, financing and diligence asks from every buyer call, with NDA and other-bidder slips flagged live.",
     accent: "#1F6E4A",
     accentDark: "#155238",
   },
@@ -44,7 +44,7 @@ export const INDUSTRIES: Industry[] = [
     key: "healthcare",
     label: "Healthcare",
     blurb:
-      "Referral, partnership, and vendor conversations organized and easy to brief a colleague on — without digging through old notes.",
+      "Every VAC stakeholder, GPO path, BAA and security step across an 18-month cycle, with clinical claims kept within your evidence and patient details kept out of notes.",
     accent: "#0E7C86",
     accentDark: "#0A5E66",
   },
@@ -52,7 +52,7 @@ export const INDUSTRIES: Industry[] = [
     key: "hospitality",
     label: "Hospitality",
     blurb:
-      "Remember every guest, partner, and vendor relationship the way your best account manager would — even across a busy season.",
+      "Room blocks, peak nights, attrition, cutoff dates and F&B minimums captured as they're negotiated, and concessions held to what revenue management approved.",
     accent: "#C08A1E",
     accentDark: "#976B16",
   },
@@ -60,7 +60,7 @@ export const INDUSTRIES: Industry[] = [
     key: "pharma",
     label: "Pharma",
     blurb:
-      "Keep detailed, sensitive conversations organized and easy to hand off cleanly, meeting after meeting.",
+      "Possible adverse events and off-label questions flagged the moment they come up, factual call notes written for you, and every access barrier logged by payer.",
     accent: "#6247AA",
     accentDark: "#4A3684",
   },
@@ -68,7 +68,7 @@ export const INDUSTRIES: Industry[] = [
     key: "tech",
     label: "Tech",
     blurb:
-      "Turn sales and partnership calls into a shared team memory that never resets just because someone's out.",
+      "MEDDPICC filled from the call itself, the paper process uncovered early, and roadmap promises and over-limit discounts flagged before you make them.",
     accent: "#2563EB",
     accentDark: "#1D4ED8",
   },

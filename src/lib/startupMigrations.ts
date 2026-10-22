@@ -71,6 +71,9 @@ const MIGRATIONS = [
   // Desktop app version per token (apiTokens in schema.ts).
   `ALTER TABLE "api_token" ADD COLUMN IF NOT EXISTS "clientVersion" text`,
   `ALTER TABLE "api_token" ADD COLUMN IF NOT EXISTS "clientPlatform" text`,
+  // Industry deal sheet and rule flags per call summary (industryPlaybooks.ts).
+  `ALTER TABLE "summary" ADD COLUMN IF NOT EXISTS "industryFacts" jsonb NOT NULL DEFAULT '[]'::jsonb`,
+  `ALTER TABLE "summary" ADD COLUMN IF NOT EXISTS "complianceFlags" jsonb NOT NULL DEFAULT '[]'::jsonb`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
+import { industryLiveText } from "./industryPlaybooks";
 import type { LiveDealContext } from "./liveContext";
 import type { LiveCaution } from "@/db/schema";
 
@@ -116,7 +117,7 @@ const LIVE_COACHING_TOOL = {
           required: ["label", "raised"],
         },
         description:
-          "What the person on this call must NOT agree to, promise, or disclose on their own, taken only from the deal's decision boundaries and prep notes (e.g. 'Discounts over 10%', 'Custom features', 'Contract changes') — each a short label of a few words, keeping the same labels across updates. raised:true once the other side has asked about or pushed on it in the transcript. Leave out what the boundaries say the rep CAN decide. Empty when the deal has no such limits recorded — never invent one.",
+          "What the person on this call must NOT agree to, promise, or disclose on their own, taken only from the deal's decision boundaries, prep notes and the industry rules given with the deal facts (e.g. 'Discounts over 10%', 'Custom features', 'Contract changes') — each a short label of a few words, keeping the same labels across updates. raised:true once the other side has asked about or pushed on it in the transcript. Leave out what the boundaries say the rep CAN decide. Include each industry rule (by its label) when industry rules are given. Empty when the deal has no such limits recorded and no industry rules are given — never invent one.",
       },
       questionAsked: {
         type: "boolean",
@@ -137,7 +138,7 @@ const LIVE_COACHING_TOOL = {
         type: "string",
         enum: ["none", "amber", "red"],
         description:
-          "For the open question: red if a straight answer would agree to or disclose something in offLimits / outside the decision boundaries (suggestedAnswer must then defer it, not agree); amber if it depends on something not known or a commitment the boundaries don't cover — including any proposal or request from the client for a price, discount, payment or contract terms, dates, scope, custom work or extras when no decision boundaries are recorded (cautionReason then exactly 'Client proposal — get sign-off first', and suggestedAnswer acknowledges it without agreeing); otherwise none.",
+          "For the open question: red if a straight answer would agree to or disclose something in offLimits / outside the decision boundaries / against an industry rule (suggestedAnswer must then defer it, not agree); amber if it depends on something not known or a commitment the boundaries don't cover — including any proposal or request from the client for a price, discount, payment or contract terms, dates, scope, custom work or extras when no decision boundaries are recorded (cautionReason then exactly 'Client proposal — get sign-off first', and suggestedAnswer acknowledges it without agreeing); otherwise none.",
       },
       cautionReason: {
         type: "string",
@@ -263,7 +264,7 @@ export function liveDealContextText(params: LiveDealContext): string {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}${feedbackText}`;
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}${feedbackText}${industryLiveText(params.industry)}`;
 }
 
 // Regenerates live coaching (nudges + checklist) for a meeting that's
