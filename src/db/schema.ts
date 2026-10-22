@@ -941,6 +941,9 @@ export const morningBriefs = pgTable("morning_brief", {
   dismissed: jsonb("dismissed").$type<Record<string, string>>().notNull().default({}),
   // The last brief as sent, for its web page (Done / Snooze buttons).
   lastBrief: jsonb("lastBrief").$type<Record<string, unknown>>(),
+  // When the person switched their brief off themselves. Everyone else's
+  // brief is on by default (see shouldAutoEnableBrief).
+  turnedOffAt: timestamp("turnedOffAt", { mode: "date" }),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
 

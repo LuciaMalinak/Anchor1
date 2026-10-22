@@ -76,6 +76,8 @@ const MIGRATIONS = [
   `ALTER TABLE "summary" ADD COLUMN IF NOT EXISTS "complianceFlags" jsonb NOT NULL DEFAULT '[]'::jsonb`,
   // Latest industry tool report per tool on each deal (industryTools.ts).
   `ALTER TABLE "deal" ADD COLUMN IF NOT EXISTS "toolReports" jsonb`,
+  // Morning brief switched off by the person themselves (morningBriefPrefs.ts).
+  `ALTER TABLE "morning_brief" ADD COLUMN IF NOT EXISTS "turnedOffAt" timestamp`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

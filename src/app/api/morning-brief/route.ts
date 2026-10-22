@@ -51,9 +51,15 @@ export async function PUT(req: NextRequest) {
   // whatever the switch showed, so trying a brief while it was off turned
   // it off for good, and auto-enable then left it off as a choice.
   const enabled = typeof body.enabled === "boolean" ? body.enabled : ((await getBriefRow(session.user.id))?.enabled ?? false);
+  // Switching it off is a choice to remember (auto-enable respects it);
+  // switching it on clears it.
+  const turnedOffAt = typeof body.enabled === "boolean" ? (body.enabled ? null : new Date()) : undefined;
   await db
     .insert(morningBriefs)
-    .values({ userId: session.user.id, enabled, prefs, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: morningBriefs.userId, set: { enabled, prefs, updatedAt: new Date() } });
+    .values({ userId: session.user.id, enabled, prefs, turnedOffAt, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: morningBriefs.userId,
+      set: { enabled, prefs, updatedAt: new Date(), ...(turnedOffAt !== undefined ? { turnedOffAt } : {}) },
+    });
   return NextResponse.json(await status(session.user.id));
 }
