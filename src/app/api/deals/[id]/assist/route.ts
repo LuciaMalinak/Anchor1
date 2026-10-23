@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { toolReportMarkdown, type SavedToolReport } from "@/lib/industryTools";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { dealFiles, meetings, summaries, meetingParticipants, contacts, meetingLiveSegments, users } from "@/db/schema";
@@ -189,6 +190,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     emailContext: deal.emailContext,
     calendarContext: deal.calendarContext,
     documentContext: deal.documentContext,
+    toolReports: savedReportsText(deal.toolReports),
     dealLeadStyle,
     dealLeadName: leadRows[0] ? leadRows[0].name || leadRows[0].email : null,
     relevantPassages: passages.length ? formatPassages(passages) : null,
@@ -249,4 +251,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   return new Response(responseStream, {
     headers: { "Content-Type": "text/plain; charset=utf-8" },
   });
+}
+
+// The deal's saved reports as Markdown, newest first, within a budget so a
+// deal with many reports still leaves room for everything else.
+const TOOL_REPORTS_CHARS = 16000;
+function savedReportsText(reports: Record<string, SavedToolReport> | null): string | null {
+  const list = Object.values(reports ?? {}).sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
+  let budget = TOOL_REPORTS_CHARS;
+  const parts: string[] = [];
+  for (const r of list) {
+    if (budget <= 0) break;
+    const text = `${toolReportMarkdown(r.report)}\n(written ${r.generatedAt.slice(0, 10)})`;
+    parts.push(text.length > budget ? `${text.slice(0, budget)}…` : text);
+    budget -= text.length;
+  }
+  return parts.length ? parts.join("\n\n---\n\n") : null;
 }

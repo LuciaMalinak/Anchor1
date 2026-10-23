@@ -8,7 +8,8 @@ import { buildDealToolContext } from "./dealToolContext";
 import { isIndustryKey, INDUSTRY_BY_KEY, type IndustryKey } from "./industries";
 import { industryPlaybook } from "./industryPlaybooks";
 import { relevantAnswers, playbookText } from "./answerPlaybook";
-import type { IndustryTool, SavedToolReport, ToolReport } from "./industryTools";
+import { toolsForIndustry, type IndustryTool, type SavedToolReport, type ToolReport } from "./industryTools";
+import { withAiUser } from "./aiUsage";
 
 // Writes one industry tool's report for a deal (see industryTools.ts) and
 // saves it on the deal, so the team sees the latest one and its gaps can
@@ -246,4 +247,41 @@ ${context}`,
 
 function sqlSetKey(key: string, value: SavedToolReport) {
   return sql`jsonb_set(coalesce(${deals.toolReports}, '{}'::jsonb), ${`{${key}}`}::text[], ${JSON.stringify(value)}::jsonb, true)`;
+}
+
+// Autopilot: after each call on a deal, rewrite the reports the team has
+// already used there, so a buyer log or MEDDPICC scorecard is always
+// current without anyone clicking Update. Most recently used first, a few
+// at most per call, one at a time.
+const AUTOPILOT_MAX = 6;
+
+export async function refreshDealReports(dealId: string, userId: string): Promise<number> {
+  try {
+    const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    const saved = deal?.toolReports ?? {};
+    if (!deal || !Object.keys(saved).length) return 0;
+    const available = new Map(toolsForIndustry(await teamIndustry(deal.teamId)).map((t) => [t.id, t]));
+    const toRun = Object.entries(saved)
+      .sort(([, a], [, b]) => b.generatedAt.localeCompare(a.generatedAt))
+      .map(([id]) => available.get(id))
+      .filter((t): t is IndustryTool => Boolean(t))
+      .slice(0, AUTOPILOT_MAX);
+    let done = 0;
+    for (const tool of toRun) {
+      try {
+        // Re-read each time: the previous report updated the row.
+        const [fresh] = await db.select().from(deals).where(eq(deals.id, dealId));
+        if (!fresh) break;
+        await withAiUser({ userId }, () => runIndustryTool(fresh, tool));
+        done++;
+      } catch (err) {
+        console.error(`[industry tools] autopilot ${tool.id} failed on ${dealId}:`, err);
+      }
+    }
+    if (done) console.log(`[industry tools] autopilot refreshed ${done} report(s) on ${dealId}`);
+    return done;
+  } catch (err) {
+    console.error(`[industry tools] autopilot failed on ${dealId}:`, err);
+    return 0;
+  }
 }

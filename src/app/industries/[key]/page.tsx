@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { INDUSTRIES, INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { INDUSTRY_PLAYBOOKS } from "@/lib/industryPlaybooks";
-import { toolsForIndustry } from "@/lib/industryTools";
+import { TOOL_KIND_LABEL, toolsForIndustry } from "@/lib/industryTools";
 
 export async function generateMetadata({ params }: { params: Promise<{ key: string }> }): Promise<Metadata> {
   const { key } = await params;
@@ -25,7 +25,8 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
   const industry = INDUSTRY_BY_KEY[key];
   const p = INDUSTRY_PLAYBOOKS[key];
   const accent = { color: industry.accent };
-  const tools = toolsForIndustry(key).filter((t) => t.industries !== "all");
+  // This industry's own tools first, then the ones every industry gets.
+  const tools = toolsForIndustry(key).sort((a, b) => Number(a.industries === "all") - Number(b.industries === "all"));
 
   return (
     <main className="flex min-h-screen flex-col bg-white">
@@ -119,14 +120,15 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
       <section className="mx-auto w-full max-w-5xl px-6 py-16 sm:px-8">
         <h2 className="text-2xl font-semibold tracking-tight text-brand">The reports you make by hand, made for you</h2>
         <p className="mt-2 max-w-2xl text-sm text-slate-500">
-          One click on any deal and Anchor writes them from every call, file and email on it. Whatever
+          One click on any deal and Anchor writes them from every call, file and email on it, then keeps
+          them up to date after every new call. Whatever
           they&apos;re still missing becomes your checklist on the next call, so they finish themselves.
         </p>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {tools.map((t) => (
             <div key={t.id} className="rounded-xl border border-slate-200 bg-white p-5">
               <p className="text-[11px] font-semibold tracking-[0.15em]" style={accent}>
-                {t.phase === "before" ? "BEFORE THE CALL" : "AFTER THE CALL"}
+                {TOOL_KIND_LABEL[t.kind].toUpperCase()}
               </p>
               <p className="mt-1.5 text-sm font-semibold text-slate-900">{t.name}</p>
               <p className="mt-1 text-sm leading-relaxed text-slate-500">{t.outcome}</p>

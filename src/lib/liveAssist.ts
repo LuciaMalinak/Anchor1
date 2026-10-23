@@ -85,6 +85,10 @@ export type DealContext = {
   emailContext: string | null;
   calendarContext: string | null;
   documentContext?: string | null;
+  // The deal's saved industry reports (buyer log, VAC packet, MEDDPICC…;
+  // see industryTools.ts), newest first, so Ask Anchor can answer from
+  // them or turn one into a deck or spreadsheet.
+  toolReports?: string | null;
   // How the deal's actual lead tends to negotiate, decide, and
   // communicate (see src/lib/styleProfile.ts) — null if no lead is set,
   // or there isn't enough of their own material yet to say anything real.
@@ -201,6 +205,10 @@ function buildContextBlock(ctx: DealContext): string {
 
   if (ctx.emailContext) {
     parts.push(`\nRecent emails with people on this deal:\n${ctx.emailContext}`);
+  }
+
+  if (ctx.toolReports) {
+    parts.push(`\nReports Anchor has written on this deal (newest first). When asked to turn one into a deck or spreadsheet, use its content as written:\n${ctx.toolReports}`);
   }
 
   if (ctx.documentContext) {

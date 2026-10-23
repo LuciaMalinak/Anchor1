@@ -29,6 +29,7 @@ import { withRetry } from "./retry";
 import { summarizeDealFiles } from "./dealFilesContext";
 import { matchDealFromText } from "./dealMatch";
 import { learnFromCall } from "./answerPlaybook";
+import { refreshDealReports } from "./industryToolRun";
 import { isIndustryKey } from "./industries";
 
 // Every Nth memory update re-derives the summary from actual raw history
@@ -521,6 +522,10 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
         console.error(`[processMeeting] deal memory update failed for ${meetingId}:`, err);
       }
     }
+
+    // Autopilot: the industry reports already in use on this deal are
+    // rewritten with this call in them, in the background.
+    if (meeting.dealId && aiSummary) void refreshDealReports(meeting.dealId, meeting.userId);
   } catch (err) {
     console.error(`[processMeeting] ${meetingId} failed:`, err);
     await db
