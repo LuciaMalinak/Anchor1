@@ -22,18 +22,13 @@ export const FOCUS_WIDGETS = [
     label: "Key facts",
     description: "Stage, primary contact, and what a stand-in is allowed to decide on their own.",
   },
-  {
-    key: "transcript",
-    label: "Live transcript",
-    description: "The raw word-for-word feed, if you want it alongside the coaching above.",
-  },
 ] as const;
 
 export type FocusWidgetKey = (typeof FOCUS_WIDGETS)[number]["key"];
 
-// Transcript is off by default — it's the one widget here that's raw
-// material rather than something Anchor has already boiled down, and the
-// whole ask behind focus mode was showing less, not everything.
+// There's no live transcript widget: the transcript is captured in the
+// background during the call and shown in full on the meeting page after
+// it. A saved "transcript" choice from before is simply dropped.
 export const DEFAULT_FOCUS_WIDGETS: FocusWidgetKey[] = ["coaching", "askAnchor", "keyFacts"];
 
 const VALID_KEYS = new Set<string>(FOCUS_WIDGETS.map((w) => w.key));

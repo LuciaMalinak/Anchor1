@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { AnsweredQuestion, CallSpeaker, LiveCaution, LiveLink, LiveSegment, LiveSuggestions } from "@/lib/useLiveMeeting";
+import { useState } from "react";
+import type { AnsweredQuestion, CallSpeaker, LiveCaution, LiveLink, LiveSuggestions } from "@/lib/useLiveMeeting";
 
 type LiveQuestion = NonNullable<NonNullable<LiveSuggestions>["liveQuestion"]>;
 
@@ -365,7 +365,31 @@ export function OffLimitsBox({
 
 // A few lines on where the call stands, so whoever's on it (or just
 // joined it) doesn't have to read the transcript.
-export function CallSummary({ summary }: { summary?: string[] }) {
+// What the other side has answered so far on this call (budget, timeline,
+// who decides…), newest first: what's been learned, not a recap of what
+// the person on the call just heard. Calls from before this show their
+// old "so far" lines instead.
+export function CallAnswers({
+  answers,
+  summary,
+}: {
+  answers?: { topic: string; answer: string }[];
+  summary?: string[];
+}) {
+  if (answers?.length) {
+    return (
+      <div>
+        <p className="mb-1 text-[11px] font-semibold tracking-[0.15em] text-emerald-700">THEY TOLD YOU</p>
+        <ul className="flex flex-col gap-1">
+          {answers.map((a, i) => (
+            <li key={`${a.topic}-${i}`} className="text-sm text-slate-700">
+              <span className="font-medium text-slate-900">{a.topic}:</span> {a.answer}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
   if (!summary?.length) return null;
   return (
     <div>
@@ -382,8 +406,6 @@ export function CallSummary({ summary }: { summary?: string[] }) {
   );
 }
 
-// Short suggestions, then what's still to cover (amber) and what's done
-// (green, below) — shared by the During tab's panel and the Focus window.
 export function CoachingLists({
   suggestions,
   coachingError,
@@ -448,50 +470,16 @@ export function CoachingLists({
   );
 }
 
-// The transcript, kept small and out of the way: the last line or two in
-// grey, with the full feed a tap away. Answers and coaching are what the
-// person on the call should be looking at.
-export function TranscriptStrip({
-  segments,
-  live,
-  error,
-}: {
-  segments: LiveSegment[];
-  live: boolean;
-  error?: string | null;
-}) {
-  const [open, setOpen] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (open) requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ block: "nearest" }));
-  }, [open, segments.length]);
-  const shown = open ? segments : segments.slice(-2);
+// Shows Anchor is listening. The transcript itself isn't shown during the
+// call (answers and coaching are what to look at); the full one is on the
+// meeting page once the call ends.
+export function ListeningStrip({ heardLines, live, error }: { heardLines: number; live: boolean; error?: string | null }) {
   return (
     <div className="rounded-md bg-slate-50 px-3 py-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-[10px] font-semibold tracking-[0.15em] text-slate-400">
-          TRANSCRIPT
-          {live && <ListeningDots />}
-        </p>
-        {segments.length > 2 && (
-          <button type="button" onClick={() => setOpen((o) => !o)} className="text-[11px] text-slate-400 hover:text-slate-600">
-            {open ? "Show less" : `Show all (${segments.length})`}
-          </button>
-        )}
-      </div>
-      {segments.length === 0 ? (
-        <p className="mt-1 text-xs text-slate-400">Waiting for people to speak…</p>
-      ) : (
-        <div className={`mt-1 flex flex-col gap-0.5 ${open ? "max-h-60 overflow-y-auto" : ""}`}>
-          {shown.map((s) => (
-            <p key={s.id} className={`text-xs text-slate-500 ${open ? "" : "truncate"}`}>
-              {s.speakerName && <span className="font-medium text-slate-600">{s.speakerName}: </span>}
-              {s.text}
-            </p>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      )}
+      <p className="flex items-center gap-2 text-[11px] text-slate-400">
+        {live && <ListeningDots />}
+        {heardLines === 0 ? "Listening. Waiting for people to speak…" : "Listening. The full transcript is ready after the call."}
+      </p>
       {error && <p className="mt-1 text-xs text-amber-600">{error}</p>}
     </div>
   );

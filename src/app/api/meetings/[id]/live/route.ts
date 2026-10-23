@@ -23,17 +23,18 @@ import { noteLivePoll } from "@/lib/stuckMeetings";
 // lock + inFlight below). Questions don't wait for any of this — they
 // have their own instant path (src/lib/liveQuestion.ts).
 // Was 1.5s/15s, which regenerated suggestions after almost every line —
-// about 80% of what a member's AI usage cost. Nudges don't need to change
-// every second (questions have their own instant path), so refresh at
-// most every 8s while people talk, and every 30s in silence.
-// Live calls now run on Haiku 5.5, about a tenth of Haiku 4.5's price, so
-// suggestions can keep up twice as quickly for less than before.
-const MIN_REFRESH_MS = 4_000;
-const IDLE_REFRESH_MS = 20_000;
-// The checklist is the longest part of each reply and only changes when a
-// topic gets covered, so it's only rewritten this often; refreshes in
-// between keep the current one.
-const CHECKLIST_REFRESH_MS = 30_000;
+// about 80% of what a member's AI usage cost. Then 4s/20s on Haiku 5.5,
+// which was still nearly half of all AI spend (a refresh every few
+// seconds of every call, and every 20s through silences). Questions
+// have their own instant path and don't wait for this, so coaching now
+// refreshes only once new speech has arrived, at most every 12s, and
+// not at all in silence (the first refresh still runs at the start, from
+// prep notes). Answers the other side gives show within ~12s.
+const MIN_REFRESH_MS = 12_000;
+// The checklist and off-limits list are the longest part of each reply
+// and only change when a topic gets covered, so they're only rewritten
+// this often; refreshes in between keep the current ones.
+const CHECKLIST_REFRESH_MS = 60_000;
 const lastChecklistAt = new Map<string, number>();
 // How much of the transcript (from the end) to hand the model each time,
 // in characters — enough context without an ever-growing prompt as a
@@ -45,11 +46,13 @@ const TRANSCRIPT_WINDOW_CHARS = 4_000;
 // question still replaces it straight away, and every answer stays in
 // the call's question list either way.
 const QUESTION_HOLD_MS = 120_000;
-// Suggestions used to be swapped wholesale on every refresh (every ~8s
-// while people talk), so one could vanish mid-read. Now each stays at
-// least this long, with new ones added on top, up to MAX_NUDGES.
+// Suggestions used to be swapped wholesale on every refresh, so one could
+// vanish mid-read. Now each stays at least this long, with new ones added
+// on top, up to MAX_NUDGES: a couple of small ones, not a list to read.
 const NUDGE_HOLD_MS = 90_000;
-const MAX_NUDGES = 4;
+const MAX_NUDGES = 2;
+// What the other side has answered this call, kept for the whole call.
+const MAX_ANSWERS = 12;
 // Why the most recent coaching refresh failed, per meeting — only the
 // request that wins the refresh lock actually sees the error, so it's
 // kept here for every other poll (and tab) to report until a refresh
@@ -134,15 +137,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const lastRefreshAt = meeting.liveSuggestionsUpdatedAt?.getTime() ?? 0;
   const sinceRefresh = Date.now() - lastRefreshAt;
   const hasNewSpeech = rawSegments.some((s) => s.createdAt.getTime() > lastRefreshAt);
-  // Keeps running even before the first words are transcribed — there's
-  // usually plenty already known about the deal (prep notes, decision
-  // boundaries, last meeting) to coach on from the very start of a call.
+  // The first refresh runs before anyone speaks — there's usually plenty
+  // already known about the deal (prep notes, decision boundaries, last
+  // meeting) to start the checklist from. After that, only new speech
+  // brings a refresh.
   const dueForRefresh =
     isLive &&
     !inFlight.has(id) &&
-    (!meeting.liveSuggestionsUpdatedAt ||
-      (hasNewSpeech && sinceRefresh > MIN_REFRESH_MS) ||
-      sinceRefresh > IDLE_REFRESH_MS);
+    (!meeting.liveSuggestionsUpdatedAt || (hasNewSpeech && sinceRefresh > MIN_REFRESH_MS));
 
   if (dueForRefresh) {
     // Soft lock: stamp the timestamp before the (slow) AI call so a
@@ -191,6 +193,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             recentTranscript: transcriptText.slice(-TRANSCRIPT_WINDOW_CHARS),
             priorChecklist,
             priorOffLimits: meeting.liveSuggestions?.offLimits ?? null,
+            priorAnswers: meeting.liveSuggestions?.answers ?? null,
             updateChecklist,
           }));
           await saveCoaching(id, coaching, startedAt.getTime());
@@ -227,12 +230,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // written up from the live transcript straight away), until its
     // recording has arrived. The app only asks while it's recording.
     stopRequested: Boolean(meeting.stopRequestedAt) && !meeting.audioStoragePath,
-    segments: segments.map((s) => ({
-      id: s.id,
-      speakerName: s.speakerName,
-      text: s.text,
-      relativeSeconds: s.relativeSeconds,
-    })),
+    // The transcript itself isn't sent during the call: it's captured in
+    // the background (questions and coaching are worked out from it) and
+    // the full one is on the meeting page after the call. Just how much
+    // has been heard, so the panel can show it's listening.
+    heardLines: segments.length,
     liveSuggestions,
     // What the deal owner said a teammate covering this call may and may
     // not decide — shown as-is until coaching has turned it into the
@@ -292,6 +294,24 @@ function mergeNudges(
   return { nudges: kept.map((n) => n.text), nudgeAt: kept.map((n) => n.at) };
 }
 
+// New answers on top of the ones already caught this call, skipping
+// repeats of the same answer.
+function mergeAnswers(
+  fresh: LiveCoaching["answers"],
+  prior: LiveCoaching["answers"] | null | undefined,
+  now: number
+) {
+  const key = (a: { topic: string; answer: string }) => `${a.topic} ${a.answer}`.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const seen = new Set((prior ?? []).map(key));
+  const added = fresh.filter((a) => {
+    const k = key(a);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return [...added.map((a) => ({ ...a, at: now })), ...(prior ?? [])].slice(0, MAX_ANSWERS);
+}
+
 // Writes a coaching refresh without clobbering a question the instant
 // path (liveQuestion.ts) put up meanwhile. Re-reads the current row
 // first since that path writes to the same column independently.
@@ -302,7 +322,11 @@ async function saveCoaching(id: string, coaching: LiveCoaching, startedAt: numbe
     .where(eq(meetings.id, id));
   const now = Date.now();
   const existing = current?.liveSuggestions?.liveQuestion ?? null;
-  const merged = { ...coaching, ...mergeNudges(coaching.nudges, current?.liveSuggestions, now) };
+  const merged = {
+    ...coaching,
+    ...mergeNudges(coaching.nudges, current?.liveSuggestions, now),
+    answers: mergeAnswers(coaching.answers, current?.liveSuggestions?.answers, now),
+  };
 
   // An answer on screen stays until a newer question replaces it, or it's
   // been up QUESTION_HOLD_MS and coaching no longer sees anything open.

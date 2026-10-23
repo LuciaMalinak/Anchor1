@@ -274,7 +274,10 @@ export const meetings = pgTable("meeting", {
     // A few lines on what's happened on the call so far, and what the
     // person on the call mustn't agree to or bring up (from the deal's
     // decision boundaries) — see generateLiveCoaching.
+    // summary is from older calls; answers (what the other side has told
+    // us this call, newest first) replaced it.
     summary?: string[];
+    answers?: { topic: string; answer: string; at?: number }[];
     offLimits?: { label: string; raised: boolean }[];
   }>(),
   liveSuggestionsUpdatedAt: timestamp("liveSuggestionsUpdatedAt", { mode: "date" }),

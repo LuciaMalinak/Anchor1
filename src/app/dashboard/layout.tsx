@@ -10,8 +10,9 @@ import { db } from "@/db";
 import { teams, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
-import { getDailyBriefing, isBriefingStale } from "@/lib/dailyBriefing";
-import { getIndustryTicker, isTickerStale, normalizeTickerItems, type TickerItem } from "@/lib/industryTicker";
+import { isBriefingStale } from "@/lib/dailyBriefing";
+import { refreshTeamBriefing, refreshTeamTicker } from "@/lib/backgroundRefresh";
+import { isTickerStale, normalizeTickerItems, type TickerItem } from "@/lib/industryTicker";
 import { GeneralNewsSidebar } from "./GeneralNewsSidebar";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { COLOR_THEME_BY_KEY, isColorThemeKey } from "@/lib/colorThemes";
@@ -74,17 +75,7 @@ export default async function DashboardLayout({
       // ticker just below: the page renders now with whatever's cached
       // (or nothing yet, on a brand-new team), and GeneralNewsSidebar's
       // client-side poll picks up the fresh result once this finishes.
-      if (team && isBriefingStale(team.dailyBriefingUpdatedAt)) {
-        const tid = teamId;
-        getDailyBriefing(teamIndustry)
-          .then((briefing) =>
-            db
-              .update(teams)
-              .set({ dailyBriefing: briefing, dailyBriefingUpdatedAt: new Date() })
-              .where(eq(teams.id, tid))
-          )
-          .catch((err) => console.error("Background daily briefing refresh failed:", err));
-      }
+      if (team && isBriefingStale(team.dailyBriefingUpdatedAt)) refreshTeamBriefing(teamId, teamIndustry);
       // Unlike the briefing above, this is never awaited here — a
       // 20-minute staleness window means near enough every page load
       // would otherwise pay for a synchronous web-search call, which is
@@ -93,17 +84,7 @@ export default async function DashboardLayout({
       // nothing, on a brand-new team, until the first poll lands one);
       // the client-side poller in IndustryTicker.tsx picks up the fresh
       // result a few minutes later once this finishes.
-      if (team && isTickerStale(team.industryTickerUpdatedAt)) {
-        const tid = teamId;
-        getIndustryTicker(teamIndustry)
-          .then((items) =>
-            db
-              .update(teams)
-              .set({ industryTicker: items, industryTickerUpdatedAt: new Date() })
-              .where(eq(teams.id, tid))
-          )
-          .catch((err) => console.error("Background industry ticker refresh failed:", err));
-      }
+      if (team && isTickerStale(team.industryTickerUpdatedAt)) refreshTeamTicker(teamId, teamIndustry);
       dailyBriefing = team?.dailyBriefing ?? null;
       dailyBriefingUpdatedAt = team?.dailyBriefingUpdatedAt ? team.dailyBriefingUpdatedAt.toISOString() : null;
       tickerItems = normalizeTickerItems(team?.industryTicker);

@@ -2,13 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type LiveSegment = {
-  id: string;
-  speakerName: string | null;
-  text: string;
-  relativeSeconds: number | null;
-};
-
 export type LiveSuggestions = {
   nudges: string[];
   checklist: { label: string; covered: boolean }[];
@@ -26,6 +19,7 @@ export type LiveSuggestions = {
   } | null;
   // Older rows (and the first moments of a call) don't have these yet.
   summary?: string[];
+  answers?: { topic: string; answer: string; at?: number }[];
   offLimits?: { label: string; raised: boolean }[];
 } | null;
 
@@ -49,15 +43,10 @@ export type AnsweredQuestion = {
 // A speaker label on the call, and whether it's the person using Anchor.
 export type CallSpeaker = { name: string; isMe: boolean };
 
-// Was 4000ms — the actual transcript segments aren't behind any
-// server-side debounce (see the live route's GET handler: it reads
-// meetingLiveSegments fresh on every call), so this interval alone was
-// the biggest lever on how quickly new words show up on screen.
-// Tightened for a snappier "it's really listening" feel; the coaching
-// nudges have their own separate server-side throttle (see
-// MIN_REFRESH_MS in the live route) so this doesn't multiply AI call
-// volume. Dropped from 1500ms to 1000ms so a just-asked question and its
-// answer show up as soon as the server has them.
+// Once a second, so a just-asked question and its answer show up as soon
+// as the server has them. Each poll is small (no transcript is sent during
+// the call), and coaching has its own server-side throttle (see
+// MIN_REFRESH_MS in the live route) so this doesn't multiply AI calls.
 const POLL_MS = 1000;
 // While a just-asked question's answer is being written (it streams in —
 // see src/lib/liveQuestion.ts), poll much faster so the rep watches it
@@ -70,7 +59,9 @@ const FAST_POLL_MS = 300;
 // can show the same live data in a different layout without polling the
 // same endpoint twice from two independent copies of this logic.
 export function useLiveMeeting(meetingId: string) {
-  const [segments, setSegments] = useState<LiveSegment[]>([]);
+  // How many transcript lines Anchor has heard (the transcript itself is
+  // only shown after the call).
+  const [heardLines, setHeardLines] = useState(0);
   const [suggestions, setSuggestions] = useState<LiveSuggestions>(null);
   const [status, setStatus] = useState<string | null>(null);
   // Whether Anchor's bot actually joined this call (Zoom/Teams) vs. an
@@ -100,7 +91,7 @@ export function useLiveMeeting(meetingId: string) {
         const res = await fetch(`/api/meetings/${meetingId}/live`);
         if (!res.ok) throw new Error("Couldn't load live updates");
         const body = await res.json();
-        setSegments(body.segments || []);
+        setHeardLines(typeof body.heardLines === "number" ? body.heardLines : 0);
         setSuggestions(body.liveSuggestions || null);
         setCoachingError(body.coachingError || null);
         setCoachingRefreshing(body.coachingRefreshing === true);
@@ -154,7 +145,7 @@ export function useLiveMeeting(meetingId: string) {
   );
 
   return {
-    segments,
+    heardLines,
     suggestions,
     status,
     hasBot,

@@ -4,11 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
 import {
   CallSpeakersRow,
-  CallSummary,
+  CallAnswers,
   CoachingLists,
   LiveQuestionsBox,
   OffLimitsBox,
-  TranscriptStrip,
 } from "@/components/LiveCoachingBits";
 import { AskAnchorPanel } from "@/components/AskAnchorPanel";
 import { StopMeetingButton } from "@/components/StopMeetingButton";
@@ -53,7 +52,7 @@ export function FocusWindow({
   // onClose: in Picture-in-Picture, the bare `window` is the opener's.
   hostWindow?: Window;
 }) {
-  const { segments, suggestions, status, hasBot, isDesktop, coachingError, coachingRefreshing, answered, speakers, markSpeaker } = useLiveMeeting(meetingId);
+  const { suggestions, status, hasBot, isDesktop, coachingError, coachingRefreshing, answered, speakers, markSpeaker } = useLiveMeeting(meetingId);
   const [widgets, setWidgets] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
@@ -403,7 +402,7 @@ export function FocusWindow({
             />
             <OffLimitsBox offLimits={suggestions?.offLimits} decisionBoundaries={decisionBoundaries} />
             <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3">
-              <CallSummary summary={suggestions?.summary} />
+              <CallAnswers answers={suggestions?.answers} summary={suggestions?.summary} />
               <CoachingLists suggestions={suggestions} coachingError={coachingError} coachingRefreshing={coachingRefreshing} />
             </section>
           </div>
@@ -449,9 +448,6 @@ export function FocusWindow({
             </section>
           ))}
 
-        {widgets.has("transcript") && (
-          <TranscriptStrip segments={segments} live={status === "recording" || status === "joining"} />
-        )}
       </div>
     </div>
   );
