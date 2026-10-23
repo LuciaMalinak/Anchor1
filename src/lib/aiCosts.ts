@@ -19,6 +19,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   morning_brief: "Morning briefs",
   meeting_detection: "Meeting requests from Slack",
   industry_tools: "Industry reports",
+  specialty_builder: "Specialty set-up",
   insights: "Insights",
   handoff_briefing: "Handoff briefings",
   company_research: "Company research",

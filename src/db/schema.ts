@@ -1,4 +1,5 @@
 import type { SavedToolReport } from "../lib/industryTools";
+import type { TeamSpecialty } from "../lib/teamSpecialty";
 import {
   pgTable,
   text,
@@ -544,6 +545,10 @@ export const teams = pgTable("team", {
   // live coaching, live answers and call summaries use the industry's
   // playbook (src/lib/industryPlaybooks.ts).
   industry: text("industry"),
+  // The team's own specialty, researched from its website: a playbook and
+  // expert tools made for exactly what they do (see teamSpecialty.ts and
+  // specialtyBuilder.ts). Null until someone builds it.
+  specialty: jsonb("specialty").$type<TeamSpecialty>(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 

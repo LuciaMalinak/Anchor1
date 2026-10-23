@@ -31,6 +31,7 @@ import { matchDealFromText } from "./dealMatch";
 import { learnFromCall } from "./answerPlaybook";
 import { refreshDealReports } from "./industryToolRun";
 import { isIndustryKey } from "./industries";
+import { teamPlaybook } from "./teamSpecialty";
 
 // Every Nth memory update re-derives the summary from actual raw history
 // instead of just trusting the current (possibly drifted) summary text —
@@ -224,17 +225,18 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
     let aiSummary = true;
     // The team's industry brings its deal sheet and rules into the summary.
     const [teamRow] = await db
-      .select({ industry: teams.industry })
+      .select({ industry: teams.industry, specialty: teams.specialty })
       .from(teams)
       .where(eq(teams.id, deal?.teamId ?? (await getOrCreateTeamId(meeting.userId))));
     const industry = teamRow?.industry && isIndustryKey(teamRow.industry) ? teamRow.industry : null;
+    const playbook = teamPlaybook(industry, teamRow?.specialty);
     try {
       result = await withRetry(
         () =>
           summarizeMeeting(
             utterances,
             deal ? { memory: deal.memory, emailContext: deal.emailContext } : null,
-            industry
+            playbook
           ),
         { label: `summarize ${meetingId}` }
       );

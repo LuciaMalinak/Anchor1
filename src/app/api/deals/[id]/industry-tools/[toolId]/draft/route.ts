@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { authorizeDeal } from "@/lib/dealAccess";
-import { TOOL_BY_ID, toolReportPlainText } from "@/lib/industryTools";
+import { toolReportPlainText } from "@/lib/industryTools";
+import { teamToolContext } from "@/lib/industryToolRun";
 import { createGmailDraft } from "@/lib/integrations/gmailDraft";
 import { NeedsGooglePermissionError } from "@/lib/integrations/google";
 
@@ -14,7 +15,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const { id, toolId } = await params;
   const authorized = await authorizeDeal(session.user.id, id);
   if (!authorized) return NextResponse.json({ error: "Deal not found" }, { status: 404 });
-  const tool = TOOL_BY_ID[toolId];
+  const tool = (await teamToolContext(authorized.deal.teamId)).tools.find((t) => t.id === toolId);
   const saved = authorized.deal.toolReports?.[toolId];
   if (!tool?.clientFacing || !saved) return NextResponse.json({ error: "Write the report first." }, { status: 404 });
   const to = authorized.deal.primaryContactEmail ? [authorized.deal.primaryContactEmail] : [];

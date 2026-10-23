@@ -6,9 +6,9 @@ import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import { buildDealToolContext } from "./dealToolContext";
 import { isIndustryKey, INDUSTRY_BY_KEY, type IndustryKey } from "./industries";
-import { industryPlaybook } from "./industryPlaybooks";
+import { teamPlaybook, toolsForTeam } from "./teamSpecialty";
 import { relevantAnswers, playbookText } from "./answerPlaybook";
-import { toolsForIndustry, type IndustryTool, type SavedToolReport, type ToolReport } from "./industryTools";
+import type { IndustryTool, SavedToolReport, ToolReport } from "./industryTools";
 import { withAiUser } from "./aiUsage";
 
 // Writes one industry tool's report for a deal (see industryTools.ts) and
@@ -81,9 +81,14 @@ function clip(text: string | null | undefined, max: number): string {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
-async function teamIndustry(teamId: string): Promise<IndustryKey | null> {
-  const [team] = await db.select({ industry: teams.industry }).from(teams).where(eq(teams.id, teamId));
-  return team?.industry && isIndustryKey(team.industry) ? team.industry : null;
+// What a team's tools and reports are built from: its industry, its own
+// specialty if it has one, the playbook that follows from those, and the
+// full list of tools it can use.
+export async function teamToolContext(teamId: string) {
+  const [team] = await db.select({ industry: teams.industry, specialty: teams.specialty }).from(teams).where(eq(teams.id, teamId));
+  const industry: IndustryKey | null = team?.industry && isIndustryKey(team.industry) ? team.industry : null;
+  const specialty = team?.specialty ?? null;
+  return { industry, specialty, playbook: teamPlaybook(industry, specialty), tools: toolsForTeam(industry, specialty) };
 }
 
 // Everything the report draws on: the deal tool context (memory, notes,
@@ -188,12 +193,16 @@ function normalizeReport(raw: unknown, fallbackTitle: string): ToolReport {
 }
 
 export async function runIndustryTool(deal: typeof deals.$inferSelect, tool: IndustryTool): Promise<SavedToolReport> {
-  const industry = await teamIndustry(deal.teamId);
-  const playbook = industryPlaybook(industry);
+  const { industry, specialty, playbook } = await teamToolContext(deal.teamId);
   const context = await reportContext(deal, tool);
 
+  const sector = specialty
+    ? `${specialty.companyName}, in ${specialty.sectorName.toLowerCase()} (${specialty.summary})`
+    : industry
+      ? `a team in ${INDUSTRY_BY_KEY[industry].label.toLowerCase()} (${playbook?.focus.toLowerCase()})`
+      : null;
   const expert = playbook
-    ? `You are ${playbook.persona}, writing for a team in ${INDUSTRY_BY_KEY[industry!].label.toLowerCase()} (${playbook.focus.toLowerCase()}). Use this business's own terms. Rules people in this business must keep: ${playbook.guardrails.map((g) => `${g.label} (${g.rule})`).join("; ")}.`
+    ? `You are ${playbook.persona}, writing for ${sector}. Use this business's own terms. Rules people in this business must keep: ${playbook.guardrails.map((g) => `${g.label} (${g.rule})`).join("; ")}.`
     : "You are a senior deal professional writing for the team that owns this deal.";
 
   const message = await createWithForcedTool(client(), {
@@ -260,7 +269,7 @@ export async function refreshDealReports(dealId: string, userId: string): Promis
     const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
     const saved = deal?.toolReports ?? {};
     if (!deal || !Object.keys(saved).length) return 0;
-    const available = new Map(toolsForIndustry(await teamIndustry(deal.teamId)).map((t) => [t.id, t]));
+    const available = new Map((await teamToolContext(deal.teamId)).tools.map((t) => [t.id, t]));
     const toRun = Object.entries(saved)
       .sort(([, a], [, b]) => b.generatedAt.localeCompare(a.generatedAt))
       .map(([id]) => available.get(id))

@@ -102,6 +102,8 @@ const MIGRATIONS = [
     "updatedAt" timestamp NOT NULL DEFAULT now()
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "meeting_proposal_source_idx" ON "meeting_proposal" ("userId", "source", "sourceKey")`,
+  // A team's own specialty: playbook and tools from its website (teamSpecialty.ts).
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialty" jsonb`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

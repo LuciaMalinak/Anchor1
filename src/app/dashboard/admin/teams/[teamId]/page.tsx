@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SpecialtyBuilder } from "@/components/SpecialtyBuilder";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { teams, users, deals } from "@/db/schema";
@@ -45,6 +46,13 @@ export default async function AdminTeamPage({
           {team.industry ? `${team.industry} · ` : ""}Created {team.createdAt.toLocaleDateString()}
         </p>
       </div>
+
+      <SpecialtyBuilder
+        endpoint={`/api/admin/teams/${teamId}/specialty`}
+        initial={team.specialty ?? null}
+        canEdit
+        forTeamName={team.name}
+      />
 
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-sm font-medium text-slate-900">Members ({members.length})</h2>

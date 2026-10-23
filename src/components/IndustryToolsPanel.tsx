@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAskAnchor } from "@/components/AskAnchorDock";
 import {
@@ -12,15 +12,28 @@ import {
   type ToolReport,
 } from "@/lib/industryTools";
 
-type ToolInfo = { id: string; name: string; outcome: string; phase: ToolPhase; kind: ToolKind; clientFacing: boolean; all: boolean };
+type ToolInfo = {
+  id: string;
+  name: string;
+  outcome: string;
+  phase: ToolPhase;
+  kind: ToolKind;
+  clientFacing: boolean;
+  custom: boolean;
+  all: boolean;
+};
 type ToolsResponse = {
   industry: string | null;
+  specialty: { sectorName: string; companyName: string } | null;
   tools: ToolInfo[];
   reports: Record<string, SavedToolReport>;
   hasContactEmail: boolean;
 };
 
 const KIND_ORDER: ToolKind[] = ["prep", "intel", "negotiate", "document", "track", "compliance"];
+// Shown before "Show all" when nothing is being searched.
+const VISIBLE_TOOLS = 8;
+type Filter = "all" | "custom" | ToolKind;
 
 // One fetch per deal page, shared by the Before and After tab panels.
 const loads = new Map<string, Promise<ToolsResponse>>();
@@ -132,10 +145,12 @@ function ReportView({ report }: { report: ToolReport }) {
   );
 }
 
-// The industry tools on a deal's Before or After tab: expert reports for
-// the team's industry (see src/lib/industryTools.ts), grouped by what
-// they're for, written from every call on the deal and saved on it. Once
-// written, a report updates itself after each new call (autopilot in
+// The tools launcher on a deal's Before and After tabs: every tool the
+// team has (made for its own specialty first, then its industry's, then
+// the ones for everyone; see teamSpecialty.ts), searchable and filtered
+// by what it's for, with the reports already written one click away.
+// Reports are written from every call on the deal and saved on it; once
+// written, each updates itself after every new call (autopilot in
 // industryToolRun.ts), can go to the client as a Gmail draft, or become a
 // deck or spreadsheet through Ask Anchor.
 export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: ToolPhase }) {
@@ -145,6 +160,9 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState<{ state: "saving" | "saved" | "error"; message?: string; url?: string | null } | null>(null);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const { ask } = useAskAnchor();
 
   useEffect(() => {
@@ -153,15 +171,37 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
       .catch(() => setError("Couldn't load the industry tools."));
   }, [dealId]);
 
+  // Before a call, start on the prep tools; after, on everything (or the
+  // tools made for this team, when it has its own).
+  const activeFilter: Filter = filter ?? (phase === "before" ? "prep" : data?.specialty ? "custom" : "all");
+
+  const visible = useMemo(() => {
+    if (!data) return [];
+    const q = query.trim().toLowerCase();
+    return data.tools.filter((t) => {
+      if (q) return `${t.name} ${t.outcome} ${TOOL_KIND_LABEL[t.kind]}`.toLowerCase().includes(q);
+      if (activeFilter === "all") return true;
+      if (activeFilter === "custom") return t.custom;
+      return t.kind === activeFilter;
+    });
+  }, [data, query, activeFilter]);
+
   if (!data) {
     return error ? <p className="text-sm text-red-600">{error}</p> : null;
   }
+  if (!data.tools.length) return null;
 
-  const tools = data.tools.filter((t) => t.phase === phase);
-  if (!tools.length) return null;
-  const open = openId ? tools.find((t) => t.id === openId) ?? null : null;
+  const open = openId ? data.tools.find((t) => t.id === openId) ?? null : null;
   const saved = open ? data.reports[open.id] : null;
-  const groups = KIND_ORDER.map((kind) => ({ kind, tools: tools.filter((t) => t.kind === kind) })).filter((g) => g.tools.length);
+  const written = data.tools
+    .filter((t) => data.reports[t.id])
+    .sort((a, b) => data.reports[b.id].generatedAt.localeCompare(data.reports[a.id].generatedAt));
+  const filters: { key: Filter; label: string; count: number }[] = [
+    ...(data.specialty ? [{ key: "custom" as Filter, label: `Made for ${data.specialty.companyName}`, count: data.tools.filter((t) => t.custom).length }] : []),
+    { key: "all", label: "All tools", count: data.tools.length },
+    ...KIND_ORDER.map((k) => ({ key: k as Filter, label: TOOL_KIND_LABEL[k], count: data.tools.filter((t) => t.kind === k).length })).filter((f) => f.count),
+  ];
+  const listed = query.trim() || showAll ? visible : visible.slice(0, VISIBLE_TOOLS);
 
   async function run(toolId: string) {
     setRunning(toolId);
@@ -197,57 +237,123 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
     }
   }
 
+  function pick(id: string) {
+    setDraft(null);
+    if (data!.reports[id]) setOpenId(openId === id ? null : id);
+    else void run(id);
+  }
+
   const btn = "rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand hover:text-brand";
+  const when = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold text-brand">{phase === "before" ? "Prep tools" : "Reports & tools"}</h2>
-        {!data.industry && (
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-brand">Tools</h2>
+          {data.specialty && (
+            <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent">Built for {data.specialty.sectorName}</p>
+          )}
+        </div>
+        {!data.industry && !data.specialty && (
           <Link href="/dashboard/team" className="text-xs font-medium text-brand hover:underline">
-            Set your industry for more tools
+            Set your industry or specialty for more tools
           </Link>
         )}
       </div>
-      <p className="mt-0.5 text-xs text-slate-500">
-        Written by Anchor from every call, file and email on this deal. Once written, each one updates itself after every new call, and
-        what&apos;s missing becomes your checklist on the next one.
+      <p className="mt-1 text-xs text-slate-500">
+        Each one is written from every call, file and email on this deal, then updates itself after every new call. What&apos;s missing
+        becomes your checklist on the next one.
       </p>
 
-      {groups.map((g) => (
-        <div key={g.kind} className="mt-4">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{TOOL_KIND_LABEL[g.kind]}</h3>
-          <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-            {g.tools.map((t) => {
-              const has = Boolean(data.reports[t.id]);
-              const active = openId === t.id;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => {
-                    setDraft(null);
-                    if (has) setOpenId(active ? null : t.id);
-                    else void run(t.id);
-                  }}
-                  disabled={running !== null && running !== t.id}
-                  className={`rounded-lg border px-4 py-3 text-left transition disabled:opacity-50 ${
-                    active ? "border-accent bg-accent/5" : "border-slate-200 hover:border-slate-300"
-                  }`}
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-slate-900">{t.name}</span>
-                    <span className="shrink-0 text-[11px] font-medium text-slate-400">
-                      {running === t.id ? "Writing…" : has ? (active ? "Hide" : "View") : "Create"}
-                    </span>
-                  </span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{t.outcome}</span>
-                </button>
-              );
-            })}
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={`Search ${data.tools.length} tools: "negotiation", "proposal", "risk"…`}
+        className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand focus:outline-none"
+      />
+
+      {!query.trim() && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {filters.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => {
+                setFilter(f.key);
+                setShowAll(false);
+              }}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                activeFilter === f.key
+                  ? "border-brand bg-brand text-white"
+                  : f.key === "custom"
+                    ? "border-accent/40 bg-accent/5 text-accent hover:border-accent"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-400"
+              }`}
+            >
+              {f.label} <span className="opacity-60">{f.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {written.length > 0 && !query.trim() && (
+        <div className="mt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Your reports on this deal</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {written.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => pick(t.id)}
+                className={`rounded-md border px-2.5 py-1 text-xs ${
+                  openId === t.id ? "border-accent bg-accent/5 text-slate-900" : "border-slate-200 text-slate-700 hover:border-slate-400"
+                }`}
+              >
+                {t.name} <span className="text-slate-400">· {when(data.reports[t.id].generatedAt)}</span>
+              </button>
+            ))}
           </div>
         </div>
-      ))}
+      )}
+
+      <ul className="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
+        {listed.length === 0 && <li className="px-4 py-3 text-sm text-slate-500">No tools match &ldquo;{query}&rdquo;.</li>}
+        {listed.map((t) => {
+          const has = Boolean(data.reports[t.id]);
+          const active = openId === t.id;
+          return (
+            <li key={t.id}>
+              <button
+                type="button"
+                onClick={() => pick(t.id)}
+                disabled={running !== null && running !== t.id}
+                className={`flex w-full items-start gap-3 px-4 py-3 text-left transition disabled:opacity-50 ${active ? "bg-accent/5" : "hover:bg-slate-50"}`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="text-sm font-medium text-slate-900">{t.name}</span>
+                    {t.custom && (
+                      <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">Made for you</span>
+                    )}
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{TOOL_KIND_LABEL[t.kind]}</span>
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{t.outcome}</span>
+                </span>
+                <span className={`shrink-0 pt-0.5 text-[11px] font-medium ${has ? "text-brand" : "text-slate-400"}`}>
+                  {running === t.id ? "Writing…" : has ? (active ? "Hide" : "View") : "Create"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {!query.trim() && !showAll && visible.length > VISIBLE_TOOLS && (
+        <button type="button" onClick={() => setShowAll(true)} className="mt-2 text-xs font-medium text-brand hover:underline">
+          Show all {visible.length}
+        </button>
+      )}
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 

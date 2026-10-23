@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
-import { industryLiveText } from "./industryPlaybooks";
+import { playbookLiveText } from "./industryPlaybooks";
 import type { LiveDealContext } from "./liveContext";
 import type { LiveCaution } from "@/db/schema";
 
@@ -267,7 +267,7 @@ export function liveDealContextText(params: LiveDealContext): string {
 
 What we know about this deal so far: ${params.dealMemory || "Nothing yet — this may be an early meeting."}
 
-Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}${feedbackText}${toolGapsText}${industryLiveText(params.industry)}`;
+Decision boundaries / constraints for this deal: ${params.decisionBoundaries || "None recorded."}${leadStyleText}${notesText}${attachedFilesText}${pastMeetingsText}${emailContextText}${calendarContextText}${documentContextText}${feedbackText}${toolGapsText}${playbookLiveText(params.playbook)}`;
 }
 
 // Regenerates live coaching (nudges + checklist) for a meeting that's
