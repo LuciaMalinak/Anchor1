@@ -8,6 +8,7 @@ import { buildDealToolContext } from "./dealToolContext";
 import { isIndustryKey, INDUSTRY_BY_KEY, type IndustryKey } from "./industries";
 import { teamPlaybook, toolsForTeam } from "./teamSpecialty";
 import { relevantAnswers, playbookText } from "./answerPlaybook";
+import { getDealLeadStyle } from "./styleProfile";
 import type { IndustryTool, SavedToolReport, ToolReport } from "./industryTools";
 import { withAiUser } from "./aiUsage";
 
@@ -153,6 +154,10 @@ async function reportContext(deal: typeof deals.$inferSelect, tool: IndustryTool
         : "No transcript is available for the latest call."
     );
   }
+
+  // How the deal lead operates, so stand-in and prep tools sound like them.
+  const leadStyle = await getDealLeadStyle(deal.leadUserId ?? null, { allowSynchronousRebuild: false }).catch(() => null);
+  if (leadStyle) parts.push(`How the deal lead operates (their style, phrases and how they decide): ${leadStyle}`);
 
   // What the team has said before about this kind of thing, for tools that
   // answer questions (security prefill, management meeting prep).

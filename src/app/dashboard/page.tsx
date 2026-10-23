@@ -18,6 +18,8 @@ import { DashboardCustomize } from "./DashboardCustomize";
 import { HomeTasks } from "./HomeTasks";
 import { HomeUpdates } from "./HomeUpdates";
 import { MorningBriefPrompt } from "./MorningBriefPrompt";
+import { SpecialtyHomeCard } from "./SpecialtyHomeCard";
+import { ensureTeamSpecialty } from "@/lib/specialtyAuto";
 import { getGoogleConnection } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
 import { normalizePrefs, shouldAutoEnableBrief } from "@/lib/morningBriefPrefs";
@@ -76,6 +78,15 @@ export default async function DashboardPage({
   // Brief on with replies-to-drafts, but Gmail hasn't let Anchor create
   // drafts — so none can appear there until this is allowed.
   let needsDraftsPermission = false;
+
+  // Every team's own specialty builds itself the first time its owner
+  // lands here, from the website given at sign-up or their work email's
+  // domain (specialtyAuto.ts). Starts in the background; never blocks.
+  if (teamId && session?.user?.id) {
+    await ensureTeamSpecialty(teamId, session.user.id, session.user.email).catch((err) =>
+      console.error("[dashboard] couldn't start the specialty build:", err)
+    );
+  }
 
   if (teamId && session?.user?.id) {
     const [user, team, brief, google] = await Promise.all([
@@ -192,6 +203,7 @@ export default async function DashboardPage({
           initialColorTheme={colorTheme && isColorThemeKey(colorTheme) ? colorTheme : null}
         />
       )}
+      {teamId && <SpecialtyHomeCard />}
       {teamId && (!briefOn || briefNeverSetUp) && <MorningBriefPrompt neverSetUp={briefNeverSetUp} />}
       {needsDraftsPermission && (
         <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-6 py-5">

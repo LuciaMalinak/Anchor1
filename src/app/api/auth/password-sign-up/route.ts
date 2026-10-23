@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { db } from "@/db";
-import { users, sessions } from "@/db/schema";
+import { users, sessions, teams } from "@/db/schema";
 import { sql, eq } from "drizzle-orm";
 import {
   hashPassword,
@@ -10,6 +10,7 @@ import {
   absoluteUrl,
 } from "@/lib/auth/password";
 import { assignTeamForNewUser } from "@/lib/onboardUser";
+import { startSpecialtyBuild, websiteFromEmail } from "@/lib/specialtyAuto";
 import { isIndustryKey } from "@/lib/industries";
 import { safeReturnTo } from "@/lib/integrations/returnTo";
 
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
   const email = String(form.get("email") ?? "").trim();
   const password = String(form.get("password") ?? "");
   const confirmPassword = String(form.get("confirmPassword") ?? "");
+  const companyWebsiteRaw = String(form.get("companyWebsite") ?? "").trim().slice(0, 200);
   const industryRaw = String(form.get("industry") ?? "");
   const industry = isIndustryKey(industryRaw) ? industryRaw : null;
   const next = safeReturnTo(typeof form.get("next") === "string" ? String(form.get("next")) : null);
@@ -92,6 +94,19 @@ export async function POST(req: NextRequest) {
       .returning();
     userId = created.id;
     await assignTeamForNewUser(userId, email, name || null);
+  }
+
+  // Their company's website (or their work email's domain) starts Anchor
+  // building their own specialty in the background (specialtyAuto.ts), so
+  // it's ready a minute after they land. Only for a team they own.
+  try {
+    const [owned] = await db.select({ id: teams.id }).from(teams).where(eq(teams.ownerUserId, userId)).limit(1);
+    if (owned) {
+      const website = companyWebsiteRaw || websiteFromEmail(email);
+      if (website) await startSpecialtyBuild(owned.id, { website }, userId);
+    }
+  } catch (err) {
+    console.error("[password-sign-up] couldn't start the specialty build:", err);
   }
 
   const token = randomBytes(32).toString("hex");

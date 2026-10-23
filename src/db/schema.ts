@@ -549,6 +549,13 @@ export const teams = pgTable("team", {
   // expert tools made for exactly what they do (see teamSpecialty.ts and
   // specialtyBuilder.ts). Null until someone builds it.
   specialty: jsonb("specialty").$type<TeamSpecialty>(),
+  // The company's website, given at sign-up or on Home; the specialty is
+  // built from it (specialtyAuto.ts).
+  companyWebsite: text("companyWebsite"),
+  // "building" while a build runs in the background, then "ready" or
+  // "failed". Null until the first build, which happens automatically.
+  specialtyStatus: text("specialtyStatus").$type<"building" | "ready" | "failed">(),
+  specialtyRequestedAt: timestamp("specialtyRequestedAt", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
