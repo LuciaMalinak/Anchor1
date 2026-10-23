@@ -33,6 +33,7 @@ export function SpecialtyBuilder({
   // Builds on the team endpoint run in the background; this checks back
   // every few seconds while one is going.
   const [status, setStatus] = useState<string | null>(null);
+  const [hidden, setHidden] = useState(false);
   const polling = status === "building";
   useEffect(() => {
     if (initial !== undefined) return;
@@ -40,7 +41,11 @@ export function SpecialtyBuilder({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const check = () =>
       fetch(endpoint)
-        .then((r) => (r.ok ? r.json() : null))
+        .then((r) => {
+          // Not one of the team's leaders: nothing to show here.
+          if (r.status === 403) setHidden(true);
+          return r.ok ? r.json() : null;
+        })
         .then((body) => {
           if (!body || stopped) return;
           setSpecialty(body.specialty ?? null);
@@ -85,7 +90,7 @@ export function SpecialtyBuilder({
     if (res?.ok) setSpecialty(null);
   }
 
-  if (!loaded) return null;
+  if (!loaded || hidden) return null;
   if (status === "building") {
     return (
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
