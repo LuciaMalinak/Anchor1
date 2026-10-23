@@ -973,6 +973,10 @@ export const morningBriefs = pgTable("morning_brief", {
   // a time zone guessed from their calendar (or the default); corrected
   // from their browser the first time they open Home.
   timeZoneGuessed: boolean("timeZoneGuessed").notNull().default(false),
+  // What happened to the last scheduled brief (sent and how, or why not),
+  // so "why didn't my brief come?" has an answer (see the user-health
+  // check).
+  lastResult: jsonb("lastResult").$type<{ at: string; status: "sent" | "failed"; channel?: string; note?: string; error?: string }>(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
 

@@ -79,6 +79,8 @@ const MIGRATIONS = [
   // Morning brief switched off by the person themselves (morningBriefPrefs.ts).
   `ALTER TABLE "morning_brief" ADD COLUMN IF NOT EXISTS "turnedOffAt" timestamp`,
   `ALTER TABLE "morning_brief" ADD COLUMN IF NOT EXISTS "timeZoneGuessed" boolean NOT NULL DEFAULT false`,
+  // What happened to the last scheduled brief (morningBrief.ts).
+  `ALTER TABLE "morning_brief" ADD COLUMN IF NOT EXISTS "lastResult" jsonb`,
   // Zoom connections, Slack user tokens, and meetings to set up from email
   // and Slack (meetingProposals.ts, meetingScheduler.ts).
   `ALTER TYPE "integration_provider" ADD VALUE IF NOT EXISTS 'zoom'`,
