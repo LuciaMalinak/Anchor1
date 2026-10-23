@@ -4,7 +4,8 @@ import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { summarizeDealFiles } from "@/lib/dealFilesContext";
 import { isIndustryKey, type IndustryKey } from "@/lib/industries";
-import { TOOL_BY_ID } from "@/lib/industryTools";
+import type { IndustryPlaybook } from "@/lib/industryPlaybooks";
+import { teamPlaybook, toolsForTeam } from "@/lib/teamSpecialty";
 
 // How many of this deal's past FINISHED meetings to ground live coaching
 // in — same idea as assist/route.ts's recentReady, just smaller since
@@ -29,6 +30,9 @@ export type LiveDealContext = {
   // The team's industry (Team page), which brings in that industry's
   // playbook: its checklist, rules and jargon (industryPlaybooks.ts).
   industry: IndustryKey | null;
+  // The playbook calls are coached with: the team's own specialty's when
+  // it has one, otherwise its industry's (teamSpecialty.ts).
+  playbook: IndustryPlaybook | null;
   // What the deal's industry reports (buyer log, VAC packet, MEDDPICC…)
   // are still missing, so the call can fill it in (industryTools.ts).
   toolGaps: { tool: string; gap: string }[];
@@ -82,7 +86,7 @@ export async function loadLiveDealContext(
       .limit(FEEDBACK_NOTES_LIMIT),
     // The deal's team, or the team of whoever's on the call when there's no deal.
     db
-      .select({ industry: teams.industry })
+      .select({ industry: teams.industry, specialty: teams.specialty })
       .from(teams)
       .where(
         deal
@@ -91,7 +95,10 @@ export async function loadLiveDealContext(
       )
       .limit(1),
   ]);
-  const industry = teamRows[0]?.industry;
+  const industryRaw = teamRows[0]?.industry;
+  const industry = industryRaw && isIndustryKey(industryRaw) ? industryRaw : null;
+  const specialty = teamRows[0]?.specialty ?? null;
+  const toolName = new Map(toolsForTeam(industry, specialty).map((t) => [t.id, t.name]));
 
   return {
     dealName: deal?.name || null,
@@ -106,11 +113,12 @@ export async function loadLiveDealContext(
     documentContext: deal?.documentContext || null,
     attachedFiles: summarizeDealFiles(fileRows),
     feedbackNotes: feedbackRows.map((r) => r.feedback?.note?.trim() ?? "").filter(Boolean),
-    industry: industry && isIndustryKey(industry) ? industry : null,
+    industry,
+    playbook: teamPlaybook(industry, specialty),
     toolGaps: Object.entries(deal?.toolReports ?? {})
       .sort(([, a], [, b]) => b.generatedAt.localeCompare(a.generatedAt))
       .flatMap(([toolId, saved]) =>
-        saved.report.gaps.slice(0, 3).map((gap) => ({ tool: TOOL_BY_ID[toolId]?.name ?? saved.report.title, gap }))
+        saved.report.gaps.slice(0, 3).map((gap) => ({ tool: toolName.get(toolId) ?? saved.report.title, gap }))
       )
       .slice(0, TOOL_GAPS_LIMIT),
     pastMeetings: pastMeetingRows.map((r) => ({

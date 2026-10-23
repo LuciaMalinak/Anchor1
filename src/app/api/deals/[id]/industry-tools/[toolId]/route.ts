@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
-import { db } from "@/db";
-import { teams } from "@/db/schema";
 import { authorizeDeal } from "@/lib/dealAccess";
-import { isIndustryKey } from "@/lib/industries";
-import { toolsForIndustry } from "@/lib/industryTools";
-import { runIndustryTool } from "@/lib/industryToolRun";
+import { runIndustryTool, teamToolContext } from "@/lib/industryToolRun";
 import { withAiUser } from "@/lib/aiUsage";
 
 // A long report on a deal with many calls can take a minute or more.
@@ -24,11 +19,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
-  const [team] = await db.select({ industry: teams.industry }).from(teams).where(eq(teams.id, authorized.deal.teamId));
-  const industry = team?.industry && isIndustryKey(team.industry) ? team.industry : null;
-  const tool = toolsForIndustry(industry).find((t) => t.id === toolId);
+  const tool = (await teamToolContext(authorized.deal.teamId)).tools.find((t) => t.id === toolId);
   if (!tool) {
-    return NextResponse.json({ error: "That tool isn't available for this team's industry" }, { status: 404 });
+    return NextResponse.json({ error: "That tool isn't available for this team" }, { status: 404 });
   }
   try {
     const saved = await withAiUser({ userId: session.user.id }, () => runIndustryTool(authorized.deal, tool));

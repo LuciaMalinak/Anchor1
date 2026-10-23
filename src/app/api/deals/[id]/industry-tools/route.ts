@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
-import { db } from "@/db";
-import { teams } from "@/db/schema";
 import { authorizeDeal } from "@/lib/dealAccess";
-import { isIndustryKey } from "@/lib/industries";
-import { toolsForIndustry } from "@/lib/industryTools";
+import { teamToolContext } from "@/lib/industryToolRun";
 
-// The industry tools this deal's team gets (its industry's, plus the ones
-// for everyone) and the latest report saved for each.
+// The tools this deal's team gets (its own specialty's first, then its
+// industry's, then the ones for everyone) and the latest report saved for
+// each.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -19,17 +16,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!authorized) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
-  const [team] = await db.select({ industry: teams.industry }).from(teams).where(eq(teams.id, authorized.deal.teamId));
-  const industry = team?.industry && isIndustryKey(team.industry) ? team.industry : null;
+  const { industry, specialty, tools } = await teamToolContext(authorized.deal.teamId);
   return NextResponse.json({
     industry,
-    tools: toolsForIndustry(industry).map((t) => ({
+    specialty: specialty ? { sectorName: specialty.sectorName, companyName: specialty.companyName } : null,
+    tools: tools.map((t) => ({
       id: t.id,
       name: t.name,
       outcome: t.outcome,
       phase: t.phase,
       kind: t.kind,
       clientFacing: Boolean(t.clientFacing),
+      custom: Boolean(t.custom),
       all: t.industries === "all",
     })),
     hasContactEmail: Boolean(authorized.deal.primaryContactEmail),

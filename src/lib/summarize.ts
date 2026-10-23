@@ -2,8 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import type { Utterance } from "./transcribe";
-import type { IndustryKey } from "./industries";
-import { industrySummaryText } from "./industryPlaybooks";
+import { playbookSummaryText, type IndustryPlaybook } from "./industryPlaybooks";
 
 // Centralized so it's a one-line change if this needs to point at a
 // different model later.
@@ -163,8 +162,9 @@ export async function summarizeMeeting(
   // transcript, never to invent an action item purely from an email that
   // was never mentioned on the call.
   dealContext?: { memory?: string | null; emailContext?: string | null } | null,
-  // The team's industry, for its deal sheet fields and rules.
-  industry?: IndustryKey | null
+  // The team's playbook (its specialty's, or its industry's), for its deal
+  // sheet fields and rules.
+  playbook?: IndustryPlaybook | null
 ): Promise<MeetingSummaryResult> {
   const transcriptText = transcriptToPlainText(utterances);
 
@@ -188,7 +188,7 @@ export async function summarizeMeeting(
     messages: [
       {
         role: "user",
-        content: `Here is a meeting transcript with speakers separated. Summarize it.\n\n${transcriptText}${dealContextBlock}${industrySummaryText(industry)}`,
+        content: `Here is a meeting transcript with speakers separated. Summarize it.\n\n${transcriptText}${dealContextBlock}${playbookSummaryText(playbook)}`,
       },
     ],
   });

@@ -1,5 +1,6 @@
 "use client";
 
+import { SpecialtyBuilder } from "@/components/SpecialtyBuilder";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -253,6 +254,8 @@ export function TeamClient({
         )}
         {industryError && <p className="mt-2 text-sm text-red-600">{industryError}</p>}
       </section>
+
+      <SpecialtyBuilder endpoint="/api/team/specialty" />
 
       <section className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Invite a teammate</h2>

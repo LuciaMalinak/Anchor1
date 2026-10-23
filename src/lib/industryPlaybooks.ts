@@ -574,7 +574,12 @@ export function industryPlaybook(key: IndustryKey | null | undefined): IndustryP
 // the cached deal-facts system block, so it adds nothing per refresh once
 // the call has started.
 export function industryLiveText(key: IndustryKey | null | undefined): string {
-  const p = industryPlaybook(key);
+  return playbookLiveText(industryPlaybook(key));
+}
+
+// The same, for any playbook: an industry's, or a team's own specialty
+// (teamSpecialty.ts).
+export function playbookLiveText(p: IndustryPlaybook | null | undefined): string {
   if (!p) return "";
   return `
 
@@ -594,7 +599,10 @@ Terms speech-to-text often mishears in this business: ${p.vocabulary.join(", ")}
 
 // The industry block for the post-call summary.
 export function industrySummaryText(key: IndustryKey | null | undefined): string {
-  const p = industryPlaybook(key);
+  return playbookSummaryText(industryPlaybook(key));
+}
+
+export function playbookSummaryText(p: IndustryPlaybook | null | undefined): string {
   if (!p) return "";
   return `
 
