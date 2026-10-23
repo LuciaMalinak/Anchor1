@@ -8,6 +8,7 @@ type Status = {
   status: "building" | "ready" | "failed" | null;
   companyWebsite: string | null;
   companyContext: string | null;
+  error: string | null;
   isOwner: boolean;
 };
 
@@ -95,18 +96,23 @@ export function CompanyContextBox() {
           {justSaved ? "Updating your Anchor with this" : "Building your Anchor"}. About a minute.
         </p>
       )}
-      {s.status === "failed" && !building && <p className="mt-2 text-sm text-red-600">The last build didn&apos;t finish. Save again to retry.</p>}
+      {s.status === "failed" && !building && (
+        <p className="mt-2 text-sm text-red-600">
+          The last build didn&apos;t finish{s.error ? `: ${s.error}` : "."} Save again to retry.
+        </p>
+      )}
 
       {s.isOwner ? (
         <div className="mt-3 flex flex-col gap-2">
-          {!s.companyWebsite && !s.specialty && (
+          <label className="text-xs font-medium text-slate-700">
+            Company website
             <input
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
-              placeholder="Company website (e.g. yourcompany.com)"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800"
+              placeholder="yourcompany.com"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800"
             />
-          )}
+          </label>
           <label className="text-xs font-medium text-slate-700">
             Give Anchor more context about your company
             <textarea

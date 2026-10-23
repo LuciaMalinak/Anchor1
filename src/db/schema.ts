@@ -560,6 +560,8 @@ export const teams = pgTable("team", {
   // "failed". Null until the first build, which happens automatically.
   specialtyStatus: text("specialtyStatus").$type<"building" | "ready" | "failed">(),
   specialtyRequestedAt: timestamp("specialtyRequestedAt", { mode: "date" }),
+  // Why the last build failed, shown to the team's leaders.
+  specialtyError: text("specialtyError"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 

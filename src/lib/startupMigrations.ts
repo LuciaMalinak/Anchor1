@@ -108,6 +108,7 @@ const MIGRATIONS = [
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "companyContext" text`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialtyStatus" text`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialtyRequestedAt" timestamp`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialtyError" text`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

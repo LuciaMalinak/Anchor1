@@ -37,6 +37,7 @@ export async function GET() {
     status: r.team.specialtyStatus ?? null,
     companyWebsite: r.team.companyWebsite ?? null,
     companyContext: r.team.companyContext ?? null,
+    error: r.team.specialtyStatus === "failed" ? (r.team.specialtyError ?? null) : null,
     isOwner: r.isOwner,
   });
 }
