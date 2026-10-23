@@ -20,6 +20,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tea
   if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
   await logAdminAccess(admin.id, teamId, "built team specialty");
   const body = await req.json().catch(() => ({}));
+  // Saved on the team, so later rebuilds (theirs or automatic) keep it.
+  const website = typeof body.website === "string" ? body.website.trim().slice(0, 200) : "";
+  const description = typeof body.description === "string" ? body.description.trim().slice(0, 4000) : "";
+  if (website || description) {
+    await db
+      .update(teams)
+      .set({ ...(website ? { companyWebsite: website } : {}), ...(description ? { companyContext: description } : {}) })
+      .where(eq(teams.id, teamId));
+  }
   try {
     const specialty = await withAiUser({ userId: admin.id }, () =>
       buildTeamSpecialty(teamId, { website: body.website, description: body.description })

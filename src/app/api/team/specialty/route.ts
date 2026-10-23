@@ -28,6 +28,7 @@ export async function GET() {
     specialty: r.team.specialty ?? null,
     status: r.team.specialtyStatus ?? null,
     companyWebsite: r.team.companyWebsite ?? null,
+    companyContext: r.team.companyContext ?? null,
     isOwner: r.isOwner,
   });
 }
@@ -37,8 +38,13 @@ export async function POST(req: NextRequest) {
   if ("error" in r) return r.error;
   if (!r.isOwner) return NextResponse.json({ error: "Only the team owner can change this" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
-  const website = typeof body.website === "string" ? body.website.trim().slice(0, 200) : "";
-  const description = typeof body.description === "string" ? body.description.trim().slice(0, 2000) : "";
+  const website =
+    (typeof body.website === "string" && body.website.trim().slice(0, 200)) || r.team.companyWebsite || r.team.specialty?.website || "";
+  // The context is saved for every later build, including automatic ones.
+  const description = typeof body.description === "string" ? body.description.trim().slice(0, 4000) : (r.team.companyContext ?? "");
+  if (typeof body.description === "string") {
+    await db.update(teams).set({ companyContext: description || null }).where(eq(teams.id, r.team.id));
+  }
   if (!website && !description) {
     return NextResponse.json({ error: "Add the company's website or a line about what you do." }, { status: 400 });
   }

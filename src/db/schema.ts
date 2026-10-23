@@ -552,6 +552,10 @@ export const teams = pgTable("team", {
   // The company's website, given at sign-up or on Home; the specialty is
   // built from it (specialtyAuto.ts).
   companyWebsite: text("companyWebsite"),
+  // Extra context the team gives Anchor about the company (Profile page):
+  // what they do, their clients, deal types, positioning. Used in every
+  // build of the specialty alongside the website.
+  companyContext: text("companyContext"),
   // "building" while a build runs in the background, then "ready" or
   // "failed". Null until the first build, which happens automatically.
   specialtyStatus: text("specialtyStatus").$type<"building" | "ready" | "failed">(),
@@ -602,6 +606,10 @@ export const deals = pgTable("deal", {
   // Used to derive a company logo (via a public logo lookup, with a
   // graceful fallback if it 404s) and shown as a link on the deal page.
   companyWebsite: text("companyWebsite"),
+  // Extra context the team gives Anchor about the company (Profile page):
+  // what they do, their clients, deal types, positioning. Used in every
+  // build of the specialty alongside the website.
+  companyContext: text("companyContext"),
   // Rolling, AI-maintained summary of this deal as a whole — the
   // deal-level equivalent of a contact's relationshipSummary. Updated
   // after every meeting attached to this deal finishes processing, so
