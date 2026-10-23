@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Status = {
@@ -10,13 +9,11 @@ type Status = {
   isOwner: boolean;
 };
 
-// How long after it's built Home keeps announcing the team's own Anchor.
-const ANNOUNCE_DAYS = 14;
 
 // Home's card for the team's own specialty (specialtyAuto.ts): asks the
-// owner for the company website when Anchor has nothing to go on, shows
-// progress while it builds in the background, then links to
-// "Anchor for <Company>" once it's ready.
+// owner for the company website, only while Anchor has nothing to go on.
+// After that, it's built in the background, and the Profile page's
+// company box is where more context goes.
 export function SpecialtyHomeCard() {
   const [s, setS] = useState<Status | null>(null);
   const [website, setWebsite] = useState("");
@@ -61,47 +58,14 @@ export function SpecialtyHomeCard() {
   }
 
   if (!s) return null;
-
-  if (s.specialty && !building) {
-    const fresh = Date.now() - Date.parse(s.specialty.generatedAt) < ANNOUNCE_DAYS * 86_400_000;
-    if (!fresh) return null;
-    return (
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-accent/30 bg-accent/5 px-6 py-5">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-accent">Your Anchor is ready</p>
-          <h2 className="mt-1 text-base font-semibold text-brand">Built for {s.specialty.sectorName}</h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
-            Your calls are now coached the way an expert in your exact business would, and {s.specialty.tools.length} tools made for{" "}
-            {s.specialty.companyName} are on every deal.
-          </p>
-        </div>
-        <Link href="/dashboard/specialty" className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent-dark">
-          See your Anchor
-        </Link>
-      </section>
-    );
-  }
-
-  if (building) {
-    return (
-      <section className="rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
-        <p className="flex items-center gap-2 text-sm font-medium text-brand">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden="true" />
-          Building your Anchor{s.companyWebsite ? ` for ${s.companyWebsite.replace(/^https?:\/\//, "")}` : ""}…
-        </p>
-        <p className="mt-1 text-sm text-slate-500">
-          Anchor is researching your company and designing a playbook and expert tools for exactly what you do. About a minute.
-        </p>
-      </section>
-    );
-  }
-
-  if (!s.isOwner) return null;
+  // Once a website is in (or it's built or building), this leaves Home;
+  // more context goes in the Profile page's company box.
+  if (!s.isOwner || s.specialty || s.companyWebsite || building) return null;
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
       <h2 className="text-base font-semibold text-brand">
-        {s.status === "failed" ? "Let's try building your Anchor again" : "Make Anchor an expert in your business"}
+        Make Anchor an expert in your business
       </h2>
       <p className="mt-1 max-w-2xl text-sm text-slate-500">
         Add your company&apos;s website. Anchor researches what you do and builds a playbook and expert tools for your exact niche, so it can

@@ -173,10 +173,15 @@ function slug(s: string) {
 }
 
 export async function buildTeamSpecialty(teamId: string, input: { website?: string | null; description?: string | null }): Promise<TeamSpecialty> {
-  const [team] = await db.select({ name: teams.name, industry: teams.industry }).from(teams).where(eq(teams.id, teamId));
+  const [team] = await db
+    .select({ name: teams.name, industry: teams.industry, companyWebsite: teams.companyWebsite, companyContext: teams.companyContext })
+    .from(teams)
+    .where(eq(teams.id, teamId));
   if (!team) throw new Error("Team not found.");
-  const website = normalizeWebsite(input.website);
-  const description = str(input.description, 2000);
+  // Anything not given this time falls back to what the team saved: the
+  // website from sign-up, and the context from the Profile page.
+  const website = normalizeWebsite(input.website || team.companyWebsite);
+  const description = str(input.description || team.companyContext, 4000);
   if (!website && !description) throw new Error("Add the company's website or a line about what they do.");
   const industry = team.industry && isIndustryKey(team.industry) ? team.industry : null;
   const industryLabel = industry ? INDUSTRY_BY_KEY[industry].label : null;

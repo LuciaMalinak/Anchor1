@@ -105,6 +105,7 @@ const MIGRATIONS = [
   // A team's own specialty: playbook and tools from its website (teamSpecialty.ts).
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialty" jsonb`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "companyWebsite" text`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "companyContext" text`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialtyStatus" text`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialtyRequestedAt" timestamp`,
 ];

@@ -7,6 +7,7 @@ import { teams } from "@/db/schema";
 import { getOrCreateTeamId } from "@/lib/team";
 import { TOOL_KIND_LABEL, TOOL_KIND_ORDER } from "@/lib/industryTools";
 import { SpecialtyHomeCard } from "../SpecialtyHomeCard";
+import { CompanyContextBox } from "@/components/CompanyContextBox";
 
 export const metadata = { title: "Your Anchor" };
 
@@ -32,6 +33,7 @@ export default async function SpecialtyPage() {
           <p className="text-sm text-slate-500">An Anchor built for exactly what your company does.</p>
         </div>
         <SpecialtyHomeCard />
+        <CompanyContextBox />
       </div>
     );
   }
@@ -190,8 +192,8 @@ export default async function SpecialtyPage() {
         {isOwner && (
           <>
             {" "}
-            <Link href="/dashboard/team" className="font-medium text-brand hover:underline">
-              Rebuild it
+            <Link href="/dashboard/profile" className="font-medium text-brand hover:underline">
+              Give Anchor more context
             </Link>
           </>
         )}
