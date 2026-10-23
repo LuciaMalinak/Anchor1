@@ -20,7 +20,8 @@ function client() {
 // keeps this from re-searching on every page load. The manual
 // "Refresh" button (see the team briefing API route) always bypasses
 // this regardless of how recent the last one was.
-const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // refresh at most every 6 hours, per team
+export const BRIEFING_STALE_AFTER_MS = 6 * 60 * 60 * 1000; // refresh at most every 6 hours, per team
+const STALE_AFTER_MS = BRIEFING_STALE_AFTER_MS;
 
 // Same reasoning as isResearchStale in companyResearch.ts — kept in a
 // plain lib module so the Date.now() read never runs in a component's

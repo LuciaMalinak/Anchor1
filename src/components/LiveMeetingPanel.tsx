@@ -3,11 +3,11 @@
 import { useLiveMeeting } from "@/lib/useLiveMeeting";
 import {
   CallSpeakersRow,
-  CallSummary,
+  CallAnswers,
   CoachingLists,
+  ListeningStrip,
   LiveQuestionsBox,
   OffLimitsBox,
-  TranscriptStrip,
 } from "@/components/LiveCoachingBits";
 import { requestFocusWindow } from "@/lib/focusWindowBus";
 import { StopMeetingButton } from "@/components/StopMeetingButton";
@@ -19,7 +19,7 @@ import { StopMeetingButton } from "@/components/StopMeetingButton";
 // running a second, independent poll of the same endpoint.
 export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; title: string }) {
   const {
-    segments,
+    heardLines,
     suggestions,
     status,
     hasBot,
@@ -66,10 +66,11 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
         </div>
       </div>
 
-      {/* Answers first and biggest — that's what someone on a call needs
-          in the moment — then what not to agree to, what's left to
-          cover, and short suggestions. The transcript sits underneath,
-          small, for when it's needed. */}
+      {/* Their questions with answers first and biggest — that's what
+          someone on a call needs in the moment — then what they've told
+          you, what not to agree to, what's left to cover, and a couple
+          of small suggestions. No transcript during the call: it's
+          captured in the background and on the meeting page after. */}
       <div className="grid gap-4 px-5 py-4 sm:grid-cols-[1.4fr_1fr]">
         <div className="flex min-w-0 flex-col gap-3">
           <CallSpeakersRow speakers={speakers} onMark={markSpeaker} />
@@ -85,7 +86,7 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
               When they ask something, the answer shows up here.
             </p>
           )}
-          <CallSummary summary={suggestions?.summary} />
+          <CallAnswers answers={suggestions?.answers} summary={suggestions?.summary} />
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
@@ -95,7 +96,7 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
       </div>
 
       <div className="px-5 pb-4">
-        <TranscriptStrip segments={segments} live={status === "recording" || status === "joining"} error={error} />
+        <ListeningStrip heardLines={heardLines} live={status === "recording" || status === "joining"} error={error} />
       </div>
     </div>
   );

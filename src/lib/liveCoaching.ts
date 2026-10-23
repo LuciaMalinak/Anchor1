@@ -48,6 +48,8 @@ export function liveClient(feature: "live_coaching" | "live_questions" = "live_c
   return new Anthropic({ apiKey, fetch: meteredFetch(feature) });
 }
 
+export type LiveAnswer = { topic: string; answer: string; at?: number };
+
 export type LiveCoaching = {
   nudges: string[];
   checklist: { label: string; covered: boolean }[];
@@ -66,8 +68,11 @@ export type LiveCoaching = {
     answering?: boolean;
     caution?: LiveCaution | null;
   } | null;
-  // What's happened on the call so far, in a few short lines.
-  summary: string[];
+  // What the other side has answered so far on this call (budget,
+  // timeline, who decides…), newest first. Replaced the "so far" summary:
+  // the person on the call already knows what was said; what they need
+  // is what was learned.
+  answers: LiveAnswer[];
   // What the person on the call mustn't agree to or bring up, from the
   // deal's decision boundaries and prep notes; raised once the client
   // has asked about it.
@@ -85,7 +90,7 @@ const LIVE_COACHING_TOOL = {
         type: "array",
         items: { type: "string" },
         description:
-          "1-3 short, specific, actionable talking points or things to watch for — each one line, at most about 12 words, leading with the action ('Ask who signs off on budget'). This should almost never be empty: when the live transcript has something to react to, ground nudges in that first ('They just raised a concern about integration time — address it before moving on'); when it hasn't (early in the call, a quiet stretch, or nothing transcribed yet), fall back to what's already known about this deal — prep notes, decision boundaries, what happened last meeting — and turn THAT into a concrete nudge instead of waiting for something to happen live (e.g. 'They haven't mentioned budget yet — worth asking directly,' 'Last meeting they asked about our SOC 2 status — worth confirming it comes up,' 'Notes say to lead with the integration story — bring it up early'). Only return an empty array when there is truly nothing to go on at all — no transcript yet AND no prep notes, decision boundaries, or past meetings for this deal. Never generic sales advice ('build rapport', 'listen actively'), and never invent a fact, number, or commitment to fill a real gap — if something needs addressing but you genuinely don't have anything concrete to say about it, phrase the nudge as flagging that gap plainly and that it's worth circling back on next meeting.",
+          "0-2 small suggestions, each one line of at most 10 words, leading with the action ('Ask who signs off on budget'). Only what's worth saying right now: react to what was just said first ('They raised integration time: address it'); early in the call or in a quiet stretch, use the deal's prep notes, report gaps or last meeting instead ('Budget not raised yet: ask directly'). Empty when nothing new is worth saying. Never generic advice ('build rapport'), and never an invented fact, number or commitment.",
       },
       checklist: {
         type: "array",
@@ -100,11 +105,18 @@ const LIVE_COACHING_TOOL = {
         description:
           "The full talking-point checklist for this call (keep the same items across updates whenever possible, just flip 'covered' as topics come up) — a handful of concrete things this call should cover given the deal's prep notes and decision boundaries, each marked covered:true only if the transcript shows it was actually discussed. Leave it out entirely when the message says to keep the checklist as it is.",
       },
-      summary: {
+      answers: {
         type: "array",
-        items: { type: "string" },
         description:
-          "Up to 3 very short lines (at most about 10 words each) summing up the call so far: what they want, their main concern, what's been agreed or promised. Only what the transcript actually shows — empty when nothing's been said yet.",
+          "New answers in the transcript: facts the OTHER side gave that answer something this call needs to find out (a checklist item, a gap in the deal's reports, a question the rep asked them), e.g. budget, timeline, who decides, volumes, terms, their position. Each with a short topic (at most 5 words) and their answer in at most 15 words, with their numbers and names as said. Only answers that appear in the transcript and aren't already in the list of answers caught so far. Empty when there are none.",
+        items: {
+          type: "object",
+          properties: {
+            topic: { type: "string" },
+            answer: { type: "string" },
+          },
+          required: ["topic", "answer"],
+        },
       },
       offLimits: {
         type: "array",
@@ -117,7 +129,7 @@ const LIVE_COACHING_TOOL = {
           required: ["label", "raised"],
         },
         description:
-          "What the person on this call must NOT agree to, promise, or disclose on their own, taken only from the deal's decision boundaries, prep notes and the industry rules given with the deal facts (e.g. 'Discounts over 10%', 'Custom features', 'Contract changes') — each a short label of a few words, keeping the same labels across updates. raised:true once the other side has asked about or pushed on it in the transcript. Leave out what the boundaries say the rep CAN decide. Include each industry rule (by its label) when industry rules are given. Empty when the deal has no such limits recorded and no industry rules are given — never invent one.",
+          "What the person on this call must NOT agree to, promise, or disclose on their own, taken only from the deal's decision boundaries, prep notes and the industry rules given with the deal facts (e.g. 'Discounts over 10%', 'Custom features', 'Contract changes') — each a short label of a few words, keeping the same labels across updates. raised:true once the other side has asked about or pushed on it in the transcript. Leave out what the boundaries say the rep CAN decide. Include each industry rule (by its label) when industry rules are given. Empty when the deal has no such limits recorded and no industry rules are given — never invent one. Leave it out entirely when the message says to keep the checklist as it is.",
       },
       questionAsked: {
         type: "boolean",
@@ -282,7 +294,9 @@ export async function generateLiveCoaching(
     recentTranscript: string;
     priorChecklist: { label: string; covered: boolean }[] | null;
     priorOffLimits?: { label: string; raised: boolean }[] | null;
-    // false = keep priorChecklist as is this time, which keeps the reply
+    // Answers already caught this call, so only new ones come back.
+    priorAnswers?: LiveAnswer[] | null;
+    // false = keep priorChecklist (and the off-limits list) as is this time, which keeps the reply
     // (and its cost) much shorter.
     updateChecklist?: boolean;
   }
@@ -294,14 +308,14 @@ export async function generateLiveCoaching(
         .join("\n")}`
     : "";
 
-  const priorOffLimitsText = params.priorOffLimits?.length
+  const priorOffLimitsText = updateChecklist && params.priorOffLimits?.length
     ? `\n\nOff-limits list from the last update (keep these labels, just update raised):\n${params.priorOffLimits
         .map((c) => `- [${c.raised ? "raised" : " "}] ${c.label}`)
         .join("\n")}`
     : "";
 
   const system =
-    "You are a live sales-call coach watching a transcript stream in during a real meeting, and this runs on a repeating timer for as long as the call lasts — the rep should always have something current to look at, not a panel that goes blank the moment the live conversation itself doesn't hand you something new. Give sharp, specific, non-generic guidance: ground it in what's actually been said when there's something to react to, and otherwise ground it in what's already known about this deal from its prep notes, decision boundaries, and past meetings — never leave nudges empty just because the last few seconds of transcript were quiet. Never invent facts, commitments, or objections that didn't happen, and never invent detail to fill a gap you don't actually have information for — if there's truly nothing to go on yet (no transcript, no prep, no history), say so plainly rather than inventing something. If the transcript so far doesn't support a checklist item being covered, mark it not covered. You're also watching for a specific kind of moment: the other side asking something that needs answering right now, like a live interview-assist tool would — when that happens, surface it and a ready-to-say answer separately from the general nudges above (see questionAsked/question/suggestedAnswer), grounded the same way, and respecting decision boundaries the same way.";
+    "You are an expert coach sitting beside someone on a live call, watching the transcript stream in. Your job, in order: (1) catch what the other side asks or proposes that needs an answer, with a ready-to-say answer (questionAsked/question/suggestedAnswer); (2) catch what the other side answers: the facts this call needs to find out (answers); (3) keep the checklist current; (4) at most two small suggestions, only when they help right now. Ground everything in the transcript and what's known about this deal: its prep notes, decision boundaries, report gaps and past meetings. Never invent facts, numbers, commitments or objections; when something isn't known, say so plainly. Respect the decision boundaries in every answer. Keep everything short: the person is mid-conversation and glances at this.";
 
   // The deal facts don't change between refreshes, so they sit in a
   // cached system block — every refresh after the first in a call skips
@@ -315,8 +329,12 @@ export async function generateLiveCoaching(
     `${
       updateChecklist
         ? priorChecklistText.trim() || "No checklist yet — draft one."
-        : "Keep the checklist as it is this time — leave it out of your reply."
-    }${priorOffLimitsText}
+        : "Keep the checklist and the off-limits list as they are this time — leave both out of your reply."
+    }${priorOffLimitsText}${
+      params.priorAnswers?.length
+        ? `\n\nAnswers caught so far (don't repeat these):\n${params.priorAnswers.map((a) => `- ${a.topic}: ${a.answer}`).join("\n")}`
+        : ""
+    }
 
 Transcript so far (most recent portion of an in-progress call):
 ${params.recentTranscript || "(nothing transcribed yet)"}`
@@ -337,7 +355,7 @@ ${params.recentTranscript || "(nothing transcribed yet)"}`
     questionAsked?: unknown;
     question?: unknown;
     suggestedAnswer?: unknown;
-    summary?: unknown;
+    answers?: unknown;
     offLimits?: unknown;
     answerCaution?: unknown;
     cautionReason?: unknown;
@@ -351,13 +369,20 @@ ${params.recentTranscript || "(nothing transcribed yet)"}`
     : [];
 
   return {
-    nudges: Array.isArray(raw.nudges) ? raw.nudges.filter((n): n is string => typeof n === "string") : [],
+    nudges: Array.isArray(raw.nudges) ? raw.nudges.filter((n): n is string => typeof n === "string" && Boolean(n.trim())).slice(0, 2) : [],
     checklist: returnedChecklist.length && updateChecklist ? returnedChecklist : params.priorChecklist ?? [],
     liveQuestion: sanitizeLiveQuestion(raw),
-    summary: Array.isArray(raw.summary)
-      ? raw.summary.filter((n): n is string => typeof n === "string" && Boolean(n.trim())).slice(0, 3)
+    answers: Array.isArray(raw.answers)
+      ? raw.answers
+          .filter(
+            (a): a is { topic: string; answer: string } =>
+              Boolean(a) && typeof a === "object" && typeof (a as { topic?: unknown }).topic === "string" && typeof (a as { answer?: unknown }).answer === "string"
+          )
+          .map((a) => ({ topic: a.topic.trim().slice(0, 60), answer: a.answer.trim().slice(0, 200) }))
+          .filter((a) => a.topic && a.answer)
+          .slice(0, 5)
       : [],
-    offLimits: Array.isArray(raw.offLimits)
+    offLimits: updateChecklist && Array.isArray(raw.offLimits)
       ? raw.offLimits
           .filter(
             (c): c is { label: string; raised: unknown } =>

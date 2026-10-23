@@ -19,9 +19,14 @@ function client() {
 // Was 20 minutes, which made it the single biggest AI cost in Anchor
 // (a web search plus a Sonnet call roughly every 20 minutes that anyone
 // had a page open) for news that rarely changes that fast. Every 2 hours
-// is a sixth of that. The client-side polls only read this — see the
-// ticker API route, which only ever triggers a rebuild, never blocks on one.
-const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
+// is a sixth of that. Then 2 hours, which still made it a fifth of all AI
+// spend; industry headlines don't move faster than the daily briefing's
+// 6 hours, so it now matches that (and teams in the same industry share
+// one refresh, see backgroundRefresh.ts). The client-side polls only read
+// this — see the ticker API route, which only ever triggers a rebuild,
+// never blocks on one.
+export const TICKER_STALE_AFTER_MS = 6 * 60 * 60 * 1000;
+const STALE_AFTER_MS = TICKER_STALE_AFTER_MS;
 
 export function isTickerStale(updatedAt: Date | null): boolean {
   if (!updatedAt) return true;

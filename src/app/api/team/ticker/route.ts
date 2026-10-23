@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { getIndustryTicker, isTickerStale, normalizeTickerItems } from "@/lib/industryTicker";
 import { isIndustryKey } from "@/lib/industries";
+import { refreshTeamTicker } from "@/lib/backgroundRefresh";
 
 // Polled every few minutes by IndustryTicker.tsx. Always answers from
 // cache immediately; when the cache is stale it kicks off a refresh in
@@ -25,15 +26,7 @@ export async function GET() {
   }
 
   if (isTickerStale(team.industryTickerUpdatedAt)) {
-    const industry = team.industry && isIndustryKey(team.industry) ? team.industry : null;
-    getIndustryTicker(industry)
-      .then((items) =>
-        db
-          .update(teams)
-          .set({ industryTicker: items, industryTickerUpdatedAt: new Date() })
-          .where(eq(teams.id, teamId))
-      )
-      .catch((err) => console.error("Background ticker refresh failed:", err));
+    refreshTeamTicker(teamId, team.industry && isIndustryKey(team.industry) ? team.industry : null);
   }
 
   return NextResponse.json({
