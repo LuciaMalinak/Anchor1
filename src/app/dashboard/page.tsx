@@ -18,7 +18,6 @@ import { DashboardCustomize } from "./DashboardCustomize";
 import { HomeTasks } from "./HomeTasks";
 import { HomeUpdates } from "./HomeUpdates";
 import { MorningBriefPrompt } from "./MorningBriefPrompt";
-import { SpecialtyHomeCard } from "./SpecialtyHomeCard";
 import { ensureTeamSpecialty } from "@/lib/specialtyAuto";
 import { getGoogleConnection } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
@@ -203,7 +202,6 @@ export default async function DashboardPage({
           initialColorTheme={colorTheme && isColorThemeKey(colorTheme) ? colorTheme : null}
         />
       )}
-      {teamId && <SpecialtyHomeCard />}
       {teamId && (!briefOn || briefNeverSetUp) && <MorningBriefPrompt neverSetUp={briefNeverSetUp} />}
       {needsDraftsPermission && (
         <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-6 py-5">
