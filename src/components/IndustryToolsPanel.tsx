@@ -2,10 +2,25 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { toolReportMarkdown, type SavedToolReport, type ToolPhase, type ToolReport } from "@/lib/industryTools";
+import { useAskAnchor } from "@/components/AskAnchorDock";
+import {
+  TOOL_KIND_LABEL,
+  toolReportMarkdown,
+  type SavedToolReport,
+  type ToolKind,
+  type ToolPhase,
+  type ToolReport,
+} from "@/lib/industryTools";
 
-type ToolInfo = { id: string; name: string; outcome: string; phase: ToolPhase; all: boolean };
-type ToolsResponse = { industry: string | null; tools: ToolInfo[]; reports: Record<string, SavedToolReport> };
+type ToolInfo = { id: string; name: string; outcome: string; phase: ToolPhase; kind: ToolKind; clientFacing: boolean; all: boolean };
+type ToolsResponse = {
+  industry: string | null;
+  tools: ToolInfo[];
+  reports: Record<string, SavedToolReport>;
+  hasContactEmail: boolean;
+};
+
+const KIND_ORDER: ToolKind[] = ["prep", "intel", "negotiate", "document", "track", "compliance"];
 
 // One fetch per deal page, shared by the Before and After tab panels.
 const loads = new Map<string, Promise<ToolsResponse>>();
@@ -118,14 +133,19 @@ function ReportView({ report }: { report: ToolReport }) {
 }
 
 // The industry tools on a deal's Before or After tab: expert reports for
-// the team's industry (see src/lib/industryTools.ts), written from every
-// call on the deal and saved on it.
+// the team's industry (see src/lib/industryTools.ts), grouped by what
+// they're for, written from every call on the deal and saved on it. Once
+// written, a report updates itself after each new call (autopilot in
+// industryToolRun.ts), can go to the client as a Gmail draft, or become a
+// deck or spreadsheet through Ask Anchor.
 export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: ToolPhase }) {
   const [data, setData] = useState<ToolsResponse | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [draft, setDraft] = useState<{ state: "saving" | "saved" | "error"; message?: string; url?: string | null } | null>(null);
+  const { ask } = useAskAnchor();
 
   useEffect(() => {
     loadTools(dealId)
@@ -141,11 +161,13 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
   if (!tools.length) return null;
   const open = openId ? tools.find((t) => t.id === openId) ?? null : null;
   const saved = open ? data.reports[open.id] : null;
+  const groups = KIND_ORDER.map((kind) => ({ kind, tools: tools.filter((t) => t.kind === kind) })).filter((g) => g.tools.length);
 
   async function run(toolId: string) {
     setRunning(toolId);
     setOpenId(toolId);
     setError(null);
+    setDraft(null);
     try {
       const res = await fetch(`/api/deals/${dealId}/industry-tools/${toolId}`, { method: "POST" });
       const body = await res.json().catch(() => ({}));
@@ -160,6 +182,23 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
     }
   }
 
+  async function saveDraft(toolId: string) {
+    setDraft({ state: "saving" });
+    const res = await fetch(`/api/deals/${dealId}/industry-tools/${toolId}/draft`, { method: "POST" }).catch(() => null);
+    const body = res ? await res.json().catch(() => ({})) : {};
+    if (res?.ok) {
+      setDraft({
+        state: "saved",
+        url: body.openUrl ?? null,
+        message: body.to?.length ? `Saved in Gmail drafts, to ${body.to.join(", ")}.` : "Saved in Gmail drafts. Add who it goes to there.",
+      });
+    } else {
+      setDraft({ state: "error", message: body.error || "Couldn't save the draft.", url: body.connectUrl ?? null });
+    }
+  }
+
+  const btn = "rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand hover:text-brand";
+
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -171,34 +210,44 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
         )}
       </div>
       <p className="mt-0.5 text-xs text-slate-500">
-        Written by Anchor from every call, file and email on this deal. What&apos;s missing becomes your checklist on the next call.
+        Written by Anchor from every call, file and email on this deal. Once written, each one updates itself after every new call, and
+        what&apos;s missing becomes your checklist on the next one.
       </p>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {tools.map((t) => {
-          const has = Boolean(data.reports[t.id]);
-          const active = openId === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => (has ? setOpenId(active ? null : t.id) : run(t.id))}
-              disabled={running !== null && running !== t.id}
-              className={`rounded-lg border px-4 py-3 text-left transition disabled:opacity-50 ${
-                active ? "border-accent bg-accent/5" : "border-slate-200 hover:border-slate-300"
-              }`}
-            >
-              <span className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-slate-900">{t.name}</span>
-                <span className="shrink-0 text-[11px] font-medium text-slate-400">
-                  {running === t.id ? "Writing…" : has ? (active ? "Hide" : "View") : "Create"}
-                </span>
-              </span>
-              <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{t.outcome}</span>
-            </button>
-          );
-        })}
-      </div>
+      {groups.map((g) => (
+        <div key={g.kind} className="mt-4">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{TOOL_KIND_LABEL[g.kind]}</h3>
+          <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+            {g.tools.map((t) => {
+              const has = Boolean(data.reports[t.id]);
+              const active = openId === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    setDraft(null);
+                    if (has) setOpenId(active ? null : t.id);
+                    else void run(t.id);
+                  }}
+                  disabled={running !== null && running !== t.id}
+                  className={`rounded-lg border px-4 py-3 text-left transition disabled:opacity-50 ${
+                    active ? "border-accent bg-accent/5" : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-slate-900">{t.name}</span>
+                    <span className="shrink-0 text-[11px] font-medium text-slate-400">
+                      {running === t.id ? "Writing…" : has ? (active ? "Hide" : "View") : "Create"}
+                    </span>
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{t.outcome}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
@@ -213,9 +262,21 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
               <h3 className="text-[15px] font-semibold text-slate-900">{saved.report.title}</h3>
               <p className="text-xs text-slate-500">
                 Written {new Date(saved.generatedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                {" · "}updates itself after each call
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {open.clientFacing && (
+                <button type="button" onClick={() => saveDraft(open.id)} disabled={draft?.state === "saving"} className={btn}>
+                  {draft?.state === "saving" ? "Saving…" : "Save as Gmail draft"}
+                </button>
+              )}
+              <button type="button" onClick={() => ask(`Turn the "${saved.report.title}" report on this deal into a PowerPoint deck.`)} className={btn}>
+                Make a deck
+              </button>
+              <button type="button" onClick={() => ask(`Turn the "${saved.report.title}" report on this deal into an Excel spreadsheet, one sheet per table.`)} className={btn}>
+                Make a spreadsheet
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -227,15 +288,11 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
                     })
                     .catch(() => {});
                 }}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand hover:text-brand"
+                className={btn}
               >
                 {copied ? "Copied" : "Copy"}
               </button>
-              <button
-                type="button"
-                onClick={() => download(`${slug(saved.report.title)}.md`, toolReportMarkdown(saved.report), "text/markdown")}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand hover:text-brand"
-              >
+              <button type="button" onClick={() => download(`${slug(saved.report.title)}.md`, toolReportMarkdown(saved.report), "text/markdown")} className={btn}>
                 Download
               </button>
               <button
@@ -248,6 +305,16 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
               </button>
             </div>
           </div>
+          {draft && draft.state !== "saving" && (
+            <p className={`mb-4 text-sm ${draft.state === "saved" ? "text-emerald-700" : "text-red-600"}`}>
+              {draft.message}{" "}
+              {draft.url && (
+                <a href={draft.url} target={draft.state === "saved" ? "_blank" : undefined} rel="noreferrer" className="font-semibold underline">
+                  {draft.state === "saved" ? "Open Gmail drafts" : "Allow it"}
+                </a>
+              )}
+            </p>
+          )}
           <ReportView report={saved.report} />
         </div>
       )}

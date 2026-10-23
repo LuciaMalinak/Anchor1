@@ -23,7 +23,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const industry = team?.industry && isIndustryKey(team.industry) ? team.industry : null;
   return NextResponse.json({
     industry,
-    tools: toolsForIndustry(industry).map((t) => ({ id: t.id, name: t.name, outcome: t.outcome, phase: t.phase, all: t.industries === "all" })),
+    tools: toolsForIndustry(industry).map((t) => ({
+      id: t.id,
+      name: t.name,
+      outcome: t.outcome,
+      phase: t.phase,
+      kind: t.kind,
+      clientFacing: Boolean(t.clientFacing),
+      all: t.industries === "all",
+    })),
+    hasContactEmail: Boolean(authorized.deal.primaryContactEmail),
     reports: authorized.deal.toolReports ?? {},
   });
 }
