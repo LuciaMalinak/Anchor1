@@ -66,7 +66,13 @@ Then write plain-text notes (no markdown) covering:
     .map((b) => b.text)
     .join("")
     .trim();
-  if (!notes) throw new Error("Couldn't research the company.");
+  if (!notes) {
+    throw new Error(
+      message.stop_reason === "pause_turn"
+        ? "Researching the website took too long. Try again, or add a description of what you do."
+        : "Couldn't find anything about the company. Check the website, or add a description of what you do."
+    );
+  }
   return notes;
 }
 
@@ -123,15 +129,14 @@ const SPECIALTY_TOOL: Anthropic.Tool = {
             kind: { type: "string", enum: KINDS },
             phase: { type: "string", enum: PHASES, description: "before = used to prepare for a call; after = written from calls." },
             outcome: { type: "string", description: "What you get, in one line, in their language." },
-            instructions: {
+            outline: {
               type: "string",
-              description:
-                "What the report must contain, as numbered sections with the exact table columns where a table fits, written as a top expert would brief an analyst. Must say to use only facts from the deal's calls, files and emails, and to write 'need: ...' for anything unknown.",
+              description: "The report's sections in one line, e.g. 'Positions by budget line; GM's likely pushbacks; owner's answers; what must come back to the owner'.",
             },
             clientFacing: { type: "boolean", description: "True if it's written to send to the client or counterparty." },
             needsTranscript: { type: "boolean", description: "True if it depends on exact wording from the latest call." },
           },
-          required: ["name", "kind", "phase", "outcome", "instructions"],
+          required: ["name", "kind", "phase", "outcome", "outline"],
         },
       },
     },
@@ -150,6 +155,34 @@ const SPECIALTY_TOOL: Anthropic.Tool = {
       "vocabulary",
       "tools",
     ],
+  },
+};
+
+// Second step: the full brief for each tool, written separately so one
+// answer never has to hold the whole playbook and every tool's brief.
+const INSTRUCTIONS_TOOL: Anthropic.Tool = {
+  name: "record_tool_instructions",
+  description: "Record what each tool's report must contain.",
+  input_schema: {
+    type: "object",
+    properties: {
+      tools: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "The tool's name, exactly as given." },
+            instructions: {
+              type: "string",
+              description:
+                "What the report must contain: numbered sections, with the exact table columns where a table fits, written as a top expert would brief an analyst. Say to use only facts from the deal's calls, files and emails, and to write 'need: ...' for anything unknown. 80-200 words.",
+            },
+          },
+          required: ["name", "instructions"],
+        },
+      },
+    },
+    required: ["tools"],
   },
 };
 
@@ -226,8 +259,10 @@ Never design anything that profiles or researches private individuals, or that w
   if (!toolUse || toolUse.type !== "tool_use") throw new Error("Couldn't design the specialty.");
   const r = toolUse.input as Record<string, unknown>;
 
+  if (message.stop_reason === "max_tokens") console.warn("[specialty] design reply hit max_tokens — using what came back");
+
   const used = new Set<string>();
-  const tools: SpecialtyTool[] = (Array.isArray(r.tools) ? r.tools : [])
+  const designed = (Array.isArray(r.tools) ? r.tools : [])
     .filter((t): t is Record<string, unknown> => Boolean(t) && typeof t === "object")
     .map((t) => {
       const name = str(t.name, 80);
@@ -240,13 +275,53 @@ Never design anything that profiles or researches private individuals, or that w
         kind: KINDS.includes(t.kind as ToolKind) ? (t.kind as ToolKind) : "intel",
         phase: PHASES.includes(t.phase as ToolPhase) ? (t.phase as ToolPhase) : "after",
         outcome: str(t.outcome, 300),
-        instructions: str(t.instructions, 4000),
+        outline: str(t.outline, 600),
         clientFacing: t.clientFacing === true,
         needsTranscript: t.needsTranscript === true,
       };
     })
-    .filter((t) => t.name && t.outcome && t.instructions)
+    .filter((t) => t.name && t.outcome)
     .slice(0, 14);
+  if (!designed.length) throw new Error("The AI didn't design any tools. Try again, or add more context about what you do.");
+
+  // Step two: each tool's full brief. If it falls short, a tool still gets
+  // working instructions built from its outline.
+  const briefs = new Map<string, string>();
+  try {
+    const second = await createWithForcedTool(client(), {
+      model: MODEL,
+      max_tokens: 16000,
+      system: `You are the most experienced practitioner in this niche: ${str(r.sectorName, 120) || "their business"} (${str(r.summary, 600)}). Write the brief for each of these Anchor tools. Each report is written from a deal's calls, files and emails. Stand-in tools ("standin") must let a colleague run that kind of meeting exactly as the lead would: positions, red lines, the lead's answers in their own words, numbers to know, what may be agreed and what must come back to the lead.`,
+      tools: [INSTRUCTIONS_TOOL],
+      tool_choice: { type: "tool", name: INSTRUCTIONS_TOOL.name },
+      messages: [
+        {
+          role: "user",
+          content: designed.map((t) => `- ${t.name} [${t.kind}, ${t.phase} the call]: ${t.outcome}${t.outline ? ` Sections: ${t.outline}` : ""}`).join("\n"),
+        },
+      ],
+    });
+    const use = second.content.find((b) => b.type === "tool_use");
+    const list = use && use.type === "tool_use" ? ((use.input as { tools?: unknown }).tools as unknown[]) ?? [] : [];
+    for (const x of list) {
+      if (x && typeof x === "object") {
+        const o = x as Record<string, unknown>;
+        const text = str(o.instructions, 4000);
+        if (text) briefs.set(str(o.name, 80).toLowerCase(), text);
+      }
+    }
+  } catch (err) {
+    console.error("[specialty] writing tool briefs failed, using outlines:", err);
+  }
+
+  const tools: SpecialtyTool[] = designed.map(({ outline, ...t }) => ({
+    ...t,
+    instructions:
+      briefs.get(t.name.toLowerCase()) ??
+      `Write the "${t.name}" for this deal: ${t.outcome}
+Sections: ${outline || "the findings, a table of the key items with their sources, and the next steps"}.
+Use only facts from the deal's calls, files and emails; write "need: …" for anything not known.`,
+  }));
 
   const playbook: IndustryPlaybook = {
     focus: str(r.focus, 300),
@@ -259,7 +334,7 @@ Never design anything that profiles or researches private individuals, or that w
     captureFields: pairs(r.captureFields, "label", "hint", 10) as { label: string; hint: string }[],
     vocabulary: strs(r.vocabulary, 30, 60),
   };
-  if (!playbook.focus || !playbook.persona || !tools.length) throw new Error("Couldn't design the specialty. Try again.");
+  if (!playbook.focus || !playbook.persona) throw new Error("The AI's answer was incomplete. Try again.");
 
   const specialty: TeamSpecialty = {
     website,

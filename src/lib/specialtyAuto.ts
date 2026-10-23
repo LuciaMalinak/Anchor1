@@ -40,6 +40,7 @@ export async function startSpecialtyBuild(
     .set({
       specialtyStatus: "building",
       specialtyRequestedAt: new Date(),
+      specialtyError: null,
       ...(input.website ? { companyWebsite: input.website } : {}),
     })
     .where(
@@ -59,7 +60,9 @@ export async function startSpecialtyBuild(
     .then(() => db.update(teams).set({ specialtyStatus: "ready" }).where(eq(teams.id, teamId)))
     .catch(async (err) => {
       console.error(`[specialty] building ${teamId} failed:`, err);
-      await db.update(teams).set({ specialtyStatus: "failed" }).where(eq(teams.id, teamId));
+      // Shown to the team's leaders, so a failed build says why.
+      const reason = err instanceof Error && err.message ? err.message : "Unknown error";
+      await db.update(teams).set({ specialtyStatus: "failed", specialtyError: reason.slice(0, 300) }).where(eq(teams.id, teamId));
     });
   return true;
 }
