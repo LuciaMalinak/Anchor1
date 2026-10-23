@@ -117,10 +117,12 @@ export function ProfileClient({ profile }: { profile: Profile }) {
         </p>
       </div>
 
-      {/* First on the page so it's easy to find; Home links here
-          (#morning-brief) until it's turned on. */}
+      {/* Your Anchor: only the team's leaders see it (it hides itself for
+          everyone else; see teamRoles.ts). */}
       <CompanyContextBox />
 
+      {/* First on the page so it's easy to find; Home links here
+          (#morning-brief) until it's turned on. */}
       <MorningBriefSettings />
 
       {/* The playbook isn't in the main menu — it's here for anyone who

@@ -2,23 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { teams } from "@/db/schema";
+import { teams, users } from "@/db/schema";
+import { isTeamLeader } from "@/lib/teamRoles";
 import { getOrCreateTeamId } from "@/lib/team";
 import { clearTeamSpecialty } from "@/lib/specialtyBuilder";
 import { startSpecialtyBuild } from "@/lib/specialtyAuto";
 
-// The team's own specialty (teamSpecialty.ts): anyone on the team can see
-// it and whether one is being built; only the team owner can build,
-// rebuild or remove it. Builds run in the background (specialtyAuto.ts):
+// The team's own specialty (teamSpecialty.ts), for the team's leaders
+// (the owner, and CEOs, managing partners and the like; teamRoles.ts):
+// see it, build, rebuild or remove it. Its tools still show on deals for
+// everyone. Builds run in the background (specialtyAuto.ts):
 // POST starts one, GET reports "building" until it's ready.
 
 async function ownerTeam() {
   const session = await auth();
   if (!session?.user?.id) return { error: NextResponse.json({ error: "Not signed in" }, { status: 401 }) };
   const teamId = await getOrCreateTeamId(session.user.id);
-  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
-  if (!team) return { error: NextResponse.json({ error: "Team not found" }, { status: 404 }) };
-  return { userId: session.user.id, team, isOwner: team.ownerUserId === session.user.id };
+  const [[team], [user]] = await Promise.all([
+    db.select().from(teams).where(eq(teams.id, teamId)),
+    db.select({ id: users.id, title: users.title, email: users.email }).from(users).where(eq(users.id, session.user.id)),
+  ]);
+  if (!team || !user) return { error: NextResponse.json({ error: "Team not found" }, { status: 404 }) };
+  // Your Anchor is for the team's leaders: the owner, and CEOs, managing
+  // partners and the like (teamRoles.ts).
+  if (!isTeamLeader(user, team)) return { error: NextResponse.json({ error: "Only your team's leaders can see this" }, { status: 403 }) };
+  return { userId: session.user.id, team, isOwner: true };
 }
 
 export async function GET() {

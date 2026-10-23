@@ -11,10 +11,12 @@ type Status = {
   isOwner: boolean;
 };
 
-// The Profile page's small company box: what Anchor knows the company as,
-// and a place to give it more context (clients, deal types, how you work),
+// "Your Anchor" on the Profile page, for the team's leaders only (the API
+// answers 403 for everyone else, and this then shows nothing): what
+// Anchor knows the company as, a link to the full Your Anchor page, and a
+// place to give it more context (clients, deal types, how you work),
 // which rebuilds the team's Anchor with it in the background
-// (specialtyAuto.ts). The team owner edits it; everyone else sees it.
+// (specialtyAuto.ts).
 export function CompanyContextBox() {
   const [s, setS] = useState<Status | null>(null);
   const [context, setContext] = useState("");
@@ -69,10 +71,10 @@ export function CompanyContextBox() {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold text-brand">Your company in Anchor</h2>
+        <h2 className="text-base font-semibold text-brand">Your Anchor</h2>
         {s.specialty && (
           <Link href="/dashboard/specialty" className="text-xs font-medium text-brand hover:underline">
-            See your Anchor →
+            Open your Anchor →
           </Link>
         )}
       </div>

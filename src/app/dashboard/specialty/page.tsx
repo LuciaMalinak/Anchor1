@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { teams } from "@/db/schema";
+import { teams, users } from "@/db/schema";
+import { isTeamLeader } from "@/lib/teamRoles";
 import { getOrCreateTeamId } from "@/lib/team";
 import { TOOL_KIND_LABEL, TOOL_KIND_ORDER } from "@/lib/industryTools";
-import { SpecialtyHomeCard } from "../SpecialtyHomeCard";
 import { CompanyContextBox } from "@/components/CompanyContextBox";
 
 export const metadata = { title: "Your Anchor" };
@@ -21,9 +21,13 @@ export default async function SpecialtyPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/sign-in");
   const teamId = await getOrCreateTeamId(session.user.id);
-  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  const [[team], [me]] = await Promise.all([
+    db.select().from(teams).where(eq(teams.id, teamId)),
+    db.select({ id: users.id, title: users.title, email: users.email }).from(users).where(eq(users.id, session.user.id)),
+  ]);
+  // For the team's leaders only (teamRoles.ts).
+  if (!me || !isTeamLeader(me, team)) redirect("/dashboard/profile");
   const sp = team?.specialty;
-  const isOwner = team?.ownerUserId === session.user.id;
 
   if (!sp) {
     return (
@@ -32,7 +36,6 @@ export default async function SpecialtyPage() {
           <h1 className="text-xl font-semibold text-brand">Your Anchor</h1>
           <p className="text-sm text-slate-500">An Anchor built for exactly what your company does.</p>
         </div>
-        <SpecialtyHomeCard />
         <CompanyContextBox />
       </div>
     );
@@ -189,14 +192,10 @@ export default async function SpecialtyPage() {
 
       <p className="text-xs text-slate-400">
         Built {new Date(sp.generatedAt).toLocaleDateString()} from {sp.website ? sp.website.replace(/^https?:\/\//, "") : "your description"}.
-        {isOwner && (
-          <>
-            {" "}
-            <Link href="/dashboard/profile" className="font-medium text-brand hover:underline">
-              Give Anchor more context
-            </Link>
-          </>
-        )}
+        {" "}
+        <Link href="/dashboard/profile" className="font-medium text-brand hover:underline">
+          Give Anchor more context
+        </Link>
         {" "}Anchor flags rule-related moments to help you; it isn&apos;t legal or compliance advice.
       </p>
     </div>
