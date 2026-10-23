@@ -445,84 +445,13 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
     // Deal-level memory — the same rolling-summary idea as contact
     // memory above, but for the deal as a whole. Best-effort: a failure
     // here shouldn't flip an otherwise-successful meeting to "failed".
-    if (meeting.dealId && aiSummary) {
-      try {
-        if (deal) {
-          // How many meetings on this deal have a summary so far
-          // (including the one just inserted above) — decides whether
-          // this update re-derives from real history instead of just
-          // the current memory string. See RESYNTHESIS_INTERVAL.
-          const dealMeetingCount = await db
-            .select({ id: summaries.id })
-            .from(summaries)
-            .innerJoin(meetings, eq(summaries.meetingId, meetings.id))
-            .where(eq(meetings.dealId, deal.id));
-          const shouldResynthesize = dealMeetingCount.length % RESYNTHESIS_INTERVAL === 0;
-
-          let recentMeetings:
-            | { overview: string; keyPoints: string[]; actionItems: { text: string; owner: string | null }[]; occurredAt: Date }[]
-            | undefined;
-          if (shouldResynthesize) {
-            recentMeetings = await db
-              .select({
-                overview: summaries.overview,
-                keyPoints: summaries.keyPoints,
-                actionItems: summaries.actionItems,
-                occurredAt: meetings.occurredAt,
-              })
-              .from(summaries)
-              .innerJoin(meetings, eq(summaries.meetingId, meetings.id))
-              .where(and(eq(meetings.dealId, deal.id), ne(meetings.id, meetingId)))
-              .orderBy(desc(meetings.occurredAt))
-              .limit(RESYNTHESIS_HISTORY_LIMIT);
-          }
-
-          // Files/voice notes attached from the Before tab's "Give Anchor
-          // more context" box (see DealContextBox.tsx) — a bounded digest,
-          // not the full text (see dealFilesContext.ts for why).
-          const dealFileRows = await db
-            .select()
-            .from(dealFiles)
-            .where(eq(dealFiles.dealId, deal.id));
-
-          const { updatedMemory, keyChanges } = await withRetry(
-            () =>
-              mergeDealMemory({
-                dealName: deal.name,
-                priorMemory: deal.memory,
-                newSummary: {
-                  overview: result.overview,
-                  // The industry deal sheet too, so the deal's memory keeps
-                  // its price, terms and dates as the deal moves.
-                  keyPoints: [...result.keyPoints, ...result.industryFacts.map((f) => `${f.label}: ${f.value}`)],
-                  actionItems: result.actionItems,
-                },
-                manualNotes: deal.notes,
-                resynthesize: shouldResynthesize,
-                recentMeetings,
-                attachedFiles: summarizeDealFiles(dealFileRows),
-                emailContext: deal.emailContext,
-              }),
-            { label: `deal memory ${deal.id}` }
-          );
-
-          await db
-            .update(deals)
-            .set({ memory: updatedMemory, updatedAt: new Date() })
-            .where(eq(deals.id, deal.id));
-
-          await db.insert(memorySnapshots).values({
-            subjectType: "deal",
-            subjectId: deal.id,
-            meetingId,
-            memory: updatedMemory,
-            keyChanges,
-            method: shouldResynthesize ? "resynthesis" : "incremental",
-          });
-        }
-      } catch (err) {
-        console.error(`[processMeeting] deal memory update failed for ${meetingId}:`, err);
-      }
+    if (meeting.dealId && aiSummary && deal) {
+      await mergeMeetingIntoDealMemory(meetingId, deal, {
+        overview: result.overview,
+        keyPoints: result.keyPoints,
+        industryFacts: result.industryFacts,
+        actionItems: result.actionItems,
+      }).catch((err) => console.error(`[processMeeting] deal memory update failed for ${meetingId}:`, err));
     }
 
     // Autopilot: the industry reports already in use on this deal are
@@ -568,4 +497,123 @@ async function liveTranscriptUtterances(meetingId: string): Promise<Utterance[]>
     const startMs = s.relativeSeconds != null ? s.relativeSeconds * 1000 : i * 5000;
     return { speakerLabel: s.speakerName || "Speaker", text: s.text, startMs, endMs: startMs + 4000 };
   });
+}
+
+// Folds one call's summary into its deal's rolling memory (and a
+// snapshot of it). Used when a call finishes on a deal, and when an
+// already-written-up call is attached to a deal later (attachMeetingToDeal
+// below), so a call moved onto a deal counts exactly like one recorded
+// there.
+async function mergeMeetingIntoDealMemory(
+  meetingId: string,
+  deal: typeof deals.$inferSelect,
+  summary: {
+    overview: string;
+    keyPoints: string[];
+    industryFacts: { label: string; value: string }[];
+    actionItems: { text: string; owner: string | null }[];
+  }
+) {
+  // How many meetings on this deal have a summary so far
+  // (including this one) — decides whether
+  // this update re-derives from real history instead of just
+  // the current memory string. See RESYNTHESIS_INTERVAL.
+  const dealMeetingCount = await db
+    .select({ id: summaries.id })
+    .from(summaries)
+    .innerJoin(meetings, eq(summaries.meetingId, meetings.id))
+    .where(eq(meetings.dealId, deal.id));
+  const shouldResynthesize = dealMeetingCount.length % RESYNTHESIS_INTERVAL === 0;
+
+  let recentMeetings:
+    | { overview: string; keyPoints: string[]; actionItems: { text: string; owner: string | null }[]; occurredAt: Date }[]
+    | undefined;
+  if (shouldResynthesize) {
+    recentMeetings = await db
+      .select({
+        overview: summaries.overview,
+        keyPoints: summaries.keyPoints,
+        actionItems: summaries.actionItems,
+        occurredAt: meetings.occurredAt,
+      })
+      .from(summaries)
+      .innerJoin(meetings, eq(summaries.meetingId, meetings.id))
+      .where(and(eq(meetings.dealId, deal.id), ne(meetings.id, meetingId)))
+      .orderBy(desc(meetings.occurredAt))
+      .limit(RESYNTHESIS_HISTORY_LIMIT);
+  }
+
+  // Files/voice notes attached from the Before tab's "Give Anchor
+  // more context" box (see DealContextBox.tsx) — a bounded digest,
+  // not the full text (see dealFilesContext.ts for why).
+  const dealFileRows = await db
+    .select()
+    .from(dealFiles)
+    .where(eq(dealFiles.dealId, deal.id));
+
+  const { updatedMemory, keyChanges } = await withRetry(
+    () =>
+      mergeDealMemory({
+        dealName: deal.name,
+        priorMemory: deal.memory,
+        newSummary: {
+          overview: summary.overview,
+          // The industry deal sheet too, so the deal's memory keeps
+          // its price, terms and dates as the deal moves.
+          keyPoints: [...summary.keyPoints, ...summary.industryFacts.map((f) => `${f.label}: ${f.value}`)],
+          actionItems: summary.actionItems,
+        },
+        manualNotes: deal.notes,
+        resynthesize: shouldResynthesize,
+        recentMeetings,
+        attachedFiles: summarizeDealFiles(dealFileRows),
+        emailContext: deal.emailContext,
+      }),
+    { label: `deal memory ${deal.id}` }
+  );
+
+  await db
+    .update(deals)
+    .set({ memory: updatedMemory, updatedAt: new Date() })
+    .where(eq(deals.id, deal.id));
+
+  await db.insert(memorySnapshots).values({
+    subjectType: "deal",
+    subjectId: deal.id,
+    meetingId,
+    memory: updatedMemory,
+    keyChanges,
+    method: shouldResynthesize ? "resynthesis" : "incremental",
+  });
+}
+
+// A call that was already written up, attached to a deal afterwards (from
+// the meeting page, or "Create deal" from it): its action items move onto
+// the deal, its summary goes into the deal's memory, and the deal's
+// reports are rewritten with it, as if it had been recorded on the deal.
+// Runs in the background; a failure only means the deal catches up on the
+// next call.
+export async function attachMeetingToDeal(meetingId: string, dealId: string) {
+  try {
+    const [row] = await db
+      .select({ meeting: meetings, summary: summaries })
+      .from(meetings)
+      .innerJoin(summaries, eq(summaries.meetingId, meetings.id))
+      .where(and(eq(meetings.id, meetingId), eq(meetings.dealId, dealId)));
+    if (!row || row.meeting.status !== "ready") return;
+    const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!deal) return;
+    await db.update(tasks).set({ dealId }).where(eq(tasks.sourceMeetingId, meetingId));
+    await withAiUser({ userId: row.meeting.userId, meetingId }, () =>
+      mergeMeetingIntoDealMemory(meetingId, deal, {
+        overview: row.summary.overview,
+        keyPoints: row.summary.keyPoints,
+        industryFacts: row.summary.industryFacts ?? [],
+        actionItems: row.summary.actionItems,
+      })
+    );
+    await refreshDealReports(dealId, row.meeting.userId);
+  } catch (err) {
+    console.error(`[attachMeetingToDeal] ${meetingId} -> ${dealId} failed:`, err);
+  }
 }

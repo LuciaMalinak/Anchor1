@@ -6,6 +6,7 @@ import { meetings, transcripts, summaries, meetingParticipants, contacts, deals 
 import { and, eq } from "drizzle-orm";
 import { deleteMeetingAudio } from "@/lib/storage";
 import { canAccessDeal, authorizeDeal } from "@/lib/dealAccess";
+import { attachMeetingToDeal } from "@/lib/processMeeting";
 
 export async function GET(
   _req: NextRequest,
@@ -114,6 +115,9 @@ export async function PATCH(
   }
 
   await db.update(meetings).set({ dealId }).where(eq(meetings.id, id));
+  // A call already written up counts on its new deal like one recorded
+  // there: memory, action items and reports catch up in the background.
+  if (dealId && dealId !== meeting.dealId) after(() => attachMeetingToDeal(id, dealId));
   return NextResponse.json({ ok: true });
 }
 

@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, deals, dealMembers, users } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { getOrCreateTeamId } from "@/lib/team";
 import { authenticateBearer } from "@/lib/apiToken";
+import { attachMeetingToDeal } from "@/lib/processMeeting";
 
 // "This call didn't match any deal — create one for it" — the desktop
 // overlay's answer for a meeting that finished with no dealId (see
@@ -64,6 +65,9 @@ export async function POST(
     .set({ dealId: deal.id })
     .where(and(eq(meetings.id, id), isNull(meetings.dealId)))
     .returning({ id: meetings.id });
+  // Usually made during the call (processMeeting handles it then); for a
+  // call already written up, the new deal catches up in the background.
+  if (updated.length) after(() => attachMeetingToDeal(id, deal.id));
 
   return NextResponse.json({
     deal: { id: deal.id, name: deal.name },
