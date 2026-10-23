@@ -467,8 +467,9 @@ export type RunResult =
   | { status: "failed"; error: string };
 
 // Builds and sends one person's brief now, and records what it showed.
-// `sendWhenEmpty`: "Send me one now" sends even an all-clear; the morning
-// job stays quiet when there's nothing to say.
+// `sendWhenEmpty`: send even an all-clear. Both the morning job and "Send
+// me one now" do: the morning job used to stay quiet when there was
+// nothing to say, which looked exactly like the brief being broken.
 export async function runMorningBrief(userId: string, opts: { sendWhenEmpty?: boolean } = {}): Promise<RunResult> {
   return withAiUser({ userId }, async () => {
     try {
@@ -779,12 +780,23 @@ async function runDueMorningBriefsNow(now: Date, draftReplies: boolean) {
       )
       .returning({ userId: morningBriefs.userId });
     if (!claimed.length) continue;
-    const result = await runMorningBrief(r.userId);
-    if (result.status === "sent" && result.delivery.sent) summary.sent++;
-    else if (result.status === "empty") summary.empty++;
+    const result = await runMorningBrief(r.userId, { sendWhenEmpty: true });
+    const at = new Date().toISOString();
+    if (result.status === "sent" && result.delivery.sent) {
+      summary.sent++;
+      await db
+        .update(morningBriefs)
+        .set({ lastResult: { at, status: "sent", channel: result.delivery.channel, note: result.delivery.note } })
+        .where(eq(morningBriefs.userId, r.userId));
+    } else if (result.status === "empty") summary.empty++;
     else {
       summary.failed++;
-      await db.update(morningBriefs).set({ lastSentOn: r.lastSentOn }).where(eq(morningBriefs.userId, r.userId));
+      // Not marked sent, so the next check (every few minutes) tries again.
+      const error = result.status === "failed" ? result.error : result.status === "sent" ? result.delivery.note : undefined;
+      await db
+        .update(morningBriefs)
+        .set({ lastSentOn: r.lastSentOn, lastResult: { at, status: "failed", error: (error ?? "Unknown").slice(0, 300) } })
+        .where(eq(morningBriefs.userId, r.userId));
     }
   }
   if (!draftReplies) return summary;

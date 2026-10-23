@@ -17,6 +17,7 @@ import {
   users,
 } from "@/db/schema";
 import { inspectDesktopRecording } from "@/lib/recall";
+import { normalizePrefs } from "@/lib/morningBriefPrefs";
 
 // A health check of one person's Anchor, for support: is their account,
 // desktop app, Google connection, morning brief and recent meetings all
@@ -155,6 +156,14 @@ export async function GET(req: NextRequest) {
         ? {
             enabled: brief[0].enabled,
             lastSentOn: brief[0].lastSentOn,
+            // When and where it goes, and what happened last time.
+            sendsAt: (() => {
+              const p = normalizePrefs(brief[0].prefs);
+              return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ${p.timeZone}, ${p.days}, by ${p.channel}`;
+            })(),
+            timeZoneGuessed: brief[0].timeZoneGuessed,
+            lastResult: brief[0].lastResult ?? null,
+            lastBuilt: brief[0].updatedAt.toISOString().slice(0, 16),
             draftReplies: (brief[0].prefs as { draftReplies?: boolean })?.draftReplies ?? true,
             // Off is a valid choice, but it's the usual answer to "why
             // didn't my brief come?", so say it plainly.
