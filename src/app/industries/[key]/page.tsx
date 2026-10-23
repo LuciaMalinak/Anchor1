@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { INDUSTRIES, INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { INDUSTRY_PLAYBOOKS } from "@/lib/industryPlaybooks";
-import { TOOL_KIND_LABEL, toolsForIndustry } from "@/lib/industryTools";
+import { TOOL_KIND_LABEL, TOOL_KIND_ORDER, toolsForIndustry } from "@/lib/industryTools";
 
 export async function generateMetadata({ params }: { params: Promise<{ key: string }> }): Promise<Metadata> {
   const { key } = await params;
@@ -26,7 +26,14 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
   const p = INDUSTRY_PLAYBOOKS[key];
   const accent = { color: industry.accent };
   // This industry's own tools first, then the ones every industry gets.
-  const tools = toolsForIndustry(key).sort((a, b) => Number(a.industries === "all") - Number(b.industries === "all"));
+  // Anchor's core first (stepping in for the lead), then this industry's
+  // own tools, then the ones every industry gets.
+  const tools = toolsForIndustry(key).sort(
+    (a, b) =>
+      Number(b.kind === "standin") - Number(a.kind === "standin") ||
+      Number(a.industries === "all") - Number(b.industries === "all") ||
+      TOOL_KIND_ORDER.indexOf(a.kind) - TOOL_KIND_ORDER.indexOf(b.kind)
+  );
 
   return (
     <main className="flex min-h-screen flex-col bg-white">
@@ -118,9 +125,10 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
       </section>
 
       <section className="mx-auto w-full max-w-5xl px-6 py-16 sm:px-8">
-        <h2 className="text-2xl font-semibold tracking-tight text-brand">The reports you make by hand, made for you</h2>
+        <h2 className="text-2xl font-semibold tracking-tight text-brand">Anyone on your team can step in for the lead</h2>
         <p className="mt-2 max-w-2xl text-sm text-slate-500">
-          One click on any deal and Anchor writes them from every call, file and email on it, then keeps
+          When your CEO or deal lead can&apos;t be in the room, anyone can run the meeting the way they would. One
+          click on any deal and Anchor writes these from every call, file and email on it, then keeps
           them up to date after every new call. Whatever
           they&apos;re still missing becomes your checklist on the next call, so they finish themselves.
         </p>

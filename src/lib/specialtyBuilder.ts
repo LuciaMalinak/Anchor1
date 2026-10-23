@@ -16,7 +16,7 @@ import type { SpecialtyTool, TeamSpecialty } from "./teamSpecialty";
 // at the company only, never at individual people.
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
-const KINDS: ToolKind[] = ["prep", "intel", "negotiate", "document", "compliance", "track"];
+const KINDS: ToolKind[] = ["standin", "prep", "intel", "negotiate", "document", "compliance", "track"];
 const PHASES: ToolPhase[] = ["before", "after"];
 
 function client() {
@@ -114,7 +114,8 @@ const SPECIALTY_TOOL: Anthropic.Tool = {
       vocabulary: { type: "array", items: { type: "string" }, description: "15-30 terms of their niche that speech-to-text mishears." },
       tools: {
         type: "array",
-        description: "8-12 expert tools made for exactly this business.",
+        description:
+          "10-14 expert tools made for exactly this business. The core, at least 5, are kind 'standin': tools that let any employee step in for the CEO or deal lead in this niche's specific meetings and run them as the lead would. Then at least 3 time-savers (kind 'document') and the rest expert tools for reading counterparties, negotiating and preparing.",
         items: {
           type: "object",
           properties: {
@@ -190,6 +191,11 @@ export async function buildTeamSpecialty(teamId: string, input: { website?: stri
 
 Design their specialty. Be specific to their niche, not their broad industry: the tools must use the documents, metrics, contracts and negotiations that only people in this niche deal with, and each should save a senior person hours or catch something that would cost them money.
 
+Anchor's core purpose: any employee can step in for the CEO or deal lead and run the meeting the way the lead would. That's what matters most; everything else is an add-on. So:
+- Most important, kind "standin" (at least 5): tools that let a colleague cover the lead in THIS niche's specific meetings (for example, for hotel asset management: covering the owner's seat in an operator budget review, a brand PIP negotiation, a lender call). Each gives the stand-in the lead's positions and red lines for that kind of meeting, the lead's answers in their own words, the numbers they must know cold, what they may agree to and what must come back to the lead, and how to read the people in the room. Note: everyone already gets general stand-in tools (Stand-in brief, How the lead decides, Answer like the lead, Live cover sheet, Relationship handover, Debrief for the lead), so make these specific to this niche's meeting types.
+- Then time-savers (kind "document"): the reports, updates, memos and trackers of their trade, written from what was said.
+- Then expert tools for reading counterparties, negotiating and preparing.
+
 Think past ordinary note-taking. Strong tools:
 - read between the lines across months of calls (shifts in a counterparty's position, unkept promises, early signs of trouble)
 - rehearse them against the toughest people they face
@@ -235,7 +241,7 @@ Never design anything that profiles or researches private individuals, or that w
       };
     })
     .filter((t) => t.name && t.outcome && t.instructions)
-    .slice(0, 12);
+    .slice(0, 14);
 
   const playbook: IndustryPlaybook = {
     focus: str(r.focus, 300),

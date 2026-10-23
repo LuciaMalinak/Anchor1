@@ -30,19 +30,33 @@ export function SpecialtyBuilder({
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Builds on the team endpoint run in the background; this checks back
+  // every few seconds while one is going.
+  const [status, setStatus] = useState<string | null>(null);
+  const polling = status === "building";
   useEffect(() => {
     if (initial !== undefined) return;
-    fetch(endpoint)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        if (!body) return;
-        setSpecialty(body.specialty ?? null);
-        setWebsite(body.specialty?.website ?? "");
-        if (typeof body.isOwner === "boolean") setEditable(body.isOwner);
-      })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
-  }, [endpoint, initial]);
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = () =>
+      fetch(endpoint)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((body) => {
+          if (!body || stopped) return;
+          setSpecialty(body.specialty ?? null);
+          setStatus(body.status ?? null);
+          setWebsite((w) => w || body.specialty?.website || body.companyWebsite || "");
+          if (typeof body.isOwner === "boolean") setEditable(body.isOwner);
+          if (body.status === "building") timer = setTimeout(check, 5000);
+        })
+        .catch(() => {})
+        .finally(() => setLoaded(true));
+    void check();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [endpoint, initial, polling]);
 
   async function build() {
     setBuilding(true);
@@ -58,8 +72,11 @@ export function SpecialtyBuilder({
       setError(body.error || "Couldn't build it. Try again.");
       return;
     }
-    setSpecialty(body.specialty);
     setEditing(false);
+    // The team endpoint builds in the background: show progress until it's
+    // ready. The admin endpoint answers with the finished specialty.
+    if (body.specialty) setSpecialty(body.specialty);
+    else setStatus("building");
   }
 
   async function remove() {
@@ -69,6 +86,17 @@ export function SpecialtyBuilder({
   }
 
   if (!loaded) return null;
+  if (status === "building") {
+    return (
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-sm font-medium text-slate-900">Specialty{forTeamName ? ` · ${forTeamName}` : ""}</h2>
+        <p className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+          Anchor is researching {website ? website.replace(/^https?:\/\//, "") : "the company"} and building its playbook and tools. This takes about a minute.
+        </p>
+      </section>
+    );
+  }
   const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800";
   const showForm = editable && (!specialty || editing);
 

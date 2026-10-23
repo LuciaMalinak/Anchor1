@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAskAnchor } from "@/components/AskAnchorDock";
 import {
   TOOL_KIND_LABEL,
+  TOOL_KIND_ORDER,
   toolReportMarkdown,
   type SavedToolReport,
   type ToolKind,
@@ -30,7 +31,7 @@ type ToolsResponse = {
   hasContactEmail: boolean;
 };
 
-const KIND_ORDER: ToolKind[] = ["prep", "intel", "negotiate", "document", "track", "compliance"];
+const KIND_ORDER: ToolKind[] = TOOL_KIND_ORDER;
 // Shown before "Show all" when nothing is being searched.
 const VISIBLE_TOOLS = 8;
 type Filter = "all" | "custom" | ToolKind;
@@ -171,20 +172,22 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
       .catch(() => setError("Couldn't load the industry tools."));
   }, [dealId]);
 
-  // Before a call, start on the prep tools; after, on everything (or the
-  // tools made for this team, when it has its own).
-  const activeFilter: Filter = filter ?? (phase === "before" ? "prep" : data?.specialty ? "custom" : "all");
+  // Opens on Anchor's core: stepping in for the lead.
+  const activeFilter: Filter = filter ?? "standin";
 
   const visible = useMemo(() => {
     if (!data) return [];
     const q = query.trim().toLowerCase();
-    return data.tools.filter((t) => {
+    // Core tools first, the team's own before the general ones, and within
+    // those the ones for this tab (before or after the call) first.
+    const rank = (t: ToolInfo) => KIND_ORDER.indexOf(t.kind) + (t.custom ? -0.5 : 0) + (t.phase === phase ? -0.25 : 0);
+    return [...data.tools].sort((a, b) => rank(a) - rank(b)).filter((t) => {
       if (q) return `${t.name} ${t.outcome} ${TOOL_KIND_LABEL[t.kind]}`.toLowerCase().includes(q);
       if (activeFilter === "all") return true;
       if (activeFilter === "custom") return t.custom;
       return t.kind === activeFilter;
     });
-  }, [data, query, activeFilter]);
+  }, [data, query, activeFilter, phase]);
 
   if (!data) {
     return error ? <p className="text-sm text-red-600">{error}</p> : null;
@@ -196,11 +199,18 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
   const written = data.tools
     .filter((t) => data.reports[t.id])
     .sort((a, b) => data.reports[b.id].generatedAt.localeCompare(data.reports[a.id].generatedAt));
-  const filters: { key: Filter; label: string; count: number }[] = [
+  const kindFilter = (k: ToolKind): { key: Filter; label: string; count: number } => ({
+    key: k,
+    label: TOOL_KIND_LABEL[k],
+    count: data.tools.filter((t) => t.kind === k).length,
+  });
+  type FilterOption = { key: Filter; label: string; count: number };
+  const filters = ([
+    kindFilter("standin"),
     ...(data.specialty ? [{ key: "custom" as Filter, label: `Made for ${data.specialty.companyName}`, count: data.tools.filter((t) => t.custom).length }] : []),
     { key: "all", label: "All tools", count: data.tools.length },
-    ...KIND_ORDER.map((k) => ({ key: k as Filter, label: TOOL_KIND_LABEL[k], count: data.tools.filter((t) => t.kind === k).length })).filter((f) => f.count),
-  ];
+    ...KIND_ORDER.filter((k) => k !== "standin").map(kindFilter),
+  ] as FilterOption[]).filter((f) => f.count);
   const listed = query.trim() || showAll ? visible : visible.slice(0, VISIBLE_TOOLS);
 
   async function run(toolId: string) {
@@ -287,7 +297,7 @@ export function IndustryToolsPanel({ dealId, phase }: { dealId: string; phase: T
               className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
                 activeFilter === f.key
                   ? "border-brand bg-brand text-white"
-                  : f.key === "custom"
+                  : f.key === "custom" || f.key === "standin"
                     ? "border-accent/40 bg-accent/5 text-accent hover:border-accent"
                     : "border-slate-200 bg-white text-slate-600 hover:border-slate-400"
               }`}

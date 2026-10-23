@@ -16,9 +16,15 @@ import type { IndustryKey } from "./industries";
 export type ToolPhase = "before" | "after";
 
 // What a tool is for, to group them on the deal page.
-export type ToolKind = "prep" | "intel" | "negotiate" | "document" | "compliance" | "track";
+// "standin" is Anchor's core: tools that let anyone on the team step in
+// for the CEO or deal lead and run the meeting as they would. The rest
+// help around that.
+export type ToolKind = "standin" | "prep" | "intel" | "negotiate" | "document" | "compliance" | "track";
+
+export const TOOL_KIND_ORDER: ToolKind[] = ["standin", "prep", "intel", "negotiate", "document", "track", "compliance"];
 
 export const TOOL_KIND_LABEL: Record<ToolKind, string> = {
+  standin: "Step in for the lead",
   prep: "Prepare",
   intel: "Read the room",
   negotiate: "Negotiate",
@@ -682,6 +688,104 @@ Sections:
 3. "Questions to ask them": three that shift the conversation your way.
 Respect the industry rules and the deal's decision boundaries in every answer.`,
   },
+  // -------------------------------------------------------------------------
+  // Anchor's core: anyone on the team can step in for the lead
+  {
+    id: "stand_in",
+    industries: "all",
+    phase: "before",
+    kind: "standin",
+    name: "Stand-in brief",
+    outcome: "Everything someone needs to run the next meeting in the lead's place, in their voice: positions, red lines, answers in their words, and what must come back to them.",
+    instructions: `Write the brief for someone covering the next meeting on this deal in the deal lead's place (a colleague, or Anchor coaching them live). It must let them sound like the lead and decide like the lead.
+Sections:
+1. "Where it stands": three sentences.
+2. "Our positions" table: Topic | Our position | Red line (never cross) | Room to move (can agree to) | Must come back to the lead.
+   Use the deal's decision boundaries and the lead's own past calls.
+3. "How the lead would answer": the eight questions most likely to come up, each answered in the lead's own style and phrases (from how they operate and what they've said on calls).
+4. "The people in the room" table: Name | What they want | How to handle them.
+5. "Say this, not that": phrases the lead uses, and ones to avoid.
+6. "If it goes off-script": what to say to buy time without committing.`,
+  },
+  {
+    id: "lead_decisions",
+    industries: "all",
+    phase: "before",
+    kind: "standin",
+    name: "How the lead decides",
+    outcome: "The lead's decision rules on this deal, worked out from every call: what they'd approve on the spot, what they'd trade, what they'd refuse, and why. 'What would the CEO do?' answered.",
+    instructions: `Work out how the deal lead makes decisions on this deal, from their own words and choices on calls, the decision boundaries, and how they operate.
+Sections:
+1. "Their priorities": what they optimise for on this deal, ranked, with evidence.
+2. "Decision rules" table: Situation | What the lead would do | Evidence (quote or call & date) | Confidence (high / medium / low).
+   Cover price and discount asks, timing pressure, scope changes, new people joining, competitor mentions, and requests for exceptions.
+3. "Approve on the spot", "Trade for something", "Always refuse": three lists.
+4. "When unsure": the default the lead would want (defer, ask, or decide) and the words to use.
+Never invent a rule the record doesn't support; mark inferred ones as low confidence.`,
+  },
+  {
+    id: "answer_bank",
+    industries: "all",
+    phase: "before",
+    kind: "standin",
+    name: "Answer like the lead",
+    outcome: "The 20 questions this counterparty asks or will ask, each answered the way the lead answers them, in their phrases, with where the answer came from.",
+    instructions: `Build the answer bank a stand-in uses to sound exactly like the lead with this counterparty.
+"Answers" table: # | Question (in the counterparty's words) | The lead's answer (in their phrasing and tone) | Source (call & date, past team answer, file) | Can the stand-in say this without checking? (yes / check first).
+Cover questions already asked on calls, and the ones likely next.
+Then "Phrases the lead uses" and "Topics the lead always handles personally".
+Never write an answer that commits to something outside the decision boundaries.`,
+  },
+  {
+    id: "cover_sheet",
+    industries: "all",
+    phase: "before",
+    kind: "standin",
+    name: "Live cover sheet",
+    outcome: "One page to keep open during the call when covering for the lead: names, numbers, the five things to say, the red lines, and what to say when you don't know.",
+    instructions: `Write a one-page sheet for the person covering this call to glance at while it's happening. Short lines only.
+Sections:
+1. "Who's who": name, role, one line on each.
+2. "Numbers to know": prices, dates, volumes and terms already agreed or discussed.
+3. "Say these five things".
+4. "Red lines": never agree to these.
+5. "If you don't know": two or three exact phrases that defer without losing credibility.
+6. "End the call with": the ask and the next step.`,
+  },
+  {
+    id: "relationship_handover",
+    industries: "all",
+    phase: "before",
+    kind: "standin",
+    name: "Relationship handover",
+    outcome: "Hands over the lead's relationships, not just the deal: each person's history, what they expect from the lead, personal details they've shared, and promises still open.",
+    instructions: `Hand over the lead's relationships on this deal so the person stepping in doesn't feel like a stranger.
+For each person on the other side, a section with:
+- "Who they are" and their role in the decision.
+- "History with the lead": how the relationship has gone, from the calls.
+- "What they expect from the lead": tone, responsiveness, the level of detail they like.
+- "Personal touches": small things they've shared (family, travel, interests) worth remembering. Only what they shared on calls.
+- "Open promises": what the lead owes them.
+- "How to introduce yourself": one line that keeps their trust.`,
+  },
+  {
+    id: "lead_debrief",
+    industries: "all",
+    phase: "after",
+    kind: "standin",
+    name: "Debrief for the lead",
+    outcome: "After someone stood in: what happened, what was agreed, where they departed from the lead's positions, and the decisions only the lead can make, in two minutes of reading.",
+    needsTranscript: true,
+    instructions: `Brief the deal lead on a call someone else ran for them. They should be able to read it in two minutes and act.
+Sections:
+1. "Bottom line": three sentences.
+2. "Agreed": what was agreed or promised, and by whom.
+3. "Off the lead's script": anything said or agreed that departs from the lead's positions, decision boundaries or usual answers (quote it).
+4. "Decisions for the lead" table: Decision | Options | Recommendation | Deadline.
+5. "Read on the counterparty": anything that shifted in their mood or position.
+6. "Follow-ups" with owners.`,
+  },
+
   {
     id: "game_plan",
     industries: "all",
