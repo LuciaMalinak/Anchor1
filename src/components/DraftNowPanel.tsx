@@ -76,7 +76,7 @@ export function DraftNowPanel({
       {report && (
         <div className="mt-4 space-y-3 text-sm">
           <p className="text-slate-600">
-            Google account: <strong>{report.account ?? "not connected"}</strong>
+            Google account: <strong>{report.account ?? (report.connected ? "connected" : "not connected")}</strong>
             {report.account && (
               <>
                 {" · "}

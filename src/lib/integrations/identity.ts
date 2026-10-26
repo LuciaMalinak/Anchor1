@@ -21,6 +21,10 @@ export async function fetchIdentityLabel(
       return typeof body.email === "string" ? body.email : null;
     }
     if (key === "google") {
+      // The id_token (scope "openid email") already names the account;
+      // the userinfo call is only needed when it's missing.
+      const fromIdToken = emailFromIdToken(tokenResponseBody.id_token);
+      if (fromIdToken) return fromIdToken;
       const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -70,4 +74,17 @@ export async function fetchIdentityLabel(
     console.error(`Couldn't fetch ${key} identity label:`, err);
   }
   return null;
+}
+
+// The email claim of an OpenID id_token (a JWT straight from Google's
+// token endpoint over TLS, so reading it without verifying is fine here:
+// it's only a label).
+function emailFromIdToken(idToken: unknown): string | null {
+  if (typeof idToken !== "string") return null;
+  try {
+    const payload = JSON.parse(Buffer.from(idToken.split(".")[1] ?? "", "base64url").toString("utf8"));
+    return typeof payload.email === "string" ? payload.email : null;
+  } catch {
+    return null;
+  }
 }

@@ -3,7 +3,7 @@
 // latest message came from someone else, was addressed to them, and isn't
 // a newsletter, notification or other automated mail. Read-only, within
 // the gmail.readonly scope the Google connection already has.
-import { getGoogleConnection, googleGet } from "./google";
+import { ensureGoogleAccountEmail, getGoogleConnection, googleGet } from "./google";
 import { extractBody, stripQuotedReply, type GmailPart } from "./gmail";
 import { addresses, decodeEntities, header, looksAwaitingReply, parseAddress, replyAllFor, type GmailMessage, type ReplyAll } from "./gmailHeaders";
 
@@ -52,6 +52,7 @@ export async function fetchThreadsAwaitingReply(
 ): Promise<{ connected: boolean; account: string | null; threads: AwaitingThread[] }> {
   const connection = await getGoogleConnection(userId);
   if (!connection) return { connected: false, account: null, threads: [] };
+  await ensureGoogleAccountEmail(connection);
 
   const myEmails = new Set(
     [connection.externalAccountEmail, ...(opts.extraMyEmails ?? [])].filter((e): e is string => Boolean(e)).map((e) => e.toLowerCase())
