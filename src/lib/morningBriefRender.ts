@@ -44,6 +44,11 @@ export type BriefEmail = {
 export type BriefSnapshot = {
   date: string; // the person's local YYYY-MM-DD
   googleConnected: boolean;
+  // Why emails couldn't be read this time, when Google is connected but
+  // Gmail failed (so the brief says that, not "connect Google").
+  emailError?: string;
+  // The person turned emails off in their brief settings.
+  emailsOff?: boolean;
   emails: BriefEmail[];
   moreEmails: number;
   tasks: { text: string; deal: string | null }[];
@@ -248,7 +253,9 @@ export function renderBriefHtml(b: BriefSnapshot, link: string, personName: stri
   const rows = [
     b.emails.length
       ? section(`Waiting on your reply (${b.emails.length + b.moreEmails})`, emails + (b.moreEmails ? `<p style="margin:0;font-size:13px;color:#64748b;">+${b.moreEmails} more on your brief page</p>` : ""))
-      : "",
+      : b.emailError
+        ? section("Emails", `<p style="margin:0;font-size:14px;color:#b45309;">Couldn't read your Gmail this time (${escapeHtml(b.emailError)}). Anchor tries again with the next brief.</p>`)
+        : "",
     b.meetings.length ? section("Today", list(b.meetings.map((m) => `<strong>${escapeHtml(m.time)}</strong> ${escapeHtml(m.title)}`))) : "",
     b.tasks.length
       ? section(

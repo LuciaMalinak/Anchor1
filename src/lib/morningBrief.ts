@@ -7,7 +7,7 @@ import { fetchTodaysDealMeetings } from "@/lib/integrations/calendar";
 import { fetchMessageText, fetchMyReplyInThread, fetchMySentReplies, fetchThreadsAwaitingReply } from "@/lib/integrations/gmailInbox";
 import { createGmailDraft } from "@/lib/integrations/gmailDraft";
 import { replyDraft } from "@/lib/integrations/gmailMime";
-import { getGoogleConnection, googleGet } from "@/lib/integrations/google";
+import { ensureGoogleAccountEmail, getGoogleConnection, googleGet } from "@/lib/integrations/google";
 import { GOOGLE_EXTRA_SCOPES } from "@/lib/integrations/config";
 import { sendEmail } from "@/lib/email";
 import { sendSms, isSmsConfigured } from "@/lib/sms";
@@ -140,6 +140,11 @@ async function buildSnapshot(params: {
   const draftTargets: { email: BriefEmail; messageId: string; messageIdHeader: string | null; dealId: string | null }[] = [];
 
   // --- Emails waiting on a reply
+  // Connected means a Google connection exists, whether or not reading
+  // Gmail works this time: a failed read is reported as that, not as
+  // "connect Google".
+  snapshot.googleConnected = Boolean(await getGoogleConnection(userId));
+  if (!prefs.include.emails) snapshot.emailsOff = true;
   if (prefs.include.emails) {
     try {
       const inbox = await fetchThreadsAwaitingReply(userId, { lookbackDays: prefs.lookbackDays, extraMyEmails: [user.email] });
@@ -205,6 +210,7 @@ async function buildSnapshot(params: {
       }
     } catch (err) {
       console.error("[morningBrief] reading Gmail failed:", err);
+      snapshot.emailError = errorText(err).slice(0, 200);
       problems.push(`Couldn't read your Gmail: ${errorText(err)}. Try reconnecting Google on the Integrations page.`);
     }
   }
@@ -538,6 +544,7 @@ const MAX_AUTO_DRAFTS_PER_RUN = 8;
 
 // What a drafting run did, for "Draft my replies now" to show.
 export type DraftReport = {
+  connected: boolean;
   account: string | null;
   canDraft: boolean;
   // Why nothing could run at all, when that's the case.
@@ -553,14 +560,15 @@ export type DraftReport = {
 // email waiting on them, not only the ones the AI judged need a reply.
 export async function autoDraftReplies(userId: string, opts: { everything?: boolean } = {}): Promise<DraftReport> {
   return withAiUser({ userId }, async () => {
-    const report: DraftReport = { account: null, canDraft: false, blocked: null, waiting: 0, drafted: [], alreadyInDrafts: [], skipped: [], problems: [] };
+    const report: DraftReport = { connected: false, account: null, canDraft: false, blocked: null, waiting: 0, drafted: [], alreadyInDrafts: [], skipped: [], problems: [] };
     const [[user], row, connection] = await Promise.all([
       db.select().from(users).where(eq(users.id, userId)),
       getBriefRow(userId),
       getGoogleConnection(userId),
     ]);
     const prefs = normalizePrefs(row?.prefs);
-    report.account = connection?.externalAccountEmail ?? null;
+    report.connected = Boolean(connection);
+    report.account = connection ? await ensureGoogleAccountEmail(connection) : null;
     report.canDraft = Boolean(connection && (connection.scope ?? "").split(/\s+/).includes(GOOGLE_EXTRA_SCOPES.gmail_compose));
     // Doesn't need the brief itself to be on: drafts are their own thing,
     // on by default once Gmail allows them, off only if turned off.

@@ -140,3 +140,23 @@ export async function googlePost(
   }
   return res.json();
 }
+
+// The Google account's email address. Saved when Google is connected, but
+// that lookup can fail (and older connections never saved it), which
+// left a working connection looking like "not connected" in places. When
+// it's missing, read it from Gmail now and save it for next time.
+export async function ensureGoogleAccountEmail(connection: Connection): Promise<string | null> {
+  if (connection.externalAccountEmail) return connection.externalAccountEmail;
+  try {
+    const { json } = await googleGet(connection, connection.accessToken, "https://gmail.googleapis.com/gmail/v1/users/me/profile");
+    const email = typeof json.emailAddress === "string" ? json.emailAddress : null;
+    if (email) {
+      await db.update(integrationConnections).set({ externalAccountEmail: email }).where(eq(integrationConnections.id, connection.id));
+      connection.externalAccountEmail = email;
+    }
+    return email;
+  } catch (err) {
+    console.error("[google] couldn't read the account's email address:", err);
+    return null;
+  }
+}

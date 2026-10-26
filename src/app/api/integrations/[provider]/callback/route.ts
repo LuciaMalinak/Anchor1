@@ -148,7 +148,8 @@ export async function GET(
       .onConflictDoUpdate({
         target: [integrationConnections.userId, integrationConnections.provider],
         set: {
-          externalAccountEmail: identityLabel,
+          // A failed lookup this time mustn't wipe the one saved before.
+          ...(identityLabel ? { externalAccountEmail: identityLabel } : {}),
           accessToken,
           ...refreshTokenUpdate,
           ...userTokenUpdate,

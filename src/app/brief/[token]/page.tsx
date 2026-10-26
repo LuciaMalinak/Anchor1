@@ -139,7 +139,13 @@ export default async function BriefPage({
           )}
           {brief.emails.length === 0 ? (
             <p className="mt-2 text-sm text-slate-500">
-              {brief.googleConnected ? "Nothing waiting on you. Nice." : "Connect Google on Anchor's Integrations page to see emails here."}
+              {brief.emailsOff
+                ? "Emails are turned off in your brief settings."
+                : brief.emailError
+                  ? `Couldn't read your Gmail this time (${brief.emailError}). Anchor tries again with the next brief.`
+                  : brief.googleConnected
+                    ? "Nothing waiting on you. Nice."
+                    : "Connect Google on Anchor's Integrations page to see emails here."}
             </p>
           ) : (
             <ul className="mt-3 flex flex-col gap-3">
