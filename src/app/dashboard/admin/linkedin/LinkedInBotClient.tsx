@@ -58,6 +58,23 @@ const ERRORS: Record<string, string> = {
   no_page: "That LinkedIn account isn't an admin of any company Page.",
 };
 
+// LinkedIn sends its error text HTML-escaped (&quot;…&quot;). The usual
+// one at first: the app in LINKEDIN_PAGE_CLIENT_ID doesn't have the
+// Community Management API product (yet), so it can't ask to post as a Page.
+function explainError(raw: string): string {
+  if (ERRORS[raw]) return ERRORS[raw];
+  const text = raw
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+  if (/scope .*not authorized for your application/i.test(text)) {
+    return `LinkedIn says: ${text}. The app set in LINKEDIN_PAGE_CLIENT_ID doesn't have the "Community Management API" product approved yet. In linkedin.com/developers, open that app → Products and check Community Management API shows as approved (not pending), and that Render's keys are from this app, not the sign-in app. Then click Connect again.`;
+  }
+  return text;
+}
+
 function when(iso: string | null, tz: string): string {
   if (!iso) return "";
   return new Date(iso).toLocaleString("en-US", {
@@ -93,7 +110,7 @@ export function LinkedInBotClient({
   callbackUrl: string;
 }) {
   const [state, setState] = useState<State | null>(null);
-  const [error, setError] = useState<string | null>(initialError ? (ERRORS[initialError] ?? initialError) : null);
+  const [error, setError] = useState<string | null>(initialError ? explainError(initialError) : null);
   const [busy, setBusy] = useState<string | null>(null);
   const [tab, setTab] = useState<"queue" | "comments" | "settings">("queue");
 
