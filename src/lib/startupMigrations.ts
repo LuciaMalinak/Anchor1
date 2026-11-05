@@ -7,6 +7,44 @@ import { BASELINE_STATEMENTS } from "@/db/baseline";
 // EXISTS), so running it on every start is harmless. Keep this to
 // additions only: never drop or rename anything here.
 const MIGRATIONS = [
+  // Billing (src/lib/billing.ts). billingExempt is added without a
+  // default first, so every team that already exists when billing
+  // arrives is marked free (they were using Anchor before it was paid);
+  // the default for new teams is then false.
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingExempt" boolean`,
+  `UPDATE "team" SET "billingExempt" = true WHERE "billingExempt" IS NULL`,
+  `ALTER TABLE "team" ALTER COLUMN "billingExempt" SET DEFAULT false`,
+  `ALTER TABLE "team" ALTER COLUMN "billingExempt" SET NOT NULL`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingStatus" text`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingPlan" text`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingSeats" integer`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "stripeCustomerId" text`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "stripeSubscriptionId" text`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "trialEndsAt" timestamp`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "currentPeriodEnd" timestamp`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "promoCodeUsed" text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "team_stripeSubscriptionId_idx" ON "team" ("stripeSubscriptionId")`,
+  `CREATE TABLE IF NOT EXISTS "promo_code" (
+    "code" text PRIMARY KEY,
+    "trialDays" integer NOT NULL,
+    "maxUses" integer,
+    "uses" integer NOT NULL DEFAULT 0,
+    "active" boolean NOT NULL DEFAULT true,
+    "expiresAt" timestamp,
+    "note" text,
+    "createdAt" timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS "sales_lead" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "name" text NOT NULL,
+    "email" text NOT NULL,
+    "company" text,
+    "teamSize" text,
+    "message" text,
+    "userId" uuid REFERENCES "user"("id") ON DELETE SET NULL,
+    "status" text NOT NULL DEFAULT 'new',
+    "createdAt" timestamp NOT NULL DEFAULT now()
+  )`,
   // The LinkedIn bot for the company Page (src/lib/linkedinBot/).
   `CREATE TABLE IF NOT EXISTS "linkedin_bot" (
     "id" text PRIMARY KEY,

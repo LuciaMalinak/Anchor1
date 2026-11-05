@@ -565,6 +565,22 @@ export const teams = pgTable("team", {
   specialtyRequestedAt: timestamp("specialtyRequestedAt", { mode: "date" }),
   // Why the last build failed, shown to the team's leaders.
   specialtyError: text("specialtyError"),
+  // Billing (src/lib/billing.ts). The team owner subscribes through
+  // Stripe; everyone on the team is covered. billingExempt = free access
+  // (every team that existed before billing started, plus any the app
+  // owner marks free in Admin). Added by startupMigrations.ts.
+  billingExempt: boolean("billingExempt").notNull().default(false),
+  // Stripe's subscription status: "trialing" | "active" | "past_due" |
+  // "canceled" | "unpaid" | "incomplete" | … Null = never subscribed.
+  billingStatus: text("billingStatus"),
+  billingPlan: text("billingPlan").$type<"team" | "pro">(),
+  billingSeats: integer("billingSeats"),
+  stripeCustomerId: text("stripeCustomerId"),
+  stripeSubscriptionId: text("stripeSubscriptionId"),
+  trialEndsAt: timestamp("trialEndsAt", { mode: "date" }),
+  currentPeriodEnd: timestamp("currentPeriodEnd", { mode: "date" }),
+  // The promo code used for a free trial; each team gets one trial.
+  promoCodeUsed: text("promoCodeUsed"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -1104,3 +1120,33 @@ export const linkedinBotItems = pgTable(
   },
   (t) => [index("linkedin_bot_item_status_idx").on(t.status, t.scheduledFor)],
 );
+
+// Promo codes the app owner hands to chosen clients (Admin → Billing):
+// each gives a free trial of trialDays before the subscription starts
+// charging. Created on deploy by startupMigrations.ts.
+export const promoCodes = pgTable("promo_code", {
+  // Stored upper-case; matched case-insensitively.
+  code: text("code").primaryKey(),
+  trialDays: integer("trialDays").notNull(),
+  // Null = unlimited uses.
+  maxUses: integer("maxUses"),
+  uses: integer("uses").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  expiresAt: timestamp("expiresAt", { mode: "date" }),
+  // Who it's for, for the app owner's own reference.
+  note: text("note"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// "Contact sales" requests from the billing and contact pages.
+export const salesLeads = pgTable("sales_lead", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  company: text("company"),
+  teamSize: text("teamSize"),
+  message: text("message"),
+  userId: uuid("userId").references(() => users.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("new"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
