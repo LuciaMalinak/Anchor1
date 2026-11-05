@@ -6,6 +6,7 @@ import { normalizeSettings, weekday, zonedTime, type LinkedInBotSettings } from 
 import { createPost, LinkedInError, refreshAccessToken, uploadVideo } from "./api";
 import { draftComments, pickEngagementTargets, researchNotes, writePosts, writeVideo, type Slide } from "./write";
 import { renderSlideVideo } from "./video";
+import { mediaUrl } from "./media";
 
 // The LinkedIn bot's daily loop, run every few minutes by the server
 // (instrumentation.ts) and by /api/cron/linkedin-bot:
@@ -161,8 +162,73 @@ export async function planDay(opts: { replace?: boolean } = {}): Promise<{ posts
   return { posts, video };
 }
 
-// Publishes one post or video now.
+// Whether the bot has somewhere to post: Zapier, or the Page itself.
+export function canPost(bot: BotRow): boolean {
+  return Boolean(normalizeSettings(bot.settings).zapierWebhookUrl || (bot.orgUrn && bot.accessToken));
+}
+
+// What Zapier receives for each post: flat fields that are easy to map
+// in its "LinkedIn → Create Company Update" step.
+function zapierPayload(item: Pick<BotItem, "id" | "kind" | "text" | "topic" | "extra" | "scheduledFor">, test = false) {
+  const extra = (item.extra ?? {}) as { title?: string };
+  const isVideo = item.kind === "video";
+  return {
+    id: item.id,
+    kind: item.kind,
+    text: item.text,
+    title: isVideo ? extra.title || item.topic || "AI Anchor" : "",
+    image_url: isVideo ? (mediaUrl(item.id, "png") ?? "") : "",
+    video_url: isVideo ? (mediaUrl(item.id, "mp4") ?? "") : "",
+    scheduled_for: item.scheduledFor?.toISOString() ?? "",
+    sent_at: new Date().toISOString(),
+    test,
+  };
+}
+
+async function sendToZapier(url: string, payload: Record<string, unknown>): Promise<void> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => "")).slice(0, 200);
+    throw new Error(`Zapier didn't accept the post (${res.status})${detail ? `: ${detail}` : ""}`);
+  }
+}
+
+// A sample sent while setting up the Zap, so Zapier can see the fields.
+// Uses the next scheduled post (or a stand-in) and is marked test: true.
+export async function sendZapierSample(): Promise<void> {
+  const bot = await loadBot();
+  const url = normalizeSettings(bot.settings).zapierWebhookUrl;
+  if (!url) throw new Error("Add the Zapier webhook link first.");
+  const [next] = await db
+    .select()
+    .from(linkedinBotItems)
+    .where(and(inArray(linkedinBotItems.kind, ["post", "video"]), eq(linkedinBotItems.status, "scheduled")))
+    .orderBy(linkedinBotItems.scheduledFor)
+    .limit(1);
+  const sample = next ?? {
+    id: "00000000-0000-0000-0000-000000000000",
+    kind: "post",
+    text: "Test post from Anchor. If you can read this on LinkedIn, the Zap is live.\n\n#AIAnchor",
+    topic: null,
+    extra: null,
+    scheduledFor: new Date(),
+  };
+  await sendToZapier(url, zapierPayload(sample, true));
+}
+
+// Publishes one post or video now. Through Zapier there's no post id to
+// keep, so "" is returned.
 async function publish(item: BotItem, bot: BotRow): Promise<string> {
+  const zapier = normalizeSettings(bot.settings).zapierWebhookUrl;
+  if (zapier) {
+    await sendToZapier(zapier, zapierPayload(item));
+    return "";
+  }
   if (!bot.orgUrn) throw new Error("The LinkedIn Page isn't connected");
   const token = await accessToken(bot);
   if (item.kind === "video") {
@@ -223,7 +289,7 @@ export async function runLinkedInBot(): Promise<{ skipped?: string; planned?: { 
     const bot = await loadBot();
     const settings = normalizeSettings(bot.settings);
     if (!settings.enabled) return { skipped: "off", posted: 0, failed: 0 };
-    if (!bot.orgUrn || !bot.accessToken) return { skipped: "not connected", posted: 0, failed: 0 };
+    if (!canPost(bot)) return { skipped: "not connected", posted: 0, failed: 0 };
 
     // A post left half-way by a restart: don't risk posting it twice.
     await db

@@ -18,6 +18,10 @@ export type LinkedInBotSettings = {
   about: string;
   // Companies and people in the sector to engage with (Comments tab).
   watchlist: string[];
+  // A Zapier (or Make) webhook that publishes to the Page. When set, posts
+  // go out through it instead of LinkedIn's own API, which needs an app
+  // LinkedIn has approved for Community Management.
+  zapierWebhookUrl: string;
 };
 
 export const DEFAULT_TOPICS = [
@@ -41,6 +45,7 @@ export const DEFAULT_SETTINGS: LinkedInBotSettings = {
   topics: DEFAULT_TOPICS,
   about: DEFAULT_ABOUT,
   watchlist: [],
+  zapierWebhookUrl: "",
 };
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -68,7 +73,20 @@ export function normalizeSettings(raw: unknown): LinkedInBotSettings {
     topics: topics.length ? topics : DEFAULT_TOPICS,
     about: typeof r.about === "string" && r.about.trim() ? r.about.trim().slice(0, 2000) : DEFAULT_ABOUT,
     watchlist: cleanList(r.watchlist, 40, 120),
+    zapierWebhookUrl: cleanWebhook(r.zapierWebhookUrl),
   };
+}
+
+// Only an https link to a public host; anything else is dropped.
+export function cleanWebhook(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) return "";
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:" || /^(localhost|127\.|10\.|192\.168\.|169\.254\.)/.test(url.hostname)) return "";
+    return url.toString().slice(0, 500);
+  } catch {
+    return "";
+  }
 }
 
 // The UTC moment of a wall-clock date and time ("YYYY-MM-DD", "HH:MM")

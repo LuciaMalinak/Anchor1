@@ -5,7 +5,7 @@ import { linkedinBotItems } from "@/db/schema";
 import { requireAppOwnerApi } from "@/lib/adminAccess";
 import { pageAppConfigured } from "@/lib/linkedinBot/api";
 import { normalizeSettings } from "@/lib/linkedinBot/settings";
-import { loadBot, updateBot } from "@/lib/linkedinBot/run";
+import { canPost, loadBot, updateBot } from "@/lib/linkedinBot/run";
 
 // The LinkedIn bot's state for its admin page, and saving its settings.
 export async function GET() {
@@ -21,6 +21,8 @@ export async function GET() {
   return NextResponse.json({
     configured: pageAppConfigured(),
     connected: Boolean(bot.orgUrn && bot.accessToken),
+    viaZapier: Boolean(normalizeSettings(bot.settings).zapierWebhookUrl),
+    canPost: canPost(bot),
     orgName: bot.orgName,
     tokenExpiresAt: bot.tokenExpiresAt,
     canRefresh: Boolean(bot.refreshToken),
