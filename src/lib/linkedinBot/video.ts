@@ -105,6 +105,11 @@ async function drawSlide(slide: Slide, index: number, total: number): Promise<Bu
     .toBuffer();
 }
 
+// The first slide on its own, used as the video's cover image.
+export async function renderCoverImage(slides: Slide[]): Promise<Buffer> {
+  return drawSlide(slides[0], 0, slides.length);
+}
+
 export async function renderSlideVideo(slides: Slide[]): Promise<Buffer> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "anchor-li-video-"));
   try {

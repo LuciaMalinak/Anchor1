@@ -11,6 +11,7 @@ type Settings = {
   topics: string[];
   about: string;
   watchlist: string[];
+  zapierWebhookUrl: string;
 };
 
 type Item = {
@@ -39,6 +40,8 @@ type Target = { name: string; why: string; angle: string };
 type State = {
   configured: boolean;
   connected: boolean;
+  viaZapier: boolean;
+  canPost: boolean;
   orgName: string | null;
   tokenExpiresAt: string | null;
   canRefresh: boolean;
@@ -57,6 +60,23 @@ const ERRORS: Record<string, string> = {
   state: "The LinkedIn sign-in didn't match. Try connecting again.",
   no_page: "That LinkedIn account isn't an admin of any company Page.",
 };
+
+// LinkedIn sends its error text HTML-escaped (&quot;…&quot;). The usual
+// one at first: the app in LINKEDIN_PAGE_CLIENT_ID doesn't have the
+// Community Management API product (yet), so it can't ask to post as a Page.
+function explainError(raw: string): string {
+  if (ERRORS[raw]) return ERRORS[raw];
+  const text = raw
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+  if (/scope .*not authorized for your application/i.test(text)) {
+    return `LinkedIn says: ${text}. The app set in LINKEDIN_PAGE_CLIENT_ID doesn't have the "Community Management API" product approved yet. In linkedin.com/developers, open that app → Products and check Community Management API shows as approved (not pending), and that Render's keys are from this app, not the sign-in app. Then click Connect again.`;
+  }
+  return text;
+}
 
 function when(iso: string | null, tz: string): string {
   if (!iso) return "";
@@ -93,7 +113,7 @@ export function LinkedInBotClient({
   callbackUrl: string;
 }) {
   const [state, setState] = useState<State | null>(null);
-  const [error, setError] = useState<string | null>(initialError ? (ERRORS[initialError] ?? initialError) : null);
+  const [error, setError] = useState<string | null>(initialError ? explainError(initialError) : null);
   const [busy, setBusy] = useState<string | null>(null);
   const [tab, setTab] = useState<"queue" | "comments" | "settings">("queue");
 
@@ -181,28 +201,34 @@ export function LinkedInBotClient({
       <section className={`${card} flex flex-wrap items-center justify-between gap-4`}>
         <div>
           <p className="text-sm font-semibold text-slate-900">
-            {state.connected ? `Posting as ${state.orgName}` : "LinkedIn Page not connected"}
+            {state.viaZapier
+              ? "Posting to the AI Anchor Page through Zapier"
+              : state.connected
+                ? `Posting as ${state.orgName}`
+                : "Not set up to post yet"}
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            {state.connected
+            {state.canPost
               ? `${state.settings.postTimes.length} posts a day at ${state.settings.postTimes.join(" and ")}, video every ${DAYS[state.settings.videoDay]} at ${state.settings.videoTime} (${tz}).`
-              : "Connect the AI Anchor Page so the bot can post."}
-            {expiresSoon && ` The LinkedIn connection runs out ${when(state.tokenExpiresAt, tz)}: reconnect before then.`}
+              : "Connect Zapier below so the bot can post."}
+            {expiresSoon && !state.viaZapier && ` The LinkedIn connection runs out ${when(state.tokenExpiresAt, tz)}: reconnect before then.`}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {state.connected ? (
+          {state.canPost && (
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={state.settings.enabled}
+                disabled={busy === "settings"}
+                onChange={(e) => saveSettings({ enabled: e.target.checked })}
+                className="h-4 w-4 accent-[var(--brand)]"
+              />
+              Bot on
+            </label>
+          )}
+          {state.connected && !state.viaZapier ? (
             <>
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={state.settings.enabled}
-                  disabled={busy === "settings"}
-                  onChange={(e) => saveSettings({ enabled: e.target.checked })}
-                  className="h-4 w-4 accent-[var(--brand)]"
-                />
-                Bot on
-              </label>
               <a href="/api/admin/linkedin-bot/connect" className={btn}>
                 Reconnect
               </a>
@@ -211,17 +237,25 @@ export function LinkedInBotClient({
               </button>
             </>
           ) : (
-            <a
-              href="/api/admin/linkedin-bot/connect"
-              className={`${btnPrimary} ${state.configured ? "" : "pointer-events-none opacity-50"}`}
-            >
-              Connect LinkedIn Page
-            </a>
+            state.configured &&
+            !state.viaZapier && (
+              <a href="/api/admin/linkedin-bot/connect" className={btn}>
+                Connect LinkedIn Page directly
+              </a>
+            )
           )}
         </div>
       </section>
 
-      {!state.configured && <SetupSteps callbackUrl={callbackUrl} />}
+      <ZapierPanel state={state} refresh={refresh} />
+      {!state.configured && !state.viaZapier && (
+        <details className="text-xs text-slate-500">
+          <summary className="cursor-pointer">Or post directly through LinkedIn&apos;s API (needs LinkedIn&apos;s approval)</summary>
+          <div className="mt-3">
+            <SetupSteps callbackUrl={callbackUrl} />
+          </div>
+        </details>
+      )}
 
       <div className="flex gap-1 border-b border-slate-200">
         {(
@@ -337,6 +371,9 @@ function QueueItem({
               </li>
             ))}
           </ol>
+          <a href={`/api/admin/linkedin-bot/items/${item.id}/video?download`} className={`${btn} self-start`}>
+            Download video
+          </a>
           {showVideo ? (
             <video src={`/api/admin/linkedin-bot/items/${item.id}/video`} controls autoPlay className="w-72 rounded-lg" />
           ) : (
@@ -538,7 +575,18 @@ function SettingsForm({ settings, saving, save }: { settings: Settings; saving: 
         Companies and people to engage with (one per line; leave empty and the bot suggests some each day)
         <textarea rows={5} value={s.watchlist.join("\n")} onChange={(e) => setS({ ...s, watchlist: lines(e.target.value) })} className={input} />
       </label>
-      <button onClick={() => save(s)} disabled={saving} className={`${btnPrimary} self-start`}>
+      <button
+        // The on/off switch and the Zapier link are saved where they're
+        // shown; leave them out so an older copy here can't undo them.
+        onClick={() => {
+          const rest: Partial<Settings> = { ...s };
+          delete rest.enabled;
+          delete rest.zapierWebhookUrl;
+          void save(rest);
+        }}
+        disabled={saving}
+        className={`${btnPrimary} self-start`}
+      >
         {saving ? "Saving…" : "Save settings"}
       </button>
     </div>
@@ -564,6 +612,102 @@ function SetupSteps({ callbackUrl }: { callbackUrl: string }) {
           and click Connect.
         </li>
       </ol>
+    </section>
+  );
+}
+
+function ZapierPanel({ state, refresh }: { state: State; refresh: () => Promise<void> }) {
+  const [url, setUrl] = useState(state.settings.zapierWebhookUrl);
+  const [open, setOpen] = useState(!state.viaZapier);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [working, setWorking] = useState<string | null>(null);
+
+  async function save(value: string) {
+    setWorking("save");
+    setMsg(null);
+    const res = await fetch("/api/admin/linkedin-bot", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: { zapierWebhookUrl: value } }),
+    }).catch(() => null);
+    const body = await res?.json().catch(() => null);
+    if (!res?.ok) setMsg({ ok: false, text: "Couldn't save." });
+    else if (value && !body?.settings?.zapierWebhookUrl) setMsg({ ok: false, text: "That doesn't look like a webhook link (it should start with https://hooks.zapier.com/)." });
+    else setMsg({ ok: true, text: value ? "Saved. Now send a sample so Zapier can see the fields." : "Zapier disconnected." });
+    setWorking(null);
+    await refresh();
+  }
+
+  async function sample() {
+    setWorking("sample");
+    setMsg(null);
+    const res = await fetch("/api/admin/linkedin-bot/zapier-test", { method: "POST" }).catch(() => null);
+    const body = await res?.json().catch(() => null);
+    setMsg(res?.ok ? { ok: true, text: "Sample sent. In Zapier, click “Test trigger” to see it." } : { ok: false, text: body?.error ?? "Couldn't reach Zapier." });
+    setWorking(null);
+  }
+
+  return (
+    <section className={`${card} flex flex-col gap-3`}>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-900">
+          Post through Zapier {state.viaZapier && <span className="ml-2 text-xs font-medium text-emerald-700">Connected</span>}
+        </h2>
+        <button onClick={() => setOpen(!open)} className="text-xs font-medium text-brand">
+          {open ? "Hide steps" : "Show steps"}
+        </button>
+      </div>
+      {open && (
+        <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-700">
+          <li>
+            In <a className="text-brand" href="https://zapier.com/app/zaps" target="_blank" rel="noreferrer">Zapier</a>, click <b>Create → Zap</b>.
+          </li>
+          <li>
+            Trigger: <b>Webhooks by Zapier</b> → <b>Catch Hook</b>. Copy the webhook URL it gives you, paste it below and click Save.
+          </li>
+          <li>Click <b>Send a sample</b> below, then <b>Test trigger</b> in Zapier.</li>
+          <li>
+            Action: <b>LinkedIn</b> → <b>Create Company Update</b>. Sign in to LinkedIn, pick <b>AI Anchor</b> as the company, set
+            Visibility to <b>Anyone</b>, and map <b>Comment</b> → <code className="rounded bg-slate-100 px-1">text</code> and{" "}
+            <b>Image URL</b> → <code className="rounded bg-slate-100 px-1">image_url</code>.
+          </li>
+          <li>
+            Skip Zapier&apos;s test step (it would post on LinkedIn), click <b>Publish</b>, then turn <b>Bot on</b> above.
+          </li>
+        </ol>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://hooks.zapier.com/hooks/catch/…"
+          className={`${input} min-w-[280px] flex-1`}
+        />
+        <button onClick={() => save(url.trim())} disabled={!!working || url.trim() === state.settings.zapierWebhookUrl} className={btnPrimary}>
+          {working === "save" ? "Saving…" : "Save"}
+        </button>
+        <button onClick={sample} disabled={!!working || !state.settings.zapierWebhookUrl} className={btn}>
+          {working === "sample" ? "Sending…" : "Send a sample"}
+        </button>
+        {state.viaZapier && (
+          <button
+            onClick={() => {
+              setUrl("");
+              void save("");
+            }}
+            disabled={!!working}
+            className={btn}
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      {msg && <p className={`text-xs ${msg.ok ? "text-emerald-700" : "text-red-600"}`}>{msg.text}</p>}
+      <p className="text-xs text-slate-500">
+        The weekly video goes through Zapier as its cover image with the caption. To post the video itself, use{" "}
+        <b>Download video</b> on it and upload it on LinkedIn, or map <code className="rounded bg-slate-100 px-1">video_url</code> if
+        your Zap&apos;s LinkedIn step offers a video field.
+      </p>
     </section>
   );
 }
