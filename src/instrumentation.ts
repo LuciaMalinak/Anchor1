@@ -52,6 +52,15 @@ function startMorningBriefSchedule() {
     } catch (err) {
       console.error("[morningBrief] scheduled check failed:", err);
     }
+    // The company LinkedIn Page bot: writes the day's posts once a day and
+    // publishes the ones that are due (src/lib/linkedinBot/run.ts).
+    try {
+      const { runLinkedInBot } = await import("@/lib/linkedinBot/run");
+      const result = await runLinkedInBot();
+      if (result.planned || result.posted || result.failed) console.log("[linkedinBot] scheduled check:", result);
+    } catch (err) {
+      console.error("[linkedinBot] scheduled check failed:", err);
+    }
   };
   setTimeout(() => {
     void check();

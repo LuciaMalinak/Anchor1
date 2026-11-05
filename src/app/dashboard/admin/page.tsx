@@ -100,6 +100,17 @@ export default async function AdminHomePage({
         </p>
       </div>
 
+      <Link
+        href="/dashboard/admin/linkedin"
+        className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm hover:border-brand"
+      >
+        <span>
+          <span className="font-semibold text-slate-900">LinkedIn bot</span>
+          <span className="ml-2 text-slate-500">Daily posts, weekly video and comment drafts for the AI Anchor Page</span>
+        </span>
+        <span className="text-brand">Open →</span>
+      </Link>
+
       <AdminSupportRequests />
 
       <AdminOverview data={overview} />

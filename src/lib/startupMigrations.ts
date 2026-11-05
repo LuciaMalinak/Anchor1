@@ -7,6 +7,36 @@ import { BASELINE_STATEMENTS } from "@/db/baseline";
 // EXISTS), so running it on every start is harmless. Keep this to
 // additions only: never drop or rename anything here.
 const MIGRATIONS = [
+  // The LinkedIn bot for the company Page (src/lib/linkedinBot/).
+  `CREATE TABLE IF NOT EXISTS "linkedin_bot" (
+    "id" text PRIMARY KEY,
+    "orgUrn" text,
+    "orgName" text,
+    "accessToken" text,
+    "refreshToken" text,
+    "tokenExpiresAt" timestamp,
+    "refreshExpiresAt" timestamp,
+    "settings" jsonb NOT NULL DEFAULT '{}'::jsonb,
+    "lastPlannedOn" text,
+    "engagement" jsonb,
+    "lastError" text,
+    "updatedAt" timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS "linkedin_bot_item" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "kind" text NOT NULL,
+    "status" text NOT NULL,
+    "scheduledFor" timestamp,
+    "topic" text,
+    "text" text NOT NULL,
+    "extra" jsonb,
+    "linkedinUrn" text,
+    "error" text,
+    "attempts" integer NOT NULL DEFAULT 0,
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "postedAt" timestamp
+  )`,
+  `CREATE INDEX IF NOT EXISTS "linkedin_bot_item_status_idx" ON "linkedin_bot_item" ("status", "scheduledFor")`,
   // Dropbox connections (integration_connection.provider).
   `ALTER TYPE "integration_provider" ADD VALUE IF NOT EXISTS 'dropbox'`,
   // Google Drive / Dropbox document excerpts per deal (dealIntegrationContext.ts).
