@@ -111,6 +111,17 @@ export default async function AdminHomePage({
         <span className="text-brand">Open →</span>
       </Link>
 
+      <Link
+        href="/dashboard/admin/billing"
+        className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm hover:border-brand"
+      >
+        <span>
+          <span className="font-semibold text-slate-900">Billing</span>
+          <span className="ml-2 text-slate-500">Promo codes, free accounts, subscriptions and sales requests</span>
+        </span>
+        <span className="text-brand">Open →</span>
+      </Link>
+
       <AdminSupportRequests />
 
       <AdminOverview data={overview} />

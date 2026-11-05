@@ -126,6 +126,16 @@ services:
       # that URL once a day — Render's own Cron Job service, or a free
       # external scheduler like cron-job.org, pointed at
       # https://<your-app>.onrender.com/api/cron/daily-digest?key=...
+      # Payments (src/lib/billing.ts). From dashboard.stripe.com →
+      # Developers → API keys (the "Secret key"), and → Webhooks: add an
+      # endpoint https://<your-app>.onrender.com/api/billing/webhook for
+      # the customer.subscription.*, checkout.session.completed and
+      # invoice.* events, and copy its "Signing secret" here. Prices are
+      # created in Stripe automatically on first checkout.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
       - key: CRON_SECRET
         sync: false
       - key: TWILIO_ACCOUNT_SID

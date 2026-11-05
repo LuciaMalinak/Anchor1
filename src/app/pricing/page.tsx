@@ -17,7 +17,7 @@ const TIERS = [
     price: "$49",
     unit: "/ user / mo",
     tagline: "For a team that just wants meetings handled well.",
-    cta: "Start free",
+    cta: "Get started",
     ctaHref: "/sign-up",
     features: [
       "Agenda enforcement, action tracking, recaps",
@@ -33,7 +33,7 @@ const TIERS = [
     tagline: "For teams where someone else has to stand in.",
     highlight: true,
     badge: "Built for delegation",
-    cta: "Start free",
+    cta: "Get started",
     ctaHref: "/sign-up",
     features: [
       "Everything in Team",
@@ -49,7 +49,7 @@ const TIERS = [
     unit: "/ seat / mo",
     tagline: "For organizations rolling this out across teams.",
     cta: "Contact us",
-    ctaHref: "mailto:lucia.malinak@gmail.com",
+    ctaHref: "/contact-sales",
     features: [
       "Everything in Pro, delegate seats included",
       "SSO, retention controls, audit log",

@@ -23,6 +23,8 @@ import { isAppOwner } from "@/lib/appOwner";
 import { WhatsNewModal } from "@/components/WhatsNewModal";
 import { after } from "next/server";
 import { autoDraftRepliesOnVisit } from "@/lib/morningBrief";
+import { redirect } from "next/navigation";
+import { hasAccess, syncSeats } from "@/lib/billing";
 
 // Members whose account existed before this date see the one-time "new
 // tools" popup (WhatsNewModal). Newer accounts get the first-visit
@@ -62,10 +64,22 @@ export default async function DashboardLayout({
   // falls through to the default brand accent, same as always.
   let accentStyle: React.CSSProperties | undefined;
   let showWhatsNew = false;
+  // Paying for Anchor (src/lib/billing.ts): a team without a subscription
+  // or free access is sent to /billing. Decided inside the try below but
+  // acted on after it, since redirect() works by throwing. If the check
+  // itself fails, people are let in rather than locked out.
+  let billingBlocked = false;
+  let ownsTeam = false;
   if (session?.user?.id) {
     try {
       const teamId = await getOrCreateTeamId(session.user.id);
       const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+      billingBlocked = Boolean(team) && !hasAccess(team, session.user.email);
+      ownsTeam = team?.ownerUserId === session.user.id;
+      // The bill follows the team's size; re-checked in the background.
+      if (team?.stripeSubscriptionId && !billingBlocked) {
+        after(() => syncSeats(teamId).catch((err) => console.error("[billing] seat sync failed:", err)));
+      }
       const teamIndustry = team?.industry && isIndustryKey(team.industry) ? team.industry : null;
       // Was awaited here — on a brand-new team (or any team whose
       // briefing hadn't refreshed yet that day) that meant every single
@@ -108,6 +122,7 @@ export default async function DashboardLayout({
       console.error("Couldn't load team daily briefing:", err);
     }
   }
+  if (billingBlocked) redirect("/billing");
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f5f7fb]" style={accentStyle}>
@@ -133,6 +148,7 @@ export default async function DashboardLayout({
                   (and everything under /dashboard/admin) simply doesn't
                   exist for them. See src/lib/adminAccess.ts. */}
               {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
+              {ownsTeam && <NavLink href="/billing">Billing</NavLink>}
             </nav>
           </div>
           <div className="flex shrink-0 items-center gap-2 text-sm">
@@ -184,6 +200,7 @@ export default async function DashboardLayout({
           <NavLink href="/dashboard/team">Team</NavLink>
           <NavLink href="/dashboard/integrations">Integrations</NavLink>
           {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
+          {ownsTeam && <NavLink href="/billing">Billing</NavLink>}
         </nav>
       </header>
       {/* Ask Anchor sits on the right of every page (AskAnchorDock.tsx);
