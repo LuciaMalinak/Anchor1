@@ -40,6 +40,15 @@ services:
         sync: false
       - key: LINKEDIN_CLIENT_SECRET
         sync: false
+      # The LinkedIn bot that posts for the company Page
+      # (/dashboard/admin/linkedin). A SEPARATE LinkedIn app from the
+      # sign-in one above, with the "Community Management API" product
+      # (LinkedIn won't put that product on an app that also has Sign In).
+      # Redirect URL: https://<your-app>.onrender.com/api/admin/linkedin-bot/callback
+      - key: LINKEDIN_PAGE_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_PAGE_CLIENT_SECRET
+        sync: false
       # "Sign in with Google" on /sign-in — a SEPARATE OAuth client from
       # GOOGLE_INTEGRATION_CLIENT_ID/SECRET below (that pair is only for
       # the Dashboard > Integrations Gmail/Calendar data connection). This

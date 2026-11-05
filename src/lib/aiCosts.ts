@@ -28,6 +28,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   linkedin_import: "LinkedIn import",
   daily_briefing: "Daily briefing (shared)",
   industry_news: "Industry news (shared)",
+  linkedin_bot: "LinkedIn Page bot",
 };
 
 export type AiCostSummary = {

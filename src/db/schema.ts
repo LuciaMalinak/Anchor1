@@ -1058,3 +1058,49 @@ export const meetingProposals = pgTable(
   },
   (t) => [uniqueIndex("meeting_proposal_source_idx").on(t.userId, t.source, t.sourceKey)]
 );
+
+// The LinkedIn bot that posts for the company Page (src/lib/linkedinBot/).
+// One row ("main"): the connected Page, its tokens and the bot's settings.
+// Created on deploy by startupMigrations.ts.
+export const linkedinBot = pgTable("linkedin_bot", {
+  id: text("id").primaryKey(),
+  orgUrn: text("orgUrn"),
+  orgName: text("orgName"),
+  accessToken: text("accessToken"),
+  refreshToken: text("refreshToken"),
+  tokenExpiresAt: timestamp("tokenExpiresAt", { mode: "date" }),
+  refreshExpiresAt: timestamp("refreshExpiresAt", { mode: "date" }),
+  // LinkedInBotSettings (src/lib/linkedinBot/settings.ts); normalized on read.
+  settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+  // The Page's local date (YYYY-MM-DD) the day's posts were last written for.
+  lastPlannedOn: text("lastPlannedOn"),
+  // Today's companies to engage with and why (the Comments tab).
+  engagement: jsonb("engagement").$type<Record<string, unknown>>(),
+  lastError: text("lastError"),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+// Everything the LinkedIn bot writes: posts and weekly videos (posted on
+// their own at scheduledFor) and comment drafts (posted by hand).
+export const linkedinBotItems = pgTable(
+  "linkedin_bot_item",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // "post" | "video" | "comment"
+    kind: text("kind").notNull(),
+    // post/video: "scheduled" -> "posting" -> "posted" | "failed" | "skipped"
+    // comment: "draft" -> "done" | "skipped"
+    status: text("status").notNull(),
+    scheduledFor: timestamp("scheduledFor", { mode: "date" }),
+    topic: text("topic"),
+    text: text("text").notNull(),
+    // Video: the slides ({ title, body }[]). Comment: the post commented on.
+    extra: jsonb("extra").$type<Record<string, unknown>>(),
+    linkedinUrn: text("linkedinUrn"),
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+    postedAt: timestamp("postedAt", { mode: "date" }),
+  },
+  (t) => [index("linkedin_bot_item_status_idx").on(t.status, t.scheduledFor)],
+);
