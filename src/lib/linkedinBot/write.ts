@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "@/lib/aiUsage";
 import { createWithForcedTool } from "@/lib/forcedTool";
-import type { LinkedInBotSettings } from "./settings";
+import { signUpUrl, type LinkedInBotSettings } from "./settings";
 
 // The writing behind the LinkedIn bot: the daily posts, the weekly video's
 // slides, today's companies to engage with, and comment drafts. Same model
@@ -14,14 +14,19 @@ function client() {
   return new Anthropic({ apiKey, fetch: meteredFetch("linkedin_bot") });
 }
 
-const VOICE = `How the company writes on LinkedIn:
-- Sharp, practical and specific, like a former investment banker who builds AI tools. Confident, never salesy or hyped.
-- First line is a hook that makes a dealmaker or salesperson stop scrolling (a concrete claim, a number from the research notes, or a sharp question). No "In today's fast-paced world", no "game-changer", no "Let's dive in", no "Here's the thing".
+// The posts exist to win clients: every one is about Anchor and how it
+// helps a company grow, and ends by asking the reader to sign up.
+function voice(settings: LinkedInBotSettings): string {
+  const link = signUpUrl(settings);
+  return `How the company writes on LinkedIn:
+- Every post is about Anchor: a real problem dealmakers, bankers, advisors or B2B sales teams have, how Anchor solves it, and what that means for their growth (more deals closed, faster follow-ups, nothing dropped between calls, hours back each week).
+- Sharp, practical and specific, like a former investment banker who built the tool she wished she'd had. Confident and persuasive, not hyped.
+- First line is a hook that makes a dealmaker or salesperson stop scrolling (a concrete pain, a sharp question, or a number from the research notes). No "In today's fast-paced world", no "game-changer", no "Let's dive in", no "Here's the thing".
 - Short paragraphs of 1-2 sentences with blank lines between them. Plain words. At most one emoji, usually none. No em dashes.
-- Give the reader something they can use: a tactic, a checklist, a lesson, a takeaway.
-- Never invent customers, quotes, results, statistics or news. Only use figures and events that appear in the research notes, and name the source in passing ("per PitchBook").
-- Mention Anchor only where it genuinely fits, at most once, and never as a hard sell. Many posts don't mention it at all.
-- End with a question or a clear takeaway, then 3 relevant hashtags on the last line (e.g. #MergersAndAcquisitions #SalesAI #Dealmaking).`;
+- Show Anchor in action: describe what it actually does in a real moment (before a call, during it, after it) using only the features in the company description.
+- Never invent customers, testimonials, quotes, results, statistics or news. Only use figures that appear in the research notes, naming the source ("per PitchBook"). Don't promise outcomes as facts about Anchor's users.
+- End with a clear call to action to sign up, e.g. "Start free with Anchor: ${link || "[link]"}" or "Sign up now: ${link || "[link]"}" (vary the wording; the link exactly as given, on its own line), then 3 relevant hashtags on the last line (e.g. #SalesAI #Dealmaking #AIAnchor).`;
+}
 
 function company(settings: LinkedInBotSettings): string {
   return `The company: ${settings.about}`;
@@ -101,13 +106,13 @@ export async function writePosts(params: {
   const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 4000,
-    system: `You write the company LinkedIn Page posts for AI Anchor.\n\n${company(settings)}\n\n${VOICE}`,
+    system: `You write the company LinkedIn Page posts for AI Anchor.\n\n${company(settings)}\n\n${voice(settings)}`,
     tools: [POSTS_TOOL],
     tool_choice: { type: "tool", name: "record_posts" },
     messages: [
       {
         role: "user",
-        content: `Today is ${todayLabel}. Write ${count} LinkedIn posts for today, each on a DIFFERENT one of these topics (pick the topics that have been used least recently):\n${settings.topics.map((t) => `- ${t}`).join("\n")}\n\nResearch notes from this week (the only facts and figures you may cite):\n${notes || "(none today: write evergreen posts with no statistics or news)"}\n\nRecent posts (don't repeat their angle, hook or opening words):\n${recent.length ? recent.map((r) => `- ${r}`).join("\n") : "(none yet)"}`,
+        content: `Today is ${todayLabel}. Write ${count} LinkedIn posts for today that make people want to try Anchor, each on a DIFFERENT one of these topics (pick the topics that have been used least recently):\n${settings.topics.map((t) => `- ${t}`).join("\n")}\n\nResearch notes from this week (the only facts and figures you may cite):\n${notes || "(none today: write posts with no statistics or news)"}\n\nRecent posts (don't repeat their angle, hook or opening words):\n${recent.length ? recent.map((r) => `- ${r}`).join("\n") : "(none yet)"}`,
       },
     ],
   });
@@ -129,14 +134,17 @@ const VIDEO_TOOL: Anthropic.Tool = {
       slides: {
         type: "array",
         description:
-          "5-6 slides shown about 6 seconds each. Slide 1 is the hook; the last slide is the takeaway. Each slide: a title of at most 7 words and a body of at most 22 words.",
+          "5-6 slides shown about 6 seconds each. Slide 1 is the hook; the last slide is the call to sign up. Each slide: a title of at most 7 words and a body of at most 22 words.",
         items: {
           type: "object",
           properties: { title: { type: "string" }, body: { type: "string" } },
           required: ["title", "body"],
         },
       },
-      caption: { type: "string", description: "The post text that goes with the video, 60-120 words, ending with 3 hashtags." },
+      caption: {
+        type: "string",
+        description: "The post text that goes with the video, 60-120 words, ending with the sign-up call to action and link, then 3 hashtags.",
+      },
     },
     required: ["topic", "title", "slides", "caption"],
   },
@@ -152,13 +160,13 @@ export async function writeVideo(params: {
   const message = await createWithForcedTool(client(), {
     model: MODEL,
     max_tokens: 3000,
-    system: `You make a short weekly slide video (30-40 seconds, text on screen, no voice) for the AI Anchor LinkedIn Page.\n\n${company(settings)}\n\n${VOICE}`,
+    system: `You make a short weekly slide video (30-40 seconds, text on screen, no voice) for the AI Anchor LinkedIn Page.\n\n${company(settings)}\n\n${voice(settings)}`,
     tools: [VIDEO_TOOL],
     tool_choice: { type: "tool", name: "record_video" },
     messages: [
       {
         role: "user",
-        content: `Today is ${todayLabel}. Make this week's video on one of these topics: one sharp insight or a short how-to people will want to save.\n${settings.topics.map((t) => `- ${t}`).join("\n")}\n\nResearch notes (the only facts and figures you may cite):\n${notes || "(none: no statistics or news)"}\n\nRecent posts (pick a different angle):\n${recent.length ? recent.map((r) => `- ${r}`).join("\n") : "(none yet)"}`,
+        content: `Today is ${todayLabel}. Make this week's video about Anchor on one of these topics: show a problem, then how Anchor solves it step by step. The last slide is the call to action: its title is "Start free with Anchor" (or similar) and its body is the sign-up link ${signUpUrl(settings) || "(no link available: say 'Search AI Anchor on LinkedIn')"}.\n${settings.topics.map((t) => `- ${t}`).join("\n")}\n\nResearch notes (the only facts and figures you may cite):\n${notes || "(none: no statistics or news)"}\n\nRecent posts (pick a different angle):\n${recent.length ? recent.map((r) => `- ${r}`).join("\n") : "(none yet)"}`,
       },
     ],
   });
@@ -250,4 +258,105 @@ export async function draftComments(settings: LinkedInBotSettings, postText: str
     .map((c) => c.trim())
     .filter(Boolean)
     .slice(0, 3);
+}
+
+export type PostToComment = { url: string; author: string; postText: string; comments: string[] };
+
+function sameLink(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/$/, "")}`.toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
+const PICKS_TOOL: Anthropic.Tool = {
+  name: "record_picks",
+  description: "Record the posts to comment on and the comment options for each.",
+  input_schema: {
+    type: "object",
+    properties: {
+      picks: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "The post's LinkedIn URL, exactly as found." },
+            author: { type: "string", description: "Who posted it." },
+            postText: { type: "string", description: "What the post says, 1-3 sentences, from what was found." },
+            comments: { type: "array", items: { type: "string" }, description: "3 different comment options." },
+          },
+          required: ["url", "author", "postText", "comments"],
+        },
+      },
+    },
+    required: ["picks"],
+  },
+};
+
+// Today's posts to comment on: real, recent public LinkedIn posts in the
+// space found with web search, each with 3 comment options written as the
+// AI Anchor Page. Only links that actually came back from the search are
+// kept, so a made-up link can never be suggested. Commenting itself stays
+// with a person (LinkedIn doesn't allow it to be automated).
+export async function findPostsToComment(
+  settings: LinkedInBotSettings,
+  count: number,
+  skipUrls: string[],
+): Promise<PostToComment[]> {
+  const search = await client().messages.create({
+    model: MODEL,
+    max_tokens: 3000,
+    system:
+      "You find recent public LinkedIn posts for a company to comment on. Use web search. Report only posts you actually found, with their exact URL.",
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+    messages: [
+      {
+        role: "user",
+        content: `${company(settings)}\n\nFind ${count * 2} public LinkedIn posts from the past 7 days (URLs on linkedin.com/posts/ or linkedin.com/feed/update/) by companies or people whose audience could become Anchor clients: M&A advisors and boutique banks, private equity and deal professionals, B2B sales leaders, sales-AI and meeting-AI companies, deal and PE media.${settings.watchlist.length ? ` Prefer these: ${settings.watchlist.join(", ")}.` : ""} Good searches: site:linkedin.com/posts with terms like "M&A", "dealmaking", "sales team", "AI meeting notes", "client calls". For each post give its exact URL, the author, and what it says.`,
+      },
+    ],
+  });
+  const found = new Set<string>();
+  for (const block of search.content as unknown as { type: string; content?: unknown }[]) {
+    if (block.type !== "web_search_tool_result" || !Array.isArray(block.content)) continue;
+    for (const r of block.content as { url?: string }[]) {
+      if (r.url && /linkedin\.com\/(posts|feed\/update)\//i.test(r.url)) found.add(sameLink(r.url));
+    }
+  }
+  const skip = new Set(skipUrls.map(sameLink));
+  const findings = textOf(search);
+  if (!found.size || !findings) return [];
+
+  const message = await createWithForcedTool(client(), {
+    model: MODEL,
+    max_tokens: 4000,
+    system: `You write LinkedIn comments posted by the AI Anchor company Page on other people's posts, to grow its followers and get noticed by future clients.\n\n${company(settings)}\n\nA good comment: 25-70 words, responds to something specific in the post, adds one real insight, example or sharp question from a dealmaking / sales-AI perspective. Sounds like a thoughtful founder, not a brand or an ad. No pitch, no links, no "Great post!", no hashtags, no emoji, no em dashes. It may mention how teams use AI for client calls, but never pushes Anchor. Never claim facts that aren't in the post or common knowledge.`,
+    tools: [PICKS_TOOL],
+    tool_choice: { type: "tool", name: "record_picks" },
+    messages: [
+      {
+        role: "user",
+        content: `Posts found today:\n${findings.slice(0, 8000)}\n\nPick the ${count} best posts to comment on (most relevant to Anchor's future clients, most active or influential authors) and write 3 comment options for each: one adding an insight, one sharing a practical tip, one asking a smart question.`,
+      },
+    ],
+  });
+  const picks = toolInput<{ picks: PostToComment[] }>(message, "record_picks").picks ?? [];
+  const seen = new Set<string>();
+  return picks
+    .filter((p) => {
+      const key = sameLink(p.url ?? "");
+      if (!found.has(key) || skip.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((p) => ({
+      url: p.url,
+      author: (p.author ?? "").slice(0, 120),
+      postText: (p.postText ?? "").slice(0, 600),
+      comments: (p.comments ?? []).map((c) => c.trim()).filter(Boolean).slice(0, 3),
+    }))
+    .filter((p) => p.comments.length)
+    .slice(0, count);
 }

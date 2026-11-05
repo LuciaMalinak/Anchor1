@@ -22,9 +22,24 @@ export type LinkedInBotSettings = {
   // go out through it instead of LinkedIn's own API, which needs an app
   // LinkedIn has approved for Community Management.
   zapierWebhookUrl: string;
+  // Where "Sign up" in each post sends people. Empty = Anchor's own
+  // sign-up page (see signUpUrl).
+  ctaUrl: string;
 };
 
+// Every topic is about Anchor and how it helps a company grow: the posts
+// exist to win clients.
 export const DEFAULT_TOPICS = [
+  "How Anchor helps deal teams and bankers win more mandates and close faster (deal memory, call prep, follow-ups)",
+  "How Anchor helps B2B sales teams grow revenue: no lost follow-ups, live answers on calls, notes and CRM done for them",
+  "A day with Anchor: the morning brief, live help during client calls, and summaries and next steps written after",
+  "The cost of dropped context between client calls, and how Anchor fixes it",
+  "Practical tips for running better client meetings with AI, using Anchor",
+];
+
+// The topics the bot started with, before it was refocused on Anchor;
+// settings still holding exactly these get the new ones.
+const OLD_DEFAULT_TOPICS = [
   "AI Anchor product tips: how to get more out of Anchor in real client work",
   "Deal and M&A insights: practical lessons from dealmaking and what's moving in the market",
   "AI for sales teams and advisors: how AI is changing client calls, follow-ups and meetings",
@@ -34,7 +49,8 @@ export const DEFAULT_ABOUT =
   "AI Anchor (Anchor) is an AI assistant for dealmakers, bankers, advisors and B2B sales teams. " +
   "It joins client calls, answers questions live during the call, writes the summary and follow-up afterwards, " +
   "keeps a running memory of every deal and contact, and sends a morning brief with the emails and tasks that need attention. " +
-  "Founded by Lucia Malinak, a former investment banking associate.";
+  "Founded by Lucia Malinak, a former investment banking associate. " +
+  "Plans: Team $49 per user per month, Pro $149 per leader seat per month (adds pre-meeting briefs and live assist for delegates); people can start free.";
 
 export const DEFAULT_SETTINGS: LinkedInBotSettings = {
   enabled: false,
@@ -46,6 +62,7 @@ export const DEFAULT_SETTINGS: LinkedInBotSettings = {
   about: DEFAULT_ABOUT,
   watchlist: [],
   zapierWebhookUrl: "",
+  ctaUrl: "",
 };
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -70,10 +87,12 @@ export function normalizeSettings(raw: unknown): LinkedInBotSettings {
     postTimes: postTimes.length ? [...new Set(postTimes)].sort() : DEFAULT_SETTINGS.postTimes,
     videoDay: Number.isInteger(videoDay) && videoDay >= 0 && videoDay <= 6 ? videoDay : DEFAULT_SETTINGS.videoDay,
     videoTime: typeof r.videoTime === "string" && TIME_RE.test(r.videoTime) ? r.videoTime : DEFAULT_SETTINGS.videoTime,
-    topics: topics.length ? topics : DEFAULT_TOPICS,
+    topics:
+      topics.length && topics.join("\n") !== OLD_DEFAULT_TOPICS.join("\n") ? topics : DEFAULT_TOPICS,
     about: typeof r.about === "string" && r.about.trim() ? r.about.trim().slice(0, 2000) : DEFAULT_ABOUT,
     watchlist: cleanList(r.watchlist, 40, 120),
     zapierWebhookUrl: cleanWebhook(r.zapierWebhookUrl),
+    ctaUrl: cleanWebhook(r.ctaUrl),
   };
 }
 
@@ -87,6 +106,13 @@ export function cleanWebhook(value: unknown): string {
   } catch {
     return "";
   }
+}
+
+// The link every post sends people to.
+export function signUpUrl(settings: LinkedInBotSettings): string {
+  if (settings.ctaUrl) return settings.ctaUrl;
+  const base = (process.env.AUTH_URL || "").replace(/\/$/, "");
+  return base ? `${base}/sign-up` : "";
 }
 
 // The UTC moment of a wall-clock date and time ("YYYY-MM-DD", "HH:MM")
