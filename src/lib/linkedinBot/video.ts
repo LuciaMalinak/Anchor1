@@ -36,7 +36,7 @@ async function textImage(text: string, opts: { bold: boolean; size: number; colo
       font: `Inter ${opts.bold ? "Bold" : "Regular"} ${opts.size}`,
       fontfile: font,
       width: opts.width,
-      wrap: "word",
+      wrap: "word-char",
       rgba: true,
       spacing: Math.round(opts.size * (opts.bold ? 0.1 : 0.25)),
       dpi: 72,

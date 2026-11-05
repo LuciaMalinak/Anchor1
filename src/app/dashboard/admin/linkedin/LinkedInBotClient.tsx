@@ -12,6 +12,7 @@ type Settings = {
   about: string;
   watchlist: string[];
   zapierWebhookUrl: string;
+  ctaUrl: string;
 };
 
 type Item = {
@@ -448,9 +449,22 @@ function CommentsTab({
   return (
     <div className="flex flex-col gap-6">
       <p className="text-xs text-slate-500">
-        LinkedIn doesn&apos;t allow bots to comment on other companies&apos; posts, so the bot does the thinking and you
-        post: open a company&apos;s latest posts, paste one in, pick a comment, and it&apos;s copied for you.
+        Every morning the bot finds 3 fresh posts in your space and writes the comments. LinkedIn doesn&apos;t allow
+        comments to be posted automatically (it restricts Pages that do), so posting is one click each: <b>Copy &amp; open
+        post</b>, paste, done. About a minute a day.
       </p>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold text-slate-900">Today&apos;s comments ({comments.length})</h2>
+        {comments.length === 0 && (
+          <p className={`${card} text-sm text-slate-500`}>
+            Today&apos;s 3 are found each morning with the day&apos;s posts. You can also paste any post below.
+          </p>
+        )}
+        {comments.map((c) => (
+          <CommentDraft key={c.id} item={c} act={act} />
+        ))}
+      </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-slate-900">
@@ -478,7 +492,7 @@ function CommentsTab({
       </section>
 
       <section className={`${card} flex flex-col gap-3`}>
-        <h2 className="text-sm font-semibold text-slate-900">Write a comment</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Comment on another post</h2>
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Post link (… → Copy link to post)" className={input} />
         <input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Who posted it (company or person)" className={input} />
         <textarea value={postText} onChange={(e) => setPostText(e.target.value)} rows={5} placeholder="Paste the post's text" className={input} />
@@ -488,9 +502,6 @@ function CommentsTab({
         </button>
       </section>
 
-      {comments.map((c) => (
-        <CommentDraft key={c.id} item={c} act={act} />
-      ))}
     </div>
   );
 }
@@ -566,6 +577,15 @@ function SettingsForm({ settings, saving, save }: { settings: Settings; saving: 
       <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
         Topics (one per line; the bot rotates through them)
         <textarea rows={4} value={s.topics.join("\n")} onChange={(e) => setS({ ...s, topics: lines(e.target.value) })} className={input} />
+      </label>
+      <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        Sign-up link in every post (leave empty for Anchor&apos;s sign-up page)
+        <input
+          value={s.ctaUrl}
+          onChange={(e) => setS({ ...s, ctaUrl: e.target.value })}
+          placeholder="https://…/sign-up"
+          className={input}
+        />
       </label>
       <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
         About the company (keeps the posts accurate)

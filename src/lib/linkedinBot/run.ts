@@ -1,10 +1,10 @@
-import { and, desc, eq, inArray, lt, lte, ne, or, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, lte, ne, or, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { linkedinBot, linkedinBotItems } from "@/db/schema";
 import { localDateISO } from "@/lib/timeZone";
 import { normalizeSettings, weekday, zonedTime, type LinkedInBotSettings } from "./settings";
 import { createPost, LinkedInError, refreshAccessToken, uploadVideo } from "./api";
-import { draftComments, pickEngagementTargets, researchNotes, writePosts, writeVideo, type Slide } from "./write";
+import { draftComments, findPostsToComment, pickEngagementTargets, researchNotes, writePosts, writeVideo, type Slide } from "./write";
 import { renderSlideVideo } from "./video";
 import { mediaUrl } from "./media";
 
@@ -26,6 +26,7 @@ const RETRY_AFTER_MS = 15 * 60_000;
 // later in the day instead.
 const LATE_SLOT_MS = 30 * 60_000;
 const LAST_POST_HOUR = 21;
+const COMMENTS_PER_DAY = 3;
 
 export async function loadBot(): Promise<BotRow> {
   const [row] = await db.select().from(linkedinBot).where(eq(linkedinBot.id, BOT_ID));
@@ -112,7 +113,7 @@ export async function planDay(opts: { replace?: boolean } = {}): Promise<{ posts
         and(
           inArray(linkedinBotItems.kind, ["post", "video"]),
           eq(linkedinBotItems.status, "scheduled"),
-          sql`${linkedinBotItems.scheduledFor} >= ${dayStart}`,
+          gte(linkedinBotItems.scheduledFor, dayStart),
         ),
       );
   }
@@ -156,6 +157,40 @@ export async function planDay(opts: { replace?: boolean } = {}): Promise<{ posts
     await updateBot({ engagement: { date: dateISO, targets } });
   } catch (err) {
     console.error("[linkedinBot] engagement list failed:", err);
+  }
+
+  // Today's posts in the space to comment on, ready to copy and post.
+  // Yesterday's unused ones are old news by now, so they're cleared.
+  try {
+    await db
+      .update(linkedinBotItems)
+      .set({ status: "skipped" })
+      .where(
+        and(
+          eq(linkedinBotItems.kind, "comment"),
+          eq(linkedinBotItems.status, "draft"),
+          sql`${linkedinBotItems.createdAt} < now() - interval '36 hours'`,
+        ),
+      );
+    const recentComments = await db
+      .select({ extra: linkedinBotItems.extra })
+      .from(linkedinBotItems)
+      .where(and(eq(linkedinBotItems.kind, "comment"), sql`${linkedinBotItems.createdAt} > now() - interval '60 days'`));
+    const skip = recentComments.map((r) => String((r.extra as { url?: string } | null)?.url ?? "")).filter(Boolean);
+    const picks = await findPostsToComment(settings, COMMENTS_PER_DAY, skip);
+    if (picks.length) {
+      await db.insert(linkedinBotItems).values(
+        picks.map((p) => ({
+          kind: "comment",
+          status: "draft",
+          topic: p.author || null,
+          text: p.comments[0],
+          extra: { options: p.comments, url: p.url, author: p.author, postText: p.postText, daily: true },
+        })),
+      );
+    }
+  } catch (err) {
+    console.error("[linkedinBot] finding posts to comment on failed:", err);
   }
 
   await updateBot({ lastPlannedOn: dateISO, lastError: null });
