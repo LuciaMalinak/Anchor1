@@ -27,6 +27,8 @@ const RETRY_AFTER_MS = 15 * 60_000;
 const LATE_SLOT_MS = 30 * 60_000;
 const LAST_POST_HOUR = 21;
 const COMMENTS_PER_DAY = 3;
+const MISSED_AFTER_MS = 20 * 3600_000;
+const POST_GAP_MS = 90 * 60_000;
 
 export async function loadBot(): Promise<BotRow> {
   const [row] = await db.select().from(linkedinBot).where(eq(linkedinBot.id, BOT_ID));
@@ -355,6 +357,30 @@ export async function runLinkedInBot(): Promise<{ skipped?: string; planned?: { 
       }
     }
 
+    // The site can be asleep at a post's time (Render's free plan sleeps
+    // when nobody's using it) and only woken later by a scheduled ping.
+    // So: a post that's a day late is dropped rather than posted out of
+    // date, and when several are overdue they go out one per run, at
+    // least POST_GAP_MS apart, instead of all at once.
+    await db
+      .update(linkedinBotItems)
+      .set({ status: "skipped", error: "Missed: the site wasn't running at its time" })
+      .where(
+        and(
+          inArray(linkedinBotItems.kind, ["post", "video"]),
+          eq(linkedinBotItems.status, "scheduled"),
+          lt(linkedinBotItems.scheduledFor, new Date(Date.now() - MISSED_AFTER_MS)),
+        ),
+      );
+    const [lastPosted] = await db
+      .select({ postedAt: linkedinBotItems.postedAt })
+      .from(linkedinBotItems)
+      .where(and(inArray(linkedinBotItems.kind, ["post", "video"]), eq(linkedinBotItems.status, "posted")))
+      .orderBy(desc(linkedinBotItems.postedAt))
+      .limit(1);
+    if (lastPosted?.postedAt && Date.now() - lastPosted.postedAt.getTime() < POST_GAP_MS) {
+      return { planned, posted: 0, failed: 0 };
+    }
     const due = await db
       .select({ id: linkedinBotItems.id })
       .from(linkedinBotItems)
@@ -366,7 +392,7 @@ export async function runLinkedInBot(): Promise<{ skipped?: string; planned?: { 
         ),
       )
       .orderBy(linkedinBotItems.scheduledFor)
-      .limit(3);
+      .limit(1);
     let posted = 0;
     let failed = 0;
     for (const { id } of due) {

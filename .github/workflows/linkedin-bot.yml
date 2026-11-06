@@ -1,0 +1,42 @@
+# Runs the LinkedIn bot (src/lib/linkedinBot/run.ts): writes the day's
+# posts once a day and publishes any that are due. The site checks this
+# by itself every few minutes, but only while it's awake, and Render's
+# free plan puts it to sleep when nobody is using it. This wakes it up.
+# Safe to run as often as you like: posts are never published twice.
+#
+# GitHub often runs scheduled jobs late or skips some, so posts can go
+# out later than their set times. For posts on time, also point a free
+# scheduler such as cron-job.org at
+#   https://<your-site>/api/cron/linkedin-bot?key=<CRON_SECRET>
+# every 15 minutes, or move Render to an always-on plan.
+#
+# Uses the same CRON_SECRET repository secret as morning-brief.yml.
+name: LinkedIn bot
+
+on:
+  schedule:
+    - cron: "7,27,47 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: linkedin-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Ask Anchor to write and publish due LinkedIn posts
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ANCHOR_URL: ${{ vars.ANCHOR_URL || 'https://anchor-be6o.onrender.com' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::warning::CRON_SECRET isn't set as a repository secret, so the LinkedIn bot didn't run."
+            exit 0
+          fi
+          # The site may be asleep and take a minute to wake, so allow
+          # time and retry.
+          curl -sS --fail-with-body --max-time 600 --retry 3 --retry-delay 30 --retry-all-errors \
+            -X POST -H "x-cron-key: $CRON_SECRET" "$ANCHOR_URL/api/cron/linkedin-bot"
