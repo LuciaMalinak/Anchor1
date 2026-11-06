@@ -38,3 +38,13 @@ jobs:
           # wake, so allow time and retry.
           curl -sS --fail-with-body --max-time 600 --retry 3 --retry-delay 30 --retry-all-errors \
             -X POST -H "x-cron-key: $CRON_SECRET" "$ANCHOR_URL/api/cron/morning-brief"
+      # While the site is awake anyway, let the LinkedIn bot publish
+      # anything due (see linkedin-bot.yml, which also runs on its own).
+      - name: Ask Anchor to publish due LinkedIn posts
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ANCHOR_URL: ${{ vars.ANCHOR_URL || 'https://anchor-be6o.onrender.com' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then exit 0; fi
+          curl -sS --max-time 300 -X POST -H "x-cron-key: $CRON_SECRET" "$ANCHOR_URL/api/cron/linkedin-bot" || true
