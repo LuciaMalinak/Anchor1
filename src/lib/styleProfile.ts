@@ -5,12 +5,13 @@ import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { isSelfSpeaker, type CallIdentity } from "@/lib/callIdentity";
 import { deals, dealMessages, meetingParticipants, meetings, summaries, transcripts, userStyleProfiles, users } from "@/db/schema";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Same model as the other batch/quality-sensitive features (summarize,
 // handoff briefing) — this only ever runs in the background or on an
 // explicit "generate a briefing" click, never in the live-assist hot
 // path itself, so quality matters more than shaving off latency here.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

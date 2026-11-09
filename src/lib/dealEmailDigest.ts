@@ -15,8 +15,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import type { EmailContextItem } from "./integrations/gmail";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

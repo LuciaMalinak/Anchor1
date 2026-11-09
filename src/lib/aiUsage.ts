@@ -104,7 +104,13 @@ async function signedInUserId(): Promise<string | null> {
 
 export function anthropicCost(model: string, u: TokenUsage): number {
   const price = ANTHROPIC_PRICES.find(([prefix]) => model.startsWith(prefix));
-  const [input, output] = price ? [price[1], price[2]] : FALLBACK_PRICE;
+  let [input, output] = price ? [price[1], price[2]] : FALLBACK_PRICE;
+  // Claude Haiku 5.5 has a second rate card for prompts over 100K tokens:
+  // $0.50 / $2.50 per million instead of $0.10 / $0.50.
+  if (model.startsWith("claude-haiku-5") && u.inputTokens + u.cacheReadTokens + u.cacheWriteTokens > 100_000) {
+    input *= 5;
+    output *= 5;
+  }
   return (
     (u.inputTokens * input +
       u.cacheWriteTokens * input * 1.25 +
@@ -186,10 +192,62 @@ async function readStreamUsage(body: ReadableStream<Uint8Array>): Promise<{ mode
 
 // A fetch for the Anthropic SDK (new Anthropic({ fetch })) that records
 // each Messages API call's usage under this feature label.
+// Background features where a quick, light answer is plenty: they run
+// at low effort on Claude Haiku 5.5, which thinks less and costs less.
+// Everything else keeps the model's default (medium).
+const LOW_EFFORT_FEATURES = new Set([
+  "industry_news",
+  "daily_briefing",
+  "meeting_detection",
+  "email_digest",
+  "linkedin_bot",
+  "linkedin_import",
+  "morning_brief",
+  "playbook_learning",
+]);
+// Claude Haiku 5.5 thinks before answering by default, and that thinking
+// counts toward max_tokens: a limit sized for a short answer could be
+// used up before the answer starts. Requests that think get at least this
+// much room (only tokens actually written are billed).
+const MIN_MAX_TOKENS_WITH_THINKING = 4096;
+
+// Fills in the Haiku 5.5 settings above on a Messages request body, in
+// one place rather than in every feature. Returns the body unchanged for
+// other models, other endpoints, or anything it can't read.
+export function withModelDefaults(feature: string, url: string, body: unknown): unknown {
+  if (typeof body !== "string" || !/\/v1\/messages(\?|$)/.test(url)) return body;
+  let req: Record<string, unknown>;
+  try {
+    req = JSON.parse(body);
+  } catch {
+    return body;
+  }
+  if (typeof req.model !== "string" || !/^claude-haiku-5/.test(req.model)) return body;
+  const thinking = req.thinking as { type?: string } | undefined;
+  const thinkingOff = thinking?.type === "disabled";
+  const outputConfig = (req.output_config ?? {}) as Record<string, unknown>;
+  if (!outputConfig.effort && LOW_EFFORT_FEATURES.has(feature)) {
+    req.output_config = { ...outputConfig, effort: "low" };
+  }
+  if (!thinkingOff && typeof req.max_tokens === "number" && req.max_tokens < MIN_MAX_TOKENS_WITH_THINKING) {
+    req.max_tokens = MIN_MAX_TOKENS_WITH_THINKING;
+  }
+  return JSON.stringify(req);
+}
+
 export function meteredFetch(feature: string): typeof fetch {
   return async (input, init) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const store = context.getStore();
+    if (init?.body !== undefined) {
+      const body = withModelDefaults(feature, url, init.body);
+      if (body !== init.body) {
+        // The body changed size, so any length header the client set is stale.
+        const headers = new Headers(init.headers);
+        headers.delete("content-length");
+        init = { ...init, body: body as string, headers };
+      }
+    }
     const res = await fetch(input, init);
     if (!res.ok || !/\/v1\/messages(\?|$)/.test(url)) return res;
 

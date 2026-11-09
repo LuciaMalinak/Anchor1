@@ -4,10 +4,11 @@ import { createWithForcedTool } from "./forcedTool";
 import { db } from "@/db";
 import { deals, meetings, summaries } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Same tool-use pattern as summarize.ts, applied across a whole team's
 // deals instead of one meeting — this is what powers the Insights page.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

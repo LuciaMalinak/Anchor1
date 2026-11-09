@@ -2,11 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "@/lib/aiUsage";
 import { createWithForcedTool } from "@/lib/forcedTool";
 import { signUpUrl, type LinkedInBotSettings } from "./settings";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // The writing behind the LinkedIn bot: the daily posts, the weekly video's
 // slides, today's companies to engage with, and comment drafts. Same model
 // and structured-output pattern as the rest of Anchor.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

@@ -1,11 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Model calls behind the deal tools: the "Draft a nudge" email for a
 // deal going quiet, the pre-call brief, and the CRM update proposal after
 // a call. Same model and structured-output pattern as summarize.ts.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

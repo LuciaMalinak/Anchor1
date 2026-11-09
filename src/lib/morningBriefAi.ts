@@ -1,12 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Model calls behind the Morning brief: deciding which emails really need
 // a reply (with a one-line summary each), and drafting a reply in the
 // person's own voice. Same model and structured-output pattern as the
 // other background features.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

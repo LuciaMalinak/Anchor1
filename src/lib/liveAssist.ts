@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
-import { FALLBACK_LIVE_MODEL } from "./liveCoaching";
+import { LIVE_MODEL, LIVE_THINKING } from "./liveCoaching";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Same pattern as summarize.ts, but conversational rather than
 // tool-forced structured output: this is "Ask Anchor", including during
@@ -11,15 +12,19 @@ import { FALLBACK_LIVE_MODEL } from "./liveCoaching";
 // which is set to a bigger, slower model for summaries and memory, so
 // every Ask Anchor answer quietly inherited that model's lag.
 // ANTHROPIC_ASK_MODEL overrides just Ask Anchor if that trade-off ever
-// needs to move the other way. Stays on Haiku 4.5 while live calls move
-// to Haiku 5.5: Ask Anchor's multi-step tool and web-search rounds
-// haven't been checked against a model that thinks by default.
-const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_LIVE_MODEL || FALLBACK_LIVE_MODEL;
+// needs to move the other way. Runs on Claude Haiku 5.5 like live calls,
+// with thinking off (QUICK_THINKING) so a quick answer starts at once and
+// short answer limits aren't used up by thinking; the tool and web-search
+// rounds send each reply back whole, as that model requires.
+const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_LIVE_MODEL || LIVE_MODEL;
+// Thinking off only on Haiku 5-family models (where it's accepted at the
+// default effort); any other model keeps its own default.
+const QUICK_THINKING = /^claude-haiku-5/.test(MODEL) ? { thinking: LIVE_THINKING } : {};
 // Building a model, spreadsheet or deck (create_spreadsheet /
 // create_presentation in askTools.ts) is
 // careful, long work — formulas across sheets — so those questions go to
 // the stronger model, with room for the whole workbook.
-const MODEL_BUILDER_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL_BUILDER_MODEL = process.env.ANTHROPIC_BUILDER_MODEL || MAIN_MODEL;
 const MODEL_BUILDER_MAX_TOKENS = 16_000;
 const MODEL_REQUEST =
   /\b(excel|spreadsheet|xlsx|sheet|model|modell?ing|forecast|projection|budget|valuation|dcf|p&l|pnl|financials?|roi|payback|unit economics|pro ?forma|scenario|sensitivity|powerpoint|pptx|deck|slides?|presentation|pitch)\b/i;
@@ -536,6 +541,7 @@ export async function askAnchor(params: {
   const request = (withSearch: boolean) =>
     client().messages.create({
       model: MODEL,
+      ...QUICK_THINKING,
       max_tokens: mode === "live" ? 700 : 1500,
       ...(withSearch ? { tools: [webSearchTool(mode === "live" ? 3 : 5)] } : {}),
       system: buildSystemPrompt(contextBlock, mode, params.context),
@@ -597,6 +603,7 @@ export async function* askAnchorStream(params: {
     (withSearch, messages) =>
       client().messages.stream({
         model: heavy ? MODEL_BUILDER_MODEL : MODEL,
+        ...(heavy ? {} : QUICK_THINKING),
         max_tokens: heavy ? MODEL_BUILDER_MAX_TOKENS : mode === "live" ? 700 : 1500,
         // The deal context in the system prompt is large and identical
         // for every follow-up question (and every tool round within one
@@ -688,6 +695,7 @@ export async function* askWorkspaceStream(params: {
     (withSearch, messages) =>
       client().messages.stream({
         model: heavy ? MODEL_BUILDER_MODEL : MODEL,
+        ...(heavy ? {} : QUICK_THINKING),
         max_tokens: heavy ? MODEL_BUILDER_MAX_TOKENS : 1500,
         cache_control: { type: "ephemeral" },
         ...(withSearch || serverTools.length
