@@ -52,6 +52,14 @@ function startMorningBriefSchedule() {
     } catch (err) {
       console.error("[morningBrief] scheduled check failed:", err);
     }
+    // A full database backup once a day (src/lib/backup.ts).
+    try {
+      const { runBackupIfDue } = await import("@/lib/backup");
+      const result = await runBackupIfDue();
+      if (result) console.log("[backup] daily backup:", result.ok ? result.key : result.error);
+    } catch (err) {
+      console.error("[backup] scheduled backup failed:", err);
+    }
     // The company LinkedIn Page bot: writes the day's posts once a day and
     // publishes the ones that are due (src/lib/linkedinBot/run.ts).
     try {

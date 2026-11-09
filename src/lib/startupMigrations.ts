@@ -7,6 +7,20 @@ import { BASELINE_STATEMENTS } from "@/db/baseline";
 // EXISTS), so running it on every start is harmless. Keep this to
 // additions only: never drop or rename anything here.
 const MIGRATIONS = [
+  // Record of deleted deals, removed people and moved accounts
+  // (src/lib/dataChangeLog.ts).
+  `CREATE TABLE IF NOT EXISTS "data_change_log" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "action" text NOT NULL,
+    "actorUserId" uuid,
+    "actorEmail" text,
+    "teamId" uuid,
+    "targetId" uuid,
+    "details" jsonb,
+    "createdAt" timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "data_change_log_target_idx" ON "data_change_log" ("targetId")`,
+  `CREATE INDEX IF NOT EXISTS "data_change_log_created_idx" ON "data_change_log" ("createdAt")`,
   // Billing (src/lib/billing.ts). billingExempt is added without a
   // default first, so every team that already exists when billing
   // arrives is marked free (they were using Anchor before it was paid);

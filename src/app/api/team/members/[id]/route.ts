@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logDataChange } from "@/lib/dataChangeLog";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { users, teams, deals } from "@/db/schema";
@@ -43,6 +44,14 @@ export async function DELETE(
   }
 
   await db.update(users).set({ teamId: null }).where(eq(users.id, memberId));
+  await logDataChange({
+    action: "member_removed",
+    actorUserId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    teamId,
+    targetId: memberId,
+    details: { email: member.email, name: member.name, teamName: team.name },
+  });
 
   // Clear any deal-lead/backup assignments pointing at them on this
   // team's deals — otherwise a removed person could keep showing up as

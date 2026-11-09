@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logDataChange } from "@/lib/dataChangeLog";
 import { randomUUID } from "crypto";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -43,11 +44,19 @@ export async function POST() {
           { status: 400 }
         );
       }
-      // Sole owner of their own team — deleting the team cascades to
-      // everything scoped to it (deals, meetings, tasks, integrations…),
-      // which is exactly what "delete my account" should mean when
-      // nobody else is relying on that data.
-      await db.delete(teams).where(eq(teams.id, team.id));
+      // Sole owner of their own team. The team and everything on it
+      // (deals, calls, files, tasks) is kept, with nobody on it, so it
+      // can be given back if the account was deleted by mistake; the
+      // person themselves can no longer sign in or see it.
+      const teamDeals = await db.select({ id: deals.id, name: deals.name }).from(deals).where(eq(deals.teamId, team.id));
+      await logDataChange({
+        action: "team_deleted",
+        actorUserId: userId,
+        actorEmail: user.email,
+        teamId: team.id,
+        targetId: userId,
+        details: { teamName: team.name, reason: "owner deleted their account; team and data kept", deals: teamDeals.map((d) => d.name) },
+      });
     }
   }
 
@@ -67,6 +76,14 @@ export async function POST() {
     await db.update(deals).set({ backupUserId: null }).where(and(eq(deals.teamId, user.teamId), eq(deals.backupUserId, userId)));
   }
 
+  await logDataChange({
+    action: "account_deleted",
+    actorUserId: userId,
+    actorEmail: user.email,
+    teamId: user.teamId,
+    targetId: userId,
+    details: { email: user.email, name: user.name },
+  });
   await db.delete(sessions).where(eq(sessions.userId, userId));
   await db.delete(accounts).where(eq(accounts.userId, userId));
   await db

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { logDataChange } from "@/lib/dataChangeLog";
+import { meetingSnapshot } from "@/lib/dataSafety";
 import { reconcileBotMeeting } from "@/lib/botReconcile";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings, transcripts, summaries, meetingParticipants, contacts, deals } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { deleteMeetingAudio } from "@/lib/storage";
 import { canAccessDeal, authorizeDeal } from "@/lib/dealAccess";
 import { attachMeetingToDeal } from "@/lib/processMeeting";
 
@@ -142,11 +143,17 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // The transcript, summary, and meeting_participant rows cascade-delete
-  // at the database level (see schema.ts) — deleting the meeting row
-  // handles the data. The audio file on disk is cleaned up separately.
+  // A full copy (transcript, summary, participants) goes to the change log
+  // first, and the recording stays in storage, so a deleted call can be
+  // put back (src/lib/dataSafety.ts). Deleting the row cascades the rest.
+  await logDataChange({
+    action: "meeting_deleted",
+    actorUserId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetId: id,
+    details: await meetingSnapshot(id),
+  });
   await db.delete(meetings).where(eq(meetings.id, id));
-  await deleteMeetingAudio(id);
 
   return NextResponse.json({ ok: true });
 }

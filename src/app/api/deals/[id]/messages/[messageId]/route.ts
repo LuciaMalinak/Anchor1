@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logDataChange } from "@/lib/dataChangeLog";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { dealMessages } from "@/db/schema";
@@ -36,6 +37,13 @@ export async function DELETE(
     return NextResponse.json({ error: "You can only delete your own messages" }, { status: 403 });
   }
 
+  await logDataChange({
+    action: "message_deleted",
+    actorUserId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetId: messageId,
+    details: { message },
+  });
   await db.delete(dealMessages).where(eq(dealMessages.id, messageId));
 
   return NextResponse.json({ ok: true });
