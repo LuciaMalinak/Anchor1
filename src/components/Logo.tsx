@@ -1,14 +1,13 @@
-// Shared wordmark + anchor mark, matched to the investor deck: a thin
-// line-art anchor glyph (no filled badge) in the deck's navy/copper, plus
-// the "Anchor" wordmark. The browser tab icon (src/app/icon.png,
-// favicon.ico, apple-icon.png) uses the bolder filled version of this
-// same mark instead — Lucia's official logo, also used for the desktop
-// app icon (desktop/build/icon.icns) — since a thin stroke doesn't read
-// well at favicon sizes. Keep colors (navy #12294A / copper #B4531F) in
-// sync if either changes.
+// Anchor's logo: a bold anchor in navy (#12294A) with a copper ring
+// (#B4531F), the same mark as the browser tab icon, the email header, the
+// desktop app and the LinkedIn Page. Every icon file is drawn from the
+// same shapes by scripts/generate-brand-assets.mjs, and the desktop app's
+// window repeats them in desktop/src/renderer/index.html: keep all three
+// in sync if the logo changes.
 //
-// `tone="dark"` (default) is navy-on-light, for headers and white
-// backgrounds. `tone="light"` is white-on-navy, for the hero section.
+// `tone="dark"` (default) is a navy anchor, for headers and white
+// backgrounds. `tone="light"` is a white anchor, for navy backgrounds.
+// The ring is copper in both.
 export function AnchorMark({
   size = 28,
   tone = "dark",
@@ -18,26 +17,25 @@ export function AnchorMark({
   tone?: "dark" | "light";
   className?: string;
 }) {
-  const color = tone === "light" ? "#FFFFFF" : "#12294A";
+  const body = tone === "light" ? "#FFFFFF" : "#12294A";
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
-      fill="none"
-      stroke={color}
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      viewBox="0 0 512 512"
       aria-hidden="true"
       className={`shrink-0 ${className}`}
     >
-      <circle cx="16" cy="7.5" r="2.25" />
-      <path d="M16 9.75V24.5" />
-      <path d="M11 13.5H21" />
-      <path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5" />
-      <path d="M8 18.5L6 15.8M8 18.5L10.3 17" />
-      <path d="M24 18.5L26 15.8M24 18.5L21.7 17" />
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="256" cy="92" r="38" stroke="#B4531F" strokeWidth="28" />
+        <line x1="256" y1="160" x2="256" y2="430" stroke={body} strokeWidth="34" />
+        <line x1="164" y1="196" x2="348" y2="196" stroke={body} strokeWidth="34" />
+        <path d="M104 300 C 112 392 180 446 256 446 C 332 446 400 392 408 300" stroke={body} strokeWidth="34" />
+      </g>
+      <g fill={body}>
+        <path d="M70 318 L104 252 L140 318 Z" />
+        <path d="M372 318 L408 252 L442 318 Z" />
+      </g>
     </svg>
   );
 }

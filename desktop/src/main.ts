@@ -527,7 +527,7 @@ function showOverlayPending(windowId: string, title: string) {
     .dot{width:9px;height:9px;border-radius:50%;background:#34d399;animation:p 1.2s infinite}
     @keyframes p{50%{opacity:.3}}
   </style></head><body>
-    <div class="brand"><svg width="20" height="20" viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="7.5" r="2.25"/><path d="M16 9.75V24.5"/><path d="M11 13.5H21"/><path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5"/><path d="M8 18.5L6 15.8M8 18.5L10.3 17"/><path d="M24 18.5L26 15.8M24 18.5L21.7 17"/></svg>Anchor</div>
+    <div class="brand"><svg width="20" height="20" viewBox="0 0 512 512" aria-hidden="true"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="256" cy="92" r="38" stroke="#B4531F" stroke-width="28"/><line x1="256" y1="160" x2="256" y2="430" stroke="#fff" stroke-width="34"/><line x1="164" y1="196" x2="348" y2="196" stroke="#fff" stroke-width="34"/><path d="M104 300 C 112 392 180 446 256 446 C 332 446 400 392 408 300" stroke="#fff" stroke-width="34"/></g><g fill="#fff"><path d="M70 318 L104 252 L140 318 Z"/><path d="M372 318 L408 252 L442 318 Z"/></g></svg>Anchor</div>
     <h1><span class="dot"></span>Call detected</h1>
     <p class="title">${escapeHtml(title)}</p>
     <p>Starting the recording and live coaching…</p>

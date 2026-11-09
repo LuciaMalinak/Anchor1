@@ -30,7 +30,7 @@ footEl.textContent = IS_MAC
 const SPARKLE_SVG =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f0b48f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.7 1.8 1.8.7-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/></svg>';
 const ANCHOR_SVG =
-  '<svg width="26" height="26" viewBox="0 0 32 32" fill="none" stroke="#12294a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="7.5" r="2.25"/><path d="M16 9.75V24.5"/><path d="M11 13.5H21"/><path d="M8 18.5C8 22.5 11.5 25.5 16 25.5C20.5 25.5 24 22.5 24 18.5"/><path d="M8 18.5L6 15.8M8 18.5L10.3 17"/><path d="M24 18.5L26 15.8M24 18.5L21.7 17"/></svg>';
+  '<svg width="26" height="26" viewBox="0 0 512 512" aria-hidden="true"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="256" cy="92" r="38" stroke="#B4531F" stroke-width="28"/><line x1="256" y1="160" x2="256" y2="430" stroke="#12294a" stroke-width="34"/><line x1="164" y1="196" x2="348" y2="196" stroke="#12294a" stroke-width="34"/><path d="M104 300 C 112 392 180 446 256 446 C 332 446 400 392 408 300" stroke="#12294a" stroke-width="34"/></g><g fill="#12294a"><path d="M70 318 L104 252 L140 318 Z"/><path d="M372 318 L408 252 L442 318 Z"/></g></svg>';
 
 function watchingHtml() {
   const signedIn = isConnected;
