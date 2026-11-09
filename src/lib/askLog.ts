@@ -6,7 +6,8 @@ import { askLog, meetings } from "@/db/schema";
 // to, so what they looked up during a meeting stays with that meeting
 // (its page lists it) and with the deal. A question goes with the call
 // they're in right now, if any; otherwise with the deal or meeting page
-// they asked from. A general question outside any call isn't kept.
+// they asked from. General questions are kept too (with neither), so the
+// person's whole history is searchable in Ask Anchor → History.
 
 const LIVE_WITHIN_MS = 4 * 60 * 60 * 1000;
 const MAX_ANSWER_CHARS = 8_000;
@@ -44,7 +45,6 @@ export async function saveAsk(params: {
   const liveFits = live && (!params.dealId || !live.dealId || live.dealId === params.dealId);
   const meetingId = params.meetingId ?? (liveFits ? live.id : null);
   const dealId = params.dealId ?? (liveFits ? live.dealId : null);
-  if (!meetingId && !dealId) return;
   await db.insert(askLog).values({
     userId: params.userId,
     meetingId,
