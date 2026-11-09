@@ -15,6 +15,14 @@ import { useIsMac } from "@/lib/useIsMac";
 // components can open it with a question (useAskAnchor().ask("…")).
 
 type Turn = { role: "user" | "assistant"; content: string };
+type PastAsk = {
+  id: string;
+  question: string;
+  answer: string;
+  createdAt: string;
+  dealName: string | null;
+  meetingTitle: string | null;
+};
 type Scope = { key: string; endpoint: string; body: Record<string, string>; kind: "deal" | "meeting" | "workspace" };
 
 type AskAnchorApi = {
@@ -161,6 +169,23 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
     [scope, threads]
   );
 
+  // History: a past question and its answer, opened as the current chat
+  // so they can read it again or carry on asking from there.
+  const openPast = useCallback(
+    (item: PastAsk) => {
+      if (!scope) return;
+      setError(null);
+      setThreads((t) => ({
+        ...t,
+        [scope.key]: [
+          { role: "user", content: item.question },
+          { role: "assistant", content: item.answer },
+        ],
+      }));
+    },
+    [scope]
+  );
+
   const api = useMemo<AskAnchorApi>(() => ({ ask: (q) => void ask(q), setLabel }), [ask]);
 
   return (
@@ -182,6 +207,7 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
                 error={error}
                 onAsk={(q) => void ask(q)}
                 onClear={() => setThreads((t) => ({ ...t, [scope.key]: [] }))}
+                onOpenPast={(item) => openPast(item)}
               />
             </aside>
             {/* Narrow screens: a button that opens the same panel as a sheet. */}
@@ -204,6 +230,7 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
                   error={error}
                   onAsk={(q) => void ask(q)}
                   onClear={() => setThreads((t) => ({ ...t, [scope.key]: [] }))}
+                  onOpenPast={(item) => openPast(item)}
                   onClose={() => setSheetOpen(false)}
                 />
               </div>
@@ -224,6 +251,7 @@ function DockBody({
   error,
   onAsk,
   onClear,
+  onOpenPast,
   onClose,
 }: {
   pathname: string;
@@ -234,8 +262,10 @@ function DockBody({
   error: string | null;
   onAsk: (q: string) => void;
   onClear: () => void;
+  onOpenPast: (item: PastAsk) => void;
   onClose?: () => void;
 }) {
+  const [showHistory, setShowHistory] = useState(false);
   const isMac = useIsMac();
   const [question, setQuestion] = useState("");
   const [listening, setListening] = useState(false);
@@ -308,7 +338,15 @@ function DockBody({
             <h2 className="text-lg font-semibold text-white">Ask Anchor</h2>
           </div>
           <div className="flex items-center gap-1">
-            {turns.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              aria-pressed={showHistory}
+              className={`rounded-md px-2 py-1 text-xs hover:bg-white/10 hover:text-white ${showHistory ? "bg-white/10 text-white" : "text-[#9fb3d1]"}`}
+            >
+              History
+            </button>
+            {turns.length > 0 && !showHistory && (
               <button type="button" onClick={onClear} className="rounded-md px-2 py-1 text-xs text-[#9fb3d1] hover:bg-white/10 hover:text-white">
                 New chat
               </button>
@@ -332,6 +370,15 @@ function DockBody({
         </p>
       </div>
 
+      {showHistory ? (
+        <HistoryView
+          onOpen={(item) => {
+            onOpenPast(item);
+            setShowHistory(false);
+          }}
+        />
+      ) : (
+      <>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4" aria-live="polite">
         {turns.length === 0 && !asking && (
           <div className="rounded-xl border border-[#1f3658] bg-[#16304f] px-4 py-3 text-sm leading-relaxed text-[#cfdaea]">
@@ -428,6 +475,79 @@ function DockBody({
           </button>
         </div>
       </form>
+      </>
+      )}
+    </div>
+  );
+}
+
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return sameDay
+    ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+// Everything this person has asked, newest first, with a search box over
+// questions and answers. Clicking one opens it in the chat.
+function HistoryView({ onOpen }: { onOpen: (item: PastAsk) => void }) {
+  const [query, setQuery] = useState("");
+  const [items, setItems] = useState<PastAsk[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const id = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/ask/history?q=${encodeURIComponent(query.trim())}`, { signal: controller.signal });
+        if (!res.ok) throw new Error();
+        const body = (await res.json()) as { items: PastAsk[] };
+        setItems(body.items);
+        setFailed(false);
+      } catch {
+        if (!controller.signal.aborted) setFailed(true);
+      }
+    }, query ? 250 : 0);
+    return () => {
+      clearTimeout(id);
+      controller.abort();
+    };
+  }, [query]);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="px-5 pt-4">
+        <input
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search your questions and answers…"
+          className="w-full rounded-xl bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+        />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-5 py-4">
+        {failed && <p className="text-sm text-red-300">Couldn&apos;t load your history. Try again.</p>}
+        {!failed && items === null && <p className="text-sm text-[#9fb3d1]">Loading…</p>}
+        {items?.length === 0 && (
+          <p className="text-sm text-[#9fb3d1]">{query ? "Nothing matches that." : "Your questions will show up here."}</p>
+        )}
+        {items?.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onOpen(item)}
+            className="rounded-xl border border-[#1f3658] bg-[#16304f] px-3.5 py-2.5 text-left transition hover:border-[#f0b48f]"
+          >
+            <p className="line-clamp-2 text-sm font-medium text-white">{item.question}</p>
+            <p className="mt-1 line-clamp-2 text-xs text-[#cfdaea]">{item.answer}</p>
+            <p className="mt-1.5 text-[11px] text-[#7d8fb0]">
+              {shortDate(item.createdAt)}
+              {item.dealName ? ` · ${item.dealName}` : item.meetingTitle ? ` · ${item.meetingTitle}` : ""}
+            </p>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
