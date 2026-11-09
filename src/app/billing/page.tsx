@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { signOut } from "@/auth";
@@ -22,11 +23,15 @@ function day(d: Date | null): string {
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ checkout?: string; session_id?: string }>;
+  searchParams: Promise<{ checkout?: string; session_id?: string; promo?: string }>;
 }) {
   let ctx = await billingContext();
   if (!ctx) redirect("/sign-in?next=/billing");
-  const { checkout, session_id } = await searchParams;
+  const { checkout, session_id, promo } = await searchParams;
+  // A promo code from the free-trial link (/try) or ?promo=, applied for
+  // them on the plans below.
+  const cookieStore = await cookies();
+  const startingPromo = (promo || cookieStore.get("anchor_promo")?.value || "").slice(0, 40);
 
   // Back from Stripe: record the subscription now rather than waiting for
   // the webhook, so they can go straight in.
@@ -127,7 +132,7 @@ export default async function BillingPage({
               </p>
             </div>
             {billingConfigured() ? (
-              <BillingPlans seats={seats} />
+              <BillingPlans seats={seats} initialPromo={startingPromo} />
             ) : (
               <p className="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">
                 Online payment is being set up. Contact sales below and we&apos;ll get you started.

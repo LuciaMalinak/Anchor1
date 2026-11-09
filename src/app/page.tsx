@@ -145,6 +145,12 @@ export default async function Home() {
             >
               Sign in
             </Link>
+            <Link
+              href="/free-trial"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-dark"
+            >
+              Try free for 1 week
+            </Link>
           </nav>
         </div>
       </header>

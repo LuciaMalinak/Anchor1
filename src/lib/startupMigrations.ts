@@ -34,6 +34,12 @@ const MIGRATIONS = [
     "note" text,
     "createdAt" timestamp NOT NULL DEFAULT now()
   )`,
+  // The public 1-week free trial code used on /free-trial and in the
+  // LinkedIn campaign. Created once; turn it off or change it in Admin →
+  // Billing (this never overwrites it).
+  `INSERT INTO "promo_code" ("code", "trialDays", "maxUses", "note")
+    VALUES ('TRYANCHOR', 7, NULL, 'Public 1-week free trial (website /free-trial and LinkedIn)')
+    ON CONFLICT ("code") DO NOTHING`,
   `CREATE TABLE IF NOT EXISTS "sales_lead" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     "name" text NOT NULL,

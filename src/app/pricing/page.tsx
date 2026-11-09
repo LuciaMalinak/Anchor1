@@ -91,6 +91,12 @@ export default function PricingPage() {
         <p className="mx-auto mt-4 max-w-xl text-base text-slate-300">
           Land with one leader. Expand to every colleague who covers for them.
         </p>
+        <Link
+          href="/free-trial"
+          className="mt-6 inline-block rounded-full bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-dark"
+        >
+          Try any plan free for 1 week →
+        </Link>
       </section>
 
       <section className="mx-auto -mt-10 w-full max-w-6xl px-6 pb-20 sm:px-8">
