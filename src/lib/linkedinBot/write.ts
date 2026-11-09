@@ -24,6 +24,7 @@ function voice(settings: LinkedInBotSettings): string {
 - First line is a hook that makes a dealmaker or salesperson stop scrolling (a concrete pain, a sharp question, or a number from the research notes). No "In today's fast-paced world", no "game-changer", no "Let's dive in", no "Here's the thing".
 - Short paragraphs of 1-2 sentences with blank lines between them. Plain words. At most one emoji, usually none. No em dashes.
 - Show Anchor in action: describe what it actually does in a real moment (before a call, during it, after it) using only the features in the company description.
+- Comparison posts compare Anchor with categories of tools ("typical AI note-takers", "a general AI chatbot", "your CRM notes"), never with named products or companies, and only on the differences stated in the company description. Fair and confident, never disparaging.
 - Never invent customers, testimonials, quotes, results, statistics or news. Only use figures that appear in the research notes, naming the source ("per PitchBook"). Don't promise outcomes as facts about Anchor's users.
 - End with a clear call to action to sign up, e.g. "Start free with Anchor: ${link || "[link]"}" or "Sign up now: ${link || "[link]"}" (vary the wording; the link exactly as given, on its own line), then 3 relevant hashtags on the last line (e.g. #SalesAI #Dealmaking #AIAnchor).`;
 }
