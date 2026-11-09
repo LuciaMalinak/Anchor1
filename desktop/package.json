@@ -64,8 +64,13 @@
       "artifactName": "Anchor-Desktop-Setup.${ext}"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Anchor Desktop",
       "include": "build/installer.nsh"
     }
   }

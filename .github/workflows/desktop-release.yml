@@ -138,7 +138,10 @@ jobs:
 
       # Unsigned for now (no Windows code-signing certificate yet), same as
       # the builds made by hand so far: electron-builder skips signing and
-      # Windows SmartScreen asks "Run anyway" on first install.
+      # Windows SmartScreen asks "Run anyway" on first install. The
+      # installer is one-click and per-user (package.json "nsis"), so
+      # installing and every automatic update run without an administrator
+      # prompt.
       - run: npm run dist:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
