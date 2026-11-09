@@ -118,6 +118,33 @@ const SPECIALTY_TOOL: Anthropic.Tool = {
         },
       },
       vocabulary: { type: "array", items: { type: "string" }, description: "15-30 terms of their niche that speech-to-text mishears." },
+    },
+    required: [
+      "companyName",
+      "sectorName",
+      "summary",
+      "focus",
+      "persona",
+      "counterparties",
+      "pains",
+      "checklist",
+      "listenFor",
+      "guardrails",
+      "captureFields",
+      "vocabulary",
+    ],
+  },
+};
+
+// Second step: the tools themselves, asked for on their own. Asked for in
+// the same answer as the playbook, they came last in a very long reply
+// and were sometimes cut off or missing, which failed the whole build.
+const DESIGN_TOOLS_TOOL: Anthropic.Tool = {
+  name: "record_tools",
+  description: "Record the expert tools made for this business.",
+  input_schema: {
+    type: "object",
+    properties: {
       tools: {
         type: "array",
         description:
@@ -140,25 +167,11 @@ const SPECIALTY_TOOL: Anthropic.Tool = {
         },
       },
     },
-    required: [
-      "companyName",
-      "sectorName",
-      "summary",
-      "focus",
-      "persona",
-      "counterparties",
-      "pains",
-      "checklist",
-      "listenFor",
-      "guardrails",
-      "captureFields",
-      "vocabulary",
-      "tools",
-    ],
+    required: ["tools"],
   },
 };
 
-// Second step: the full brief for each tool, written separately so one
+// Third step: the full brief for each tool, written separately so one
 // answer never has to hold the whole playbook and every tool's brief.
 const INSTRUCTIONS_TOOL: Anthropic.Tool = {
   name: "record_tool_instructions",
@@ -186,20 +199,36 @@ const INSTRUCTIONS_TOOL: Anthropic.Tool = {
   },
 };
 
+// Models sometimes return a list as a JSON string ("[{...}]") instead of
+// a list; read either.
+function asArray(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === "object" && Array.isArray((parsed as { tools?: unknown }).tools)) {
+        return (parsed as { tools: unknown[] }).tools;
+      }
+    } catch {
+      // not JSON: no list
+    }
+  }
+  return [];
+}
+
 function str(v: unknown, max: number): string {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
 }
 function strs(v: unknown, maxItems: number, maxLen: number): string[] {
-  return Array.isArray(v) ? v.map((x) => str(x, maxLen)).filter(Boolean).slice(0, maxItems) : [];
+  return asArray(v).map((x) => str(x, maxLen)).filter(Boolean).slice(0, maxItems);
 }
 function pairs<K extends string>(v: unknown, a: K, b: K, maxItems: number): Record<K, string>[] {
-  return Array.isArray(v)
-    ? v
-        .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object")
-        .map((x) => ({ [a]: str(x[a], 400), [b]: str(x[b], 600) }) as Record<K, string>)
-        .filter((x) => x[a] && x[b])
-        .slice(0, maxItems)
-    : [];
+  return asArray(v)
+    .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object")
+    .map((x) => ({ [a]: str(x[a], 400), [b]: str(x[b], 600) }) as Record<K, string>)
+    .filter((x) => x[a] && x[b])
+    .slice(0, maxItems);
 }
 function slug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) || "tool";
@@ -222,10 +251,7 @@ export async function buildTeamSpecialty(teamId: string, input: { website?: stri
   const notes = await research(website, description, industryLabel);
   const existing = toolsForIndustry(industry).map((t) => t.name).join(", ");
 
-  const message = await createWithForcedTool(client(), {
-    model: MODEL,
-    max_tokens: 16000,
-    system: `You are the most experienced practitioner in this company's exact niche, and you design tools for people who do that work every day. Anchor joins their client and counterparty calls, remembers every call, email and file on each deal, coaches them live, and writes reports from that record with one click.
+  const designSystem = `You are the most experienced practitioner in this company's exact niche, and you design tools for people who do that work every day. Anchor joins their client and counterparty calls, remembers every call, email and file on each deal, coaches them live, and writes reports from that record with one click.
 
 Design their specialty. Be specific to their niche, not their broad industry: the tools must use the documents, metrics, contracts and negotiations that only people in this niche deal with, and each should save a senior person hours or catch something that would cost them money.
 
@@ -243,7 +269,13 @@ Think past ordinary note-taking. Strong tools:
 - protect them from the rules they could break on a call
 They already have these general tools, so don't repeat them: ${existing || "none"}.
 
-Never design anything that profiles or researches private individuals, or that would require breaking confidentiality or regulation.`,
+Never design anything that profiles or researches private individuals, or that would require breaking confidentiality or regulation.`;
+
+  // First the playbook: who they are, what their calls need.
+  const message = await createWithForcedTool(client(), {
+    model: MODEL,
+    max_tokens: 16000,
+    system: designSystem,
     tools: [SPECIALTY_TOOL],
     tool_choice: { type: "tool", name: SPECIALTY_TOOL.name },
     messages: [
@@ -251,38 +283,83 @@ Never design anything that profiles or researches private individuals, or that w
         role: "user",
         content: `Research notes on the company:\n\n${notes}${description ? `\n\nHow they describe what they do: ${description}` : ""}${
           industryLabel ? `\n\nTheir broad industry in Anchor: ${industryLabel}.` : ""
-        }`,
+        }\n\nWrite their playbook now. Their tools are designed in the next step.`,
       },
     ],
   });
   const toolUse = message.content.find((b) => b.type === "tool_use");
-  if (!toolUse || toolUse.type !== "tool_use") throw new Error("Couldn't design the specialty.");
+  if (!toolUse || toolUse.type !== "tool_use") throw new Error("Couldn't design the specialty. Please try again.");
   const r = toolUse.input as Record<string, unknown>;
 
   if (message.stop_reason === "max_tokens") console.warn("[specialty] design reply hit max_tokens — using what came back");
 
-  const used = new Set<string>();
-  const designed = (Array.isArray(r.tools) ? r.tools : [])
-    .filter((t): t is Record<string, unknown> => Boolean(t) && typeof t === "object")
-    .map((t) => {
-      const name = str(t.name, 80);
-      let id = `x_${slug(name)}`;
-      while (used.has(id)) id += "_2";
-      used.add(id);
-      return {
-        id,
-        name,
-        kind: KINDS.includes(t.kind as ToolKind) ? (t.kind as ToolKind) : "intel",
-        phase: PHASES.includes(t.phase as ToolPhase) ? (t.phase as ToolPhase) : "after",
-        outcome: str(t.outcome, 300),
-        outline: str(t.outline, 600),
-        clientFacing: t.clientFacing === true,
-        needsTranscript: t.needsTranscript === true,
-      };
-    })
-    .filter((t) => t.name && t.outcome)
-    .slice(0, 14);
-  if (!designed.length) throw new Error("The AI didn't design any tools. Try again, or add more context about what you do.");
+  type Designed = {
+    id: string;
+    name: string;
+    kind: ToolKind;
+    phase: ToolPhase;
+    outcome: string;
+    outline: string;
+    clientFacing: boolean;
+    needsTranscript: boolean;
+  };
+  const readTools = (raw: unknown): Designed[] => {
+    const used = new Set<string>();
+    return asArray(raw)
+      .filter((t): t is Record<string, unknown> => Boolean(t) && typeof t === "object")
+      .map((t) => {
+        const name = str(t.name, 80);
+        let id = `x_${slug(name)}`;
+        while (used.has(id)) id += "_2";
+        used.add(id);
+        return {
+          id,
+          name,
+          kind: KINDS.includes(t.kind as ToolKind) ? (t.kind as ToolKind) : "intel",
+          phase: PHASES.includes(t.phase as ToolPhase) ? (t.phase as ToolPhase) : "after",
+          outcome: str(t.outcome, 300),
+          outline: str(t.outline, 600),
+          clientFacing: t.clientFacing === true,
+          needsTranscript: t.needsTranscript === true,
+        };
+      })
+      .filter((t) => t.name && t.outcome)
+      .slice(0, 14);
+  };
+
+  // Tools, in their own answer; tried twice before giving up.
+  let designed: Designed[] = [];
+  for (let attempt = 0; attempt < 2 && !designed.length; attempt++) {
+    try {
+      const reply = await createWithForcedTool(client(), {
+        model: MODEL,
+        max_tokens: 12000,
+        system: designSystem,
+        tools: [DESIGN_TOOLS_TOOL],
+        tool_choice: { type: "tool", name: DESIGN_TOOLS_TOOL.name },
+        messages: [
+          {
+            role: "user",
+            content: `${str(r.companyName, 120) || team.name}: ${str(r.sectorName, 120)}. ${str(r.summary, 600)}
+Who Anchor sits beside: ${str(r.focus, 300)}
+Who's on the other side: ${str(r.counterparties, 400)}
+
+Research notes:
+${notes}${description ? `\n\nHow they describe what they do: ${description}` : ""}
+
+Design their 10-14 tools now.`,
+          },
+        ],
+      });
+      const use = reply.content.find((b) => b.type === "tool_use");
+      if (use && use.type === "tool_use") designed = readTools((use.input as { tools?: unknown }).tools ?? use.input);
+      if (!designed.length) console.warn(`[specialty] tool design attempt ${attempt + 1} came back empty (stop: ${reply.stop_reason})`);
+    } catch (err) {
+      console.error(`[specialty] tool design attempt ${attempt + 1} failed:`, err);
+      if (attempt === 1) throw err;
+    }
+  }
+  if (!designed.length) throw new Error("Anchor couldn't finish designing your tools this time. Please click Build my Anchor again.");
 
   // Step two: each tool's full brief. If it falls short, a tool still gets
   // working instructions built from its outline.

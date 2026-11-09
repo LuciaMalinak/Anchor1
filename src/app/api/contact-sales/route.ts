@@ -15,13 +15,14 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, string | undefined>;
   // A hidden field people never see; bots fill it in.
   if (body.website) return NextResponse.json({ ok: true });
-  const name = (body.name ?? "").trim().slice(0, 120);
   const email = (body.email ?? "").trim().toLowerCase().slice(0, 200);
+  // The free-trial page asks for an email only.
+  const name = (body.name ?? "").trim().slice(0, 120) || email;
   const company = (body.company ?? "").trim().slice(0, 200);
   const teamSize = (body.teamSize ?? "").trim().slice(0, 40);
   const message = (body.message ?? "").trim().slice(0, 4000);
   if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ error: "Please add your name and a valid email." }, { status: 400 });
+    return NextResponse.json({ error: "Please enter a valid email." }, { status: 400 });
   }
   const session = await auth();
   await db.insert(salesLeads).values({

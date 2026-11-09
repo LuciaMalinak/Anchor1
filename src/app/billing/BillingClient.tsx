@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Plan = "team" | "pro";
 
@@ -29,20 +29,20 @@ const PLANS: { key: Plan; name: string; unit: string; features: string[]; highli
   },
 ];
 
-export function BillingPlans({ seats }: { seats: number }) {
-  const [promo, setPromo] = useState("");
+export function BillingPlans({ seats, initialPromo = "" }: { seats: number; initialPromo?: string }) {
+  const [promo, setPromo] = useState(initialPromo);
   const [applied, setApplied] = useState<{ code: string; trialDays: number } | null>(null);
   const [promoMsg, setPromoMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function applyPromo() {
+  async function applyPromo(code = promo) {
     setBusy("promo");
     setPromoMsg(null);
     const res = await fetch("/api/billing/promo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: promo }),
+      body: JSON.stringify({ code }),
     }).catch(() => null);
     const body = await res?.json().catch(() => null);
     if (res?.ok && body?.ok) setApplied({ code: body.code, trialDays: body.trialDays });
@@ -52,6 +52,15 @@ export function BillingPlans({ seats }: { seats: number }) {
     }
     setBusy(null);
   }
+
+  // A code from the free-trial link is applied as soon as the page opens.
+  const autoApplied = useRef(false);
+  useEffect(() => {
+    if (!initialPromo || autoApplied.current) return;
+    autoApplied.current = true;
+    void applyPromo(initialPromo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPromo]);
 
   async function subscribe(plan: Plan) {
     setBusy(plan);
@@ -118,7 +127,7 @@ export function BillingPlans({ seats }: { seats: number }) {
           className="w-48 rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase focus:border-brand focus:outline-none"
         />
         <button
-          onClick={applyPromo}
+          onClick={() => applyPromo()}
           disabled={!promo.trim() || !!busy}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
         >

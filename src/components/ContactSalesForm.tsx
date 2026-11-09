@@ -4,7 +4,16 @@ import { useState } from "react";
 
 // "Talk to sales": goes to /api/contact-sales (saved for Admin → Billing
 // and emailed to the founder). Used on /contact-sales and /billing.
-export function ContactSalesForm({ defaultName = "", defaultEmail = "" }: { defaultName?: string; defaultEmail?: string }) {
+export function ContactSalesForm({
+  defaultName = "",
+  defaultEmail = "",
+  compact = false,
+}: {
+  defaultName?: string;
+  defaultEmail?: string;
+  // Just an email box and a button (the free-trial page).
+  compact?: boolean;
+}) {
   const [form, setForm] = useState({ name: defaultName, email: defaultEmail, company: "", teamSize: "", message: "", website: "" });
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -30,8 +39,43 @@ export function ContactSalesForm({ defaultName = "", defaultEmail = "" }: { defa
   if (state === "sent") {
     return (
       <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-        Thanks! We&apos;ll get back to you at {form.email} within one business day.
+        Thanks! Our sales team will reach out to you at {form.email} shortly.
       </p>
+    );
+  }
+
+  if (compact) {
+    return (
+      <form onSubmit={submit} className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            required
+            type="email"
+            placeholder="Your work email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            className={`${field} sm:flex-1`}
+          />
+          <input
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+            value={form.website}
+            onChange={(e) => setForm({ ...form, website: e.target.value })}
+            className="hidden"
+            name="website"
+          />
+          <button
+            type="submit"
+            disabled={state === "sending"}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {state === "sending" ? "Sending…" : "Contact sales"}
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <p className="text-xs text-slate-500">Our sales team will reach out shortly.</p>
+      </form>
     );
   }
 
