@@ -6,6 +6,7 @@ import { meteredFetch, withAiUser } from "./aiUsage";
 import { createWithForcedTool } from "./forcedTool";
 import { getConnection } from "./integrations/oauthConnection";
 import { DEFAULT_PREFS, normalizePrefs } from "./morningBriefPrefs";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Notices in someone's Slack direct messages when a meeting should be set
 // up ("can we find 30 min next week?", "let's get the three of us on a
@@ -14,7 +15,7 @@ import { DEFAULT_PREFS, normalizePrefs } from "./morningBriefPrefs";
 // brief. Reads only the person's own DMs and group DMs, with their own
 // Slack user token (?add=read_dms on the Slack connection).
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 const LOOKBACK_SECONDS = 2 * 86_400;
 const MAX_CONVERSATIONS = 25;
 const MAX_MESSAGES = 20;

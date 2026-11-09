@@ -112,6 +112,17 @@ export default async function AdminHomePage({
       </Link>
 
       <Link
+        href="/dashboard/admin/data"
+        className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm hover:border-brand"
+      >
+        <span>
+          <span className="font-semibold text-slate-900">Data safety</span>
+          <span className="ml-2 text-slate-500">Find anyone&apos;s deals, restore deleted ones, nightly backups</span>
+        </span>
+        <span className="text-brand">Open →</span>
+      </Link>
+
+      <Link
         href="/dashboard/admin/billing"
         className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm hover:border-brand"
       >

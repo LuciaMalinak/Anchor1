@@ -2167,7 +2167,7 @@ export function DealTabs({
   async function handleDeleteDeal() {
     if (
       !window.confirm(
-        `Permanently delete "${deal.name}"? This removes the deal and everything on it — every meeting recording, transcript, and summary, every attached file, and the chat. This can't be undone.`
+        `Delete "${deal.name}"? It disappears for everyone on the team, with its calls, files and chat. Nothing is erased: it can be restored later if you need it back.`
       )
     ) {
       return;

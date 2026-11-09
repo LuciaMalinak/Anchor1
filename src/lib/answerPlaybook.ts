@@ -5,6 +5,7 @@ import { answerPlaybook, deals, meetings, users, type LiveQuestionRecord } from 
 import { meteredFetch, withAiUser } from "@/lib/aiUsage";
 import { createWithForcedTool } from "@/lib/forcedTool";
 import type { Utterance } from "@/lib/transcribe";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Anchor's answer playbook: how this team actually answers the questions
 // clients ask. It grows two ways —
@@ -145,7 +146,7 @@ export function invalidatePlaybook(teamId: string) {
 
 // ---- Learning from each call ----------------------------------------
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 const TRANSCRIPT_CHARS = 60_000;
 const MAX_LEARNED_PER_CALL = 10;
 

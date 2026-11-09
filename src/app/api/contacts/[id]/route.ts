@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logDataChange } from "@/lib/dataChangeLog";
+import { contactNotesSnapshot } from "@/lib/dataSafety";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { contacts } from "@/db/schema";
@@ -45,6 +47,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   // meeting_participant rows referencing this contact just lose the link
   // (onDelete: set null, see schema.ts) — past meeting summaries and
   // transcripts are untouched, Anchor just stops tracking history for them.
+  await logDataChange({
+    action: "contact_deleted",
+    actorUserId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetId: contactId,
+    details: { contact, notes: await contactNotesSnapshot(contactId) },
+  });
   await db.delete(contacts).where(eq(contacts.id, contactId));
 
   return NextResponse.json({ ok: true });

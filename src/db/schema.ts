@@ -1150,3 +1150,27 @@ export const salesLeads = pgTable("sales_lead", {
   status: text("status").notNull().default("new"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
+
+// A permanent record of changes that remove or move people's data: a deal
+// deleted, someone removed from a team, an account deleted, a person moved
+// between teams by the app owner. So "where did my deals go?" always has
+// an answer (Admin → Find a person). Created on deploy by
+// startupMigrations.ts.
+export const dataChangeLog = pgTable(
+  "data_change_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // "deal_deleted" | "member_removed" | "account_deleted" | "team_deleted" | "user_moved"
+    action: text("action").notNull(),
+    actorUserId: uuid("actorUserId"),
+    actorEmail: text("actorEmail"),
+    teamId: uuid("teamId"),
+    // The deal or person the change was about.
+    targetId: uuid("targetId"),
+    // What it was, kept after it's gone: a deleted deal's name, company,
+    // stage and the number of calls removed with it, or a person's email.
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("data_change_log_target_idx").on(t.targetId), index("data_change_log_created_idx").on(t.createdAt)],
+);

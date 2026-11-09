@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { logDataChange } from "@/lib/dataChangeLog";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { dealFiles } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { readStoredFile, deleteDealFile } from "@/lib/storage";
+import { readStoredFile } from "@/lib/storage";
 import { authorizeDeal } from "@/lib/dealAccess";
 
 export async function GET(
@@ -65,7 +66,16 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  await deleteDealFile(file.storagePath);
+  // The file itself stays in storage and its details go to the change
+  // log, so it can be put back (src/lib/dataSafety.ts).
+  await logDataChange({
+    action: "file_deleted",
+    actorUserId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    teamId: authorized.teamId,
+    targetId: fileId,
+    details: { file },
+  });
   await db.delete(dealFiles).where(eq(dealFiles.id, fileId));
 
   return NextResponse.json({ ok: true });

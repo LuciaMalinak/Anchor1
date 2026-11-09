@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logDataChange } from "@/lib/dataChangeLog";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { deals, users, dealMembers, meetings, teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { DEAL_STAGES } from "@/lib/dealStages";
 import { authorizeDeal } from "@/lib/dealAccess";
-import { deleteMeetingAudio, deleteAllDealFiles } from "@/lib/storage";
+import { trashDeal } from "@/lib/dataSafety";
 
 // Lead/backup must be null (unassigned) or an actual member of this
 // deal's team — never trust a client-supplied id without checking.
@@ -129,18 +130,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 // Deal-creator or team-owner only — same bar as removing a teammate
 // (see /api/team/members/[id]/route.ts) and stricter than everyday deal
-// access, since this is permanent and takes the meetings with it.
-//
-// meetings.dealId is "set null" on delete at the database level (a
-// meeting can normally outlive being unlinked from a deal — see
-// schema.ts), so deleting the deal row alone would just orphan its
-// meetings rather than remove them. That's the wrong default here:
-// wiping a whole deal is expected to take its recordings with it, so
-// meetings are deleted explicitly first (which does cascade their
-// transcript/summary/participant rows, and cleans up each one's audio
-// file). dealFiles/dealMessages/dealMembers all cascade-delete
-// automatically once the deal row goes — only their storage bytes (for
-// files) need the explicit cleanup below.
+// access. Nothing is erased: the deal and everything on it (calls,
+// recordings, files, notes, tasks) moves to the trash, where the app
+// owner can restore it from Admin (src/lib/dataSafety.ts).
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -165,15 +157,25 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   }
 
   const dealMeetings = await db.select({ id: meetings.id }).from(meetings).where(eq(meetings.dealId, dealId));
-  for (const m of dealMeetings) {
-    await deleteMeetingAudio(m.id);
-  }
-  if (dealMeetings.length > 0) {
-    await db.delete(meetings).where(eq(meetings.dealId, dealId));
-  }
-
-  await deleteAllDealFiles(dealId);
-  await db.delete(deals).where(eq(deals.id, dealId));
+  // Recorded first, so a deleted deal is never a mystery later, and so
+  // Admin knows which team to put it back on.
+  await logDataChange({
+    action: "deal_deleted",
+    actorUserId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    teamId,
+    targetId: dealId,
+    details: {
+      name: deal.name,
+      stage: deal.stage,
+      createdByUserId: deal.createdByUserId,
+      createdAt: deal.createdAt,
+      calls: dealMeetings.length,
+    },
+  });
+  // Nothing is erased: the deal, its calls, recordings, files and notes
+  // move to the trash and can be restored from Admin (dataSafety.ts).
+  await trashDeal(dealId);
 
   return NextResponse.json({ ok: true });
 }

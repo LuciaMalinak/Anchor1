@@ -1,9 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Centralized so it's a one-line change if this needs to point at a
 // different model later.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

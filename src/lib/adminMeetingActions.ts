@@ -1,9 +1,10 @@
 import { and, eq, ilike, inArray } from "drizzle-orm";
+import { logDataChange } from "@/lib/dataChangeLog";
+import { meetingSnapshot } from "@/lib/dataSafety";
 import { db } from "@/db";
 import { meetings, summaries, users } from "@/db/schema";
 import { cancelBot, leaveCall } from "@/lib/recall";
 import { processMeeting, AI_SUMMARY_UNAVAILABLE } from "@/lib/processMeeting";
-import { deleteMeetingAudio } from "@/lib/storage";
 import { logAdminAccess } from "@/lib/adminAccess";
 
 // Stop and Delete for the app owner, from the admin Overview's failed and
@@ -79,10 +80,14 @@ export async function adminDeleteMeeting(
   }
   // Transcript, summary, live transcript and participants go with it
   // (ON DELETE CASCADE); tasks keep their text but lose the link.
+  // Copy kept and recording left in storage, as for any deleted call.
+  await logDataChange({
+    action: "meeting_deleted",
+    actorUserId: adminUserId,
+    targetId: meeting.id,
+    details: await meetingSnapshot(meeting.id),
+  });
   await db.delete(meetings).where(eq(meetings.id, meeting.id));
-  await deleteMeetingAudio(meeting.id).catch((err) =>
-    console.error(`[admin] couldn't delete audio for ${meeting.id}:`, err),
-  );
 }
 
 // Re-runs a failed meeting through processing. It reuses the transcript

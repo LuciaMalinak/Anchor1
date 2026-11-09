@@ -11,12 +11,13 @@ import { relevantAnswers, playbookText } from "./answerPlaybook";
 import { getDealLeadStyle } from "./styleProfile";
 import type { IndustryTool, SavedToolReport, ToolReport } from "./industryTools";
 import { withAiUser } from "./aiUsage";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Writes one industry tool's report for a deal (see industryTools.ts) and
 // saves it on the deal, so the team sees the latest one and its gaps can
 // steer the next live call. Same model as the other batch features:
 // quality matters more than speed here.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 
 // A deal's whole call history, not just the last three calls the deal
 // brief uses: a buyer log or promise ledger is only right if it sees

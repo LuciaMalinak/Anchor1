@@ -1,0 +1,27 @@
+# Daily full backup of Anchor's database to the R2 bucket
+# (src/lib/backup.ts). The site also backs itself up once a day while it's
+# awake; this makes sure it happens even when it's asleep. Uses the same
+# CRON_SECRET repository secret as morning-brief.yml.
+name: Database backup
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Ask Anchor to back up its database
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ANCHOR_URL: ${{ vars.ANCHOR_URL || 'https://anchor-be6o.onrender.com' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::warning::CRON_SECRET isn't set as a repository secret, so no backup was made."
+            exit 0
+          fi
+          curl -sS --fail-with-body --max-time 600 --retry 3 --retry-delay 30 --retry-all-errors \
+            -X POST -H "x-cron-key: $CRON_SECRET" "$ANCHOR_URL/api/cron/backup"

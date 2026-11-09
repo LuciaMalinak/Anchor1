@@ -8,6 +8,7 @@ import { INDUSTRY_BY_KEY, isIndustryKey } from "./industries";
 import type { IndustryPlaybook } from "./industryPlaybooks";
 import { toolsForIndustry, type ToolKind, type ToolPhase } from "./industryTools";
 import type { SpecialtyTool, TeamSpecialty } from "./teamSpecialty";
+import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Builds a team's own specialty from its website (teamSpecialty.ts): first
 // researches what the company actually does, with web search, then has an
@@ -15,7 +16,7 @@ import type { SpecialtyTool, TeamSpecialty } from "./teamSpecialty";
 // and 8-12 tools made for their work. Like companyResearch.ts, it looks
 // at the company only, never at individual people.
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODEL = MAIN_MODEL;
 const KINDS: ToolKind[] = ["standin", "prep", "intel", "negotiate", "document", "compliance", "track"];
 const PHASES: ToolPhase[] = ["before", "after"];
 
