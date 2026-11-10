@@ -477,3 +477,26 @@ export async function recallAccountCheck() {
   }
   return out;
 }
+
+// Privacy: once Anchor.AI has its own permanent copy of a call (in R2) and
+// has finished processing it, Recall.ai's copy isn't needed, so it's
+// deleted rather than left on Recall's servers. Bot calls: "Delete Bot
+// Media" (POST /bot/{id}/delete_media/). Desktop recordings: delete the
+// recording (DELETE /recording/{id}/). Best-effort; a failure only means
+// Recall keeps its copy until its own retention period ends.
+export async function deleteRecallCopy(ids: { recallBotId?: string | null; recallRecordingId?: string | null }): Promise<void> {
+  if (!API_KEY) return;
+  const calls: Promise<Response>[] = [];
+  if (ids.recallBotId) {
+    calls.push(fetch(`${BASE_URL}/bot/${ids.recallBotId}/delete_media/`, { method: "POST", headers: authHeaders() }));
+  }
+  if (ids.recallRecordingId) {
+    calls.push(fetch(`${BASE_URL}/recording/${ids.recallRecordingId}/`, { method: "DELETE", headers: authHeaders() }));
+  }
+  for (const res of await Promise.allSettled(calls)) {
+    if (res.status === "rejected") console.error("[recall] couldn't delete Recall's copy:", res.reason);
+    else if (!res.value.ok && res.value.status !== 404) {
+      console.error(`[recall] couldn't delete Recall's copy (${res.value.status}): ${(await res.value.text().catch(() => "")).slice(0, 200)}`);
+    }
+  }
+}

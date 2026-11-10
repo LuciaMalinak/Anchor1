@@ -136,6 +136,10 @@ export default function PrivacyPage() {
             </table>
           </div>
           <p>
+            Recall.ai and AssemblyAI only hold a recording while it&apos;s being made and transcribed:
+            once Anchor.AI has saved its own copy, we delete theirs.
+          </p>
+          <p>
             Services you choose to connect (such as Google, Microsoft, Slack, or Zoom) receive the
             requests needed for the features you use, under your agreement with them. We may update
             this list as the Service changes.
@@ -196,9 +200,9 @@ export default function PrivacyPage() {
             We keep your data while your company&apos;s account is active, so your team&apos;s deals
             and history are never lost by accident. When you delete a deal, meeting, file, or
             contact, it&apos;s removed from your workspace but kept in a recoverable copy, so a
-            mistake can be undone. We also make a full backup every day and keep backups long-term,
-            stored separately from the live service, so your data can always be recreated if
-            something goes wrong.
+            mistake can be undone. We also make a full backup every day, encrypted and stored separately
+            from the live service, and keep it, so your data can always be recreated if something
+            goes wrong.
           </p>
           <p>
             To have data permanently erased, email us at{" "}
@@ -206,8 +210,9 @@ export default function PrivacyPage() {
             We&apos;ll remove it from the service and its recoverable copies within 30 days, apart from
             anything we must keep by law (for example billing records). Backups are only ever used to
             recover lost data; if we ever restore one, we apply your erasure again before anything
-            is used. When a company closes its account, we keep its data so it can be restored if it
-            comes back, unless it asks us to delete it or to export it first.
+            is used. Cancelling a subscription doesn&apos;t delete anything: we keep a company&apos;s data so
+            that if it comes back, everything is where it left it, unless it asks us to export or
+            permanently delete it.
           </p>
         </Section>
 

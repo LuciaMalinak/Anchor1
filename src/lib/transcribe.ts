@@ -47,10 +47,17 @@ export async function transcribeAudioFile(
     endMs: u.end,
   }));
 
-  return {
-    fullText: transcript.text ?? "",
-    utterances,
-  };
+  const result = { fullText: transcript.text ?? "", utterances };
+  forgetAtAssemblyAI(client, transcript.id);
+  return result;
+}
+
+// Privacy: AssemblyAI keeps a transcript (and the audio it was made from)
+// until it's deleted. Anchor.AI has already saved the text by this point,
+// so delete AssemblyAI's copy straight away. Best-effort.
+function forgetAtAssemblyAI(client: AssemblyAI, id: string | undefined) {
+  if (!id) return;
+  client.transcripts.delete(id).catch((err) => console.error("[transcribe] couldn't delete AssemblyAI's copy:", err));
 }
 
 // A short spoken question (Ask Anchor's mic when the browser can't do
@@ -63,5 +70,7 @@ export async function transcribeShortClip(audio: Buffer): Promise<string> {
   const transcript = await client.transcripts.transcribe({ audio });
   if (transcript.status === "error") throw new Error(`Transcription failed: ${transcript.error}`);
   recordAudioUsage({ feature: "transcription", seconds: transcript.audio_duration ?? 0 });
-  return (transcript.text ?? "").trim();
+  const text = (transcript.text ?? "").trim();
+  forgetAtAssemblyAI(client, transcript.id);
+  return text;
 }
