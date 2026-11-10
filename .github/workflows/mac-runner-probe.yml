@@ -1,0 +1,16 @@
+# Temporary: checks which macOS runners start (desktop release's mac job is
+# being cancelled before it starts). Removed after the check.
+name: Mac runner probe
+on:
+  push:
+    branches: [claude/dreamy-shannon-jp4hfg]
+    paths: [".github/workflows/mac-runner-probe.yml"]
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: sw_vers && uname -m
