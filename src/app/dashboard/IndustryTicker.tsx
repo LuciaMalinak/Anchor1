@@ -88,7 +88,7 @@ export function IndustryTicker({
     // ticker is actively catching up to the new sector, not broken.
     return (
       <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
-        <div className="flex items-center gap-2 border-b border-white/10 px-3 py-1.5">
+        <div className="flex items-center gap-2 px-3 py-1.5">
           <span className="relative flex h-1.5 w-1.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -97,7 +97,7 @@ export function IndustryTicker({
             {industryLabel ? `${industryLabel.toUpperCase()} · LIVE` : "MARKETS · LIVE"}
           </span>
         </div>
-        <div className="px-3 py-2 text-xs font-medium text-slate-400">
+        <div className="hidden">
           Pulling today&apos;s {industryLabel ? industryLabel.toLowerCase() : "market"} headlines…
         </div>
       </div>
@@ -110,25 +110,28 @@ export function IndustryTicker({
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
-      <div className="flex items-center gap-2 border-b border-white/10 px-3 py-1.5">
+      {/* One slim row: the LIVE label, then the scrolling headlines. */}
+      <div className="flex items-center">
+      <div className="z-10 flex shrink-0 items-center gap-1.5 border-r border-white/10 bg-slate-900 px-2.5 py-1.5">
         <span className="relative flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
         </span>
-        <span className="text-[10px] font-semibold tracking-[0.15em] text-slate-300">
-          {industryLabel ? `${industryLabel.toUpperCase()} · LIVE` : "MARKETS · LIVE"}
-        </span>
+        <span className="text-[10px] font-semibold tracking-[0.12em] text-slate-300">LIVE</span>
       </div>
-      <div className="ticker-track flex whitespace-nowrap py-2">
+      <div className="min-w-0 flex-1 overflow-hidden">
+      <div className="ticker-track flex whitespace-nowrap py-1.5">
         {loopItems.map((item, i) => (
           <span
             key={i}
-            className="mx-4 flex shrink-0 items-center font-mono text-xs font-medium text-slate-100"
+            className="mx-3 flex shrink-0 items-center font-mono text-[11px] font-medium text-slate-100"
           >
             <DirectionMark direction={item.direction} />
             {item.text}
           </span>
         ))}
+      </div>
+      </div>
       </div>
     </div>
   );
