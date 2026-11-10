@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Resend from "next-auth/providers/resend";
 import LinkedIn from "next-auth/providers/linkedin";
 import Google from "next-auth/providers/google";
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import {
@@ -29,6 +30,26 @@ const linkedInConfigured = Boolean(
 const googleConfigured = Boolean(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
 );
+
+// "Sign in with Microsoft" for company Microsoft 365 / Entra ID accounts
+// (and personal Microsoft accounts), so a hotel group's IT can manage who
+// gets in: someone whose work account is disabled can't sign in this way.
+// Registered as a multi-tenant app in the Microsoft Entra admin center.
+export const microsoftConfigured = Boolean(
+  process.env.MICROSOFT_SIGNIN_CLIENT_ID && process.env.MICROSOFT_SIGNIN_CLIENT_SECRET
+);
+
+// Microsoft's "email" claim isn't verified (any tenant admin can type any
+// address into it), so trusting it would let someone take over another
+// person's Anchor.AI account by email. The sign-in name (UPN) is safer: a
+// work account's UPN must use a domain its organisation has proven it
+// owns, and a personal account's is the verified Microsoft account email.
+// Guest accounts (#EXT#) and anything without a usable name are refused.
+function microsoftEmail(profile: Record<string, unknown>): string | null {
+  const upn = typeof profile.preferred_username === "string" ? profile.preferred_username.trim().toLowerCase() : "";
+  if (!upn || upn.includes("#ext#") || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(upn)) return null;
+  return upn;
+}
 
 export const {
   handlers: { GET, POST },
@@ -104,6 +125,24 @@ export const {
           }),
         ]
       : []),
+    ...(microsoftConfigured
+      ? [
+          MicrosoftEntraID({
+            clientId: process.env.MICROSOFT_SIGNIN_CLIENT_ID,
+            clientSecret: process.env.MICROSOFT_SIGNIN_CLIENT_SECRET,
+            issuer: "https://login.microsoftonline.com/common/v2.0",
+            authorization: { params: { scope: "openid profile email" } },
+            // Only the verified sign-in name, never a downloaded photo
+            // (the default stores the picture inline in the database).
+            profile(profile) {
+              const email = microsoftEmail(profile as unknown as Record<string, unknown>);
+              return { id: String(profile.sub), name: typeof profile.name === "string" ? profile.name : null, email: email ?? "", image: null };
+            },
+            // Safe with the verified sign-in name above (see microsoftEmail).
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
   ],
   pages: {
     signIn: "/sign-in",
@@ -123,6 +162,12 @@ export const {
     error: "/sign-in",
   },
   callbacks: {
+    // A Microsoft account without a usable verified sign-in name (see
+    // microsoftEmail above) is turned away with an explanation.
+    signIn({ account, user }) {
+      if (account?.provider === "microsoft-entra-id" && !user.email) return "/sign-in?error=MicrosoftAccount";
+      return true;
+    },
     session({ session, user }) {
       if (session.user) {
         session.user.id = user.id;
