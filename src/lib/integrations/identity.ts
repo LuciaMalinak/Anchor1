@@ -88,3 +88,16 @@ function emailFromIdToken(idToken: unknown): string | null {
     return null;
   }
 }
+
+// Zoom's own user id for the connected account. Zoom's "app removed"
+// notice (src/app/api/webhooks/zoom/route.ts) names the user only by it.
+export async function fetchZoomUserId(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch("https://api.zoom.us/v2/users/me", { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return typeof body.id === "string" && body.id ? body.id : null;
+  } catch {
+    return null;
+  }
+}

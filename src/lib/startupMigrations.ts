@@ -173,6 +173,7 @@ const MIGRATIONS = [
   // and Slack (meetingProposals.ts, meetingScheduler.ts).
   `ALTER TYPE "integration_provider" ADD VALUE IF NOT EXISTS 'zoom'`,
   `ALTER TABLE "integration_connection" ADD COLUMN IF NOT EXISTS "userAccessToken" text`,
+  `ALTER TABLE "integration_connection" ADD COLUMN IF NOT EXISTS "externalAccountId" text`,
   `CREATE TABLE IF NOT EXISTS "meeting_proposal" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     "userId" uuid NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
