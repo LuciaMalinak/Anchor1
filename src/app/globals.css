@@ -387,3 +387,17 @@ a {
     }
   }
 }
+
+/* Phones: iOS zooms the page when a text box under 16px is tapped; keep
+   inputs at 16px on small screens so typing doesn't jump the layout. Also
+   no grey flash when tapping links and buttons in the installed app. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+html {
+  -webkit-tap-highlight-color: transparent;
+}
