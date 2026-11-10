@@ -34,6 +34,8 @@ export function GeneralNewsSidebar({
   const [briefingUpdatedAt, setBriefingUpdatedAt] = useState(initialBriefingUpdatedAt);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Kept to two lines so it doesn't push the page down; "More" opens it.
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (dailyBriefing) return; // already have one — nothing to wait on
@@ -87,12 +89,12 @@ export function GeneralNewsSidebar({
   }
 
   return (
-    <section aria-label="News" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+    <section aria-label="News" className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] xl:items-start">
       <IndustryTicker initialItems={initialTickerItems} industryLabel={industryLabel} />
 
-      <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-brand">Today&apos;s briefing</h2>
+          <h2 className="text-xs font-semibold text-brand">Today&apos;s briefing</h2>
           <button
             type="button"
             onClick={handleRefresh}
@@ -104,15 +106,16 @@ export function GeneralNewsSidebar({
         </div>
         {dailyBriefing ? (
           <>
-            <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{dailyBriefing}</p>
-            {briefingUpdatedAt && (
-              <p className="mt-1 text-[11px] text-slate-400">
-                {new Date(briefingUpdatedAt).toLocaleDateString()}
-              </p>
-            )}
+            <p className={`mt-0.5 text-xs leading-relaxed text-slate-700 ${expanded ? "" : "line-clamp-2"}`}>{dailyBriefing}</p>
+            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-400">
+              <button type="button" onClick={() => setExpanded((v) => !v)} className="font-medium text-brand hover:underline">
+                {expanded ? "Less" : "More"}
+              </button>
+              {briefingUpdatedAt && <span>{new Date(briefingUpdatedAt).toLocaleDateString()}</span>}
+            </div>
           </>
         ) : (
-          <p className="mt-1.5 text-sm text-slate-400">
+          <p className="mt-0.5 text-xs text-slate-400">
             A roundup of today&apos;s business news for your industry, shared across your team.
           </p>
         )}
