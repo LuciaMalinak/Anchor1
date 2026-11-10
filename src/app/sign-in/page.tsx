@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { signIn } from "@/auth";
+import { signIn, microsoftConfigured } from "@/auth";
 import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { INDUSTRY_BY_KEY, isIndustryKey } from "@/lib/industries";
 import { SignInMethods } from "./SignInMethods";
@@ -15,6 +15,10 @@ const googleConfigured = Boolean(
 const SIGN_IN_ERROR_COPY: Record<string, string> = {
   invalid: "Incorrect email or password.",
   missing: "Enter your email and password.",
+  MicrosoftAccount:
+    "That Microsoft account can't be used to sign in here (guest or unverified accounts aren't allowed). Use your own work account, or sign in with your email instead.",
+  OAuthAccountNotLinked:
+    "That email already has an Anchor.AI account. Sign in the way you did before (email link or password).",
   locked: "Too many sign-in attempts. Wait 15 minutes and try again, or sign in with an email link.",
   // These are Auth.js's own error "type" strings — now routed to this
   // page instead of its bare default error page (see `pages.error` in
@@ -86,12 +90,17 @@ export default async function SignInPage({
 
           <SignInMethods
             googleConfigured={googleConfigured}
+            microsoftConfigured={microsoftConfigured}
             linkedInConfigured={linkedInConfigured}
             error={error}
             errorCopy={error ? SIGN_IN_ERROR_COPY[error] ?? "Something went wrong — try again." : null}
             onGoogle={async () => {
               "use server";
               await signIn("google", { redirectTo: dashboardRedirect });
+            }}
+            onMicrosoft={async () => {
+              "use server";
+              await signIn("microsoft-entra-id", { redirectTo: dashboardRedirect });
             }}
             onLinkedIn={async () => {
               "use server";

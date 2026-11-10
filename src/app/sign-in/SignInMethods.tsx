@@ -14,19 +14,23 @@ const ACK_STORAGE_KEY = "anchor-terms-ack-2026-11";
 
 export function SignInMethods({
   googleConfigured,
+  microsoftConfigured,
   linkedInConfigured,
   error,
   errorCopy,
   onGoogle,
+  onMicrosoft,
   onLinkedIn,
   onMagicLink,
   children,
 }: {
   googleConfigured: boolean;
+  microsoftConfigured: boolean;
   linkedInConfigured: boolean;
   error?: string;
   errorCopy: string | null;
   onGoogle: () => Promise<void>;
+  onMicrosoft: () => Promise<void>;
   onLinkedIn: () => Promise<void>;
   onMagicLink: (formData: FormData) => Promise<void>;
   // The password sign-in form, rendered by the parent server component —
@@ -80,7 +84,7 @@ export function SignInMethods({
         </span>
       </label>
 
-      {(googleConfigured || linkedInConfigured) && (
+      {(googleConfigured || microsoftConfigured || linkedInConfigured) && (
         <>
           <div className="flex flex-col gap-2.5">
             {googleConfigured && (
@@ -97,6 +101,23 @@ export function SignInMethods({
                     <path fill="#EA4335" d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.24 6.61l4.01 3.1C6.2 6.87 8.86 4.75 12 4.75z" />
                   </svg>
                   Continue with Google
+                </button>
+              </form>
+            )}
+            {microsoftConfigured && (
+              <form action={onMicrosoft}>
+                <button
+                  type="submit"
+                  disabled={!acknowledged}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:shadow disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-300 disabled:hover:shadow-sm"
+                >
+                  <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden="true">
+                    <path fill="#F25022" d="M1 1h10v10H1z" />
+                    <path fill="#7FBA00" d="M12 1h10v10H12z" />
+                    <path fill="#00A4EF" d="M1 12h10v10H1z" />
+                    <path fill="#FFB900" d="M12 12h10v10H12z" />
+                  </svg>
+                  Continue with Microsoft
                 </button>
               </form>
             )}
