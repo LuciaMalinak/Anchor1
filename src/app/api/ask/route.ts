@@ -12,6 +12,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { saveAsk } from "@/lib/askLog";
+import { getAskMemory, noteAsk } from "@/lib/askMemory";
 
 const MAX_HISTORY_TURNS = 6;
 
@@ -102,10 +103,12 @@ export async function POST(req: NextRequest) {
     console.error("[ask] building context failed:", err);
     return NextResponse.json({ error: "Anchor.AI couldn't load your workspace. Try again." }, { status: 500 });
   }
-  const [leadStyle, { serverTools, toolRules }] = await Promise.all([
+  const [leadStyle, { serverTools, toolRules }, askNotes] = await Promise.all([
     getDealLeadStyle(leadUserId, { allowSynchronousRebuild: false }),
     // Live lookups it can run mid-answer, e.g. searching their Google Drive.
     loadAskTools(userId),
+    // What it has learned about how this person likes to work.
+    getAskMemory(userId),
   ]);
 
   const encoder = new TextEncoder();
@@ -122,14 +125,16 @@ export async function POST(req: NextRequest) {
           history,
           serverTools,
           toolRules,
+          personal: askNotes,
         })) {
           answer += chunk;
           controller.enqueue(encoder.encode(chunk));
         }
         // Kept with the call (or deal) it was asked during — see askLog.ts.
-        void saveAsk({ userId, question, answer, dealId: null, meetingId: meetingId }).catch((err) =>
-          console.error("[ask log] couldn't save:", err)
-        );
+        void saveAsk({ userId, question, answer, dealId: null, meetingId: meetingId })
+          // Then learn from it (askMemory.ts).
+          .then(() => noteAsk(userId, question))
+          .catch((err) => console.error("[ask log] couldn't save:", err));
       } catch (err) {
         console.error("[ask] stream failed:", err);
         controller.enqueue(encoder.encode(describeAnswerError(err)));

@@ -13,8 +13,18 @@ const ACTION = /\[\[anchor:(record|stop|open):([^\]\s]+)\]\]/g;
 // A marker that's only partly streamed in so far.
 const PARTIAL_ACTION = /\[\[[^\]]*\]?$/;
 
+// Progress notes ("Building your Excel model…") sent while it works.
+const STATUS = /\[\[anchor:status:([^\]]*)\]\]/g;
+
 export function stripAskActions(text: string): string {
-  return text.replace(ACTION, "").replace(PARTIAL_ACTION, "").trimEnd();
+  return text.replace(ACTION, "").replace(STATUS, "").replace(PARTIAL_ACTION, "").trimEnd();
+}
+
+// The most recent progress note in a streaming answer, if any.
+export function latestAskStatus(text: string): string | null {
+  let last: string | null = null;
+  for (const [, note] of text.matchAll(STATUS)) last = note;
+  return last;
 }
 
 // Runs every action in a finished answer. Returns a note to show under

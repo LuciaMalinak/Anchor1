@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { meteredFetch } from "./aiUsage";
 import { LIVE_MODEL, LIVE_THINKING } from "./liveCoaching";
-import { MAIN_MODEL } from "@/lib/aiModels";
 
 // Same pattern as summarize.ts, but conversational rather than
 // tool-forced structured output: this is "Ask Anchor", including during
@@ -21,15 +20,30 @@ const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_LIVE_MODE
 // default effort); any other model keeps its own default.
 const QUICK_THINKING = /^claude-haiku-5/.test(MODEL) ? { thinking: LIVE_THINKING } : {};
 // Building a model, spreadsheet or deck (create_spreadsheet /
-// create_presentation in askTools.ts) is
-// careful, long work — formulas across sheets — so those questions go to
-// the stronger model, with room for the whole workbook.
-const MODEL_BUILDER_MODEL = process.env.ANTHROPIC_BUILDER_MODEL || MAIN_MODEL;
-const MODEL_BUILDER_MAX_TOKENS = 16_000;
-const MODEL_REQUEST =
-  /\b(excel|spreadsheet|xlsx|sheet|model|modell?ing|forecast|projection|budget|valuation|dcf|p&l|pnl|financials?|roi|payback|unit economics|pro ?forma|scenario|sensitivity|powerpoint|pptx|deck|slides?|presentation|pitch)\b/i;
+// create_presentation in askTools.ts) is careful, long work (formulas
+// across sheets, a whole deck's story), so those questions go to Claude
+// Opus 5.5 at high effort, with room for the whole workbook: 16K output
+// tokens used to cut big models off before the file was written. If that
+// model declines a request, it's retried once on Claude Sonnet 5.5.
+// ANTHROPIC_BUILDER_MODEL overrides the first choice.
+const MODEL_BUILDER_MODEL = process.env.ANTHROPIC_BUILDER_MODEL || "claude-opus-5-5";
+const MODEL_BUILDER_FALLBACK_MODEL = "claude-sonnet-5-5";
+const MODEL_BUILDER_MAX_TOKENS = 64_000;
+function builderRequest(refused: boolean) {
+  return {
+    model: refused ? MODEL_BUILDER_FALLBACK_MODEL : MODEL_BUILDER_MODEL,
+    max_tokens: MODEL_BUILDER_MAX_TOKENS,
+    output_config: { effort: "high" as const },
+  };
+}
+// A deliverable (an Excel file, a deck), or building / running a model,
+// valuation or forecast, goes to the builder model. A quick question that
+// only mentions one ("what's their budget?") stays on the fast model.
+const FILE_REQUEST = /\b(excel|spreadsheet|xlsx|workbook|powerpoint|pptx|deck|slides?|presentation|pitch ?deck)\b/i;
+const BUILD_VERB = /\b(build|create|make|prepare|put together|draft|run|redo|update|rebuild|do|calculate|estimate|work out)\b|^\s*(please\s+)?(value|model|forecast|project)\b/i;
+const ANALYSIS = /\b(model|modell?ing|forecast|projection|budget|valuation|value|dcf|p&l|pnl|financials?|roi|irr|npv|payback|unit economics|pro ?forma|scenarios?|sensitivity|returns|cash flows?)\b/i;
 export function wantsSpreadsheet(question: string): boolean {
-  return MODEL_REQUEST.test(question);
+  return FILE_REQUEST.test(question) || (BUILD_VERB.test(question) && ANALYSIS.test(question));
 }
 
 function client() {
@@ -265,7 +279,7 @@ function formatRules(mode: AskMode): string {
 Use **bold** sparingly for names.`;
 }
 
-function buildSystemPrompt(contextBlock: string, mode: AskMode, ctx: DealContext): string {
+function buildSystemPrompt(mode: AskMode, ctx: DealContext): string {
   return `You are Anchor, the assistant for the team working on "${ctx.dealName}"${mode === "live" ? ", answering a quick question during a live call" : ""}.
 
 ${sourcingRules("This deal's own material below: first the passages matched to this question from its calls, documents and emails, then the live call (if one is happening), past meeting summaries, notes, files, and email and calendar context.")}
@@ -274,10 +288,33 @@ Attached files, including PowerPoint and Excel ones, are already converted to pl
 
 ${leadRules(ctx.dealLeadName, ctx.dealLeadStyle)}
 
-${formatRules(mode)}
+${formatRules(mode)}`;
+}
 
---- Deal context ---
-${contextBlock}`;
+// The system prompt in two blocks: the instructions (the same for every
+// question this person asks, so they're cached and later answers start
+// sooner) and then the context, which changes with every question.
+function systemBlocks(instructions: string, context: string): Anthropic.TextBlockParam[] {
+  return [
+    { type: "text", text: instructions, cache_control: { type: "ephemeral" } },
+    { type: "text", text: context },
+  ];
+}
+
+// What Anchor.AI has learned about how this person likes to work (see
+// src/lib/askMemory.ts), added to the instructions.
+function personalRules(personal: string | null | undefined): string {
+  return personal?.trim()
+    ? `\n\nWhat you've learned about this person from working with them (follow it unless they ask otherwise; their own words in this conversation win):\n${personal.trim()}`
+    : "";
+}
+
+// Request settings: the fast model for answers, the strongest for building
+// models and decks, and Claude Sonnet 5.5 when a request was declined.
+function answerRequest(heavy: boolean, refused: boolean, maxTokens: number) {
+  if (heavy) return builderRequest(refused);
+  if (refused) return { model: MODEL_BUILDER_FALLBACK_MODEL, max_tokens: 4000, output_config: { effort: "low" as const } };
+  return { model: MODEL, ...QUICK_THINKING, max_tokens: maxTokens };
 }
 
 // A deal image attached as a real vision content block — see
@@ -340,8 +377,43 @@ export function describeAnswerError(err: unknown): string {
 
 type AnswerStream = ReturnType<ReturnType<typeof client>["messages"]["stream"]>;
 
-function webSearchTool(maxUses: number): Anthropic.Messages.WebSearchTool20250305 {
-  return { type: "web_search_20250305", name: "web_search", max_uses: maxUses };
+// The newer web search (it filters pages before reading them, so answers
+// come back faster and cleaner) on the models that support it; the basic
+// one elsewhere (Claude Haiku 5.5).
+const DYNAMIC_SEARCH_MODELS = /^claude-(opus-5|opus-4-[678]|sonnet-5|sonnet-4-6|fable|mythos)/;
+function webSearchTool(
+  maxUses: number,
+  model: string
+): Anthropic.Messages.WebSearchTool20250305 | Anthropic.Messages.WebSearchTool20260209 {
+  return DYNAMIC_SEARCH_MODELS.test(model)
+    ? { type: "web_search_20260209", name: "web_search", max_uses: maxUses }
+    : { type: "web_search_20250305", name: "web_search", max_uses: maxUses };
+}
+
+// Progress shown in the Ask Anchor panel while it works (searching,
+// building a file), carried in the text stream as a marker the panel
+// shows and then removes (src/lib/askActions.ts).
+export function statusMarker(text: string): string {
+  return `[[anchor:status:${text.replace(/[\[\]]/g, "")}]]`;
+}
+const STATUS_PREFIX = "[[anchor:status:";
+function toolStatus(name: string): string | null {
+  switch (name) {
+    case "create_spreadsheet":
+      return "Building your Excel model…";
+    case "fix_spreadsheet":
+      return "Fixing the model…";
+    case "create_presentation":
+      return "Designing your deck…";
+    case "search_drive":
+      return "Searching your Google Drive…";
+    case "search_dropbox":
+      return "Searching your Dropbox…";
+    case "web_search":
+      return "Searching the web…";
+    default:
+      return null;
+  }
 }
 
 // Streams an answer's text. If the request fails before any text has
@@ -349,34 +421,49 @@ function webSearchTool(maxUses: number): Anthropic.Messages.WebSearchTool2025030
 // web search hiccup), retries once without web search so the person still
 // gets an answer from their own Anchor data instead of an error. A failure
 // after text has started is passed on, since retrying would repeat it.
-async function* streamWithSearchFallback(
-  start: (withSearch: boolean) => AnswerStream
-): AsyncGenerator<string, Anthropic.Message> {
-  let produced = false;
-  try {
-    const stream = start(true);
-    for await (const event of stream) {
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        produced = true;
-        yield event.delta.text;
-      }
-    }
-    // Surfaces stream-level errors (e.g. an API error mid-response) that a
-    // plain `for await` over content_block_delta events alone would swallow.
-    const message: Anthropic.Message = await stream.finalMessage();
-    // An action-only reply (a tool call with no text) is a real answer too.
-    if (produced || message.content.some((b) => b.type === "tool_use")) return message;
-    console.error("[liveAssist] answer with web search came back empty; retrying without it");
-  } catch (err) {
-    if (produced) throw err;
-    console.error("[liveAssist] answer with web search failed; retrying without it:", err);
-  }
-  const stream = start(false);
+async function* streamEvents(stream: AnswerStream, onText: () => void): AsyncGenerator<string> {
   for await (const event of stream) {
     if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+      onText();
       yield event.delta.text;
+    } else if (event.type === "content_block_start") {
+      const block = event.content_block;
+      const status =
+        block.type === "tool_use" || block.type === "server_tool_use" ? toolStatus(block.name) : null;
+      if (status) yield statusMarker(status);
     }
   }
+}
+
+async function* streamWithSearchFallback(
+  start: (withSearch: boolean, refused: boolean) => AnswerStream
+): AsyncGenerator<string, Anthropic.Message> {
+  let produced = false;
+  let refused = false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const stream = start(true, refused);
+      yield* streamEvents(stream, () => (produced = true));
+      // Surfaces stream-level errors (e.g. an API error mid-response) that a
+      // plain `for await` over content_block_delta events alone would swallow.
+      const message: Anthropic.Message = await stream.finalMessage();
+      // A declined request: try once more on the fallback model.
+      if (message.stop_reason === "refusal" && !produced && !refused) {
+        console.error("[liveAssist] request declined; retrying on the fallback model");
+        refused = true;
+        continue;
+      }
+      // An action-only reply (a tool call with no text) is a real answer too.
+      if (produced || message.content.some((b) => b.type === "tool_use")) return message;
+      console.error("[liveAssist] answer with web search came back empty; retrying without it");
+    } catch (err) {
+      if (produced) throw err;
+      console.error("[liveAssist] answer with web search failed; retrying without it:", err);
+    }
+    break;
+  }
+  const stream = start(false, refused);
+  yield* streamEvents(stream, () => {});
   return await stream.finalMessage();
 }
 
@@ -400,7 +487,7 @@ const MAX_TOOL_ROUNDS = 5;
 // the loop — they're acknowledged and collected, and the returned message
 // carries all of them for actionOutput.
 async function* streamWithServerTools(
-  start: (withSearch: boolean, messages: Anthropic.MessageParam[]) => AnswerStream,
+  start: (withSearch: boolean, messages: Anthropic.MessageParam[], refused: boolean) => AnswerStream,
   messages: Anthropic.MessageParam[],
   serverTools: ServerTool[]
 ): AsyncGenerator<string, Anthropic.Message> {
@@ -409,12 +496,16 @@ async function* streamWithServerTools(
   let producedText = false;
   for (let round = 0; ; round++) {
     let roundText = false;
-    const stream = streamWithSearchFallback((withSearch) => start(withSearch, convo));
+    const stream = streamWithSearchFallback((withSearch, refused) => start(withSearch, convo, refused));
     let step = await stream.next();
     while (!step.done) {
-      // Keep separate rounds' text from running together.
-      yield producedText && !roundText ? `\n\n${step.value}` : step.value;
-      roundText = true;
+      if (step.value.startsWith(STATUS_PREFIX)) {
+        yield step.value;
+      } else {
+        // Keep separate rounds' text from running together.
+        yield producedText && !roundText ? `\n\n${step.value}` : step.value;
+        roundText = true;
+      }
       step = await stream.next();
     }
     producedText ||= roundText;
@@ -424,7 +515,14 @@ async function* streamWithServerTools(
     const toolUses = message.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     const serverCalls = toolUses.filter((b) => serverTools.some((t) => t.tool.name === b.name));
     if (message.stop_reason !== "tool_use" || serverCalls.length === 0 || round >= MAX_TOOL_ROUNDS) {
+      if (message.stop_reason === "max_tokens") {
+        yield "\n\nThat was too big to finish in one go. Ask for it in smaller parts (for example, one sheet or a few slides at a time).";
+      }
       return { ...message, content: collected };
+    }
+    for (const call of serverCalls) {
+      const status = call.name === "create_spreadsheet" ? "Saving and checking your Excel model…" : call.name === "create_presentation" ? "Saving your deck…" : null;
+      if (status) yield statusMarker(status);
     }
 
     const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
@@ -543,8 +641,8 @@ export async function askAnchor(params: {
       model: MODEL,
       ...QUICK_THINKING,
       max_tokens: mode === "live" ? 700 : 1500,
-      ...(withSearch ? { tools: [webSearchTool(mode === "live" ? 3 : 5)] } : {}),
-      system: buildSystemPrompt(contextBlock, mode, params.context),
+      ...(withSearch ? { tools: [webSearchTool(mode === "live" ? 3 : 5, MODEL)] } : {}),
+      system: systemBlocks(buildSystemPrompt(mode, params.context), `--- Deal context ---\n${contextBlock}`),
       messages: [
         ...params.history.map((h) => ({ role: h.role, content: h.content })),
         { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
@@ -591,8 +689,10 @@ export async function* askAnchorStream(params: {
   // prompt lines that go with them.
   serverTools?: ServerTool[];
   toolRules?: string;
+  personal?: string | null;
 }): AsyncGenerator<string> {
   const heavy = wantsSpreadsheet(params.question);
+  if (heavy) yield statusMarker("Gathering the numbers…");
   const contextBlock = buildContextBlock(params.context);
   const mode = params.mode ?? "live";
   const actions = params.actions;
@@ -600,30 +700,32 @@ export async function* askAnchorStream(params: {
 
   const serverTools = params.serverTools ?? [];
   const message = yield* streamWithServerTools(
-    (withSearch, messages) =>
-      client().messages.stream({
-        model: heavy ? MODEL_BUILDER_MODEL : MODEL,
-        ...(heavy ? {} : QUICK_THINKING),
-        max_tokens: heavy ? MODEL_BUILDER_MAX_TOKENS : mode === "live" ? 700 : 1500,
-        // The deal context in the system prompt is large and identical
-        // for every follow-up question (and every tool round within one
-        // answer), so cache it — later turns start answering sooner.
+    (withSearch, messages, refused) => {
+      const request = answerRequest(heavy, refused, mode === "live" ? 700 : 1500);
+      return client().messages.stream({
+        ...request,
+        // Caches the conversation so far, so every tool round within one
+        // answer (and follow-up questions) starts sooner.
         cache_control: { type: "ephemeral" },
         ...(withSearch || tools.length || serverTools.length
           ? {
               tools: [
-                ...(withSearch ? [webSearchTool(mode === "live" ? 3 : 5)] : []),
+                ...(withSearch ? [webSearchTool(mode === "live" ? 3 : 5, request.model)] : []),
                 ...tools,
                 ...serverTools.map((t) => t.tool),
               ],
             }
           : {}),
-        system:
-          buildSystemPrompt(contextBlock, mode, params.context) +
-          (actions ? actionRules(actions) : "") +
-          (params.toolRules ?? ""),
+        system: systemBlocks(
+          buildSystemPrompt(mode, params.context) +
+            (actions ? actionRules(actions) : "") +
+            (params.toolRules ?? "") +
+            personalRules(params.personal),
+          `--- Deal context ---\n${contextBlock}`
+        ),
         messages,
-      }),
+      });
+    },
     [
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
@@ -640,7 +742,6 @@ export async function* askAnchorStream(params: {
 // in one meeting's recap, instead of a single deal mid-call.
 function buildWorkspaceSystemPrompt(
   scope: "workspace" | "meeting",
-  contextBlock: string,
   lead: { name: string | null; style: string | null },
   canSearchWeb = true
 ): string {
@@ -659,10 +760,7 @@ Facts about Anchor itself, for questions about the app:
 - Slack is used to send deal handoff briefings to a teammate. Salesforce and HubSpot sync contacts and deals into Anchor, and Anchor can suggest field updates after a call that are only written back when the person approves them.
 - Anchor Desktop records Zoom and Teams calls on a Mac without a bot joining.
 
-${scope === "workspace" ? quietDayRules(canSearchWeb) + "\n\n" : ""}${formatRules("panel")}
-
---- Context ---
-${contextBlock}`;
+${scope === "workspace" ? quietDayRules(canSearchWeb) + "\n\n" : ""}${formatRules("panel")}`;
 }
 
 // For "what needs me today?"-style questions on a day with nothing urgent:
@@ -688,24 +786,29 @@ export async function* askWorkspaceStream(params: {
   history: { role: "user" | "assistant"; content: string }[];
   serverTools?: ServerTool[];
   toolRules?: string;
+  personal?: string | null;
 }): AsyncGenerator<string> {
   const serverTools = params.serverTools ?? [];
   const heavy = wantsSpreadsheet(params.question);
+  if (heavy) yield statusMarker("Gathering the numbers…");
   yield* streamWithServerTools(
-    (withSearch, messages) =>
-      client().messages.stream({
-        model: heavy ? MODEL_BUILDER_MODEL : MODEL,
-        ...(heavy ? {} : QUICK_THINKING),
-        max_tokens: heavy ? MODEL_BUILDER_MAX_TOKENS : 1500,
+    (withSearch, messages, refused) => {
+      const request = answerRequest(heavy, refused, 1500);
+      return client().messages.stream({
+        ...request,
         cache_control: { type: "ephemeral" },
         ...(withSearch || serverTools.length
-          ? { tools: [...(withSearch ? [webSearchTool(5)] : []), ...serverTools.map((t) => t.tool)] }
+          ? { tools: [...(withSearch ? [webSearchTool(5, request.model)] : []), ...serverTools.map((t) => t.tool)] }
           : {}),
-        system:
-          buildWorkspaceSystemPrompt(params.scope, params.contextBlock, params.lead, withSearch) +
-          (params.toolRules ?? ""),
+        system: systemBlocks(
+          buildWorkspaceSystemPrompt(params.scope, params.lead, withSearch) +
+            (params.toolRules ?? "") +
+            personalRules(params.personal),
+          `--- Context ---\n${params.contextBlock}`
+        ),
         messages,
-      }),
+      });
+    },
     [
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user" as const, content: params.question },

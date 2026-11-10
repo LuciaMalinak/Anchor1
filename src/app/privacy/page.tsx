@@ -224,6 +224,11 @@ export default function PrivacyPage() {
         <Section title="10. Your rights and choices">
           <ul className="flex list-disc flex-col gap-1.5 pl-5">
             <li>You can see and correct your account information in your profile.</li>
+            <li>
+              Ask Anchor keeps a short note of how you like to work (learned from your questions and
+              feedback) so its answers fit you. Only you see it, and you can edit or clear it on your
+              Profile at any time.
+            </li>
             <li>You can disconnect any connected service at any time from the Integrations page.</li>
             <li>You can delete meetings, contacts, and deals, or your account, from within Anchor.AI.</li>
             <li>

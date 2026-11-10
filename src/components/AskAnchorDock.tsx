@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FormattedMessage } from "@/components/AskAnchorPanel";
-import { runAskActions, stripAskActions } from "@/lib/askActions";
+import { latestAskStatus, runAskActions, stripAskActions } from "@/lib/askActions";
 import { useIsMac } from "@/lib/useIsMac";
 
 // Ask Anchor, docked on the right of every signed-in page (a sheet behind
@@ -112,7 +112,7 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
   // Conversations are kept per scope for this visit, so going back to a
   // deal shows what you asked about it a minute ago.
   const [threads, setThreads] = useState<Record<string, Turn[]>>({});
-  const [streaming, setStreaming] = useState<{ key: string; text: string } | null>(null);
+  const [streaming, setStreaming] = useState<{ key: string; text: string; status?: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const inFlight = useRef(false);
@@ -153,7 +153,7 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
           const { done, value } = await reader.read();
           if (done) break;
           answer += decoder.decode(value, { stream: true });
-          setStreaming({ key: scope.key, text: stripAskActions(answer) });
+          setStreaming({ key: scope.key, text: stripAskActions(answer), status: latestAskStatus(answer) });
         }
         if (!answer.trim()) throw new Error("Anchor.AI couldn't answer that.");
         // Stop the meeting / open a file if the answer asked for it — see
@@ -207,6 +207,7 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
                 label={label}
                 turns={turns}
                 streamingText={streaming?.key === scope.key ? streaming.text : null}
+                streamingStatus={streaming?.key === scope.key ? streaming.status ?? null : null}
                 error={error}
                 onAsk={(q) => void ask(q)}
                 onClear={() => setThreads((t) => ({ ...t, [scope.key]: [] }))}
@@ -237,6 +238,7 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
                   label={label}
                   turns={turns}
                   streamingText={streaming?.key === scope.key ? streaming.text : null}
+                streamingStatus={streaming?.key === scope.key ? streaming.status ?? null : null}
                   error={error}
                   onAsk={(q) => void ask(q)}
                   onClear={() => setThreads((t) => ({ ...t, [scope.key]: [] }))}
@@ -258,6 +260,7 @@ function DockBody({
   label,
   turns,
   streamingText,
+  streamingStatus,
   error,
   onAsk,
   onClear,
@@ -269,6 +272,7 @@ function DockBody({
   label: string | null;
   turns: Turn[];
   streamingText: string | null;
+  streamingStatus: string | null;
   error: string | null;
   onAsk: (q: string) => void;
   onClear: () => void;
@@ -480,14 +484,23 @@ function DockBody({
               {t.content}
             </div>
           ) : (
-            <div key={i} className="max-w-[95%] self-start rounded-2xl rounded-tl-md border border-[#1f3658] bg-[#16304f] px-3.5 py-2.5 text-sm leading-relaxed text-slate-100 [&_strong]:text-white">
-              <FormattedMessage content={t.content} />
+            <div key={i} className="flex max-w-[95%] flex-col gap-1 self-start">
+              <div className="rounded-2xl rounded-tl-md border border-[#1f3658] bg-[#16304f] px-3.5 py-2.5 text-sm leading-relaxed text-slate-100 [&_strong]:text-white">
+                <FormattedMessage content={t.content} />
+              </div>
+              {turns[i - 1]?.role === "user" && <AnswerFeedback question={turns[i - 1].content} />}
             </div>
           )
         )}
         {asking && (
           <div className="max-w-[95%] self-start rounded-2xl rounded-tl-md border border-[#1f3658] bg-[#16304f] px-3.5 py-2.5 text-sm leading-relaxed text-slate-100">
-            {streamingText ? <FormattedMessage content={streamingText} /> : <span className="text-[#9fb3d1]">Thinking…</span>}
+            {streamingText ? <FormattedMessage content={streamingText} /> : !streamingStatus && <span className="text-[#9fb3d1]">Thinking…</span>}
+            {streamingStatus && (
+              <p className={`flex items-center gap-2 text-xs text-[#9fb3d1] ${streamingText ? "mt-2" : ""}`}>
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#e8a87c]" aria-hidden="true" />
+                {streamingStatus}
+              </p>
+            )}
           </div>
         )}
         {error && <p className="text-sm text-red-300">{error}</p>}
@@ -667,5 +680,58 @@ export function AskAnchorButton({
       <Sparkle className="h-3.5 w-3.5 text-accent" />
       {children}
     </button>
+  );
+}
+
+// Thumbs up / down under an answer. Ask Anchor learns from it how this
+// person likes answers (src/lib/askMemory.ts); a thumbs down asks what to
+// do differently.
+function AnswerFeedback({ question }: { question: string }) {
+  const [state, setState] = useState<"idle" | "asking" | "sent-up" | "sent-down">("idle");
+  const [note, setNote] = useState("");
+
+  async function send(rating: 1 | -1, text?: string) {
+    setState(rating === 1 ? "sent-up" : "sent-down");
+    await fetch("/api/ask/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, rating, note: text ?? null }),
+    }).catch(() => {});
+  }
+
+  if (state === "sent-up" || state === "sent-down") {
+    return <p className="px-1 text-[11px] text-[#7f93b3]">Thanks — Anchor.AI will remember that.</p>;
+  }
+  if (state === "asking") {
+    return (
+      <form
+        className="flex items-center gap-1.5 px-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send(-1, note);
+        }}
+      >
+        <input
+          autoFocus
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="What should it do differently?"
+          className="min-w-0 flex-1 rounded-lg border border-[#1f3658] bg-[#0f2340] px-2 py-1 text-xs text-slate-100 placeholder:text-[#7f93b3] outline-none focus:border-[#e8a87c]"
+        />
+        <button type="submit" className="rounded-lg bg-accent px-2 py-1 text-xs font-medium text-white">
+          Send
+        </button>
+      </form>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1 px-1 text-[#7f93b3]">
+      <button type="button" onClick={() => void send(1)} aria-label="Good answer" title="Good answer" className="rounded p-1 hover:bg-[#16304f] hover:text-slate-100">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 10v11H4V10zM7 10l4-8a3 3 0 0 1 3 3v4h5.5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18 21H7" /></svg>
+      </button>
+      <button type="button" onClick={() => setState("asking")} aria-label="Bad answer" title="Not helpful" className="rounded p-1 hover:bg-[#16304f] hover:text-slate-100">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 14V3h3v11zM17 14l-4 8a3 3 0 0 1-3-3v-4H4.5a2 2 0 0 1-2-2.3l1.4-8A2 2 0 0 1 6 3h11" /></svg>
+      </button>
+    </div>
   );
 }
