@@ -83,13 +83,13 @@ export default function ZoomGuidePage() {
           <p className="font-medium text-slate-800">Schedule a Zoom meeting</p>
           <Steps>
             <li>
-              When Anchor.AI spots a request to meet (for example, an email or Slack message saying
-              &quot;can we meet Thursday?&quot;), it shows a meeting suggestion. You can also schedule a
-              meeting from a deal.
+              Open a deal in Anchor.AI and click <span className="font-medium text-slate-800">Schedule a meeting</span> at
+              the top. (Anchor.AI also offers to set up a meeting when it spots a request to meet in an email or
+              Slack message, such as &quot;can we meet Thursday?&quot;; click <span className="font-medium text-slate-800">Set it up</span> on that suggestion.)
             </li>
-            <li>Check the title, date, time and the people to invite.</li>
             <li>Under <span className="font-medium text-slate-800">How you&apos;ll meet</span>, choose <span className="font-medium text-slate-800">Zoom</span>.</li>
-            <li>Click <span className="font-medium text-slate-800">Set it up</span>.</li>
+            <li>Check the title, day, time, length and the people to invite.</li>
+            <li>Click <span className="font-medium text-slate-800">Create &amp; send invites</span>.</li>
           </Steps>
           <p>
             Anchor.AI creates the scheduled meeting on your Zoom account, puts the Zoom join link in the
@@ -97,7 +97,7 @@ export default function ZoomGuidePage() {
             your Zoom account under <span className="font-medium text-slate-800">Meetings</span>, where you can edit or cancel it as usual.
           </p>
           <p>
-            Nothing is created until you click <span className="font-medium text-slate-800">Set it up</span>. If you decline a suggestion, nothing is set up.
+            Nothing is created until you click <span className="font-medium text-slate-800">Create &amp; send invites</span>. The meeting is also added to the deal&apos;s to-dos with its time and join link.
           </p>
           <p className="font-medium text-slate-800">If something doesn&apos;t work</p>
           <ul className="flex list-disc flex-col gap-1.5 pl-5">

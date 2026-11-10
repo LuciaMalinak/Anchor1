@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { meetingProposals } from "@/db/schema";
+import { contacts, deals, meetingParticipants, meetings, meetingProposals, morningBriefs, tasks } from "@/db/schema";
+import { canAccessDeal } from "@/lib/dealAccess";
 import { briefActor, loadBriefEmail, saveBriefEmail, validThreadId } from "@/lib/briefActions";
 import { parseAddress } from "@/lib/integrations/gmailHeaders";
 import { NeedsGooglePermissionError } from "@/lib/integrations/google";
 import { NeedsConnectionError } from "@/lib/integrations/onlineMeetings";
-import { isValidTimeZone } from "@/lib/morningBriefPrefs";
+import { isValidTimeZone, normalizePrefs } from "@/lib/morningBriefPrefs";
 import { platformOptions, scheduleMeeting, type MeetingPlatform } from "@/lib/meetingScheduler";
 
 // Setting up a meeting someone asked for, by email (from the Morning
@@ -15,7 +16,7 @@ import { platformOptions, scheduleMeeting, type MeetingPlatform } from "@/lib/me
 // to meet are available), POST creates it in the calendar with the video
 // link and sends everyone the invitation, or declines it.
 
-type Source = "email" | "slack";
+type Source = "email" | "slack" | "deal";
 type Draft = {
   fromName: string;
   title: string;
@@ -29,7 +30,60 @@ type Draft = {
 
 const PLATFORMS: MeetingPlatform[] = ["google_meet", "zoom", "teams", "in_person"];
 
-async function load(userId: string, source: Source, id: string) {
+async function load(userId: string, source: Source, id: string, browserTimeZone?: string | null) {
+  // A meeting started from a deal page ("Schedule a meeting"): the deal's
+  // contacts are suggested as invitees, and the meeting is noted on the
+  // deal as a to-do with its time and link once it's set up.
+  if (source === "deal") {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    const [deal] = await db.select().from(deals).where(eq(deals.id, id));
+    if (!deal || !(await canAccessDeal(userId, deal.id, deal.teamId, deal))) return null;
+    const [brief] = await db.select({ prefs: morningBriefs.prefs }).from(morningBriefs).where(eq(morningBriefs.userId, userId));
+    // The device's own time zone first (sent by the form), then the one
+    // set for their morning brief.
+    const timeZone = isValidTimeZone(browserTimeZone)
+      ? browserTimeZone!
+      : brief
+        ? normalizePrefs(brief.prefs).timeZone
+        : "America/New_York";
+    const people = await db
+      .selectDistinct({ name: contacts.name, email: contacts.email })
+      .from(meetingParticipants)
+      .innerJoin(meetings, eq(meetings.id, meetingParticipants.meetingId))
+      .innerJoin(contacts, eq(contacts.id, meetingParticipants.contactId))
+      .where(eq(meetings.dealId, deal.id))
+      .limit(12);
+    const seen = new Set<string>();
+    const attendees = [
+      ...(deal.primaryContactEmail ? [{ name: deal.primaryContactName ?? deal.primaryContactEmail, email: deal.primaryContactEmail }] : []),
+      ...people.filter((p): p is { name: string; email: string } => Boolean(p.email)),
+    ].filter((p) => {
+      const key = p.email.toLowerCase();
+      return !seen.has(key) && Boolean(seen.add(key));
+    });
+    const draft: Draft = {
+      fromName: deal.primaryContactName ?? deal.name,
+      title: deal.name,
+      reason: `Meeting for the deal ${deal.name}`,
+      start: null,
+      durationMinutes: 30,
+      timeZone,
+      attendees,
+      status: "open",
+    };
+    const done = async (state: { added?: boolean; result?: Record<string, unknown>; when?: string }) => {
+      if (!state.added) return;
+      const link = typeof state.result?.joinUrl === "string" ? ` · ${state.result.joinUrl}` : "";
+      await db.insert(tasks).values({
+        teamId: deal.teamId,
+        dealId: deal.id,
+        text: `Meeting: ${state.when ?? ""}${link}`.slice(0, 500),
+        source: "manual",
+        createdByUserId: userId,
+      });
+    };
+    return { draft, subject: deal.name, done };
+  }
   if (source === "email") {
     const threadId = validThreadId(id);
     if (!threadId) return null;
@@ -79,7 +133,7 @@ async function load(userId: string, source: Source, id: string) {
 }
 
 function source(v: unknown): Source | null {
-  return v === "email" || v === "slack" ? v : null;
+  return v === "email" || v === "slack" || v === "deal" ? v : null;
 }
 
 export async function GET(req: NextRequest) {
@@ -87,7 +141,7 @@ export async function GET(req: NextRequest) {
   const userId = await briefActor(q.get("token"));
   if (!userId) return NextResponse.json({ error: "Sign in to Anchor.AI first." }, { status: 401 });
   const src = source(q.get("source"));
-  const found = src ? await load(userId, src, q.get("id") ?? "") : null;
+  const found = src ? await load(userId, src, q.get("id") ?? "", q.get("tz")) : null;
   if (!found) return NextResponse.json({ error: "That meeting request isn't here anymore." }, { status: 404 });
   const returnTo = q.get("returnTo")?.startsWith("/") ? q.get("returnTo")! : "/dashboard";
   return NextResponse.json({ ...found.draft, options: await platformOptions(userId, returnTo) });
@@ -129,7 +183,7 @@ export async function POST(req: NextRequest) {
       attendees,
       location: typeof body.location === "string" ? body.location.slice(0, 300) : undefined,
     });
-    await found.done({ added: true, result });
+    await found.done({ added: true, result, when: `${title}, ${start.replace("T", " ")} (${timeZone})` });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const returnTo = typeof body.returnTo === "string" && body.returnTo.startsWith("/") ? body.returnTo : "/dashboard";

@@ -16,6 +16,7 @@ import { IndustryToolsPanel } from "@/components/IndustryToolsPanel";
 import { ShareNextSteps } from "@/components/ShareNextSteps";
 import { DealContextBox } from "@/components/DealContextBox";
 import { requestFocusWindowPending } from "@/lib/focusWindowBus";
+import { MeetingDecision } from "@/components/MeetingDecision";
 
 type MeetingStatus =
   | "joining"
@@ -2163,6 +2164,7 @@ export function DealTabs({
   }, [companyResearch, deal.id]);
 
   const [deletingDeal, setDeletingDeal] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
   const [deleteDealError, setDeleteDealError] = useState<string | null>(null);
   async function handleDeleteDeal() {
     if (
@@ -2213,6 +2215,15 @@ export function DealTabs({
         <div className="flex flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-2xl font-semibold text-brand">{deal.name}</h1>
+            <div className="flex shrink-0 items-start gap-2">
+            <button
+              type="button"
+              onClick={() => setScheduling((v) => !v)}
+              aria-expanded={scheduling}
+              className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-brand-dark"
+            >
+              {scheduling ? "Close" : "Schedule a meeting"}
+            </button>
             {canDeleteDeal && (
               <div className="flex flex-col items-end gap-1">
                 <button
@@ -2226,7 +2237,20 @@ export function DealTabs({
                 {deleteDealError && <p className="text-xs text-red-600">{deleteDealError}</p>}
               </div>
             )}
+            </div>
           </div>
+          {/* Set up a Zoom / Meet / Teams / in-person meeting for this deal,
+              with the invite sent from your calendar (MeetingDecision). */}
+          {scheduling && (
+            <MeetingDecision
+              source="deal"
+              threadId={deal.id}
+              fromName={deal.primaryContactName || deal.name}
+              title={deal.name}
+              when=""
+              onDone={() => router.refresh()}
+            />
+          )}
           <TabBar active={tab} onChange={setTab} duringCount={inProgress.length} />
         </div>
         <RecordingBanner {...mic} />
