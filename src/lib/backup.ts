@@ -1,25 +1,18 @@
 import { gzipSync } from "node:zlib";
 import { rawClient } from "@/db";
-import { isR2Configured, r2Delete, r2Put } from "@/lib/r2";
+import { isR2Configured, r2Put } from "@/lib/r2";
+import { APP_OWNER_EMAILS } from "@/lib/appOwner";
+import { sendEmail } from "@/lib/email";
 
 // A full copy of Anchor's database, once a day: every table, every row,
 // as gzipped JSON in the R2 bucket (backups/anchor-YYYY-MM-DD.json.gz).
 // It's a safety net independent of the database host, so a lost database,
 // a bad change or a mistaken deletion can always be put back. Runs from
 // the server's own schedule (instrumentation.ts) and /api/cron/backup.
-// Copies are kept for KEEP_DAYS (the Privacy Policy says up to 30 days).
-
-const KEEP_DAYS = 30;
-
-// Removes the copies that have aged out. Backups are named by date, so the
-// ones from just past the window are deleted by name; a missed day is still
-// caught by a later run because the sweep covers another 30 days back.
-async function removeOldBackups(now: Date): Promise<void> {
-  for (let age = KEEP_DAYS + 1; age <= KEEP_DAYS * 2; age++) {
-    const day = new Date(now.getTime() - age * 86_400_000).toISOString().slice(0, 10);
-    await r2Delete(`backups/anchor-${day}.json.gz`).catch(() => {});
-  }
-}
+// Every copy is kept forever: nothing here ever deletes a backup, so any
+// client's data can be recreated from any past day (scripts/load-backup.ts
+// loads one into a database; /api/cron/restore-deals copies from it). If
+// backups stop, the owner gets an email (backupAlertIfDue below).
 
 export type BackupResult = { ok: boolean; key?: string; bytes?: number; tables?: number; rows?: number; error?: string };
 
@@ -75,7 +68,6 @@ export async function runBackup(): Promise<BackupResult> {
     const gz = gzipSync(json);
     const key = `backups/anchor-${new Date().toISOString().slice(0, 10)}.json.gz`;
     await r2Put(key, gz, "application/gzip");
-    await removeOldBackups(new Date()).catch((err) => console.error("[backup] removing old copies failed:", err));
     return record({ ok: true, key, bytes: gz.length, tables: tables.length, rows });
   } catch (err) {
     console.error("[backup] failed:", err);
@@ -93,4 +85,33 @@ export async function runBackupIfDue(): Promise<BackupResult | null> {
   const last = await lastBackup();
   if (last && !last.ok && Date.now() - last.createdAt.getTime() < 3600_000) return null;
   return runBackup();
+}
+
+// Emails the owner, at most once a day, when there's been no successful
+// backup for more than 26 hours (or backups were never set up), so a
+// stopped backup is noticed the same day instead of when it's needed.
+const ALERT_AFTER_MS = 26 * 3600_000;
+const ALERT_EVERY_MS = 24 * 3600_000;
+
+export async function backupAlertIfDue(): Promise<boolean> {
+  await ensureLogTable();
+  await rawClient.unsafe(`CREATE TABLE IF NOT EXISTS "backup_alert" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(), "createdAt" timestamp NOT NULL DEFAULT now())`);
+  const lastOk = await lastSuccessfulBackupAt();
+  if (lastOk && Date.now() - lastOk.getTime() < ALERT_AFTER_MS) return false;
+  const [alerted] = await rawClient<{ createdAt: Date }[]>`select "createdAt" from "backup_alert" order by "createdAt" desc limit 1`;
+  if (alerted && Date.now() - alerted.createdAt.getTime() < ALERT_EVERY_MS) return false;
+  if (APP_OWNER_EMAILS.length === 0) return false;
+  const last = await lastBackup();
+  const reason = !isR2Configured()
+    ? "File storage isn't set up, so no backups are being made. Add the four R2_* settings to the web service's Environment in Render."
+    : `The last attempt failed: ${last?.error ?? "unknown error"}.`;
+  await rawClient`insert into "backup_alert" default values`;
+  await sendEmail({
+    to: APP_OWNER_EMAILS,
+    subject: "Anchor: client data isn't being backed up",
+    html: `<p>Anchor hasn't made a successful backup ${lastOk ? `since <strong>${lastOk.toISOString().slice(0, 16).replace("T", " ")} UTC</strong>` : "<strong>yet</strong>"}.</p>
+      <p>${reason}</p>
+      <p>Backups are the copy of every client's data kept outside the database, so it can always be recreated. Anchor tries again every hour and will email you again tomorrow if it still can't.</p>`,
+  }).catch((err) => console.error("[backup] alert email failed:", err));
+  return true;
 }
