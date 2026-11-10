@@ -10,7 +10,7 @@ import Link from "next/link";
 // silently create a brand-new account, same as the required checkbox on
 // /sign-up. See the comment on the password form below for why *that*
 // form doesn't need this at all.
-const ACK_STORAGE_KEY = "anchor-prototype-ack";
+const ACK_STORAGE_KEY = "anchor-terms-ack-2026-11";
 
 export function SignInMethods({
   googleConfigured,
@@ -60,23 +60,21 @@ export function SignInMethods({
 
   return (
     <>
-      <label className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-900">
+      <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[11px] leading-relaxed text-slate-600">
         <input
           type="checkbox"
           checked={acknowledged}
           onChange={handleAckChange}
-          className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-amber-300"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-slate-300"
         />
         <span>
-          I understand Anchor is an early-stage prototype provided &quot;as is,&quot; and I
-          won&apos;t use Google, LinkedIn, or a sign-in link to bring in my most confidential,
-          sensitive, or regulated information. I&apos;ve read the{" "}
+          I agree to the{" "}
           <Link href="/terms" className="font-medium underline underline-offset-2">
-            Terms
+            Terms of Service
           </Link>{" "}
           and{" "}
-          <Link href="/privacy#prototype-disclaimer" className="font-medium underline underline-offset-2">
-            prototype disclaimer
+          <Link href="/privacy" className="font-medium underline underline-offset-2">
+            Privacy Policy
           </Link>
           .
         </span>

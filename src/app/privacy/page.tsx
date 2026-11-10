@@ -5,16 +5,35 @@ export const metadata = {
   title: "Privacy Policy — Anchor",
 };
 
-const EFFECTIVE_DATE = "September 2026";
+const EFFECTIVE_DATE = "November 10, 2026";
+const CONTACT_EMAIL = "lucia.malinak@gmail.com";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ id, title, children }: { id?: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
+    <section id={id} className="flex scroll-mt-6 flex-col gap-2">
       <h2 className="text-base font-semibold text-slate-900">{title}</h2>
       <div className="flex flex-col gap-3 text-sm leading-relaxed text-slate-600">{children}</div>
     </section>
   );
 }
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="font-medium text-slate-800">{children}</span>;
+}
+
+// Service providers that process customer data on Anchor's behalf. Keep in
+// step with the integrations in src/lib (AI, transcription, meeting bot,
+// email, SMS, payments, hosting, storage).
+const PROVIDERS: [string, string][] = [
+  ["Anthropic", "AI processing (summaries, answers, insights)"],
+  ["AssemblyAI", "Speech-to-text transcription"],
+  ["Recall.ai", "Meeting bot that joins calls you send Anchor to"],
+  ["Render", "Application hosting and database"],
+  ["Cloudflare (R2)", "File storage and encrypted backups"],
+  ["Stripe", "Subscription billing and payments"],
+  ["SendGrid", "Account and notification emails"],
+  ["Twilio", "Text-message notifications, if you turn them on"],
+];
 
 export default function PrivacyPage() {
   return (
@@ -33,224 +52,201 @@ export default function PrivacyPage() {
         <p className="mt-1 text-sm text-slate-400">Effective {EFFECTIVE_DATE}</p>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-5 text-sm leading-relaxed text-amber-900">
-        <p className="text-base font-semibold text-amber-900">Before you test Anchor, please read this</p>
-        <p>
-          Anchor is an early-stage prototype, provided &quot;as is&quot; for testing and
-          evaluation — it hasn&apos;t yet been hardened with all the privacy, security, and
-          data-protection safeguards a production product would have. See{" "}
-          <a href="#prototype-disclaimer" className="font-medium underline underline-offset-2">
-            the full prototype disclaimer below
-          </a>{" "}
-          for details.
-        </p>
-        <p className="font-semibold">
-          Please don&apos;t upload your most confidential, sensitive, or regulated information at
-          this stage. Test Anchor with meetings, documents, and accounts you&apos;d be comfortable
-          with if something went wrong — not your most sensitive deals or data.
-        </p>
-      </div>
-
       <div className="flex flex-col gap-8">
         <Section title="1. What this covers">
           <p>
-            This Privacy Policy explains what information Anchor collects when you use the Service,
-            how it&apos;s used, and the choices you have. &quot;Anchor,&quot; &quot;we,&quot; or
-            &quot;us&quot; refers to the team operating the Anchor application.
+            This Privacy Policy explains what information Anchor.AI (&quot;Anchor,&quot;
+            &quot;we,&quot; or &quot;us&quot;) collects when you use the Anchor web and desktop
+            apps (the &quot;Service&quot;), how we use and protect it, and the choices you have.
+          </p>
+          <p>
+            When a company signs up for Anchor, that company (our &quot;customer&quot;) decides what
+            data goes into its workspace and who on its team can see it. For that data, we act as a
+            service provider (processor) on the customer&apos;s behalf.
           </p>
         </Section>
 
-        <section id="prototype-disclaimer" className="flex scroll-mt-8 flex-col gap-2">
-          <h2 className="text-base font-semibold text-slate-900">
-            2. Prototype / beta-testing disclaimer
-          </h2>
-          <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-600">
-            <p>
-              <span className="font-medium text-slate-900">Early-stage product.</span> Anchor is an
-              early-stage prototype provided solely for testing, evaluation, development, and
-              demonstration purposes. It is not a production-ready product and may contain errors,
-              interruptions, inaccuracies, incomplete functionality, or other defects.
-            </p>
-            <p>
-              <span className="font-medium text-slate-900">Live data.</span> The prototype may
-              access, receive, process, analyze, or display live or real-world data, including
-              meeting recordings, transcripts, and information about your contacts and deals. By
-              providing or authorizing access to any data, you represent that you have all rights,
-              permissions, consents, and authority necessary to permit its use for testing and
-              evaluation purposes.
-            </p>
-            <p>
-              <span className="font-medium text-slate-900">Privacy and security.</span> The
-              prototype does not yet incorporate all the privacy, cybersecurity, data-protection,
-              retention, access-control, or other safeguards that may be built into a future
-              commercial product.{" "}
-              <span className="font-semibold text-slate-900">
-                Please don&apos;t provide confidential, sensitive, regulated, or personally
-                identifiable information unless its use has been expressly authorized for the
-                prototype
-              </span>
-              . If you&apos;re testing Anchor with real meetings or accounts, use ones you&apos;d be
-              comfortable with if something leaked or went wrong — not your most sensitive deals,
-              clients, or documents.
-            </p>
-            <p>
-              <span className="font-medium text-slate-900">No reliance.</span> Information,
-              analyses, recommendations, predictions, or other outputs generated by the prototype
-              may be incomplete, inaccurate, or incorrect, and shouldn&apos;t be relied on for
-              financial, legal, operational, employment, medical, safety-critical, or other material
-              decisions without independent verification.
-            </p>
-            <p>
-              <span className="font-medium text-slate-900">Confidentiality and intellectual property.</span>{" "}
-              The prototype — including its concepts, functionality, workflows, designs,
-              algorithms, interfaces, documentation, and other non-public information — is
-              confidential and proprietary to Anchor. Access to the prototype doesn&apos;t grant you
-              any ownership interest or license except the limited right to evaluate it as expressly
-              authorized by Anchor. You may not copy, reproduce, reverse engineer, disclose,
-              distribute, or use the prototype or this confidential information to develop or assist
-              in developing a competing product, except to the extent such restrictions are
-              prohibited by applicable law.
-            </p>
-            <p className="font-semibold text-slate-900">
-              No warranty. The prototype is provided &quot;as is&quot; and &quot;as available,&quot;
-              without representations or warranties of any kind, express or implied, including
-              warranties of accuracy, reliability, availability, merchantability, fitness for a
-              particular purpose, title, or non-infringement.
-            </p>
-            <p className="font-semibold text-slate-900">
-              Limitation of liability. To the fullest extent permitted by applicable law, Anchor and
-              its founders, officers, employees, contractors, affiliates, and agents will not be
-              liable for any indirect, incidental, special, consequential, exemplary, or punitive
-              damages, or for any loss of profits, revenue, business opportunity, goodwill, or data,
-              arising out of or related to access to or use of the prototype.
-            </p>
-            <p>
-              <span className="font-medium text-slate-900">Assumption of risk.</span> By using the
-              prototype, you acknowledge its experimental nature and voluntarily assume the risks
-              inherent in evaluating and using pre-release technology, subject to any rights or
-              liabilities that can&apos;t lawfully be waived or limited.
-            </p>
-            <p>
-              <span className="font-medium text-slate-900">No commercial commitment.</span> Access to
-              the prototype doesn&apos;t constitute a commitment that Anchor will commercially
-              release the product, or any particular feature, functionality, integration, or
-              service.
-            </p>
-            <p>
-              By accessing or using the prototype, you acknowledge that you&apos;ve read and
-              understood this notice and agree to these terms.
-            </p>
+        <Section title="2. Information we collect">
+          <ul className="flex list-disc flex-col gap-1.5 pl-5">
+            <li>
+              <B>Account information</B>: your name, email address, phone number if you add one,
+              team, and role. If you sign in with Google or LinkedIn, the basic profile that service
+              shares.
+            </li>
+            <li>
+              <B>Meeting content</B>: audio recordings, transcripts, and AI-generated summaries,
+              action items, and signals from meetings you record or upload through Anchor.
+            </li>
+            <li>
+              <B>Deal and contact data</B>: names, roles, notes, files, and other information you
+              or your team enter about contacts and deals.
+            </li>
+            <li>
+              <B>Connected-service data</B>: if you connect another account (for example Google,
+              Microsoft, Slack, Zoom, HubSpot, Salesforce, or Dropbox), the data you authorize
+              Anchor to access from it, used only for the features you connected it for.
+            </li>
+            <li>
+              <B>Billing information</B>: plan, number of seats, and billing status. Card details
+              are entered on Stripe&apos;s secure page and stored by Stripe. Anchor never receives
+              or stores your full card number.
+            </li>
+            <li>
+              <B>Usage data</B>: technical information such as log data, device and app version,
+              and the questions you ask Anchor, used to run, secure, and support the Service.
+            </li>
+          </ul>
+        </Section>
+
+        <Section title="3. How we use it">
+          <ul className="flex list-disc flex-col gap-1.5 pl-5">
+            <li>To transcribe and summarize your meetings, and pull out action items and deal signals;</li>
+            <li>To keep the memory Anchor builds about your deals and contacts, and answer your questions about them;</li>
+            <li>To let your team share deal context, handoffs, and follow-ups;</li>
+            <li>To schedule meetings and send invites you ask for;</li>
+            <li>To bill your subscription and send account messages;</li>
+            <li>To keep the Service secure, fix problems, and provide support.</li>
+          </ul>
+        </Section>
+
+        <Section title="4. What we don't do">
+          <p>
+            We don&apos;t sell your personal information or your content, and we don&apos;t share it
+            with advertisers. We don&apos;t use your meetings, transcripts, or deal data to train AI
+            models. The AI providers we use process your content only to produce your results, under
+            terms that don&apos;t allow them to train their models on it.
+          </p>
+        </Section>
+
+        <Section title="5. Service providers">
+          <p>
+            We use the following providers to run Anchor. Each receives only the data needed for
+            its part of the Service and is bound by its own data-protection terms.
+          </p>
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <tbody>
+                {PROVIDERS.map(([name, purpose]) => (
+                  <tr key={name} className="border-b border-slate-100 last:border-0">
+                    <td className="w-40 px-4 py-2 font-medium text-slate-800">{name}</td>
+                    <td className="px-4 py-2 text-slate-600">{purpose}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </section>
+          <p>
+            Services you choose to connect (such as Google, Microsoft, Slack, or Zoom) receive the
+            requests needed for the features you use, under your agreement with them. We may update
+            this list as the Service changes.
+          </p>
+        </Section>
 
-        <Section title="3. Information we collect">
-          <ul className="list-disc space-y-1 pl-5">
+        <Section id="security" title="6. How we protect your data">
+          <ul className="flex list-disc flex-col gap-1.5 pl-5">
             <li>
-              <span className="font-medium text-slate-900">Account information</span> — your name,
-              email address, and, if you sign in that way, a linked Google or LinkedIn identity.
+              <B>Encryption</B>: all traffic to Anchor uses HTTPS (TLS). Sign-in tokens for
+              connected services are encrypted in our database (AES-256), and our hosting and storage
+              providers encrypt data at rest.
             </li>
             <li>
-              <span className="font-medium text-slate-900">Meeting content</span> — audio
-              recordings, transcripts, and AI-generated summaries, action items, and signals from
-              meetings you record or upload through Anchor.
+              <B>Separation between companies</B>: each company&apos;s workspace is kept separate,
+              and every request is checked against the signed-in person&apos;s team.
             </li>
             <li>
-              <span className="font-medium text-slate-900">Deal and contact data</span> — names,
-              roles, notes, and other information you or your team enter about contacts and deals,
-              including AI-generated relationship summaries built from meeting history.
+              <B>Access inside your team</B>: team leaders choose who can see which deals.
             </li>
             <li>
-              <span className="font-medium text-slate-900">Connected-service data</span> — if you
-              choose to connect a third-party account (e.g. Google, Microsoft, Slack, or a CRM like
-              Salesforce), the data you authorize Anchor to access from that account.
+              <B>Protection against loss</B>: deleted deals go to a recoverable trash rather than
+              being erased right away, changes that remove data are logged, and the database is
+              backed up every night.
             </li>
             <li>
-              <span className="font-medium text-slate-900">Usage data</span> — basic technical
-              information like log data, needed to operate and secure the Service.
+              <B>Payments</B>: card payments are handled by Stripe, which is certified to PCI DSS
+              Level 1.
+            </li>
+          </ul>
+          <p>
+            No system is perfectly secure. If we learn of a security incident affecting your data,
+            we&apos;ll notify affected customers without undue delay and tell them what happened
+            and what we&apos;re doing about it.
+          </p>
+        </Section>
+
+        <Section title="7. Who at Anchor can see your data">
+          <p>
+            A small number of authorized Anchor staff can access account data only when needed for
+            support, security, billing, or to fix a problem, for example when you ask us to recover
+            something or investigate an issue. We don&apos;t look at your content for any other
+            reason.
+          </p>
+        </Section>
+
+        <Section title="8. Recording meetings">
+          <p>
+            Anchor only records calls you set it up to record. Recording laws differ by location,
+            and some require everyone on a call to agree to being recorded. You&apos;re responsible
+            for telling participants and getting any consent the law requires (see our{" "}
+            <Link href="/terms" className="text-brand hover:underline">Terms of Service</Link>).
+          </p>
+        </Section>
+
+        <Section title="9. Keeping and deleting data">
+          <p>
+            We keep your data while your company&apos;s account is active, so your team&apos;s deals
+            and history are never lost by accident. When you delete a deal, meeting, file, or
+            contact, it&apos;s removed from your workspace but kept in a recoverable copy, so a
+            mistake can be undone. Database backups are kept for up to 30 days.
+          </p>
+          <p>
+            To have data permanently erased, including recoverable copies, email us at{" "}
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand hover:underline">{CONTACT_EMAIL}</a>.
+            We&apos;ll complete it within 30 days, apart from anything we must keep by law (for
+            example billing records). When a company closes its account, we delete its data within
+            90 days unless it asks us to export it first.
+          </p>
+        </Section>
+
+        <Section title="10. Your rights and choices">
+          <ul className="flex list-disc flex-col gap-1.5 pl-5">
+            <li>You can see and correct your account information in your profile.</li>
+            <li>You can disconnect any connected service at any time from the Integrations page.</li>
+            <li>You can delete meetings, contacts, and deals, or your account, from within Anchor.</li>
+            <li>
+              You can ask us for a copy of your data, or for it to be corrected or deleted, by
+              emailing us. Depending on where you live (for example under the GDPR or California
+              law), you may have further rights, and we&apos;ll honor them.
+            </li>
+            <li>
+              If your account belongs to a company, we may pass your request to that company, since
+              it controls its workspace.
             </li>
           </ul>
         </Section>
 
-        <Section title="4. How we use it">
-          <p>We use this information to:</p>
-          <ul className="list-disc space-y-1 pl-5">
-            <li>Transcribe and summarize your meetings, and extract action items and deal signals;</li>
-            <li>Build and maintain the rolling memory Anchor keeps about your deals and contacts;</li>
-            <li>Let your team share deal context, handoffs, and follow-ups;</li>
-            <li>Operate, secure, and improve the Service;</li>
-            <li>Communicate with you about your account.</li>
-          </ul>
-        </Section>
-
-        <Section title="5. AI processing and third-party providers">
+        <Section title="11. International transfers">
           <p>
-            Producing transcripts, summaries, and AI-generated insights requires sending meeting
-            content to third-party AI and infrastructure providers (for example, speech-to-text and
-            large language model providers) strictly to process that request. We choose providers
-            whose terms state that business/API data like this isn&apos;t used to train their
-            general-purpose models. We also use a third-party service to send account emails (like
-            sign-in links). If you connect a third-party account (Google, Microsoft, Slack,
-            Salesforce, etc.), the data you authorize is used only to power the features you
-            connected it for.
+            Anchor and its providers are based in the United States, and your data is processed
+            there. Where the law requires, we rely on appropriate safeguards such as the European
+            Commission&apos;s standard contractual clauses.
           </p>
         </Section>
 
-        <Section title="6. What we don't do">
+        <Section title="12. Children">
+          <p>Anchor is a business product and isn&apos;t meant for anyone under 16.</p>
+        </Section>
+
+        <Section title="13. Changes to this policy">
           <p>
-            We don&apos;t sell your personal information or your meeting content. We don&apos;t
-            share it with advertisers. We don&apos;t use your meeting recordings or transcripts to
-            train AI models beyond what&apos;s needed to generate your own summaries and insights.
+            We may update this policy as the Service changes. If we make material changes, we&apos;ll
+            let account owners know by email or in the app before they take effect.
           </p>
         </Section>
 
-        <Section title="7. How Anchor is administered">
+        <Section title="14. Contact">
           <p>
-            A small number of authorized Anchor staff can access account data — including deal,
-            meeting, and transcript content — for support, security, fraud-prevention, and
-            product-improvement purposes, such as investigating a reported problem or understanding
-            how the Service is being used. This access doesn&apos;t generate a real-time notification
-            to your account, but every instance of it is logged internally (who, which account, and
-            when) and reviewed for appropriate use. This access is never used to read your data for
-            any purpose unrelated to operating, securing, or improving the Service, and is never sold
-            or shared with advertisers.
-          </p>
-        </Section>
-
-        <Section title="8. Data retention and deletion">
-          <p>
-            We retain your account data, recordings, and derived content for as long as your
-            account is active, or as needed to provide the Service. You can delete individual
-            meetings from within Anchor, and you can delete your own account at any time from
-            Profile → Delete account — this signs you out everywhere and removes your personal
-            information immediately. If you&apos;re the sole member of your team, your team&apos;s
-            deals and data are deleted along with it; if others are still on your team, we&apos;ll
-            help move ownership first. You can also reach out to us directly for a data request.
-          </p>
-        </Section>
-
-        <Section title="9. Your choices">
-          <ul className="list-disc space-y-1 pl-5">
-            <li>You can disconnect a third-party integration at any time from the Integrations page.</li>
-            <li>You can delete individual meetings or contacts from within Anchor at any time.</li>
-            <li>You can delete your own account at any time from Profile → Delete account.</li>
-            <li>You control what gets recorded — Anchor only joins or records calls you set it up for.</li>
-          </ul>
-        </Section>
-
-        <Section title="10. Changes to this policy">
-          <p>
-            We may update this Privacy Policy as the Service evolves. If we make material changes,
-            we&apos;ll make a reasonable effort to let you know.
-          </p>
-        </Section>
-
-        <Section title="11. Contact">
-          <p>
-            Questions about this policy, or a data request? Reach out at{" "}
-            <a href="mailto:lucia.malinak@gmail.com" className="text-brand hover:underline">
-              lucia.malinak@gmail.com
-            </a>
-            .
+            Questions about this policy, or a data request? Email{" "}
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand hover:underline">{CONTACT_EMAIL}</a>.
           </p>
         </Section>
       </div>
