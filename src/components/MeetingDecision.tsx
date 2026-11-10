@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Platform = "google_meet" | "zoom" | "teams" | "in_person";
 type Option = { platform: Platform; label: string; available: boolean; connectUrl: string | null; note: string | null };
@@ -39,7 +39,9 @@ export function MeetingDecision({
   onDone,
 }: {
   token?: string;
-  source?: "email" | "slack";
+  // "deal": started from a deal page's "Schedule a meeting" (threadId is
+  // the deal id): opens straight on the form, nothing to decline.
+  source?: "email" | "slack" | "deal";
   // The Gmail thread id for an email, the proposal id for Slack.
   threadId: string;
   fromName: string;
@@ -67,7 +69,8 @@ export function MeetingDecision({
   async function open() {
     setState("loading");
     setError(null);
-    const params = new URLSearchParams({ source, id: threadId, returnTo, ...(token ? { token } : {}) });
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const params = new URLSearchParams({ source, id: threadId, returnTo, ...(tz ? { tz } : {}), ...(token ? { token } : {}) });
     const res = await fetch(`/api/schedule-meeting?${params}`).catch(() => null);
     const json = res ? await res.json().catch(() => ({})) : {};
     if (!res?.ok) {
@@ -84,6 +87,14 @@ export function MeetingDecision({
     setPlatform(f.options.find((o) => o.available)?.platform ?? null);
     setState("form");
   }
+
+  // A meeting started from a deal goes straight to the form.
+  useEffect(() => {
+    if (source !== "deal") return;
+    const id = requestAnimationFrame(() => void open());
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function post(body: Record<string, unknown>) {
     const res = await fetch("/api/schedule-meeting", {
@@ -145,8 +156,14 @@ export function MeetingDecision({
   return (
     <div className={box}>
       <p className="text-sm text-sky-900">
-        <span className="font-semibold">{first} asked to meet: </span>
-        {title} · {when}
+        {source === "deal" ? (
+          <span className="font-semibold">Schedule a meeting: {title}</span>
+        ) : (
+          <>
+            <span className="font-semibold">{first} asked to meet: </span>
+            {title} · {when}
+          </>
+        )}
       </p>
 
       {state === "added" && (
@@ -178,14 +195,14 @@ export function MeetingDecision({
           <button type="button" onClick={open} disabled={state === "loading"} className={`${btn} bg-sky-700 text-white hover:bg-sky-800`}>
             {state === "loading" ? "Opening…" : "Set it up"}
           </button>
-          <button
+          {source !== "deal" && <button
             type="button"
             onClick={decline}
             disabled={state === "loading"}
             className={`${btn} border border-slate-300 bg-white text-slate-700 hover:border-slate-400`}
           >
             Decline
-          </button>
+          </button>}
         </div>
       )}
 
