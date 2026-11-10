@@ -62,6 +62,13 @@ function alertOwnerOutOfCredit(detail: string) {
   })().catch((err) => console.error("[recall] out-of-credit alert failed:", err));
 }
 
+// What the bot posts in the meeting chat when it joins. "Anchor.AI
+// (Lucia)" -> "Lucia's notetaker".
+export function recordingNotice(botName: string): string {
+  const owner = botName.match(/\(([^)]+)\)/)?.[1];
+  return `Hi, I'm Anchor.AI${owner ? `, ${owner}'s notetaker` : ", a notetaker"}. This call is being recorded and transcribed to take notes. If you'd rather not be recorded, say so${owner ? ` or message ${owner}` : ""} and the recording can be stopped.`;
+}
+
 export async function createBot(
   meetingUrl: string,
   liveTranscriptWebhookUrl?: string,
@@ -101,6 +108,11 @@ export async function createBot(
     meeting_url: meetingUrl,
     bot_name: botName,
     recording_config: recordingConfig,
+    // Recording notice: the moment the bot joins it tells everyone in the
+    // meeting chat that the call is recorded and how to opt out, pinned
+    // where the platform allows (docs.recall.ai "Sending Chat Messages",
+    // chat.on_bot_join). Kept well under Google Meet's 500-character limit.
+    chat: { on_bot_join: { send_to: "everyone", message: recordingNotice(botName), pin: true } },
   };
 
   // Scheduling ahead of time (rather than the default "join now") hands
@@ -123,11 +135,21 @@ export async function createBot(
     ];
   }
 
-  const res = await fetch(`${BASE_URL}/bot/`, {
+  let res = await fetch(`${BASE_URL}/bot/`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(body),
   });
+  // Never let the notice stop the bot from joining: if Recall rejects the
+  // chat settings (a platform that doesn't support them), join without.
+  if (res.status === 400) {
+    const detail = await res.clone().text().catch(() => "");
+    if (/chat/i.test(detail)) {
+      console.error("[recall] chat notice rejected, joining without it:", detail.slice(0, 300));
+      delete body.chat;
+      res = await fetch(`${BASE_URL}/bot/`, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+    }
+  }
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
