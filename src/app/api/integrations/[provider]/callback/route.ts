@@ -41,7 +41,7 @@ export async function GET(
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");
 
-  let decodedState: { userId: string; returnTo?: string | null } | null = null;
+  let decodedState: { userId: string; nonce?: string; returnTo?: string | null } | null = null;
   try {
     decodedState = state ? JSON.parse(Buffer.from(state, "base64url").toString()) : null;
   } catch {
@@ -61,7 +61,15 @@ export async function GET(
     return redirectWith(req, { error: "missing_code", provider });
   }
 
-  if (!decodedState || decodedState.userId !== session.user.id) {
+  // Same user who started it, and the nonce set by connect/route.ts in this
+  // browser (rejects an authorization started anywhere else).
+  const expectedNonce = req.cookies.get(`anchor_oauth_nonce_${provider}`)?.value;
+  if (
+    !decodedState ||
+    decodedState.userId !== session.user.id ||
+    !expectedNonce ||
+    decodedState.nonce !== expectedNonce
+  ) {
     return redirectWith(req, { error: "state_mismatch", provider });
   }
 
