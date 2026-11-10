@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   aiUsage,
   apiTokens,
+  dataChangeLog,
   answerPlaybook,
   dealMembers,
   deals,
@@ -147,9 +148,65 @@ export async function GET(req: NextRequest) {
         dealsTheyCanSee: u.restrictedToDeals ? (sharedDeals?.n ?? 0) : (teamDeals?.n ?? 0),
         theirDealsOnOtherTeams: ownDealsElsewhere?.n ?? 0,
         canGetIn: hasAccess(t, u.email),
-        billing: t ? { exempt: t.billingExempt, status: t.billingStatus ?? null } : null,
+        created: t?.createdAt?.toISOString().slice(0, 16) ?? null,
+        ownedByThem: t?.ownerUserId === u.id,
+        billing: t
+          ? {
+              exempt: t.billingExempt,
+              status: t.billingStatus ?? null,
+              plan: t.billingPlan ?? null,
+              promo: t.promoCodeUsed ?? null,
+              trialEnds: t.trialEndsAt?.toISOString().slice(0, 10) ?? null,
+              stripeCustomer: Boolean(t.stripeCustomerId),
+            }
+          : null,
       };
     }
+
+    // Where their access went: deals they were given on other teams, and
+    // every logged change about them (removals, moves, restores), with team
+    // names, so a lost team can be found and put back.
+    const sharedElsewhere = await db
+      .select({ teamId: deals.teamId, teamName: teams.name, n: sql<number>`count(*)::int` })
+      .from(dealMembers)
+      .innerJoin(deals, eq(deals.id, dealMembers.dealId))
+      .leftJoin(teams, eq(teams.id, deals.teamId))
+      .where(and(eq(dealMembers.userId, u.id), u.teamId ? sql`${deals.teamId} <> ${u.teamId}` : sql`true`))
+      .groupBy(deals.teamId, teams.name);
+    const history = await db
+      .select({
+        action: dataChangeLog.action,
+        at: dataChangeLog.createdAt,
+        teamId: dataChangeLog.teamId,
+        teamName: teams.name,
+        actorEmail: dataChangeLog.actorEmail,
+        targetId: dataChangeLog.targetId,
+      })
+      .from(dataChangeLog)
+      .leftJoin(teams, eq(teams.id, dataChangeLog.teamId))
+      .where(or(eq(dataChangeLog.targetId, u.id), eq(dataChangeLog.actorUserId, u.id)))
+      .orderBy(desc(dataChangeLog.createdAt))
+      .limit(20);
+
+    // Teams that colleagues (same company email domain) are on, with their
+    // deal counts: usually where a person's lost team is. Skipped for
+    // shared email providers.
+    const domain = (u.email.split("@")[1] ?? "").toLowerCase();
+    const shared = ["gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "yahoo.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com", "live.com"];
+    const colleagueTeams =
+      domain && !shared.includes(domain)
+        ? await db
+            .select({
+              teamId: users.teamId,
+              teamName: teams.name,
+              people: sql<number>`count(distinct ${users.id})::int`,
+              deals: sql<number>`(select count(*)::int from "deal" d where d."teamId" = ${users.teamId})`,
+            })
+            .from(users)
+            .leftJoin(teams, eq(teams.id, users.teamId))
+            .where(and(ilike(users.email, `%@${domain}`), sql`${users.id} <> ${u.id}`))
+            .groupBy(users.teamId, teams.name)
+        : [];
 
     const google = connections.find((c) => c.provider === "google");
     report.push({
@@ -162,6 +219,16 @@ export async function GET(req: NextRequest) {
         callNames: (u.callNames ?? []).length,
       },
       team,
+      colleagueTeams: colleagueTeams.map((c) => ({ team: c.teamName ?? null, teamId: c.teamId, colleagues: c.people, deals: c.deals })),
+      dealsGivenOnOtherTeams: sharedElsewhere.map((r) => ({ team: r.teamName, teamId: r.teamId, deals: r.n })),
+      changeHistory: history.map((h) => ({
+        action: h.action,
+        at: h.at.toISOString().slice(0, 16),
+        team: h.teamName ?? null,
+        teamId: h.teamId,
+        by: h.actorEmail ? mask(h.actorEmail) : null,
+        aboutThem: h.targetId === u.id,
+      })),
       desktop: tokens.length
         ? {
             tokens: tokens.length,
