@@ -5,6 +5,7 @@ import {
   aiUsage,
   apiTokens,
   answerPlaybook,
+  dealMembers,
   deals,
   integrationConnections,
   meetingLiveSegments,
@@ -12,12 +13,14 @@ import {
   morningBriefs,
   summaries,
   tasks,
+  teams,
   transcripts,
   userStyleProfiles,
   users,
 } from "@/db/schema";
 import { inspectDesktopRecording } from "@/lib/recall";
 import { normalizePrefs } from "@/lib/morningBriefPrefs";
+import { hasAccess } from "@/lib/billing";
 
 // A health check of one person's Anchor, for support: is their account,
 // desktop app, Google connection, morning brief and recent meetings all
@@ -125,6 +128,29 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    // Their team: can they get in (billing), and how many deals can they see?
+    // "Stand-in" means alone on a team they own while their own deals sit on
+    // another team (src/lib/reuniteTeams.ts fixes that at the next start).
+    let team: Record<string, unknown> | null = null;
+    if (u.teamId) {
+      const [t] = await db.select().from(teams).where(eq(teams.id, u.teamId));
+      const [[members], [teamDeals], [ownDealsElsewhere], [sharedDeals]] = await Promise.all([
+        db.select({ n: sql<number>`count(*)::int` }).from(users).where(eq(users.teamId, u.teamId)),
+        db.select({ n: sql<number>`count(*)::int` }).from(deals).where(eq(deals.teamId, u.teamId)),
+        db.select({ n: sql<number>`count(*)::int` }).from(deals).where(and(eq(deals.createdByUserId, u.id), sql`${deals.teamId} <> ${u.teamId}`)),
+        db.select({ n: sql<number>`count(*)::int` }).from(dealMembers).innerJoin(deals, eq(deals.id, dealMembers.dealId)).where(and(eq(dealMembers.userId, u.id), eq(deals.teamId, u.teamId))),
+      ]);
+      team = {
+        name: t?.name ?? null,
+        members: members?.n ?? 0,
+        dealsOnTeam: teamDeals?.n ?? 0,
+        dealsTheyCanSee: u.restrictedToDeals ? (sharedDeals?.n ?? 0) : (teamDeals?.n ?? 0),
+        theirDealsOnOtherTeams: ownDealsElsewhere?.n ?? 0,
+        canGetIn: hasAccess(t, u.email),
+        billing: t ? { exempt: t.billingExempt, status: t.billingStatus ?? null } : null,
+      };
+    }
+
     const google = connections.find((c) => c.provider === "google");
     report.push({
       user: {
@@ -135,6 +161,7 @@ export async function GET(req: NextRequest) {
         restrictedToDeals: u.restrictedToDeals ?? false,
         callNames: (u.callNames ?? []).length,
       },
+      team,
       desktop: tokens.length
         ? {
             tokens: tokens.length,
