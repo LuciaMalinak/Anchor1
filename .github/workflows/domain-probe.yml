@@ -19,3 +19,4 @@ jobs:
           echo "== apex"; curl -sS -o /dev/null -w "%{http_code} -> %{redirect_url}\n" --max-time 30 http://anchortechnolgies.com/ || true
           curl -sS -o /dev/null -w "%{http_code} -> %{redirect_url}\n" --max-time 30 https://anchortechnolgies.com/ || true
           echo "== sign-in"; curl -sS -o /dev/null -w "%{http_code}\n" --max-time 30 https://www.anchortechnolgies.com/sign-in || true
+# run 1794332520
