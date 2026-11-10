@@ -34,6 +34,9 @@ type Config = {
   // windows are left out of screen shares and recordings unless this is
   // true (see applyScreenShareProtection in main.ts).
   showInScreenShare?: boolean;
+  // The Recall.ai region host last fetched from /api/desktop/recall-region
+  // (see fetchRecallApiUrl in main.ts), used when that lookup fails.
+  recallApiUrl?: string | null;
 };
 
 function configPath(): string {
@@ -60,6 +63,10 @@ export function loadConfig(): Config {
           ? { windowWasVisible: parsed.restartedForUpdate.windowWasVisible }
           : null,
       showInScreenShare: parsed.showInScreenShare === true,
+      recallApiUrl:
+        typeof parsed.recallApiUrl === "string" && /^https:\/\/[a-z0-9-]+\.recall\.ai$/.test(parsed.recallApiUrl)
+          ? parsed.recallApiUrl
+          : null,
     };
   } catch {
     return { apiBase: DEFAULT_API_BASE, token: null };

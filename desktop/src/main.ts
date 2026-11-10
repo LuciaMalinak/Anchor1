@@ -635,18 +635,19 @@ function startServerKeepAwake() {
 
 // Recall.ai's API is region-scoped — see
 // src/app/api/desktop/recall-region/route.ts for the full explanation.
-// Without this, RecallAiSdk.init() defaults to a host that may not match
-// the region our backend created the upload token against, and every
-// recording fails with "Invalid upload token" even though the token
-// itself is perfectly valid. Best-effort with a short timeout: if this
-// can't be reached (offline, slow network), initSdk() proceeds without an
-// override rather than blocking startup — recordings just fall back to
-// whatever the SDK's own default region-guessing does in that case.
-async function fetchRecallApiUrl(): Promise<string | undefined> {
-  const config = loadConfig();
-  const apiBase = config.apiBase || DEFAULT_API_BASE;
+// RecallAiSdk.init() must be given the region our backend creates upload
+// tokens in, or every recording fails with "Invalid upload token" even
+// though the token itself is valid. init() only runs once per launch, so
+// one failed lookup (the app starting at login before the network is up,
+// a slow connection) used to break recording until the app was restarted.
+// Now: retry for about a minute, remember the last answer, and otherwise
+// use Anchor.AI's region rather than the SDK's own guess.
+const DEFAULT_RECALL_API_URL = "https://us-west-2.recall.ai";
+const RECALL_REGION_ATTEMPTS = 6;
+
+async function fetchRecallApiUrlOnce(apiBase: string): Promise<string | undefined> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
+  const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const res = await fetch(`${apiBase}/api/desktop/recall-region`, { signal: controller.signal });
     if (!res.ok) return undefined;
@@ -655,12 +656,30 @@ async function fetchRecallApiUrl(): Promise<string | undefined> {
     // The SDK wants the region's base URL and adds its own API path — an
     // older Anchor server sent .../api/v1, which made every recording fail
     // with a 404 retrieving the recording configuration.
-    return body.apiUrl.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
+    const url = body.apiUrl.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
+    return /^https:\/\/[a-z0-9-]+\.recall\.ai$/.test(url) ? url : undefined;
   } catch {
     return undefined;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchRecallApiUrl(): Promise<string> {
+  const config = loadConfig();
+  const apiBase = config.apiBase || DEFAULT_API_BASE;
+  for (let attempt = 1; attempt <= RECALL_REGION_ATTEMPTS; attempt++) {
+    const url = await fetchRecallApiUrlOnce(apiBase);
+    if (url) {
+      if (url !== loadConfig().recallApiUrl) saveConfig({ ...loadConfig(), recallApiUrl: url });
+      log(`Using Recall.ai region endpoint: ${url}`);
+      return url;
+    }
+    if (attempt < RECALL_REGION_ATTEMPTS) await new Promise((r) => setTimeout(r, attempt * 2_000));
+  }
+  const fallback = config.recallApiUrl || DEFAULT_RECALL_API_URL;
+  log(`Couldn't reach Anchor.AI to check the Recall.ai region — using ${fallback}.`);
+  return fallback;
 }
 
 // The native recording program the SDK launches, if it isn't on disk.
@@ -682,11 +701,6 @@ async function initSdk() {
   // requestPermission() per permission after init(), which is what the loop
   // below does.
   const recallApiUrl = await fetchRecallApiUrl();
-  if (recallApiUrl) {
-    log(`Using Recall.ai region endpoint: ${recallApiUrl}`);
-  } else {
-    log("Couldn't fetch Anchor.AI's Recall.ai region — falling back to the SDK's default, which may cause 'Invalid upload token' errors if it doesn't match Anchor.AI's account region.");
-  }
   // The SDK records through a native program (agent-windows.exe on
   // Windows) that npm only downloads for the platform it runs on, so a
   // Windows installer built on a Mac shipped without it. Then init only

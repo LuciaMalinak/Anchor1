@@ -32,6 +32,36 @@ export function botDisplayName(userName: string | null | undefined): string {
   return first ? `Anchor.AI (${first})` : "Anchor.AI";
 }
 
+// Recall.ai answers 402 "insufficient_credit_balance" when the account's
+// prepaid credit runs out: every bot and desktop recording is refused
+// until it's topped up. That's for the app owner to fix, not the person
+// on the call, so say so plainly and email the owner (at most every 6
+// hours per server).
+const OUT_OF_CREDIT_MESSAGE =
+  "Recording is paused: Anchor.AI's recording service is out of credit. The Anchor.AI team has been alerted and will fix it shortly.";
+const CREDIT_ALERT_EVERY_MS = 6 * 60 * 60_000;
+let lastCreditAlert = 0;
+
+function isOutOfCredit(status: number, detail: string) {
+  return status === 402 || /insufficient_credit_balance/.test(detail);
+}
+
+function alertOwnerOutOfCredit(detail: string) {
+  if (Date.now() - lastCreditAlert < CREDIT_ALERT_EVERY_MS) return;
+  lastCreditAlert = Date.now();
+  void (async () => {
+    const [{ APP_OWNER_EMAILS }, { sendEmail }] = await Promise.all([import("@/lib/appOwner"), import("@/lib/email")]);
+    if (APP_OWNER_EMAILS.length === 0) return;
+    await sendEmail({
+      to: APP_OWNER_EMAILS,
+      subject: "Anchor.AI: call recording is down (Recall.ai is out of credit)",
+      html: `<p>Recall.ai refused to start a recording because the account has run out of credit, so no one can record calls (meeting bot or desktop app) until it's topped up.</p>
+        <p>Add credit in the Recall.ai dashboard (Billing). Recording works again straight away.</p>
+        <p style="color:#64748b">Recall.ai said: ${detail.replace(/[<>&]/g, "").slice(0, 300)}</p>`,
+    });
+  })().catch((err) => console.error("[recall] out-of-credit alert failed:", err));
+}
+
 export async function createBot(
   meetingUrl: string,
   liveTranscriptWebhookUrl?: string,
@@ -101,6 +131,10 @@ export async function createBot(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
+    if (isOutOfCredit(res.status, detail)) {
+      alertOwnerOutOfCredit(detail);
+      throw new Error(OUT_OF_CREDIT_MESSAGE);
+    }
     throw new Error(
       `Recall.ai couldn't join that meeting (${res.status}): ${detail || "no details"}`
     );
@@ -310,6 +344,10 @@ export async function createSdkUpload(): Promise<{ uploadToken: string; recordin
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
+    if (isOutOfCredit(res.status, detail)) {
+      alertOwnerOutOfCredit(detail);
+      throw new Error(OUT_OF_CREDIT_MESSAGE);
+    }
     throw new Error(`Recall.ai couldn't create a desktop recording upload (${res.status}): ${detail || "no details"}`);
   }
   const body = (await res.json()) as SdkUploadCreateResponse;
