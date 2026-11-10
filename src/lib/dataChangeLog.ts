@@ -16,7 +16,11 @@ export type DataChange = {
     | "meeting_deleted"
     | "file_deleted"
     | "message_deleted"
-    | "contact_deleted";
+    | "contact_deleted"
+    | "two_factor_enabled"
+    | "two_factor_disabled"
+    | "team_two_factor_required"
+    | "team_two_factor_optional";
   actorUserId?: string | null;
   actorEmail?: string | null;
   teamId?: string | null;

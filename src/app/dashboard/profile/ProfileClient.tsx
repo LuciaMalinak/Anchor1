@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { MorningBriefSettings } from "./MorningBriefSettings";
+import { TwoFactorSettings } from "@/components/TwoFactorSettings";
 import { CompanyContextBox } from "@/components/CompanyContextBox";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -124,6 +125,8 @@ export function ProfileClient({ profile }: { profile: Profile }) {
       {/* First on the page so it's easy to find; Home links here
           (#morning-brief) until it's turned on. */}
       <MorningBriefSettings />
+
+      <TwoFactorSettings />
 
       {/* The playbook isn't in the main menu — it's here for anyone who
           wants to check or fix what Anchor has learned. */}
