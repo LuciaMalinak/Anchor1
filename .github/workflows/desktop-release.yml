@@ -30,7 +30,9 @@ concurrency:
 
 jobs:
   mac:
-    runs-on: macos-14 # Apple silicon, same as the builds made so far
+    # macos-14 runners were retired (jobs were cancelled before starting);
+    # macos-15 is Apple silicon too.
+    runs-on: macos-15
     defaults:
       run:
         working-directory: desktop
