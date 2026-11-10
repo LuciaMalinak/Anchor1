@@ -63,6 +63,8 @@ function startMorningBriefSchedule() {
       const { runBackupIfDue } = await import("@/lib/backup");
       const result = await runBackupIfDue();
       if (result) console.log("[backup] daily backup:", result.ok ? result.key : result.error);
+      const { backupAlertIfDue } = await import("@/lib/backup");
+      if (await backupAlertIfDue()) console.log("[backup] emailed the owner: no recent backup");
     } catch (err) {
       console.error("[backup] scheduled backup failed:", err);
     }

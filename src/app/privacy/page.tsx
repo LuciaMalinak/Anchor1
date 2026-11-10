@@ -196,14 +196,18 @@ export default function PrivacyPage() {
             We keep your data while your company&apos;s account is active, so your team&apos;s deals
             and history are never lost by accident. When you delete a deal, meeting, file, or
             contact, it&apos;s removed from your workspace but kept in a recoverable copy, so a
-            mistake can be undone. Database backups are kept for up to 30 days.
+            mistake can be undone. We also make a full backup every day and keep backups long-term,
+            stored separately from the live service, so your data can always be recreated if
+            something goes wrong.
           </p>
           <p>
-            To have data permanently erased, including recoverable copies, email us at{" "}
+            To have data permanently erased, email us at{" "}
             <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand hover:underline">{CONTACT_EMAIL}</a>.
-            We&apos;ll complete it within 30 days, apart from anything we must keep by law (for
-            example billing records). When a company closes its account, we delete its data within
-            90 days unless it asks us to export it first.
+            We&apos;ll remove it from the service and its recoverable copies within 30 days, apart from
+            anything we must keep by law (for example billing records). Backups are only ever used to
+            recover lost data; if we ever restore one, we apply your erasure again before anything
+            is used. When a company closes its account, we keep its data so it can be restored if it
+            comes back, unless it asks us to delete it or to export it first.
           </p>
         </Section>
 
