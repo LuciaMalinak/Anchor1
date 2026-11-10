@@ -227,7 +227,7 @@ export default async function DashboardLayout({
           homepage, so someone who signed up straight from a sign-up link
           and never saw that page had no way to find them. */}
       <footer className="mt-auto hidden border-t border-slate-100 px-6 py-6 text-center text-xs text-slate-400 md:block lg:px-10 2xl:px-16">
-        © {new Date().getFullYear()} Anchor ·{" "}
+        © {new Date().getFullYear()} Anchor.AI ·{" "}
         <Link href="/terms" className="hover:text-slate-600 hover:underline">
           Terms
         </Link>{" "}

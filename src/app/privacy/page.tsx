@@ -227,6 +227,10 @@ export default function PrivacyPage() {
             <li>You can disconnect any connected service at any time from the Integrations page.</li>
             <li>You can delete meetings, contacts, and deals, or your account, from within Anchor.AI.</li>
             <li>
+              Your team owner can download all of your company&apos;s data at any time from the Team
+              page, see who has which services connected, and sign anyone out everywhere.
+            </li>
+            <li>
               You can ask us for a copy of your data, or for it to be corrected or deleted, by
               emailing us. Depending on where you live (for example under the GDPR or California
               law), you may have further rights, and we&apos;ll honor them.

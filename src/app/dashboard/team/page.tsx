@@ -6,6 +6,7 @@ import { getOrCreateTeamId } from "@/lib/team";
 import { canManageJoinRequests } from "@/lib/joinRequestAccess";
 import { isAppOwner } from "@/lib/appOwner";
 import { TeamClient } from "./TeamClient";
+import { TeamSecurityPanel } from "./TeamSecurityPanel";
 
 type DealOption = { id: string; name: string };
 type JoinRequestItem = {
@@ -100,7 +101,9 @@ export default async function TeamPage() {
     }));
   }
 
+  const isOwner = team?.ownerUserId === session.user.id;
   return (
+    <>
     <TeamClient
       teamId={teamId}
       teamName={team?.name || "My Team"}
@@ -110,7 +113,13 @@ export default async function TeamPage() {
       otherTeamRequests={otherTeamRequests}
       currentUserId={session.user.id}
       industry={team?.industry ?? null}
-      isOwner={team?.ownerUserId === session.user.id}
+      isOwner={isOwner}
     />
+    {isOwner && (
+      <div className="mt-8">
+        <TeamSecurityPanel />
+      </div>
+    )}
+    </>
   );
 }

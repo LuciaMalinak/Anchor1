@@ -20,7 +20,9 @@ export type DataChange = {
     | "two_factor_enabled"
     | "two_factor_disabled"
     | "team_two_factor_required"
-    | "team_two_factor_optional";
+    | "team_two_factor_optional"
+    | "team_exported"
+    | "member_signed_out";
   actorUserId?: string | null;
   actorEmail?: string | null;
   teamId?: string | null;

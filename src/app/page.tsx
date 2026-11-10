@@ -473,7 +473,7 @@ export default async function Home() {
               </a>
             </div>
             <p className="text-xs text-slate-400">
-              © {new Date().getFullYear()} Anchor. All rights reserved.
+              © {new Date().getFullYear()} Anchor.AI. All rights reserved.
             </p>
             <nav className="flex items-center gap-5 text-sm font-medium text-brand">
               <Link href="/pricing" className="hover:underline">

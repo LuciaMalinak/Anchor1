@@ -177,7 +177,7 @@ export default function PricingPage() {
             </a>
           </div>
           <p className="text-xs text-slate-400">
-            © {new Date().getFullYear()} Anchor. All rights reserved.
+            © {new Date().getFullYear()} Anchor.AI. All rights reserved.
           </p>
           <nav className="flex items-center gap-5 text-sm font-medium text-brand">
             <Link href="/terms" className="hover:underline">
