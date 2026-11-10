@@ -5,12 +5,13 @@ import { users, sessions } from "@/db/schema";
 import { sql } from "drizzle-orm";
 import { verifyPassword, sessionCookieName, secureCookiesEnabled, absoluteUrl } from "@/lib/auth/password";
 import { safeReturnTo } from "@/lib/integrations/returnTo";
+import { clearSignInFailures, clientIp, recordSignInFailure, signInLocked } from "@/lib/auth/signInLimit";
 
 // How long the underlying session row (and, when "stay signed in" is
 // checked, the cookie itself) stays valid. Unchecked still gets a real
 // session — just a short-lived one, and a cookie with no Max-Age at all so
 // the browser drops it on its own when the browser closes.
-const REMEMBER_ME_DAYS = 90;
+const REMEMBER_ME_DAYS = 30;
 const DEFAULT_SESSION_DAYS = 1;
 
 function backToSignIn(req: NextRequest, error: string, next: string | null) {
@@ -33,6 +34,11 @@ export async function POST(req: NextRequest) {
     return backToSignIn(req, "missing", next);
   }
 
+  const ip = clientIp(req);
+  if (await signInLocked(email, ip)) {
+    return backToSignIn(req, "locked", next);
+  }
+
   const [user] = await db
     .select()
     .from(users)
@@ -42,13 +48,16 @@ export async function POST(req: NextRequest) {
   // Same generic error either way — don't reveal whether the email exists
   // or whether it just doesn't have a password set yet.
   if (!user || !user.passwordHash) {
+    await recordSignInFailure(email, ip);
     return backToSignIn(req, "invalid", next);
   }
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
+    await recordSignInFailure(email, ip);
     return backToSignIn(req, "invalid", next);
   }
+  await clearSignInFailures(email);
 
   const days = rememberMe ? REMEMBER_ME_DAYS : DEFAULT_SESSION_DAYS;
   const token = randomBytes(32).toString("hex");

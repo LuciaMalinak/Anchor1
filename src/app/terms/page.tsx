@@ -180,8 +180,8 @@ export default function TermsPage() {
         <Section title="14. Contact">
           <p>
             Questions about these Terms? Reach out at{" "}
-            <a href="mailto:lucia.malinak@gmail.com" className="text-brand hover:underline">
-              lucia.malinak@gmail.com
+            <a href="mailto:lucia@anchortechnolgies.com" className="text-brand hover:underline">
+              lucia@anchortechnolgies.com
             </a>
             .
           </p>

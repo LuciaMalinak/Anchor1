@@ -153,7 +153,7 @@ export default function PricingPage() {
         <p className="mt-10 text-center text-sm text-slate-500">
           Every meeting Anchor.AI delegates for is one your team keeps handling well even when
           you&apos;re not in the room. Questions about which tier fits?{" "}
-          <a href="mailto:lucia.malinak@gmail.com" className="text-brand hover:underline">
+          <a href="mailto:lucia@anchortechnolgies.com" className="text-brand hover:underline">
             Reach out
           </a>
           .

@@ -15,6 +15,7 @@ const googleConfigured = Boolean(
 const SIGN_IN_ERROR_COPY: Record<string, string> = {
   invalid: "Incorrect email or password.",
   missing: "Enter your email and password.",
+  locked: "Too many sign-in attempts. Wait 15 minutes and try again, or sign in with an email link.",
   // These are Auth.js's own error "type" strings — now routed to this
   // page instead of its bare default error page (see `pages.error` in
   // src/auth.ts). "Configuration" is the generic bucket Auth.js uses for
