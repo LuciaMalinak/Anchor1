@@ -642,7 +642,7 @@ function startServerKeepAwake() {
 // a slow connection) used to break recording until the app was restarted.
 // Now: retry for about a minute, remember the last answer, and otherwise
 // use Anchor.AI's region rather than the SDK's own guess.
-const DEFAULT_RECALL_API_URL = "https://us-east-1.recall.ai";
+const DEFAULT_RECALL_API_URL = "https://us-west-2.recall.ai";
 const RECALL_REGION_ATTEMPTS = 6;
 
 async function fetchRecallApiUrlOnce(apiBase: string): Promise<string | undefined> {
