@@ -1,0 +1,21 @@
+# Temporary: diagnose www.anchortechnolgies.com not loading. Removed after.
+name: Domain probe
+on:
+  push:
+    branches: [claude/dreamy-shannon-jp4hfg]
+    paths: [.github/workflows/domain-probe.yml]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for n in www.anchortechnolgies.com anchortechnolgies.com; do
+            echo "== DNS $n"; dig +noall +answer $n A; dig +noall +answer $n CNAME; dig +noall +answer @8.8.8.8 $n; dig +noall +answer @1.1.1.1 $n
+          done
+          echo "== NS"; dig +short anchortechnolgies.com NS
+          echo "== www https"; curl -sS -o /dev/null -w "%{http_code} -> %{redirect_url}\n" --max-time 30 https://www.anchortechnolgies.com/ || true
+          curl -sSv --max-time 30 https://www.anchortechnolgies.com/ -o /dev/null 2>&1 | grep -E "subject:|issuer:|expire|SSL|HTTP/|location|error" || true
+          echo "== www http"; curl -sS -o /dev/null -w "%{http_code} -> %{redirect_url}\n" --max-time 30 http://www.anchortechnolgies.com/ || true
+          echo "== apex"; curl -sS -o /dev/null -w "%{http_code} -> %{redirect_url}\n" --max-time 30 http://anchortechnolgies.com/ || true
+          curl -sS -o /dev/null -w "%{http_code} -> %{redirect_url}\n" --max-time 30 https://anchortechnolgies.com/ || true
+          echo "== sign-in"; curl -sS -o /dev/null -w "%{http_code}\n" --max-time 30 https://www.anchortechnolgies.com/sign-in || true
