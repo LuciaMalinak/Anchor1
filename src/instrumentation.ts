@@ -5,6 +5,9 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs" || !process.env.DATABASE_URL) return;
   const { runStartupMigrations } = await import("@/lib/startupMigrations");
   await runStartupMigrations();
+  // Encrypts any connected-tool token still stored as plain text.
+  const { encryptStoredTokens } = await import("@/lib/encryptStoredTokens");
+  await encryptStoredTokens().catch((err) => console.error("[encryptStoredTokens] failed:", err));
   startStuckMeetingSweep();
   if (process.env.NODE_ENV === "production") startMorningBriefSchedule();
 }

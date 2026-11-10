@@ -14,8 +14,18 @@ import {
   index,
   doublePrecision,
   type AnyPgColumn,
+  customType,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
+import { encryptToken, decryptToken } from "../lib/tokenCrypto";
+
+// A text column stored encrypted (src/lib/tokenCrypto.ts): used for the
+// sign-in tokens of connected tools. Code reads and writes plain strings.
+const encryptedText = customType<{ data: string; driverData: string }>({
+  dataType: () => "text",
+  toDriver: (value) => encryptToken(value),
+  fromDriver: (value) => decryptToken(value),
+});
 
 // ---------------------------------------------------------------------------
 // Auth.js tables (shape required by @auth/drizzle-adapter)
@@ -848,8 +858,8 @@ export const integrationConnections = pgTable(
     // already sitting in .env for this project. Before this goes beyond a
     // design-partner demo, these should move to an encrypted column (or a
     // secrets manager) — see ENGINEER_BRIEF.md.
-    accessToken: text("accessToken").notNull(),
-    refreshToken: text("refreshToken"),
+    accessToken: encryptedText("accessToken").notNull(),
+    refreshToken: encryptedText("refreshToken"),
     tokenExpiresAt: timestamp("tokenExpiresAt", { mode: "date" }),
     scope: text("scope"),
     // Salesforce (unlike Google/Microsoft/Slack) has a per-org API base
@@ -859,7 +869,7 @@ export const integrationConnections = pgTable(
     instanceUrl: text("instanceUrl"),
     // Slack only: the person's own user token (from user_scope), for
     // reading their direct messages. accessToken stays the bot token.
-    userAccessToken: text("userAccessToken"),
+    userAccessToken: encryptedText("userAccessToken"),
     // The provider's own id for the connected account (Zoom only for now),
     // so a "user removed the app" notice can find the right connection.
     externalAccountId: text("externalAccountId"),
@@ -1085,8 +1095,8 @@ export const linkedinBot = pgTable("linkedin_bot", {
   id: text("id").primaryKey(),
   orgUrn: text("orgUrn"),
   orgName: text("orgName"),
-  accessToken: text("accessToken"),
-  refreshToken: text("refreshToken"),
+  accessToken: encryptedText("accessToken"),
+  refreshToken: encryptedText("refreshToken"),
   tokenExpiresAt: timestamp("tokenExpiresAt", { mode: "date" }),
   refreshExpiresAt: timestamp("refreshExpiresAt", { mode: "date" }),
   // LinkedInBotSettings (src/lib/linkedinBot/settings.ts); normalized on read.

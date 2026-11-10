@@ -8,7 +8,7 @@ const SIGN_UP_ERROR_COPY: Record<string, string> = {
   short: "Use at least 8 characters for your password.",
   mismatch: "Those passwords didn't match — try again.",
   exists: "An account already exists for that email — sign in instead.",
-  ack: "Please check the box confirming you've read the prototype notice before creating an account.",
+  ack: "Please check the box to agree to the Terms of Service and Privacy Policy before creating an account.",
 };
 
 export default async function SignUpPage({
@@ -90,28 +90,25 @@ export default async function SignUpPage({
           placeholder="Confirm password"
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
         />
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-          <label className="flex items-start gap-2 text-[11px] leading-relaxed text-amber-900">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <label className="flex items-start gap-2 text-[11px] leading-relaxed text-slate-600">
             <input
               type="checkbox"
               name="acknowledgePrototype"
               value="1"
               required
-              className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-amber-300"
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-slate-300"
             />
             <span>
-              I understand Anchor is an early-stage prototype provided &quot;as is,&quot; and I
-              won&apos;t upload my most confidential, sensitive, or regulated information — I&apos;ll
-              test it with meetings and documents I&apos;d be comfortable with if something leaked.
-              I&apos;ve read the{" "}
+              I agree to the{" "}
               <Link href="/terms" className="font-medium underline underline-offset-2">
-                Terms
+                Terms of Service
               </Link>{" "}
               and{" "}
-              <Link href="/privacy#prototype-disclaimer" className="font-medium underline underline-offset-2">
-                prototype disclaimer
-              </Link>
-              .
+              <Link href="/privacy" className="font-medium underline underline-offset-2">
+                Privacy Policy
+              </Link>, and I&apos;ll get any consent the law requires before
+              recording a call.
             </span>
           </label>
         </div>
