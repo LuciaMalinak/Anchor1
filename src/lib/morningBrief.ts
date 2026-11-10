@@ -57,7 +57,7 @@ const MAX_DRAFTS = MAX_EMAILS;
 const REPLY_CONCURRENCY = 4;
 
 export function siteUrl(): string {
-  return (process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "https://anchor-be6o.onrender.com").replace(/\/$/, "");
+  return (process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "https://www.anchortechnolgies.com").replace(/\/$/, "");
 }
 
 export function briefLinkFor(userId: string): string {
