@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { contacts, deals, meetings, summaries } from "@/db/schema";
+import { contacts, deals, meetings, summaries, transcripts } from "@/db/schema";
 import { MAIN_MODEL } from "@/lib/aiModels";
 import { meteredFetch, withAiUser } from "@/lib/aiUsage";
 import { logDataChange } from "@/lib/dataChangeLog";
@@ -66,9 +66,17 @@ function client() {
 export async function planRebuild(userId: string): Promise<RebuildPlan> {
   const teamId = await getOrCreateTeamId(userId);
   const calls = await db
-    .select({ id: meetings.id, title: meetings.title, occurredAt: meetings.occurredAt, createdAt: meetings.createdAt, summary: summaries })
+    .select({
+      id: meetings.id,
+      title: meetings.title,
+      occurredAt: meetings.occurredAt,
+      createdAt: meetings.createdAt,
+      summary: summaries,
+      transcript: transcripts.fullText,
+    })
     .from(meetings)
-    .innerJoin(summaries, eq(summaries.meetingId, meetings.id))
+    .leftJoin(summaries, eq(summaries.meetingId, meetings.id))
+    .leftJoin(transcripts, eq(transcripts.meetingId, meetings.id))
     .where(and(eq(meetings.userId, userId), isNull(meetings.dealId), eq(meetings.status, "ready")))
     .orderBy(desc(meetings.createdAt));
   if (calls.length === 0) return { deals: [], skipped: [] };
@@ -81,26 +89,32 @@ export async function planRebuild(userId: string): Promise<RebuildPlan> {
   const callText = calls
     .map((c) => {
       const s = c.summary;
+      // The transcript's opening is what tells you who a call was with
+      // when the summary is thin or missing.
+      const excerpt = (c.transcript ?? "").replace(/\s+/g, " ").trim().slice(0, s?.overview ? 1200 : 3000);
       return [
         `### Call ${c.id}`,
         `Title: ${c.title ?? "(untitled)"}  Date: ${(c.occurredAt ?? c.createdAt).toISOString().slice(0, 10)}`,
-        `Overview: ${s.overview}`,
-        `Key points: ${(s.keyPoints ?? []).slice(0, 8).join(" | ")}`,
-      ].join("\n");
+        s ? `Overview: ${s.overview}` : "Overview: (none)",
+        s ? `Key points: ${(s.keyPoints ?? []).slice(0, 8).join(" | ")}` : "",
+        excerpt ? `Transcript excerpt: ${excerpt}` : "Transcript: (none)",
+      ]
+        .filter(Boolean)
+        .join("\n");
     })
     .join("\n\n");
   const prompt = [
     `EXISTING deals on the team:\n${existing.map((d) => `- ${d.id}: ${d.name}`).join("\n") || "(none)"}`,
     `The person's contacts:\n${people.map((p) => `- ${p.name}${p.role ? `, ${p.role}` : ""}${p.company ? ` at ${p.company}` : ""}`).join("\n") || "(none)"}`,
     `Calls that aren't on any deal:\n\n${callText}`,
-    "Group every call by the client deal it was about. Put calls about the same counterparty, property or transaction in one deal. Use an existing deal when the calls clearly belong to it. Every call id must appear exactly once, in a deal or in skipped.",
+    "These deals were lost and the person wants all of them back. Group every call by the deal, client, property or project it was about, and make a deal for each one. A project the person works on (a hotel opening, an RFP, an operator selection, a forecast for a property) counts as a deal even when the call was internal. Put calls about the same counterparty, property or transaction in one deal, and use an existing deal when the calls clearly belong to it. Name each deal after the property or client and what it's about. Skip a call only when neither its summary nor its transcript says anything about what it concerns. Every call id must appear exactly once, in a deal or in skipped.",
   ].join("\n\n");
 
   const message = await withAiUser({ userId }, () =>
     createWithForcedTool(client(), {
       model: MAIN_MODEL,
       max_tokens: 4096,
-      system: "You organise a dealmaker's recorded client calls into deals. Be conservative: only group calls you're confident are about the same deal.",
+      system: "You organise a dealmaker's recorded calls into the deals and projects they were about, to recover deals that were lost. Every call that's about a client, property or project belongs on a deal; group calls together only when they're clearly about the same one.",
       tools: [PLAN_TOOL],
       tool_choice: { type: "tool", name: PLAN_TOOL.name },
       messages: [{ role: "user", content: prompt }],
