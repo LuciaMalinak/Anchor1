@@ -53,10 +53,13 @@ export async function GET(
   //
   // returnTo sends them back to the page they started from (e.g. a
   // meeting's "Save to Gmail drafts") instead of the Integrations page.
+  //
+  // The nonce is also kept in a short-lived HTTP-only cookie; the callback
+  // only accepts a state whose nonce matches it, so an authorization started
+  // anywhere else (cross-site request forgery) is rejected.
   const returnTo = safeReturnTo(req.nextUrl.searchParams.get("returnTo"));
-  const state = Buffer.from(
-    JSON.stringify({ userId: session.user.id, nonce: crypto.randomUUID(), returnTo })
-  ).toString("base64url");
+  const nonce = crypto.randomUUID();
+  const state = Buffer.from(JSON.stringify({ userId: session.user.id, nonce, returnTo })).toString("base64url");
 
   // ?add=gmail_compose / calendar_events asks for one extra Google
   // permission on top of the default read-only ones (see config.ts).
@@ -88,5 +91,17 @@ export async function GET(
   // SLACK_USER_SCOPES), alongside the bot scopes.
   if (provider === "slack" && add === "read_dms") url.searchParams.set("user_scope", SLACK_USER_SCOPES.join(","));
 
-  return NextResponse.redirect(url.toString());
+  const res = NextResponse.redirect(url.toString());
+  res.cookies.set(oauthNonceCookie(provider), nonce, {
+    httpOnly: true,
+    secure: baseUrl(req).startsWith("https://"),
+    sameSite: "lax",
+    path: "/api/integrations",
+    maxAge: 15 * 60,
+  });
+  return res;
+}
+
+function oauthNonceCookie(provider: string): string {
+  return `anchor_oauth_nonce_${provider}`;
 }
