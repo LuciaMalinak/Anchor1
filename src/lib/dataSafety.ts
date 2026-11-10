@@ -32,7 +32,7 @@ export async function trashTeamId(): Promise<string> {
 }
 
 // Moves a deal and the rows that carry a team id of their own along with it.
-async function moveDeal(dealId: string, toTeamId: string): Promise<void> {
+export async function moveDeal(dealId: string, toTeamId: string): Promise<void> {
   await db.update(deals).set({ teamId: toTeamId }).where(eq(deals.id, dealId));
   await db.update(tasks).set({ teamId: toTeamId }).where(eq(tasks.dealId, dealId));
   await db.update(answerPlaybook).set({ teamId: toTeamId }).where(eq(answerPlaybook.dealId, dealId));

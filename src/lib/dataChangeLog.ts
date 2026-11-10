@@ -9,6 +9,7 @@ export type DataChange = {
     | "account_deleted"
     | "team_deleted"
     | "user_moved"
+    | "user_restored"
     | "meeting_deleted"
     | "file_deleted"
     | "message_deleted"

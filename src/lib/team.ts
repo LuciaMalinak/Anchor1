@@ -12,6 +12,15 @@ export async function getOrCreateTeamId(userId: string): Promise<string> {
   const [user] = await db.select().from(users).where(eq(users.id, userId));
   if (user?.teamId) return user.teamId;
 
+  // Someone who lost their team still has deals on it: put them back
+  // rather than starting them on an empty team (src/lib/reuniteTeams.ts).
+  const { reuniteUser } = await import("@/lib/reuniteTeams");
+  const restored = await reuniteUser(userId, "had no team").catch((err) => {
+    console.error("[team] couldn't check for a team to return to:", err);
+    return null;
+  });
+  if (restored) return restored;
+
   const [team] = await db
     .insert(teams)
     .values({ name: user?.name ? `${user.name}'s Team` : "My Team", ownerUserId: userId })
