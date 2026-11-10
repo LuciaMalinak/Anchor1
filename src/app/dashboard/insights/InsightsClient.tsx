@@ -102,7 +102,7 @@ export function InsightsClient({
       {!restricted && insights && !hasAnything && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center">
           <p className="text-sm text-slate-500">
-            Not enough finished meetings yet for Anchor to spot patterns — this fills in as deals
+            Not enough finished meetings yet for Anchor.AI to spot patterns — this fills in as deals
             progress and meetings wrap up.
           </p>
         </div>

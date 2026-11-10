@@ -104,7 +104,7 @@ export default async function AdminDealPage({
           {deal.memory && (
             <>
               <h2 className={deal.notes ? "mt-5 text-sm font-medium text-slate-900" : "text-sm font-medium text-slate-900"}>
-                What Anchor has learned
+                What Anchor.AI has learned
               </h2>
               <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{deal.memory}</p>
             </>

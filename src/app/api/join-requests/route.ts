@@ -66,8 +66,8 @@ export async function POST(req: NextRequest) {
     if (teammates.length > 0) {
       await sendEmail({
         to: teammates.map((t) => t.email),
-        subject: `${name} wants to join your team on Anchor`,
-        html: `<p><strong>${name}</strong> (${email}) asked to join ${team.name} on Anchor, for <strong>${dealName}</strong>.</p><p>Review it on your Team page: <a href="${process.env.AUTH_URL}/dashboard/team">${process.env.AUTH_URL}/dashboard/team</a></p>`,
+        subject: `${name} wants to join your team on Anchor.AI`,
+        html: `<p><strong>${name}</strong> (${email}) asked to join ${team.name} on Anchor.AI, for <strong>${dealName}</strong>.</p><p>Review it on your Team page: <a href="${process.env.AUTH_URL}/dashboard/team">${process.env.AUTH_URL}/dashboard/team</a></p>`,
       });
     }
   } catch (err) {

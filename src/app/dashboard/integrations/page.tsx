@@ -55,7 +55,7 @@ export default async function IntegrationsPage() {
     key: "slack_dms",
     name: "Meeting requests in Slack",
     description:
-      "Anchor reads your Slack direct messages for people asking to meet, and offers to set the meeting up for you: Zoom, Teams, Google Meet or in person, with everyone invited.",
+      "Anchor.AI reads your Slack direct messages for people asking to meet, and offers to set the meeting up for you: Zoom, Teams, Google Meet or in person, with everyone invited.",
     configured: isProviderConfigured("slack"),
     connected: Boolean(slack?.userAccessToken),
     connectedLabel: slack?.externalAccountEmail ?? null,

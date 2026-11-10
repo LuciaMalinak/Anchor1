@@ -136,7 +136,7 @@ function MemberActivityCell({ activity: a }: { activity: MemberActivity | undefi
         className={isInactive(a) ? "font-medium text-amber-700" : "text-slate-600"}
         title={a?.lastActiveAt?.toLocaleString()}
       >
-        {a?.lastActiveAt ? `Last used ${timeAgo(a.lastActiveAt)}` : "Never used Anchor"}
+        {a?.lastActiveAt ? `Last used ${timeAgo(a.lastActiveAt)}` : "Never used Anchor.AI"}
       </span>
       <span className="block max-w-xs truncate text-slate-400">
         {last

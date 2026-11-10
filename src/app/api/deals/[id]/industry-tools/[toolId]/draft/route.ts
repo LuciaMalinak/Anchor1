@@ -30,7 +30,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (err instanceof NeedsGooglePermissionError) {
       return NextResponse.json(
         {
-          error: "Anchor needs permission to save drafts in your Gmail.",
+          error: "Anchor.AI needs permission to save drafts in your Gmail.",
           connectUrl: `/api/integrations/google/connect?add=${err.scopeKey}&returnTo=${encodeURIComponent(`/dashboard/deals/${id}`)}`,
         },
         { status: 403 }

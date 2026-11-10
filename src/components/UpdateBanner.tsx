@@ -69,7 +69,7 @@ export function UpdateBanner({ initialVersion }: { initialVersion: string }) {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-center gap-3 border-t border-brand-dark bg-brand px-4 py-2.5 text-sm text-white shadow-lg">
-      <span>A new version of Anchor is available.</span>
+      <span>A new version of Anchor.AI is available.</span>
       <button
         type="button"
         onClick={() => window.location.reload()}

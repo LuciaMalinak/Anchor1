@@ -24,8 +24,8 @@ const platform = (window.anchor && window.anchor.platform) || "darwin";
 document.body.classList.add(`platform-${platform}`);
 const IS_MAC = platform === "darwin";
 footEl.textContent = IS_MAC
-  ? "Closing this window keeps Anchor running in your menu bar, watching for calls. Click the anchor icon near your clock to reopen it or quit."
-  : "Closing this window keeps Anchor running in the system tray, watching for calls. Click the anchor icon by the clock (bottom-right, maybe under ^) to reopen it or quit.";
+  ? "Closing this window keeps Anchor.AI running in your menu bar, watching for calls. Click the anchor icon near your clock to reopen it or quit."
+  : "Closing this window keeps Anchor.AI running in the system tray, watching for calls. Click the anchor icon by the clock (bottom-right, maybe under ^) to reopen it or quit.";
 
 const SPARKLE_SVG =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f0b48f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.7 1.8 1.8.7-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/></svg>';
@@ -38,8 +38,8 @@ function watchingHtml() {
     signedIn ? "Watching for calls" : "Sign in to start"
   }</h2><p class="hint">${
     signedIn
-      ? "Open a Zoom, Teams or Meet call and it shows up here. Anchor starts recording on its own — nobody joins your call."
-      : "Once you're signed in, Anchor spots your Zoom, Teams and Meet calls and records them from this computer."
+      ? "Open a Zoom, Teams or Meet call and it shows up here. Anchor.AI starts recording on its own — nobody joins your call."
+      : "Once you're signed in, Anchor.AI spots your Zoom, Teams and Meet calls and records them from this computer."
   }</p><div class="apps"><span class="app-chip">Zoom</span><span class="app-chip">Microsoft Teams</span><span class="app-chip">Google Meet</span></div></div>`;
 }
 
@@ -136,7 +136,7 @@ function renderAnswersHtml(s) {
 // (green), then one-line suggestions.
 function renderCoachingHtml(s) {
   if (!s) {
-    return '<p class="hint">Suggestions show up here once Anchor has enough of the call to work with.</p>';
+    return '<p class="hint">Suggestions show up here once Anchor.AI has enough of the call to work with.</p>';
   }
   let html = "";
   const checklist = s.checklist || [];
@@ -150,7 +150,7 @@ function renderCoachingHtml(s) {
   if (s.nudges && s.nudges.length) {
     html += `<p class="label">Suggestions</p><ul class="nudges">${s.nudges.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
   }
-  return html || '<p class="hint">Nothing to flag yet — Anchor is listening.</p>';
+  return html || '<p class="hint">Nothing to flag yet — Anchor.AI is listening.</p>';
 }
 
 function renderTasksHtml(m) {
@@ -318,7 +318,7 @@ function renderDealPanel(windowId, m) {
   sideCol.innerHTML = `<div id="coaching-${windowId}">${renderCoachingHtml(m.suggestions)}</div>${
     m.dealId
       ? `<div class="panel-section"><p class="label">To do for this deal</p><div id="tasks-${windowId}">${renderTasksHtml(m)}</div></div>`
-      : '<p class="hint panel-section">Link this call to a deal on Anchor\'s website to see its to-dos and Ask Anchor here.</p>'
+      : '<p class="hint panel-section">Link this call to a deal on Anchor.AI\'s website to see its to-dos and Ask Anchor here.</p>'
   }`;
   if (m.dealId) attachTaskHandlers(windowId, sideCol);
   grid.appendChild(sideCol);
@@ -484,7 +484,7 @@ async function beginSignIn() {
     // Re-enable after a moment so they can try again if they closed the tab.
     setTimeout(() => {
       signInBtn.disabled = false;
-      signInBtn.textContent = "Sign in to Anchor";
+      signInBtn.textContent = "Sign in to Anchor.AI";
     }, 5000);
   }
 }
@@ -494,7 +494,7 @@ signInBtn.onclick = beginSignIn;
 hideFromShareEl.onchange = async () => {
   const hidden = hideFromShareEl.checked;
   await window.anchor.setHiddenFromScreenShare(hidden);
-  appendLog(hidden ? "Anchor is hidden from screen sharing." : "Anchor now shows up when you share your screen.");
+  appendLog(hidden ? "Anchor.AI is hidden from screen sharing." : "Anchor.AI now shows up when you share your screen.");
 };
 window.anchor.onScreenShareChanged((hidden) => {
   hideFromShareEl.checked = hidden;

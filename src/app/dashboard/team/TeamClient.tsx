@@ -207,8 +207,8 @@ export function TeamClient({
           <>
             <p className="mt-1 text-sm text-slate-500">
               {isOwner
-                ? "Pick the closest match. Anchor then coaches your calls the way an expert in that business would, fills in that industry's deal sheet after each call, and flags the rules it can't let you break."
-                : "Set by your team owner. Anchor uses it to coach calls, fill in the deal sheet and flag industry rules."}
+                ? "Pick the closest match. Anchor.AI then coaches your calls the way an expert in that business would, fills in that industry's deal sheet after each call, and flags the rules it can't let you break."
+                : "Set by your team owner. Anchor.AI uses it to coach calls, fill in the deal sheet and flag industry rules."}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
@@ -321,7 +321,7 @@ export function TeamClient({
 
       {otherTeamRequests.length > 0 && (
         <PendingRequests
-          title={`All requests across Anchor (${otherTeamRequests.length})`}
+          title={`All requests across Anchor.AI (${otherTeamRequests.length})`}
           description="Pending requests for every other team, since you're set up as the app owner."
           requests={otherTeamRequests}
           showTeamName

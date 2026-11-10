@@ -219,7 +219,7 @@ function NewMeetingForms({
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         focusWindow?.cancel();
-        throw new Error(body.error || "Couldn't send Anchor to that meeting");
+        throw new Error(body.error || "Couldn't send Anchor.AI to that meeting");
       }
       if (body.meeting?.id) focusWindow?.attach(body.meeting.id);
       else focusWindow?.cancel();
@@ -230,7 +230,7 @@ function NewMeetingForms({
       // and the tab switches on its own once that time arrives.
       if (!scheduledAt) onJoinedNow?.();
     } catch (err) {
-      setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
+      setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor.AI to that meeting");
     } finally {
       setJoining(false);
     }
@@ -254,7 +254,7 @@ function NewMeetingForms({
         onSubmit={handleJoin}
         className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm"
       >
-        <p className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</p>
+        <p className="text-sm font-medium text-slate-900">Send Anchor.AI to a live meeting</p>
         <div className="mt-3 flex flex-col gap-2.5">
           <input
             type="text"
@@ -1159,7 +1159,7 @@ function NewsSidebar({
           </>
         ) : (
           <p className="mt-2 text-sm text-slate-400">
-            Have Anchor search the web for public info about this company.
+            Have Anchor.AI search the web for public info about this company.
           </p>
         )}
         {researchError && <p className="mt-2 text-xs text-red-600">{researchError}</p>}
@@ -1787,14 +1787,14 @@ function FilesSection({ dealId, files }: { dealId: string; files: DealFile[] }) 
                 {f.readableByAI ? (
                   <span
                     className="shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent"
-                    title="Anchor can read this file's contents"
+                    title="Anchor.AI can read this file's contents"
                   >
                     AI-readable
                   </span>
                 ) : (
                   <span
                     className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
-                    title="Anchor can't read this one — if it's a format Anchor now supports, remove and re-attach it"
+                    title="Anchor.AI can't read this one — if it's a format Anchor.AI now supports, remove and re-attach it"
                   >
                     Not readable
                   </span>

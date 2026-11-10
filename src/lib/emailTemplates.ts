@@ -22,10 +22,10 @@ export function signInEmailHtml({ url, host }: { url: string; host: string }) {
                 <table cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="vertical-align:middle;padding-right:10px;">
-                      <img src="${logoUrl}" width="32" height="32" alt="Anchor" style="display:block;border-radius:7px;" />
+                      <img src="${logoUrl}" width="32" height="32" alt="Anchor.AI" style="display:block;border-radius:7px;" />
                     </td>
                     <td style="vertical-align:middle;">
-                      <span style="font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.01em;">Anchor</span>
+                      <span style="font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.01em;">Anchor.AI</span>
                     </td>
                   </tr>
                 </table>

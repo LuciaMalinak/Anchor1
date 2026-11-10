@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FormattedMessage } from "@/components/AskAnchorPanel";
 import { runAskActions, stripAskActions } from "@/lib/askActions";
@@ -69,7 +70,7 @@ function suggestionsFor(pathname: string, kind: Scope["kind"]): string[] {
   if (pathname.startsWith("/dashboard/insights")) return ["What do customers keep raising?", "Where are deals getting stuck?"];
   if (pathname.startsWith("/dashboard/contacts")) return ["Who haven't I talked to in a while?", "Who are the key people on my deals?"];
   if (pathname.startsWith("/dashboard/team")) return ["Who covers which deals?", "Who should back me up next week?"];
-  if (pathname.startsWith("/dashboard/integrations")) return ["What can Anchor see in my Gmail?", "Why connect Salesforce?"];
+  if (pathname.startsWith("/dashboard/integrations")) return ["What can Anchor.AI see in my Gmail?", "Why connect Salesforce?"];
   return ["What needs me today?", "What did I promise this week?", "Which deals need attention?"];
 }
 
@@ -84,7 +85,7 @@ type SpeechRecognitionLike = {
   interimResults: boolean;
   onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
   start: () => void;
   stop: () => void;
 };
@@ -143,7 +144,7 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
         });
         if (!res.ok || !res.body) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || "Anchor couldn't answer that.");
+          throw new Error(body.error || "Anchor.AI couldn't answer that.");
         }
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -154,14 +155,14 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
           answer += decoder.decode(value, { stream: true });
           setStreaming({ key: scope.key, text: stripAskActions(answer) });
         }
-        if (!answer.trim()) throw new Error("Anchor couldn't answer that.");
+        if (!answer.trim()) throw new Error("Anchor.AI couldn't answer that.");
         // Stop the meeting / open a file if the answer asked for it — see
         // askActions.ts. A failure is added under the answer, not hidden.
         const actionNote = await runAskActions(answer);
         const shown = stripAskActions(answer) + (actionNote ? `\n\n${actionNote}` : "");
         setThreads((t) => ({ ...t, [scope.key]: [...withQuestion, { role: "assistant", content: shown }] }));
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Anchor couldn't answer that.");
+        setError(err instanceof Error ? err.message : "Anchor.AI couldn't answer that.");
         setThreads((t) => ({ ...t, [scope.key]: history }));
       } finally {
         setStreaming(null);
@@ -282,12 +283,27 @@ function DockBody({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [canListen, setCanListen] = useState(false);
+  // Fallback when the browser has no speech recognition (or it's unreliable,
+  // as in the iPhone home-screen app): record the question and have it
+  // transcribed (/api/ask/transcribe).
+  const [canRecord, setCanRecord] = useState(false);
+  const [preferRecording, setPreferRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recorder = useRef<MediaRecorder | null>(null);
   const asking = streamingText !== null;
 
   useEffect(() => {
     // Read after mount: the server render can't know about the browser's
     // speech support, and reading it during render would mismatch.
-    const id = requestAnimationFrame(() => setCanListen(getSpeechRecognition() !== null));
+    const id = requestAnimationFrame(() => {
+      setCanListen(getSpeechRecognition() !== null);
+      setCanRecord(typeof MediaRecorder !== "undefined" && !!navigator.mediaDevices?.getUserMedia);
+      const standalone =
+        (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+        window.matchMedia?.("(display-mode: standalone)").matches;
+      setPreferRecording(Boolean(standalone) && /iPhone|iPad|iPod/.test(navigator.userAgent));
+    });
     return () => cancelAnimationFrame(id);
   }, []);
 
@@ -313,13 +329,55 @@ function DockBody({
     setQuestion("");
   }
 
+  async function recordQuestion() {
+    if (listening) {
+      recorder.current?.stop();
+      return;
+    }
+    setVoiceError(null);
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setVoiceError("Anchor.AI needs microphone access. Allow it in your browser or phone settings.");
+      return;
+    }
+    const chunks: Blob[] = [];
+    const rec = new MediaRecorder(stream);
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    rec.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      setListening(false);
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      if (!blob.size) return;
+      setTranscribing(true);
+      try {
+        const res = await fetch("/api/ask/transcribe", { method: "POST", body: blob, headers: { "Content-Type": blob.type } });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || !body.text) throw new Error(body.error || "Couldn't make out the question. Try again or type it.");
+        setQuestion((q) => (q ? `${q} ${body.text}` : body.text));
+        inputRef.current?.focus();
+      } catch (err) {
+        setVoiceError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setTranscribing(false);
+      }
+    };
+    recorder.current = rec;
+    rec.start();
+    setListening(true);
+  }
+
   function toggleListening() {
+    const Ctor = getSpeechRecognition();
+    if (!Ctor || preferRecording || recorder.current?.state === "recording") {
+      void recordQuestion();
+      return;
+    }
     if (listening) {
       recognition.current?.stop();
       return;
     }
-    const Ctor = getSpeechRecognition();
-    if (!Ctor) return;
     const r = new Ctor();
     r.lang = navigator.language || "en-US";
     r.interimResults = true;
@@ -330,7 +388,15 @@ function DockBody({
       setQuestion(text);
     };
     r.onend = () => setListening(false);
-    r.onerror = () => setListening(false);
+    // Speech recognition refused or unavailable here: switch this panel to
+    // recording the question instead, and start that.
+    r.onerror = (e: { error?: string }) => {
+      setListening(false);
+      if (canRecord && e?.error && e.error !== "aborted" && e.error !== "no-speech") {
+        setPreferRecording(true);
+        void recordQuestion();
+      }
+    };
     recognition.current = r;
     setListening(true);
     r.start();
@@ -344,7 +410,7 @@ function DockBody({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Sparkle className="h-5 w-5 text-[#f0b48f]" />
-            <h2 className="text-lg font-semibold text-white">Ask Anchor</h2>
+            <h2 className="whitespace-nowrap text-lg font-semibold text-white">Ask Anchor</h2>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -360,6 +426,16 @@ function DockBody({
                 New chat
               </button>
             )}
+            <Link
+              href="/dashboard/record"
+              onClick={onClose}
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-[#9fb3d1] hover:bg-white/10 hover:text-white"
+              title="Record an in-person meeting"
+              aria-label="Record a meeting"
+            >
+              <span className="h-2 w-2 rounded-full bg-red-500" />
+              Record
+            </Link>
             {onClose ? (
               <button
                 type="button"
@@ -395,7 +471,7 @@ function DockBody({
               ? "Ask anything about this deal: what was said, what's open, who decides, or what to say next."
               : scope.kind === "meeting"
                 ? "Ask about this call: exact quotes, decisions, objections, or what to put in the follow-up."
-                : "Ask about any deal, call, task or person. Anchor answers from your own meetings and notes."}
+                : "Ask about any deal, call, task or person. Anchor.AI answers from your own meetings and notes."}
           </div>
         )}
         {turns.map((t, i) =>
@@ -460,10 +536,11 @@ function DockBody({
             placeholder="Ask anything…"
             className="max-h-32 min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400"
           />
-          {canListen && (
+          {(canListen || canRecord) && (
             <button
               type="button"
               onClick={toggleListening}
+              disabled={transcribing}
               aria-label={listening ? "Stop listening" : "Ask by voice"}
               aria-pressed={listening}
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${listening ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
@@ -483,6 +560,11 @@ function DockBody({
             Ask
           </button>
         </div>
+        {(listening || transcribing || voiceError) && (
+          <p className={`mt-2 px-1 text-xs ${voiceError ? "text-red-300" : "text-[#9fb3d1]"}`} role="status">
+            {voiceError ?? (transcribing ? "Turning your question into text…" : "Listening… tap the mic again when you're done.")}
+          </p>
+        )}
       </form>
       </>
       )}

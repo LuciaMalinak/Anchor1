@@ -47,7 +47,7 @@ function Recorder({ deals, dealId, setDealId }: { deals: Deal[]; dealId: string;
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Record a meeting</h1>
         <p className="mt-1 text-sm text-slate-500">
-          For in-person meetings. Keep the phone on the table, screen on. Anchor writes the summary
+          For in-person meetings. Keep the phone on the table, screen on. Anchor.AI writes the summary
           when you stop.
         </p>
       </div>
@@ -109,7 +109,7 @@ function Recorder({ deals, dealId, setDealId }: { deals: Deal[]; dealId: string;
           </div>
         ) : done && meetingId ? (
           <div className="flex flex-col items-center gap-2">
-            <p className="text-base text-slate-800">Saved. Anchor is writing the summary.</p>
+            <p className="text-base text-slate-800">Saved. Anchor.AI is writing the summary.</p>
             <Link href={`/dashboard/meetings/${meetingId}`} className="rounded-xl bg-brand px-4 py-2.5 text-base font-medium text-white">
               Open the meeting
             </Link>

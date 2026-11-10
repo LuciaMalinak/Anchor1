@@ -105,7 +105,7 @@ export async function generateHandoffBriefing(params: {
           .map((p) => {
             const roleCompany = [p.role, p.company].filter(Boolean).join(", ");
             const lines = [`— ${p.name}${roleCompany ? ` (${roleCompany})` : ""}`];
-            if (p.relationshipSummary) lines.push(`What Anchor knows: ${p.relationshipSummary}`);
+            if (p.relationshipSummary) lines.push(`What Anchor.AI knows: ${p.relationshipSummary}`);
             if (p.notes) lines.push(`Manual notes: ${p.notes}`);
             return lines.join("\n");
           })
@@ -157,7 +157,7 @@ Produce a handoff briefing for someone else running the next meeting on this dea
 
   const toolUse = message.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
-    throw new Error("Anchor didn't return a handoff briefing.");
+    throw new Error("Anchor.AI didn't return a handoff briefing.");
   }
 
   // Defensive: forced tool_choice isn't a 100% schema guarantee (see

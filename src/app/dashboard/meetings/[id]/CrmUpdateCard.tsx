@@ -107,7 +107,7 @@ export function CrmUpdateCard({ meetingId, crmName }: { meetingId: string; crmNa
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 403 && body.connectUrl) {
-        if (afterPermission) throw new Error(`Anchor needs permission to update deals in ${crmName}. Try again and allow it.`);
+        if (afterPermission) throw new Error(`Anchor.AI needs permission to update deals in ${crmName}. Try again and allow it.`);
         stashPendingGoogleAction("crm", meetingId, changes);
         window.location.href = body.connectUrl;
         return;

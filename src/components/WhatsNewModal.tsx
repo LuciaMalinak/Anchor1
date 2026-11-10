@@ -31,7 +31,7 @@ const TOOLS = [
   },
   {
     title: "Update Salesforce or HubSpot",
-    body: "On a meeting recap, Anchor suggests the stage, close date, amount and next step the call changed. Only what you approve is written.",
+    body: "On a meeting recap, Anchor.AI suggests the stage, close date, amount and next step the call changed. Only what you approve is written.",
   },
   {
     title: "Share next steps",
@@ -105,7 +105,7 @@ export function WhatsNewModal() {
           <span className="text-xs font-medium uppercase tracking-wide text-accent">What&apos;s new</span>
         </div>
         <h2 id="whats-new-title" className="mt-2 text-xl font-semibold text-brand">
-          New tools in Anchor
+          New tools in Anchor.AI
         </h2>
         <ul className="mt-4 flex flex-col gap-3">
           {TOOLS.map((t) => (

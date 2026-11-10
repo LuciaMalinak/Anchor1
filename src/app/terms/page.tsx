@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 
 export const metadata = {
-  title: "Terms of Service — Anchor",
+  title: "Terms of Service — Anchor.AI",
 };
 
 const EFFECTIVE_DATE = "November 10, 2026";
@@ -47,12 +47,12 @@ export default function TermsPage() {
 
         <Section title="2. Recording meetings — your responsibility">
           <p>
-            Anchor can join calls, record audio, and generate transcripts and summaries. Laws on
+            Anchor.AI can join calls, record audio, and generate transcripts and summaries. Laws on
             recording conversations vary by location — many require that some or all participants
             be notified, or affirmatively consent, before a call is recorded. You are solely
             responsible for knowing and following the recording-consent laws that apply to you and
             the people you meet with, including giving any notice or obtaining any consent
-            required before using Anchor to record a call. Anchor is not responsible for how you
+            required before using Anchor.AI to record a call. Anchor.AI is not responsible for how you
             use the recording features.
           </p>
         </Section>
@@ -66,7 +66,7 @@ export default function TermsPage() {
         </Section>
 
         <Section title="4. Acceptable use">
-          <p>You agree not to use Anchor to:</p>
+          <p>You agree not to use Anchor.AI to:</p>
           <ul className="list-disc space-y-1 pl-5">
             <li>Record or process a call without the notice or consent required by law;</li>
             <li>Upload content you don&apos;t have the right to share;</li>
@@ -78,7 +78,7 @@ export default function TermsPage() {
 
         <Section title="5. Third-party services and AI processing">
           <p>
-            Anchor uses third-party providers to operate — for example, to transcribe audio,
+            Anchor.AI uses third-party providers to operate — for example, to transcribe audio,
             generate AI summaries, send email, and (where you choose to connect them) sync data
             from services like Google, Microsoft, Slack, or Salesforce. Meeting content and related
             data you provide may be processed by these providers, and by AI models, in order to
@@ -134,7 +134,7 @@ export default function TermsPage() {
 
         <Section title="9. Ending the agreement and your data">
           <p>
-            You can stop using Anchor and cancel at any time. We may suspend or end access for
+            You can stop using Anchor.AI and cancel at any time. We may suspend or end access for
             serious or repeated violations of these Terms, or non-payment, and will give notice where
             reasonable. After an account closes, you can ask us for an export of Your Content within
             30 days; after that, we delete it as described in our Privacy Policy.
@@ -143,7 +143,7 @@ export default function TermsPage() {
 
         <Section title="10. AI output and warranties">
           <p>
-            We work to keep Anchor available and accurate, but the Service, including AI-generated
+            We work to keep Anchor.AI available and accurate, but the Service, including AI-generated
             summaries, signals, and answers, is provided &quot;as is&quot; and &quot;as
             available,&quot; without warranties of any kind, to the extent the law allows. AI output
             can be incomplete or wrong, so check it before relying on it for decisions that matter.

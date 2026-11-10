@@ -100,7 +100,7 @@ Only state things you found via search.`,
   );
 
   return {
-    briefing: briefing || "Anchor couldn't find much public information about this company.",
+    briefing: briefing || "Anchor.AI couldn't find much public information about this company.",
     newsHeadline,
   };
 }

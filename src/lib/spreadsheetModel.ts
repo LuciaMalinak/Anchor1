@@ -93,7 +93,7 @@ function applyCell(cell: ExcelJS.Cell, raw: ModelCell, isHeader: boolean) {
 
 export async function buildModelWorkbook(spec: ModelSpec): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Anchor";
+  wb.creator = "Anchor.AI";
   wb.created = new Date();
   // Formulas are written without results; have Excel work them out on open.
   wb.calcProperties = { fullCalcOnLoad: true };
@@ -104,7 +104,7 @@ export async function buildModelWorkbook(spec: ModelSpec): Promise<Buffer> {
   cover.getColumn(2).width = 90;
   cover.getCell("A1").value = spec.title;
   cover.getCell("A1").font = { size: 16, bold: true };
-  cover.getCell("A2").value = `Prepared by Anchor on ${new Date().toISOString().slice(0, 10)}`;
+  cover.getCell("A2").value = `Prepared by Anchor.AI on ${new Date().toISOString().slice(0, 10)}`;
   cover.getCell("A2").font = { italic: true, color: { argb: "FF6B7280" } };
   let r = 4;
   if (spec.summary) {

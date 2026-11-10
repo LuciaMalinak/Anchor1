@@ -142,7 +142,7 @@ function presentationTool(userId: string): ServerTool {
       const data = await buildDeck(spec);
       const fileId = `${randomUUID()}.pptx`;
       await saveExport(userId, fileId, data);
-      const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor deck";
+      const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor.AI deck";
       return `Created "${name}.pptx" (${spec.slides.length + 1} slides including the cover). Give the person this link exactly: [Download ${name}.pptx](/api/exports/${fileId}?name=${encodeURIComponent(name)})`;
     },
   };
@@ -189,7 +189,7 @@ function spreadsheetTool(userId: string): ServerTool {
       const data = await buildModelWorkbook(spec);
       const fileId = `${randomUUID()}.xlsx`;
       await saveExport(userId, fileId, data);
-      const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor model";
+      const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor.AI model";
       return `Created "${name}.xlsx" (${spec.sheets.length + 1} sheets including the cover). Give the person this link exactly: [Download ${name}.xlsx](/api/exports/${fileId}?name=${encodeURIComponent(name)})`;
     },
   };

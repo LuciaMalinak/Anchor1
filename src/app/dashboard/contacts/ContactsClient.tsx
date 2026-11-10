@@ -47,7 +47,7 @@ export function ContactsClient({ initialContacts }: { initialContacts: Contact[]
     e.stopPropagation();
     if (
       !window.confirm(
-        `Remove ${name} from your contacts? Anchor will stop tracking history for them — past meeting summaries and transcripts are untouched.`
+        `Remove ${name} from your contacts? Anchor.AI will stop tracking history for them — past meeting summaries and transcripts are untouched.`
       )
     ) {
       return;
@@ -81,7 +81,7 @@ export function ContactsClient({ initialContacts }: { initialContacts: Contact[]
 
       {contacts.length === 0 ? (
         <p className="text-sm text-slate-500">
-          No one yet — Anchor builds this automatically as it recognizes speakers in your meetings.
+          No one yet — Anchor.AI builds this automatically as it recognizes speakers in your meetings.
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">

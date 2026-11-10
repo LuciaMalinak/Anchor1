@@ -3,11 +3,11 @@ import { Logo } from "@/components/Logo";
 import { ContactSalesForm } from "@/components/ContactSalesForm";
 
 export const metadata = {
-  title: "Try Anchor free for 1 week",
+  title: "Try Anchor.AI free for 1 week",
   description:
     "The AI assistant for dealmakers and client teams. Live answers on your calls, summaries and follow-ups written for you, and a memory of every deal. Free for 7 days.",
   openGraph: {
-    title: "Try Anchor free for 1 week",
+    title: "Try Anchor.AI free for 1 week",
     description: "Live answers on your calls, follow-ups written for you, and a memory of every deal. Free for 7 days.",
   },
 };
@@ -67,7 +67,7 @@ export default function FreeTrialPage() {
           Free for 7 days
         </span>
         <h1 className="mx-auto mt-5 max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-          Try Anchor free for one week
+          Try Anchor.AI free for one week
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-slate-300">
           The AI assistant for dealmakers and client teams. It answers questions during your calls, writes the

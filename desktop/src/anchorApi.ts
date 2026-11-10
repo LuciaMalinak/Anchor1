@@ -91,7 +91,7 @@ export class AnchorApi {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(body.error || `Anchor rejected starting this meeting (${res.status})`);
+      throw new Error(body.error || `Anchor.AI rejected starting this meeting (${res.status})`);
     }
     return body;
   }
@@ -105,7 +105,7 @@ export class AnchorApi {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Anchor couldn't confirm this meeting stopped (${res.status})`);
+      throw new Error(body.error || `Anchor.AI couldn't confirm this meeting stopped (${res.status})`);
     }
   }
 
@@ -210,7 +210,7 @@ export class AnchorApi {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Anchor couldn't answer that (${res.status})`);
+      throw new Error(body.error || `Anchor.AI couldn't answer that (${res.status})`);
     }
     if (!res.body) {
       const text = await res.text();

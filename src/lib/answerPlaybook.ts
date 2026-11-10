@@ -229,7 +229,7 @@ export async function learnFromCall(meetingId: string, utterances: Utterance[]):
             }${asked
               .map(
                 (q) =>
-                  `\n- Q: ${q.question}\n  Anchor suggested: ${q.answer}${q.feedback ? ` (rated ${q.feedback}${q.correction ? `, should have been: ${q.correction}` : ""})` : ""}`
+                  `\n- Q: ${q.question}\n  Anchor.AI suggested: ${q.answer}${q.feedback ? ` (rated ${q.feedback}${q.correction ? `, should have been: ${q.correction}` : ""})` : ""}`
               )
               .join("")}\n\nWhat's already in the playbook${shortlist.length ? "" : ": nothing yet"}${shortlist
               .map((e, i) => `\n${i + 1}. Q: ${e.question}\n   A: ${e.answer}`)

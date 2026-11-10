@@ -39,7 +39,7 @@ export function SaveDraftButton({
     setState("idle");
     if (body.error === "needs_google_permission" && body.connectUrl) {
       setConnectUrl(body.connectUrl);
-      setError("Anchor needs permission to create Gmail drafts.");
+      setError("Anchor.AI needs permission to create Gmail drafts.");
     } else setError(body.error || "Couldn't save it. Try again.");
   }
 

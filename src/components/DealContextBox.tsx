@@ -36,7 +36,7 @@ export function DealContextBox({ dealId }: { dealId: string }) {
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <p className="text-[11px] font-semibold tracking-[0.15em] text-accent">GIVE ANCHOR MORE CONTEXT</p>
       <p className="mt-1 text-xs text-slate-500">
-        Anything Anchor should know going into the next meeting — type it, talk it out, or attach
+        Anything Anchor.AI should know going into the next meeting — type it, talk it out, or attach
         a file. This feeds meeting prep, live coaching, and Ask Anchor.
       </p>
 

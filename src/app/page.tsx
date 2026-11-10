@@ -16,7 +16,7 @@ const STEPS = [
     n: "02",
     label: "During",
     title: "Capture",
-    body: "Send Anchor into the call, record it yourself, or upload it after — nothing about the conversation gets left in someone's head.",
+    body: "Send Anchor.AI into the call, record it yourself, or upload it after — nothing about the conversation gets left in someone's head.",
   },
   {
     n: "03",
@@ -85,12 +85,12 @@ const FEATURES = [
   {
     icon: IconJoin,
     title: "Joins the meeting for you",
-    body: "Paste a Zoom, Google Meet, or Teams link and Anchor sends itself in, records, and processes the call automatically — nobody has to remember to hit record.",
+    body: "Paste a Zoom, Google Meet, or Teams link and Anchor.AI sends itself in, records, and processes the call automatically — nobody has to remember to hit record.",
   },
   {
     icon: IconNetwork,
     title: "Remembers every relationship",
-    body: "Anchor builds a running history of each contact and each deal across every meeting, so anyone on the team can step in already knowing who they're talking to.",
+    body: "Anchor.AI builds a running history of each contact and each deal across every meeting, so anyone on the team can step in already knowing who they're talking to.",
   },
   {
     icon: IconFlag,
@@ -200,7 +200,7 @@ export default async function Home() {
             Your knowledge in the room. Without you in the room.
           </p>
           <p className="enter-fade enter-5 max-w-lg text-base leading-relaxed text-slate-400">
-            Meeting intelligence for teams — Anchor joins the call, remembers what matters, and
+            Meeting intelligence for teams — Anchor.AI joins the call, remembers what matters, and
             keeps every deal covered.
           </p>
           <div className="enter-fade enter-6 mt-4 flex flex-wrap items-center justify-center gap-4">
@@ -429,7 +429,7 @@ export default async function Home() {
             BUILT FOR YOUR INDUSTRY
           </p>
           <h2 className="mx-auto mt-3 max-w-xl text-center text-3xl font-semibold tracking-tight text-brand">
-            Anchor speaks your industry
+            Anchor.AI speaks your industry
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-sm leading-relaxed text-slate-500">
             Set your team&apos;s industry and Anchor joins every call knowing your business: what
@@ -464,7 +464,7 @@ export default async function Home() {
                 href="https://www.linkedin.com/company/143888744/"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Anchor on LinkedIn"
+                aria-label="Anchor.AI on LinkedIn"
                 className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-[#0A66C2]"
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

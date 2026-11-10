@@ -118,7 +118,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await cancelBot(meeting.recallBotId).catch(() => {});
     }
     return endLocally(
-      "Ended manually in Anchor. If Anchor's bot was still connecting, it may take a minute to leave the call on its own."
+      "Ended manually in Anchor.AI. If Anchor.AI's bot was still connecting, it may take a minute to leave the call on its own."
     );
   }
 
@@ -131,7 +131,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       // to just end this rather than making the user retry Stop until
       // the join eventually resolves on its own.
       await cancelBot(meeting.recallBotId).catch(() => {});
-      return endLocally("Anchor's bot never made it into the call, so this meeting was ended.");
+      return endLocally("Anchor.AI's bot never made it into the call, so this meeting was ended.");
     }
     console.error(`[meetings/stop] Failed to end bot for meeting ${id}:`, err);
     return NextResponse.json({ error: message, canForceEnd: true }, { status: 502 });

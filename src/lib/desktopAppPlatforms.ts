@@ -6,12 +6,12 @@ export const DESKTOP_APP_PLATFORMS = {
   mac: {
     key: "desktop-app/mac/Anchor-Desktop-mac.zip",
     contentType: "application/zip",
-    downloadFilename: "Anchor Desktop.zip",
+    downloadFilename: "Anchor.AI Desktop.zip",
   },
   win: {
     key: "desktop-app/win/Anchor-Desktop-Setup.exe",
     contentType: "application/x-msdownload",
-    downloadFilename: "Anchor Desktop Setup.exe",
+    downloadFilename: "Anchor.AI Desktop Setup.exe",
   },
 } as const;
 

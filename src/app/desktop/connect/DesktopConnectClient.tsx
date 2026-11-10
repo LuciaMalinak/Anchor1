@@ -28,7 +28,7 @@ export function DesktopConnectClient({
       const res = await fetch("/api/profile/desktop-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: device ? `Anchor Desktop on ${device}` : "Anchor Desktop" }),
+        body: JSON.stringify({ label: device ? `Anchor.AI Desktop on ${device}` : "Anchor.AI Desktop" }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Couldn't connect the desktop app");
@@ -67,7 +67,7 @@ export function DesktopConnectClient({
           If your browser asked whether to open Anchor Desktop, click <strong>Open</strong>. Didn&rsquo;t switch
           over?{" "}
           <a href={deepLink ?? "#"} className="font-medium text-brand hover:underline">
-            Open Anchor Desktop
+            Open Anchor.AI Desktop
           </a>
         </p>
       </div>
@@ -77,7 +77,7 @@ export function DesktopConnectClient({
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">Connect Anchor Desktop</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900">Connect Anchor.AI Desktop</h1>
         <p className="mt-1 text-sm text-slate-500">
           Signed in as <span className="font-medium text-slate-700">{email}</span>. The desktop app will record
           your calls into this account.
@@ -90,7 +90,7 @@ export function DesktopConnectClient({
         disabled={status === "connecting"}
         className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-brand-dark disabled:opacity-50"
       >
-        {status === "connecting" ? "Connecting…" : "Connect Anchor Desktop"}
+        {status === "connecting" ? "Connecting…" : "Connect Anchor.AI Desktop"}
       </button>
       <a href="/dashboard" className="text-xs text-slate-400 hover:text-slate-600 hover:underline">
         Not you? Go to your dashboard to sign out first

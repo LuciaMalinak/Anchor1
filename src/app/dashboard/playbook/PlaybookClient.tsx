@@ -66,7 +66,7 @@ export function PlaybookClient({ initial, deals }: { initial: Entry[]; deals: { 
           onClick={() => setAdding((a) => !a)}
           className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark"
         >
-          Teach Anchor an answer
+          Teach Anchor.AI an answer
         </button>
       </div>
 
@@ -96,7 +96,7 @@ export function PlaybookClient({ initial, deals }: { initial: Entry[]; deals: { 
 
       {shown.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
-          {entries.length ? "Nothing matches that search." : "Nothing yet — Anchor starts learning from your next call."}
+          {entries.length ? "Nothing matches that search." : "Nothing yet — Anchor.AI starts learning from your next call."}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">

@@ -124,7 +124,7 @@ export function DesktopTokenPanel() {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div>
-        <p className="text-sm font-medium text-slate-900">Anchor Desktop</p>
+        <p className="text-sm font-medium text-slate-900">Anchor.AI Desktop</p>
         <p className="mt-1 text-xs text-slate-500">
           Records Zoom, Teams, and Meet calls straight from your computer — no bot joins the call.
         </p>
@@ -162,7 +162,7 @@ export function DesktopTokenPanel() {
             disabled={connecting}
             className="rounded-lg border border-brand px-3 py-1.5 text-xs font-medium text-brand shadow-sm transition hover:bg-brand/5 disabled:opacity-50"
           >
-            {connecting ? "Connecting…" : "Connect Anchor Desktop"}
+            {connecting ? "Connecting…" : "Connect Anchor.AI Desktop"}
           </button>
           <span className="text-[11px] text-slate-400">Signs the app into your account automatically.</span>
         </li>
@@ -214,7 +214,7 @@ export function DesktopTokenPanel() {
             </p>
             {freshToken && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                <p className="font-medium">Copy this now — Anchor won&apos;t show it again:</p>
+                <p className="font-medium">Copy this now — Anchor.AI won&apos;t show it again:</p>
                 <code className="mt-1 block break-all rounded bg-white px-2 py-1 text-[11px] text-slate-800">
                   {freshToken}
                 </code>

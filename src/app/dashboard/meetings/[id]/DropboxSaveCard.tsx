@@ -43,7 +43,7 @@ export function DropboxSaveCard({ meetingId, defaultFolder }: { meetingId: strin
       const body = await res.json().catch(() => ({}));
       if (res.status === 403 && body.connectUrl) {
         if (afterPermission) {
-          throw new Error("Anchor needs permission to save to Dropbox. Click Save to Dropbox and allow it on Dropbox's screen.");
+          throw new Error("Anchor.AI needs permission to save to Dropbox. Click Save to Dropbox and allow it on Dropbox's screen.");
         }
         // First save: Dropbox asks for write access, then brings them back
         // here and the save finishes on its own.

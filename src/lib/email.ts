@@ -36,7 +36,7 @@ export async function sendEmail({
     body: JSON.stringify({
       personalizations: [{ to: recipients.map((email) => ({ email })) }],
       // Shows as "Anchor" in the inbox; the address is the verified sender.
-      from: { email: from, name: process.env.SENDGRID_FROM_NAME || "Anchor" },
+      from: { email: from, name: process.env.SENDGRID_FROM_NAME || "Anchor.AI" },
       subject,
       content: [{ type: "text/html", value: html }],
     }),

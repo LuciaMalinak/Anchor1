@@ -58,7 +58,7 @@ export async function extractLinkedInProfile(params: {
 }): Promise<LinkedInExtraction> {
   const text = params.pastedText.slice(0, MAX_PASTE_LENGTH);
   const priorBlock = params.priorSummary?.trim()
-    ? `\n\nWhat Anchor already knows about them from past meetings — keep anything from this that's still relevant, don't drop it just because it's not repeated in the pasted text:\n${params.priorSummary.trim()}`
+    ? `\n\nWhat Anchor.AI already knows about them from past meetings — keep anything from this that's still relevant, don't drop it just because it's not repeated in the pasted text:\n${params.priorSummary.trim()}`
     : "";
 
   const message = await createWithForcedTool(client(), {

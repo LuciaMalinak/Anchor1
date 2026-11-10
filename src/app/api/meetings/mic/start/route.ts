@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   if (existing && (await settleIfStale(existing.id))) {
     return NextResponse.json(
       {
-        error: "Anchor's already in a live meeting here — check the During tab.",
+        error: "Anchor.AI's already in a live meeting here — check the During tab.",
         meeting: existing,
       },
       { status: 409 }

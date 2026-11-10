@@ -144,7 +144,7 @@ const LIVE_COACHING_TOOL = {
       suggestedAnswer: {
         type: "string",
         description:
-          "A short, concrete, ready-to-say answer to that question, grounded only in what's known about this deal (memory, notes, decision boundaries, past meetings, attached files) — written like a talking point the rep could say almost as-is, not a summary. If the real answer isn't something you actually know, say so plainly ('Anchor doesn't have pricing for that tier — worth saying you'll follow up') rather than inventing a number, date, or commitment. Never suggest committing to anything outside the deal's decision boundaries — if the question asks for exactly that, the suggested answer should say to note it and follow up rather than decide it live. Empty string when questionAsked is false.",
+          "A short, concrete, ready-to-say answer to that question, grounded only in what's known about this deal (memory, notes, decision boundaries, past meetings, attached files) — written like a talking point the rep could say almost as-is, not a summary. If the real answer isn't something you actually know, say so plainly ('Anchor.AI doesn't have pricing for that tier — worth saying you'll follow up') rather than inventing a number, date, or commitment. Never suggest committing to anything outside the deal's decision boundaries — if the question asks for exactly that, the suggested answer should say to note it and follow up rather than decide it live. Empty string when questionAsked is false.",
       },
       answerCaution: {
         type: "string",
@@ -241,7 +241,7 @@ function sanitizeLiveQuestion(raw: {
 // (liveQuestion.ts), so both are grounded in exactly the same material.
 export function liveDealContextText(params: LiveDealContext): string {
   const feedbackText = params.feedbackNotes?.length
-    ? `\n\nWhat the person on this call told Anchor after their recent calls — follow it:\n${params.feedbackNotes.map((n) => `- ${n}`).join("\n")}`
+    ? `\n\nWhat the person on this call told Anchor.AI after their recent calls — follow it:\n${params.feedbackNotes.map((n) => `- ${n}`).join("\n")}`
     : "";
   const leadStyleText = params.leadStyle
     ? `\n\nHow the deal lead actually operates — guidance should sound like it comes from them, not generic coaching: ${params.leadStyle}`

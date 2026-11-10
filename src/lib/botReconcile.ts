@@ -107,7 +107,7 @@ export async function reconcileBotMeeting(meeting: {
       else
         await db
           .update(meetings)
-          .set({ status: "failed", errorMessage: "The call ended but Anchor's bot didn't get a recording.", updatedAt: new Date() })
+          .set({ status: "failed", errorMessage: "The call ended but Anchor.AI's bot didn't get a recording.", updatedAt: new Date() })
           .where(and(eq(meetings.id, meeting.id), inArray(meetings.status, [...LIVE])));
       return;
     }

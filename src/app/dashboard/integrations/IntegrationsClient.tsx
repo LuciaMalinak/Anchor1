@@ -29,7 +29,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   state_mismatch: "That connection attempt didn't match this session — try again.",
   token_exchange: "The provider didn't accept the connection — double-check the client ID/secret.",
   callback_failed: "Something went wrong finishing that connection.",
-  unknown_provider: "That's not a provider Anchor knows about.",
+  unknown_provider: "That's not a provider Anchor.AI knows about.",
 };
 
 function BadgeDot({ color }: { color: string }) {
@@ -70,7 +70,7 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
   }
 
   async function handleDisconnect(key: string, name: string) {
-    if (!window.confirm(`Disconnect ${name}? Anchor will stop being able to use it until you reconnect.`)) {
+    if (!window.confirm(`Disconnect ${name}? Anchor.AI will stop being able to use it until you reconnect.`)) {
       return;
     }
     setDisconnecting(key);
@@ -94,7 +94,7 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
       <div>
         <h1 className="text-xl font-semibold text-brand">Integrations</h1>
         <p className="text-sm text-slate-500">
-          Connect the tools your team already uses so Anchor sees more than just recorded meetings.
+          Connect the tools your team already uses so Anchor.AI sees more than just recorded meetings.
         </p>
       </div>
 
@@ -190,7 +190,7 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
       </div>
 
       <p className="text-xs text-slate-400">
-        Connecting sets up secure access — Anchor pulling this data into deal context (so Ask Anchor and
+        Connecting sets up secure access — Anchor.AI pulling this data into deal context (so Ask Anchor and
         handoff briefings can use it) is the next step once a connection is live.
       </p>
 

@@ -119,7 +119,7 @@ async function postingConnection(userId: string): Promise<Connection> {
     throw new Error("Slack isn't connected yet — connect it from the Integrations page first.");
   }
   if (!hasScopes(connection.scope, SLACK_EXTRA_SCOPES.post_channels)) {
-    throw new NeedsSlackPermissionError("Anchor needs permission to post in Slack channels.");
+    throw new NeedsSlackPermissionError("Anchor.AI needs permission to post in Slack channels.");
   }
   return connection;
 }
@@ -143,7 +143,7 @@ export async function listSlackChannels(userId: string): Promise<SlackChannel[]>
     );
     const json = await res.json().catch(() => ({}));
     if (json.ok !== true) {
-      if (json.error === "missing_scope") throw new NeedsSlackPermissionError("Anchor needs permission to list Slack channels.");
+      if (json.error === "missing_scope") throw new NeedsSlackPermissionError("Anchor.AI needs permission to list Slack channels.");
       throw new Error(typeof json.error === "string" ? json.error : "Slack couldn't list channels.");
     }
     for (const c of (json.channels ?? []) as { id?: string; name?: string }[]) {
@@ -172,7 +172,7 @@ export async function postSlackChannelMessage(
     });
   } catch (err) {
     if (err instanceof Error && err.message === "missing_scope") {
-      throw new NeedsSlackPermissionError("Anchor needs permission to post in Slack channels.");
+      throw new NeedsSlackPermissionError("Anchor.AI needs permission to post in Slack channels.");
     }
     throw err;
   }

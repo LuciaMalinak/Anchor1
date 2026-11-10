@@ -86,12 +86,12 @@ const SPECIALTY_TOOL: Anthropic.Tool = {
       companyName: { type: "string" },
       sectorName: { type: "string", description: "Their niche in a few words, e.g. 'Ultra-luxury hotel asset management'." },
       summary: { type: "string", description: "Two or three sentences on what they do and for whom." },
-      focus: { type: "string", description: "Who Anchor sits beside on their calls, e.g. 'Asset managers representing owners of ultra-luxury hotels in calls with operators, brands and lenders'." },
-      persona: { type: "string", description: "The expert Anchor acts as: 'a ... with 20 years of ... who knows ... cold'." },
+      focus: { type: "string", description: "Who Anchor.AI sits beside on their calls, e.g. 'Asset managers representing owners of ultra-luxury hotels in calls with operators, brands and lenders'." },
+      persona: { type: "string", description: "The expert Anchor.AI acts as: 'a ... with 20 years of ... who knows ... cold'." },
       counterparties: { type: "string", description: "Who is usually on the other side of their calls." },
       pains: {
         type: "array",
-        description: "5-6 real struggles of people doing this exact work, each with what Anchor does about it.",
+        description: "5-6 real struggles of people doing this exact work, each with what Anchor.AI does about it.",
         items: {
           type: "object",
           properties: { pain: { type: "string" }, anchor: { type: "string" } },
@@ -283,7 +283,7 @@ Never design anything that profiles or researches private individuals, or that w
       {
         role: "user",
         content: `Research notes on the company:\n\n${notes}${description ? `\n\nHow they describe what they do: ${description}` : ""}${
-          industryLabel ? `\n\nTheir broad industry in Anchor: ${industryLabel}.` : ""
+          industryLabel ? `\n\nTheir broad industry in Anchor.AI: ${industryLabel}.` : ""
         }\n\nWrite their playbook now. Their tools are designed in the next step.`,
       },
     ],
@@ -360,7 +360,7 @@ Design their 10-14 tools now.`,
       if (attempt === 1) throw err;
     }
   }
-  if (!designed.length) throw new Error("Anchor couldn't finish designing your tools this time. Please click Build my Anchor again.");
+  if (!designed.length) throw new Error("Anchor.AI couldn't finish designing your tools this time. Please click Build my Anchor again.");
 
   // Step two: each tool's full brief. If it falls short, a tool still gets
   // working instructions built from its outline.
@@ -369,7 +369,7 @@ Design their 10-14 tools now.`,
     const second = await createWithForcedTool(client(), {
       model: MODEL,
       max_tokens: 16000,
-      system: `You are the most experienced practitioner in this niche: ${str(r.sectorName, 120) || "their business"} (${str(r.summary, 600)}). Write the brief for each of these Anchor tools. Each report is written from a deal's calls, files and emails. Stand-in tools ("standin") must let a colleague run that kind of meeting exactly as the lead would: positions, red lines, the lead's answers in their own words, numbers to know, what may be agreed and what must come back to the lead.`,
+      system: `You are the most experienced practitioner in this niche: ${str(r.sectorName, 120) || "their business"} (${str(r.summary, 600)}). Write the brief for each of these Anchor.AI tools. Each report is written from a deal's calls, files and emails. Stand-in tools ("standin") must let a colleague run that kind of meeting exactly as the lead would: positions, red lines, the lead's answers in their own words, numbers to know, what may be agreed and what must come back to the lead.`,
       tools: [INSTRUCTIONS_TOOL],
       tool_choice: { type: "tool", name: INSTRUCTIONS_TOOL.name },
       messages: [

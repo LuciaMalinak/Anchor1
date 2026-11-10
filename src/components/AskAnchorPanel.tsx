@@ -129,9 +129,9 @@ export function AskAnchorPanel({ dealId }: { dealId: string }) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Anchor couldn't answer that.");
+        throw new Error(body.error || "Anchor.AI couldn't answer that.");
       }
-      if (!res.body) throw new Error("Anchor couldn't answer that.");
+      if (!res.body) throw new Error("Anchor.AI couldn't answer that.");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -143,14 +143,14 @@ export function AskAnchorPanel({ dealId }: { dealId: string }) {
         setStreamingAnswer(stripAskActions(answer));
         requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
       }
-      if (!answer.trim()) throw new Error("Anchor couldn't answer that.");
+      if (!answer.trim()) throw new Error("Anchor.AI couldn't answer that.");
       // Stop the meeting / open a file if the answer asked for it — see
       // askActions.ts. A failure is added under the answer, not hidden.
       const actionNote = await runAskActions(answer);
       const shown = stripAskActions(answer) + (actionNote ? `\n\n${actionNote}` : "");
       setTurns([...nextTurns, { role: "assistant", content: shown }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Anchor couldn't answer that.");
+      setError(err instanceof Error ? err.message : "Anchor.AI couldn't answer that.");
     } finally {
       setAsking(false);
       setStreamingAnswer("");

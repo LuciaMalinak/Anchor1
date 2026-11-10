@@ -56,7 +56,7 @@ export function LiveMeetingWatcher() {
 
     function fireNotification(m: LiveMeeting) {
       const n = new Notification(`${m.title} just went live`, {
-        body: "Open the Focus window to use Anchor alongside the call.",
+        body: "Open the Focus window to use Anchor.AI alongside the call.",
         tag: `anchor-live-${m.id}`,
       });
       n.onclick = () => {
@@ -146,7 +146,7 @@ export function LiveMeetingWatcher() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-slate-900">{m.title} just went live</p>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Open the Focus window to use Anchor alongside the call.
+                  Open the Focus window to use Anchor.AI alongside the call.
                 </p>
                 <div className="mt-2 flex items-center gap-3">
                   <button

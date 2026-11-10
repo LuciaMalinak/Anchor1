@@ -61,10 +61,10 @@ export function StopMeetingButton({
       <div className="flex flex-wrap items-center gap-2">
         <span className={`text-xs ${mutedText}`}>
           {desktop
-            ? "Anchor Desktop stops recording and writes up the meeting — the call itself carries on."
+            ? "Anchor.AI Desktop stops recording and writes up the meeting — the call itself carries on."
             : inPerson
             ? "Stops recording and writes up the meeting."
-            : "Anchor leaves the call — doesn't end the meeting for anyone else."}
+            : "Anchor.AI leaves the call — doesn't end the meeting for anyone else."}
         </span>
         <button
           type="button"
@@ -108,7 +108,7 @@ export function StopMeetingButton({
         title={
           inPerson
             ? "Stop recording and write up this meeting"
-            : "Have Anchor leave the call now — this doesn't end the meeting for anyone else"
+            : "Have Anchor.AI leave the call now — this doesn't end the meeting for anyone else"
         }
         className={
           variant === "light"

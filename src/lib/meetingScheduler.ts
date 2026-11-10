@@ -66,7 +66,7 @@ export async function platformOptions(userId: string, returnTo: string): Promise
       available: Boolean(zoom) && anyCalendar,
       connectUrl: !isProviderConfigured("zoom") ? null : !zoom ? connect("zoom", returnTo) : anyCalendar ? null : calendarConnect,
       note: !isProviderConfigured("zoom")
-        ? "Zoom isn't set up on Anchor yet"
+        ? "Zoom isn't set up on Anchor.AI yet"
         : !zoom
           ? "Connect Zoom"
           : anyCalendar
@@ -78,7 +78,7 @@ export async function platformOptions(userId: string, returnTo: string): Promise
       label: PLATFORM_LABEL.teams,
       available: cal.outlook,
       connectUrl: cal.outlook || !isProviderConfigured("microsoft") ? null : connect("microsoft", returnTo),
-      note: cal.outlook ? null : isProviderConfigured("microsoft") ? "Connect Microsoft 365" : "Microsoft isn't set up on Anchor yet",
+      note: cal.outlook ? null : isProviderConfigured("microsoft") ? "Connect Microsoft 365" : "Microsoft isn't set up on Anchor.AI yet",
     },
     {
       platform: "in_person",

@@ -134,7 +134,7 @@ function ReportView({ report }: { report: ToolReport }) {
       {report.gaps.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Still missing</p>
-          <p className="mt-0.5 text-xs text-amber-800">Anchor will prompt you for these on the next live call.</p>
+          <p className="mt-0.5 text-xs text-amber-800">Anchor.AI will prompt you for these on the next live call.</p>
           <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-amber-900">
             {report.gaps.map((g, i) => (
               <li key={i}>{g}</li>

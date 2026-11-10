@@ -30,7 +30,7 @@ export async function createOutlookEvent(
   const connection = await getConnection(userId, "microsoft");
   if (!connection) throw new NeedsConnectionError("microsoft", "Connect Microsoft 365 to create Teams and Outlook meetings.");
   if (!/Calendars\.ReadWrite/i.test(connection.scope ?? "")) {
-    throw new NeedsConnectionError("microsoft", "Reconnect Microsoft 365 so Anchor can add meetings to your Outlook calendar.");
+    throw new NeedsConnectionError("microsoft", "Reconnect Microsoft 365 so Anchor.AI can add meetings to your Outlook calendar.");
   }
   const res = await apiFetch(connection, "https://graph.microsoft.com/v1.0/me/events", {
     method: "POST",
@@ -45,7 +45,7 @@ export async function createOutlookEvent(
     }),
   });
   if (res.status === 403) {
-    throw new NeedsConnectionError("microsoft", "Reconnect Microsoft 365 so Anchor can add meetings to your Outlook calendar.");
+    throw new NeedsConnectionError("microsoft", "Reconnect Microsoft 365 so Anchor.AI can add meetings to your Outlook calendar.");
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Outlook didn't create the meeting (${res.status}): ${JSON.stringify(body).slice(0, 300)}`);

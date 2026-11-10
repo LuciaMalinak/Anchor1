@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error("[ask] building context failed:", err);
-    return NextResponse.json({ error: "Anchor couldn't load your workspace. Try again." }, { status: 500 });
+    return NextResponse.json({ error: "Anchor.AI couldn't load your workspace. Try again." }, { status: 500 });
   }
   const [leadStyle, { serverTools, toolRules }] = await Promise.all([
     getDealLeadStyle(leadUserId, { allowSynchronousRebuild: false }),

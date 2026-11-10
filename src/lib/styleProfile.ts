@@ -122,7 +122,7 @@ const STYLE_TOOL = {
       profile: {
         type: "string",
         description:
-          "Written in third person, up to about 200 words, so that someone covering a call for them (or Anchor suggesting what to say) can answer the way they would: how they negotiate, what they hold firm on vs. stay flexible on, how they decide; how they typically answer common moments (price pushback, discount requests, delays, a new stakeholder, an objection, a question about the product) — quoting short phrases they actually use where the material has them; and their tone (formal or casual, brief or detailed, how they open and close). Grounded ONLY in the material given. Never invent a trait, phrase or preference that isn't evidenced. If the material is thin, say less rather than generalize.",
+          "Written in third person, up to about 200 words, so that someone covering a call for them (or Anchor.AI suggesting what to say) can answer the way they would: how they negotiate, what they hold firm on vs. stay flexible on, how they decide; how they typically answer common moments (price pushback, discount requests, delays, a new stakeholder, an objection, a question about the product) — quoting short phrases they actually use where the material has them; and their tone (formal or casual, brief or detailed, how they open and close). Grounded ONLY in the material given. Never invent a trait, phrase or preference that isn't evidenced. If the material is thin, say less rather than generalize.",
       },
     },
     required: ["profile"],

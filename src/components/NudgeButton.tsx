@@ -100,7 +100,7 @@ export function NudgeButton({
       if (res.status === 403 && body.connectUrl) {
         if (afterPermission) {
           throw new Error(
-            "Anchor needs permission to create Gmail drafts. Click Save to Gmail drafts and allow it on Google's screen.",
+            "Anchor.AI needs permission to create Gmail drafts. Click Save to Gmail drafts and allow it on Google's screen.",
           );
         }
         stashPendingGoogleAction("nudge", dealId, d);

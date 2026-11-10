@@ -40,7 +40,7 @@ export function MorningBriefPrompt({ neverSetUp }: { neverSetUp: boolean }) {
     const sent = Boolean(res?.ok && body.sent);
     setSending(sent ? "sent" : "failed");
     setOutcome({
-      line: res?.ok ? `${sent ? "Sent." : `Not sent.${body.note ? ` ${body.note}` : ""}`} ${sendSummary(body)}` : body.error || "Couldn't reach Anchor.",
+      line: res?.ok ? `${sent ? "Sent." : `Not sent.${body.note ? ` ${body.note}` : ""}`} ${sendSummary(body)}` : body.error || "Couldn't reach Anchor.AI.",
       problems: Array.isArray(body.problems) ? body.problems : [],
     });
   }

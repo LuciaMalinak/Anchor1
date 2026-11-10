@@ -86,7 +86,7 @@ export function CompanyContextBox() {
             {s.companyWebsite ? ` (${s.companyWebsite.replace(/^https?:\/\//, "")})` : ""}.
           </>
         ) : building ? null : (
-          "Tell Anchor about your company so it can coach your calls and stand in for you like an expert in your business."
+          "Tell Anchor.AI about your company so it can coach your calls and stand in for you like an expert in your business."
         )}
       </p>
 
@@ -114,7 +114,7 @@ export function CompanyContextBox() {
             />
           </label>
           <label className="text-xs font-medium text-slate-700">
-            Give Anchor more context about your company
+            Give Anchor.AI more context about your company
             <textarea
               value={context}
               onChange={(e) => {

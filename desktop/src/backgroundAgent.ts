@@ -125,7 +125,7 @@ function windowsTaskXml(execPath: string): string {
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Starts Anchor Desktop again if it isn't running, so it never misses a call. Turn off with "Always watch for calls" in Anchor's tray menu.</Description>
+    <Description>Starts Anchor.AI Desktop again if it isn't running, so it never misses a call. Turn off with "Always watch for calls" in Anchor.AI's tray menu.</Description>
   </RegistrationInfo>
   <Triggers>
     <TimeTrigger>
@@ -179,11 +179,11 @@ export async function installWindowsWatchdog(): Promise<string | null> {
   try {
     fs.writeFileSync(xmlPath, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(windowsTaskXml(process.execPath), "utf16le")]));
   } catch (err) {
-    return `Couldn't set Anchor to restart itself: ${err instanceof Error ? err.message : err}`;
+    return `Couldn't set Anchor.AI to restart itself: ${err instanceof Error ? err.message : err}`;
   }
   const result = await run("schtasks", ["/Create", "/F", "/TN", WINDOWS_TASK, "/XML", xmlPath]);
   fs.rmSync(xmlPath, { force: true });
-  return result.ok ? null : `Couldn't set Anchor to restart itself: ${result.output}`;
+  return result.ok ? null : `Couldn't set Anchor.AI to restart itself: ${result.output}`;
 }
 
 export async function removeWindowsWatchdog(): Promise<void> {

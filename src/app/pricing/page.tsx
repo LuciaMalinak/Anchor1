@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 
 export const metadata = {
-  title: "Pricing — Anchor",
+  title: "Pricing — Anchor.AI",
 };
 
 // Mirrors the tiers from the investor deck's business-model slide —
@@ -151,7 +151,7 @@ export default function PricingPage() {
         </div>
 
         <p className="mt-10 text-center text-sm text-slate-500">
-          Every meeting Anchor delegates for is one your team keeps handling well even when
+          Every meeting Anchor.AI delegates for is one your team keeps handling well even when
           you&apos;re not in the room. Questions about which tier fits?{" "}
           <a href="mailto:lucia.malinak@gmail.com" className="text-brand hover:underline">
             Reach out
@@ -168,7 +168,7 @@ export default function PricingPage() {
               href="https://www.linkedin.com/company/143888744/"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Anchor on LinkedIn"
+              aria-label="Anchor.AI on LinkedIn"
               className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-[#0A66C2]"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

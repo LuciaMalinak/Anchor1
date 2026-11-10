@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   try {
     await sendEmail({
       to: APP_OWNER_EMAILS,
-      subject: `Anchor sales request: ${name}${company ? ` (${company})` : ""}`,
+      subject: `Anchor.AI sales request: ${name}${company ? ` (${company})` : ""}`,
       html: `<p><b>${esc(name)}</b> &lt;${esc(email)}&gt; wants to talk to sales.</p>
 <p>Company: ${esc(company || "-")}<br>Team size: ${esc(teamSize || "-")}</p>
 <p>${esc(message || "(no message)").replace(/\n/g, "<br>")}</p>

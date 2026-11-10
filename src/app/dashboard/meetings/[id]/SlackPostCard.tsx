@@ -39,7 +39,7 @@ export function SlackPostCard({ meetingId, dealId }: { meetingId: string; dealId
   // declined, so say so instead of looping.
   function needsPermission(body: { connectUrl?: string }, pending: Pending, afterPermission: boolean): boolean {
     if (!body.connectUrl) return false;
-    if (afterPermission) throw new Error("Anchor needs permission to post in Slack. Click again and allow it on Slack's screen.");
+    if (afterPermission) throw new Error("Anchor.AI needs permission to post in Slack. Click again and allow it on Slack's screen.");
     stashPendingGoogleAction("slack", meetingId, pending);
     window.location.href = body.connectUrl;
     return true;

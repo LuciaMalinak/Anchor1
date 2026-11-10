@@ -39,9 +39,9 @@ export const PLANS: Record<Plan, { name: string; tagline: string; features: stri
 };
 
 const PRICES = {
-  team_seat: { lookupKey: "anchor_team_seat_monthly", cents: 4900, name: "Anchor Team (per person)" },
-  pro_leader: { lookupKey: "anchor_pro_leader_monthly", cents: 14900, name: "Anchor Pro (leader seat)" },
-  pro_delegate: { lookupKey: "anchor_pro_delegate_monthly", cents: 5900, name: "Anchor Pro (delegate seat)" },
+  team_seat: { lookupKey: "anchor_team_seat_monthly", cents: 4900, name: "Anchor.AI Team (per person)" },
+  pro_leader: { lookupKey: "anchor_pro_leader_monthly", cents: 14900, name: "Anchor.AI Pro (leader seat)" },
+  pro_delegate: { lookupKey: "anchor_pro_delegate_monthly", cents: 5900, name: "Anchor.AI Pro (delegate seat)" },
 } as const;
 type PriceKey = keyof typeof PRICES;
 

@@ -8,9 +8,9 @@ import { TOOL_KIND_LABEL, TOOL_KIND_ORDER, toolsForIndustry } from "@/lib/indust
 
 export async function generateMetadata({ params }: { params: Promise<{ key: string }> }): Promise<Metadata> {
   const { key } = await params;
-  if (!isIndustryKey(key)) return { title: "Anchor" };
+  if (!isIndustryKey(key)) return { title: "Anchor.AI" };
   return {
-    title: `Anchor for ${INDUSTRY_BY_KEY[key].label}`,
+    title: `Anchor.AI for ${INDUSTRY_BY_KEY[key].label}`,
     description: INDUSTRY_PLAYBOOKS[key].focus,
   };
 }
@@ -78,7 +78,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
       </section>
 
       <section className="mx-auto w-full max-w-5xl px-6 py-16 sm:px-8">
-        <h2 className="text-2xl font-semibold tracking-tight text-brand">What slows you down, and what Anchor does about it</h2>
+        <h2 className="text-2xl font-semibold tracking-tight text-brand">What slows you down, and what Anchor.AI does about it</h2>
         <div className="mt-8 grid gap-5 md:grid-cols-2">
           {p.pains.map((item) => (
             <div
@@ -96,7 +96,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
       <section className="border-y border-slate-100 bg-slate-50 py-16">
         <div className="mx-auto grid max-w-5xl gap-10 px-6 sm:px-8 md:grid-cols-2">
           <div>
-            <h2 className="text-lg font-semibold text-brand">On the call: what Anchor makes sure you cover</h2>
+            <h2 className="text-lg font-semibold text-brand">On the call: what Anchor.AI makes sure you cover</h2>
             <ul className="mt-4 space-y-2 text-sm text-slate-700">
               {p.checklist.map((c) => (
                 <li key={c} className="flex items-start gap-2.5">
@@ -128,7 +128,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
         <h2 className="text-2xl font-semibold tracking-tight text-brand">Anyone on your team can step in for the lead</h2>
         <p className="mt-2 max-w-2xl text-sm text-slate-500">
           When your CEO or deal lead can&apos;t be in the room, anyone can run the meeting the way they would. One
-          click on any deal and Anchor writes these from every call, file and email on it, then keeps
+          click on any deal and Anchor.AI writes these from every call, file and email on it, then keeps
           them up to date after every new call. Whatever
           they&apos;re still missing becomes your checklist on the next call, so they finish themselves.
         </p>
@@ -147,9 +147,9 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
 
       <section className="mx-auto grid w-full max-w-5xl gap-10 border-t border-slate-100 px-6 py-16 sm:px-8 md:grid-cols-2">
         <div>
-          <h2 className="text-lg font-semibold text-brand">Lines Anchor watches for you</h2>
+          <h2 className="text-lg font-semibold text-brand">Lines Anchor.AI watches for you</h2>
           <p className="mt-2 text-sm text-slate-500">
-            When a question would take you over one of these, Anchor flags it live and gives you a safe
+            When a question would take you over one of these, Anchor.AI flags it live and gives you a safe
             way to answer. Anything that came close goes on the call summary for review.
           </p>
           <ul className="mt-4 space-y-3 text-sm">
@@ -168,7 +168,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ key: 
         <div>
           <h2 className="text-lg font-semibold text-brand">Your deal sheet, filled in from every call</h2>
           <p className="mt-2 text-sm text-slate-500">
-            No more typing it up afterwards. After each call Anchor fills in the fields your business
+            No more typing it up afterwards. After each call Anchor.AI fills in the fields your business
             tracks, from what was actually said.
           </p>
           <dl className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200 text-sm">

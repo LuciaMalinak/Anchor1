@@ -106,7 +106,7 @@ export default async function AdminHomePage({
       >
         <span>
           <span className="font-semibold text-slate-900">LinkedIn bot</span>
-          <span className="ml-2 text-slate-500">Daily posts, weekly video and comment drafts for the AI Anchor Page</span>
+          <span className="ml-2 text-slate-500">Daily posts, weekly video and comment drafts for the Anchor.AI Page</span>
         </span>
         <span className="text-brand">Open →</span>
       </Link>
@@ -194,7 +194,7 @@ export default async function AdminHomePage({
             </div>
           ) : (
             <p className="text-sm text-slate-500">
-              Nothing recorded yet — costs show up here as members use Anchor.
+              Nothing recorded yet — costs show up here as members use Anchor.AI.
             </p>
           )}
         </section>
@@ -217,7 +217,7 @@ export default async function AdminHomePage({
               <tr>
                 <th className="whitespace-nowrap px-4 py-3">Member</th>
                 <th className="whitespace-nowrap px-4 py-3">Team</th>
-                <th className="whitespace-nowrap px-4 py-3">Last used Anchor</th>
+                <th className="whitespace-nowrap px-4 py-3">Last used Anchor.AI</th>
                 <th className="whitespace-nowrap px-4 py-3">Last activity</th>
                 <th className="whitespace-nowrap px-4 py-3 text-right">AI cost ({COST_WINDOW_DAYS}d)</th>
               </tr>

@@ -29,7 +29,7 @@ function authHeaders() {
 // back to plain "Anchor" if this account has no name set.
 export function botDisplayName(userName: string | null | undefined): string {
   const first = userName?.trim().split(/\s+/)[0];
-  return first ? `Anchor.${first}` : "Anchor";
+  return first ? `Anchor.AI (${first})` : "Anchor.AI";
 }
 
 export async function createBot(
@@ -40,7 +40,7 @@ export async function createBot(
   // participant list — "Anchor" alone was confusing on a call with more
   // than one Anchor user, since there was no way to tell whose bot it
   // was. Defaults to plain "Anchor" for any caller that doesn't pass one.
-  botName = "Anchor"
+  botName = "Anchor.AI"
 ): Promise<{ id: string }> {
   const recordingConfig: Record<string, unknown> = {
     // Only request mixed audio for the final recording — we run our own

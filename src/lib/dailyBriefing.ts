@@ -75,5 +75,5 @@ export async function getDailyBriefing(industry?: IndustryKey | null): Promise<s
     .replace(/\s+/g, " ")
     .trim();
 
-  return text || "Anchor couldn't find much notable news today.";
+  return text || "Anchor.AI couldn't find much notable news today.";
 }

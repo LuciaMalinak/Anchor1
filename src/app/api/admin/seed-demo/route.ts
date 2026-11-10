@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
       primaryContactEmail: "jordan.weiss@acmerobotics-demo.com",
       companyWebsite: "https://acmerobotics-demo.com",
       notes:
-        "Champion is Jordan (VP Eng) — brought Anchor in originally and still drives the account. Economic buyer is Priya Shah, CTO; she cleared the original security review and is now the one weighing the EMEA data-residency question. Signed at 40 seats; can offer up to 15% off list at this volume without approval. EMEA expansion pricing can match the existing per-seat rate. Any new integration work (Slack, SSO/SAML) needs a check with Lucia first.",
+        "Champion is Jordan (VP Eng) — brought Anchor.AI in originally and still drives the account. Economic buyer is Priya Shah, CTO; she cleared the original security review and is now the one weighing the EMEA data-residency question. Signed at 40 seats; can offer up to 15% off list at this volume without approval. EMEA expansion pricing can match the existing per-seat rate. Any new integration work (Slack, SSO/SAML) needs a check with Lucia first.",
       memory:
         "Acme Robotics builds warehouse picking robots. What started as a single kickoff call about cutting down manual call notes for their 40-person customer success team turned into a signed deal within two months, once Jordan cleared it with Priya (CTO) and their security team signed off on SOC 2. Seven months in, adoption is strong — 35 of the 40 team members are active users, and the recap emails are the most-cited win in every check-in. The conversation has shifted from onboarding to growth: Jordan and Priya are now asking about a ~10-seat expansion for a new EMEA team, a Slack integration for deal alerts, and whether call data can stay in-region for EU team members.",
       decisionBoundaries:
@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
       company: "Acme Robotics",
       role: "VP of Engineering",
       relationshipSummary:
-        "Jordan is the internal champion who first brought Anchor to Acme Robotics and has driven the account from a single kickoff call to a company-wide rollout across all 40 team members. Practical and fast-moving — now pushing for an EMEA expansion and a Slack integration.",
+        "Jordan is the internal champion who first brought Anchor.AI to Acme Robotics and has driven the account from a single kickoff call to a company-wide rollout across all 40 team members. Practical and fast-moving — now pushing for an EMEA expansion and a Slack integration.",
       meetingCount: 4,
       firstMetAt: daysAgo(210),
       lastMeetingAt: daysAgo(2),
@@ -188,9 +188,9 @@ export async function GET(req: NextRequest) {
       { label: "Speaker B", name: "Sam Rivera (you)" },
     ],
     utterances: [
-      { speakerLabel: "Speaker B", text: "Thanks for making time, Jordan — I know you've got a packed week. Want to start with what's prompting the search for something like Anchor?", startMs: 0, endMs: 6200 },
+      { speakerLabel: "Speaker B", text: "Thanks for making time, Jordan — I know you've got a packed week. Want to start with what's prompting the search for something like Anchor.AI?", startMs: 0, endMs: 6200 },
       { speakerLabel: "Speaker A", text: "Yeah, no problem. Honestly it's pretty simple — our team spends a good chunk of every day just writing up call notes and updating the CRM by hand, and half of it never gets written down at all.", startMs: 6400, endMs: 16000 },
-      { speakerLabel: "Speaker B", text: "That's exactly the gap Anchor's built for. It joins the call, transcribes it, and writes the recap and action items automatically — and it keeps a running memory per account so the next call already has context.", startMs: 16400, endMs: 27000 },
+      { speakerLabel: "Speaker B", text: "That's exactly the gap Anchor.AI's built for. It joins the call, transcribes it, and writes the recap and action items automatically — and it keeps a running memory per account so the next call already has context.", startMs: 16400, endMs: 27000 },
       { speakerLabel: "Speaker A", text: "That memory piece is actually the part I care most about. We've got forty people on the team and constant account handoffs — every time someone leaves or a deal changes owners, we lose context.", startMs: 27400, endMs: 38000 },
       { speakerLabel: "Speaker B", text: "Makes sense — that's the handoff briefing feature. It pulls together the deal history, decision boundaries, and open items into one page whoever's picking it up can read in two minutes.", startMs: 38400, endMs: 48500 },
       { speakerLabel: "Speaker A", text: "Good. Two blockers on my end: pricing at our seat count, and our security team is going to ask about SOC 2 before this goes anywhere.", startMs: 49000, endMs: 58000 },
@@ -199,14 +199,14 @@ export async function GET(req: NextRequest) {
       { speakerLabel: "Speaker B", text: "Perfect — let's plan on looping her in once the SOC 2 docs are in hand. I'll send those over today along with the pricing by Friday.", startMs: 77400, endMs: 85000 },
     ],
     overview:
-      "Kickoff call with Jordan Weiss (VP of Engineering, Acme Robotics) to explore Anchor for their 40-person customer success team. Strong initial interest — the core pain point is manual call notes and lost context on account handoffs. Two open items before this can move forward: SOC 2 documentation for their security review, and volume pricing at their seat count.",
+      "Kickoff call with Jordan Weiss (VP of Engineering, Acme Robotics) to explore Anchor.AI for their 40-person customer success team. Strong initial interest — the core pain point is manual call notes and lost context on account handoffs. Two open items before this can move forward: SOC 2 documentation for their security review, and volume pricing at their seat count.",
     keyPoints: [
       "Acme's 40-person team currently writes up call notes by hand, and a lot of it never makes it into the CRM.",
-      "Jordan is most interested in Anchor's per-account memory and handoff briefings — they have frequent account reassignments.",
+      "Jordan is most interested in Anchor.AI's per-account memory and handoff briefings — they have frequent account reassignments.",
       "Security review (SOC 2) and volume pricing are the two remaining blockers before this can go to the CTO for sign-off.",
     ],
     actionItems: [
-      { text: "Send Jordan Weiss Anchor's SOC 2 documentation", owner: "Sam Rivera" },
+      { text: "Send Jordan Weiss Anchor.AI's SOC 2 documentation", owner: "Sam Rivera" },
       { text: "Put together volume pricing for 40 seats", owner: "Sam Rivera" },
     ],
     dealSignals: [
@@ -269,7 +269,7 @@ export async function GET(req: NextRequest) {
       { speakerLabel: "Speaker B", text: "That's great to hear. Any friction points on the other 5, or anything the team's asked for?", startMs: 17400, endMs: 23500 },
       { speakerLabel: "Speaker A", text: "Mainly one thing — some people still take calls by phone instead of Zoom, and those don't get captured at all. Not a dealbreaker, just a gap.", startMs: 24000, endMs: 33000 },
       { speakerLabel: "Speaker B", text: "Good to know, I'll flag that as product feedback. Anything else on your radar?", startMs: 33400, endMs: 38500 },
-      { speakerLabel: "Speaker A", text: "Actually yes — we're standing up a small EMEA team next quarter, maybe 10 people. And a few people have asked if Anchor can post deal alerts into Slack.", startMs: 39000, endMs: 49000 },
+      { speakerLabel: "Speaker A", text: "Actually yes — we're standing up a small EMEA team next quarter, maybe 10 people. And a few people have asked if Anchor.AI can post deal alerts into Slack.", startMs: 39000, endMs: 49000 },
       { speakerLabel: "Speaker B", text: "Both very doable to talk through. Let's set up time once the EMEA team's headcount is firmer, and I'll look into the Slack integration timeline in the meantime.", startMs: 49400, endMs: 58500 },
     ],
     overview:
@@ -301,7 +301,7 @@ export async function GET(req: NextRequest) {
       { label: "Speaker C", name: "Sam Rivera (you)" },
     ],
     utterances: [
-      { speakerLabel: "Speaker A", text: "Thanks for hopping on — the EMEA team is confirmed now, 10 people starting next quarter, and we'd like to get them onto Anchor from day one.", startMs: 0, endMs: 8500 },
+      { speakerLabel: "Speaker A", text: "Thanks for hopping on — the EMEA team is confirmed now, 10 people starting next quarter, and we'd like to get them onto Anchor.AI from day one.", startMs: 0, endMs: 8500 },
       { speakerLabel: "Speaker C", text: "Great news. Pricing-wise I can match your existing per-seat rate for those 10 — I'll send over a formal quote today.", startMs: 8800, endMs: 17000 },
       { speakerLabel: "Speaker B", text: "One thing I need before I can sign off: those team members are EU-based. Can you confirm their call data stays in-region, or does everything still route through the US?", startMs: 17400, endMs: 27500 },
       { speakerLabel: "Speaker C", text: "Good question — today everything's processed in the US under our existing SOC 2 boundary. Let me get you a definitive answer on EU data residency rather than guess.", startMs: 28000, endMs: 38000 },
@@ -331,7 +331,7 @@ export async function GET(req: NextRequest) {
   });
 
   await db.insert(tasks).values([
-    { teamId, dealId: dealA.id, text: "Send Jordan Weiss Anchor's SOC 2 documentation", ownerLabel: "Sam Rivera", source: "meeting", sourceMeetingId: m1.id, completed: true, completedAt: daysAgo(205), createdAt: daysAgo(210) },
+    { teamId, dealId: dealA.id, text: "Send Jordan Weiss Anchor.AI's SOC 2 documentation", ownerLabel: "Sam Rivera", source: "meeting", sourceMeetingId: m1.id, completed: true, completedAt: daysAgo(205), createdAt: daysAgo(210) },
     { teamId, dealId: dealA.id, text: "Put together volume pricing for Acme Robotics (40 seats)", ownerLabel: "Sam Rivera", source: "meeting", sourceMeetingId: m1.id, completed: true, completedAt: daysAgo(202), createdAt: daysAgo(210) },
     { teamId, dealId: dealA.id, text: "Look into capturing notes from non-Zoom (phone) calls", ownerLabel: "Sam Rivera", source: "meeting", completed: true, completedAt: daysAgo(38), createdAt: daysAgo(45) },
     { teamId, dealId: dealA.id, text: "Send EMEA expansion pricing quote (10 seats)", ownerLabel: "Sam Rivera", source: "meeting", completed: false, createdAt: daysAgo(2) },
@@ -355,7 +355,7 @@ export async function GET(req: NextRequest) {
       companyWebsite: "https://globex-demo.com",
       notes: "Inbound from a webinar. Pain point is messy handoffs between teammates, not note-taking per se — lead with the handoff briefing feature.",
       memory:
-        "Globex Industries makes industrial sensors. Morgan Lee (Director of Sales Ops) took an initial discovery call interested primarily in Anchor's handoff briefings — team members hand off accounts to each other frequently and lose context every time. Early stage; a proposal is the next step.",
+        "Globex Industries makes industrial sensors. Morgan Lee (Director of Sales Ops) took an initial discovery call interested primarily in Anchor.AI's handoff briefings — team members hand off accounts to each other frequently and lose context every time. Early stage; a proposal is the next step.",
       createdByUserId: user.id,
       leadUserId: user.id,
       createdAt: daysAgo(8),
@@ -371,7 +371,7 @@ export async function GET(req: NextRequest) {
       email: "morgan.lee@globex-demo.com",
       company: "Globex Industries",
       role: "Director of Sales Operations",
-      relationshipSummary: "Morgan took an initial discovery call and is mainly evaluating Anchor's handoff briefings for messy handoffs between teammates.",
+      relationshipSummary: "Morgan took an initial discovery call and is mainly evaluating Anchor.AI's handoff briefings for messy handoffs between teammates.",
       meetingCount: 1,
       firstMetAt: daysAgo(8),
       lastMeetingAt: daysAgo(8),
@@ -390,16 +390,16 @@ export async function GET(req: NextRequest) {
       { label: "Speaker B", name: "Sam Rivera (you)" },
     ],
     utterances: [
-      { speakerLabel: "Speaker B", text: "Morgan, thanks for the time — what's prompting you to look at something like Anchor right now?", startMs: 0, endMs: 6000 },
+      { speakerLabel: "Speaker B", text: "Morgan, thanks for the time — what's prompting you to look at something like Anchor.AI right now?", startMs: 0, endMs: 6000 },
       { speakerLabel: "Speaker A", text: "Mainly handoffs. Every time an account moves from one teammate to another, half the context gets lost and the customer has to repeat themselves.", startMs: 6400, endMs: 15000 },
-      { speakerLabel: "Speaker B", text: "That's one of the things Anchor's handoff briefings are built for — pulls the deal history into one page whoever's picking it up can read in a couple minutes.", startMs: 15400, endMs: 24500 },
+      { speakerLabel: "Speaker B", text: "That's one of the things Anchor.AI's handoff briefings are built for — pulls the deal history into one page whoever's picking it up can read in a couple minutes.", startMs: 15400, endMs: 24500 },
       { speakerLabel: "Speaker A", text: "That would solve a real problem for us. Can you put together a proposal so I can bring it to my VP?", startMs: 25000, endMs: 31000 },
       { speakerLabel: "Speaker B", text: "Absolutely, I'll get one over to you this week.", startMs: 31400, endMs: 34500 },
     ],
     overview:
       "Discovery call with Morgan Lee (Director of Sales Ops, Globex Industries), inbound from a webinar. Core pain point is context loss when an account moves from one teammate to another. Morgan asked for a proposal to bring to their VP.",
     keyPoints: [
-      "Primary pain point is handoffs, not note-taking — Anchor's handoff briefing feature is the clear fit.",
+      "Primary pain point is handoffs, not note-taking — Anchor.AI's handoff briefing feature is the clear fit.",
       "Morgan needs a proposal to socialize internally with their VP.",
     ],
     actionItems: [{ text: "Send Globex Industries a proposal deck", owner: "Sam Rivera" }],
@@ -457,7 +457,7 @@ export async function GET(req: NextRequest) {
       { label: "Speaker B", name: "Sam Rivera (you)" },
     ],
     utterances: [
-      { speakerLabel: "Speaker B", text: "Casey, good to catch up — overall, how's the past year with Anchor been for the team?", startMs: 0, endMs: 6000 },
+      { speakerLabel: "Speaker B", text: "Casey, good to catch up — overall, how's the past year with Anchor.AI been for the team?", startMs: 0, endMs: 6000 },
       { speakerLabel: "Speaker A", text: "Genuinely good, no complaints on the product. The one thing is our team shrank from 20 people to about 16 over the year, so I'd like the renewal to reflect that.", startMs: 6400, endMs: 17500 },
       { speakerLabel: "Speaker B", text: "That's fair, and totally doable — I can true the seat count down to 16 for the renewal term.", startMs: 18000, endMs: 25000 },
       { speakerLabel: "Speaker A", text: "Great, that's really all I needed. Send over the updated contract and I can get it signed this week.", startMs: 25400, endMs: 32000 },

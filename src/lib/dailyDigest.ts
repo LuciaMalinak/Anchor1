@@ -54,7 +54,7 @@ export async function buildDailyDigestText(params: {
 
   if (process.env.AUTH_URL) {
     lines.push("");
-    lines.push(`Open Anchor: ${process.env.AUTH_URL}/dashboard`);
+    lines.push(`Open Anchor.AI: ${process.env.AUTH_URL}/dashboard`);
   }
 
   return lines.join("\n");

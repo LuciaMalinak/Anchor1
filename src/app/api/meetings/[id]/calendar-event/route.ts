@@ -43,8 +43,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const result = await createCalendarEvent(session.user.id, {
       title: d.title,
       description: d.sourceQuote
-        ? `Agreed in the call: "${d.sourceQuote}"\n\nSuggested by Anchor.`
-        : "Suggested by Anchor.",
+        ? `Agreed in the call: "${d.sourceQuote}"\n\nSuggested by Anchor.AI.`
+        : "Suggested by Anchor.AI.",
       startISO: start,
       endISO: endISO(start, d.durationMinutes),
       timeZone: safeTimeZone(d.timeZone),

@@ -5,8 +5,8 @@ import type { MetadataRoute } from "next";
 // Anchor icon. Icons come from scripts/generate-brand-assets.mjs.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Anchor",
-    short_name: "Anchor",
+    name: "Anchor.AI",
+    short_name: "Anchor.AI",
     description: "Meeting context that carries forward.",
     id: "/dashboard",
     start_url: "/dashboard",
