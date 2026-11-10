@@ -19,7 +19,7 @@ import {
   userStyleProfiles,
   users,
 } from "@/db/schema";
-import { inspectDesktopRecording } from "@/lib/recall";
+import { inspectDesktopRecording, recallAccountCheck } from "@/lib/recall";
 import { normalizePrefs } from "@/lib/morningBriefPrefs";
 import { hasAccess } from "@/lib/billing";
 
@@ -273,5 +273,6 @@ export async function GET(req: NextRequest) {
       problemCount: meetingRows.reduce((n, m) => n + m.problems.filter((p) => p !== "not on a deal").length, 0),
     });
   }
-  return NextResponse.json({ q, found: people.length, report });
+  const recall = await recallAccountCheck().catch((err) => ({ error: String(err) }));
+  return NextResponse.json({ q, found: people.length, recall, report });
 }

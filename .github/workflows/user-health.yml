@@ -31,6 +31,9 @@ jobs:
           if "error" in d:
               print("Error:", d["error"]); raise SystemExit(1)
           print(f"### {d['found']} match(es) for '{d['q']}' — newest desktop app: {latest}\n")
+          print("Recall.ai account check:\n```json")
+          print(json.dumps(d.get("recall"), indent=2))
+          print("```")
           for r in d["report"]:
               print("```json")
               print(json.dumps(r, indent=2))

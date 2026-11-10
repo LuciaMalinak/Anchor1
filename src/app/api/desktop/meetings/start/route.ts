@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { authenticateBearer } from "@/lib/apiToken";
 import { createSdkUpload } from "@/lib/recall";
+import { settleIfStale } from "@/lib/botReconcile";
 
 // The desktop app's equivalent of /api/meetings/mic/start and
 // /api/meetings/join — called the moment Anchor's desktop app detects a
@@ -43,7 +44,8 @@ export async function POST(req: NextRequest) {
       )
     )
     .limit(1);
-  if (existing) {
+  // An earlier meeting left "live" by mistake doesn't block this one.
+  if (existing && (await settleIfStale(existing.id))) {
     return NextResponse.json(
       { error: "Anchor.AI's already in a live meeting here.", meeting: existing },
       { status: 409 }
@@ -55,10 +57,15 @@ export async function POST(req: NextRequest) {
   try {
     ({ uploadToken, recordingId } = await createSdkUpload());
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Couldn't start a desktop recording with Recall.ai" },
-      { status: 502 }
-    );
+    const message = err instanceof Error ? err.message : "Couldn't start a desktop recording with Recall.ai";
+    // Keep a record of the failed start (shown in Meetings and in the
+    // user-health report) so the reason isn't only in the desktop app's log.
+    await db
+      .insert(meetings)
+      .values({ userId, title, status: "failed", dealId, errorMessage: message })
+      .catch((e) => console.error("[desktop start] couldn't save the failed start:", e));
+    console.error("[desktop start] Recall.ai sdk_upload failed:", message);
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
   const [meeting] = await db

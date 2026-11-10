@@ -397,3 +397,45 @@ export async function inspectDesktopRecording(id: string) {
   const [asRecording, asSdkUpload] = await Promise.all([look("recording"), look("sdk_upload")]);
   return { asRecording, asSdkUpload };
 }
+
+// Support check (src/app/api/cron/user-health): can Anchor.AI's Recall.ai
+// account do the two things joining a call needs right now? Lists the
+// latest bots with how each one ended, and asks for a desktop upload slot
+// the same way /api/desktop/meetings/start does (an unused slot records
+// nothing). Returns Recall's own status codes and error text, never the
+// API key.
+export async function recallAccountCheck() {
+  const out: Record<string, unknown> = { region: REGION, apiKeySet: Boolean(API_KEY) };
+  if (!API_KEY) return out;
+  try {
+    const res = await fetch(`${BASE_URL}/bot/?page_size=8&ordering=-created_at`, { headers: authHeaders() });
+    const text = await res.text();
+    if (!res.ok) {
+      out.listBots = { status: res.status, error: text.slice(0, 500) };
+    } else {
+      const body = JSON.parse(text) as {
+        results?: { id: string; created_at?: string; join_at?: string; bot_name?: string; status_changes?: { code?: string; sub_code?: string | null; message?: string | null }[] }[];
+      };
+      out.latestBots = (body.results ?? []).map((b) => {
+        const last = b.status_changes?.at(-1);
+        return {
+          created: b.created_at?.slice(0, 16),
+          joinAt: b.join_at?.slice(0, 16) ?? null,
+          name: b.bot_name,
+          status: last?.code ?? "unknown",
+          subCode: last?.sub_code ?? null,
+          message: last?.message ?? null,
+        };
+      });
+    }
+  } catch (err) {
+    out.listBots = { error: err instanceof Error ? err.message : String(err) };
+  }
+  try {
+    await createSdkUpload();
+    out.desktopUpload = "ok";
+  } catch (err) {
+    out.desktopUpload = err instanceof Error ? err.message.slice(0, 500) : String(err);
+  }
+  return out;
+}
