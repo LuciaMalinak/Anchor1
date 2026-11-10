@@ -1,0 +1,48 @@
+# Rebuilds a person's lost deals from their recorded calls
+# (src/lib/rebuildDeals.ts). Run it first with "apply" off to preview which
+# deals would be created and which calls go on each; then run it again with
+# "apply" on to create them. Actions -> Rebuild deals -> Run workflow.
+name: Rebuild deals
+
+on:
+  workflow_dispatch:
+    inputs:
+      who:
+        description: "Part of their email (must match one person)"
+        required: true
+      apply:
+        description: "Create the deals (leave off to preview)"
+        type: boolean
+        default: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    env:
+      SITE: ${{ vars.ANCHOR_URL || 'https://anchor-be6o.onrender.com' }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      WHO: ${{ inputs.who }}
+      APPLY: ${{ inputs.apply && '1' || '0' }}
+    steps:
+      - name: Rebuild
+        run: |
+          curl -sS --max-time 300 --retry 2 --retry-all-errors -G -H "x-cron-key: $CRON_SECRET" \
+            --data-urlencode "q=$WHO" --data-urlencode "apply=$APPLY" "$SITE/api/cron/rebuild-deals" > result.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open("result.json"))
+          if "error" in d:
+              print("Error:", d["error"]); raise SystemExit(1)
+          print(f"### {d['mode']} for {d['person']}\n")
+          if d["mode"] == "applied":
+              print(f"Created {d['created']} deal(s), attached {d['attached']} call(s).\n")
+          for deal in d["plan"]["deals"]:
+              where = "existing deal" if deal["existingDealId"] else "new deal"
+              print(f"- **{deal['name']}** ({deal['company'] or 'company unknown'}, {where}): {len(deal['meetingIds'])} call(s)")
+              for t in deal["meetingTitles"]:
+                  print(f"  - {t}")
+          if d["plan"]["skipped"]:
+              print("\nNot put on a deal:")
+              for s in d["plan"]["skipped"]:
+                  print(f"- {s['title']}: {s['reason']}")
+          PY
