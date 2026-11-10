@@ -6,6 +6,7 @@ import { Logo } from "@/components/Logo";
 import { AskAnchorProvider } from "@/components/AskAnchorDock";
 import { PageFade } from "@/components/PageFade";
 import { NavLink } from "@/components/NavLink";
+import { MobileTabBar } from "@/components/MobileTabBar";
 import { db } from "@/db";
 import { teams, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -128,8 +129,10 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen flex-col bg-[#f5f7fb]" style={accentStyle}>
       {/* Navy header, as on the original site and the public homepage —
           a slight gradient and shadow so it sits above the page. */}
-      <header className="sticky top-0 z-20 bg-linear-to-r from-brand-dark via-brand to-brand text-white shadow-[0_1px_0_rgba(255,255,255,0.06),0_4px_16px_-6px_rgba(11,25,48,0.45)]">
-        <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <header
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+        className="sticky top-0 z-20 bg-linear-to-r from-brand-dark via-brand to-brand text-white shadow-[0_1px_0_rgba(255,255,255,0.06),0_4px_16px_-6px_rgba(11,25,48,0.45)]">
+        <div className="flex h-14 w-full items-center justify-between gap-4 px-4 sm:px-6 md:h-16 lg:px-8">
           <div className="flex min-w-0 items-center gap-6 lg:gap-8">
             <Link href="/dashboard" aria-label="Anchor home" className="shrink-0">
               <Logo size="md" tone="light" />
@@ -174,7 +177,9 @@ export default async function DashboardLayout({
               )}
               <span className="hidden font-medium xl:inline">{session?.user?.name || session?.user?.email}</span>
             </Link>
+            {/* On phones, Sign out lives in the bottom bar's More menu. */}
             <form
+              className="hidden md:block"
               action={async () => {
                 "use server";
                 await signOut({ redirectTo: "/" });
@@ -189,19 +194,6 @@ export default async function DashboardLayout({
             </form>
           </div>
         </div>
-        {/* Narrow screens: the same links on their own scrollable row. */}
-        <nav className="flex items-center gap-1 overflow-x-auto border-t border-white/10 px-3 py-2 text-sm font-medium md:hidden">
-          <NavLink href="/dashboard" exact>
-            Home
-          </NavLink>
-          <NavLink href="/dashboard/deals">Deals</NavLink>
-          <NavLink href="/dashboard/insights">Insights</NavLink>
-          <NavLink href="/dashboard/contacts">Contacts</NavLink>
-          <NavLink href="/dashboard/team">Team</NavLink>
-          <NavLink href="/dashboard/integrations">Integrations</NavLink>
-          {isAppOwner(session?.user?.email) && <NavLink href="/dashboard/admin">Admin</NavLink>}
-          {ownsTeam && <NavLink href="/billing">Billing</NavLink>}
-        </nav>
       </header>
       {/* Ask Anchor sits on the right of every page (AskAnchorDock.tsx);
           the page itself fills the rest. */}
@@ -220,12 +212,21 @@ export default async function DashboardLayout({
           />
           <PageFade>{children}</PageFade>
         </main>
+        {/* Phones: app-style tab bar (Home, Deals, Record, Ask, More). */}
+        <MobileTabBar
+          isOwner={isAppOwner(session?.user?.email)}
+          ownsTeam={Boolean(ownsTeam)}
+          signOut={async () => {
+            "use server";
+            await signOut({ redirectTo: "/" });
+          }}
+        />
       </AskAnchorProvider>
       {/* Small, quiet footer on every dashboard page — the site's Terms
           and Privacy links previously only lived on the marketing
           homepage, so someone who signed up straight from a sign-up link
           and never saw that page had no way to find them. */}
-      <footer className="mt-auto border-t border-slate-100 px-6 py-6 text-center text-xs text-slate-400 lg:px-10 2xl:px-16">
+      <footer className="mt-auto hidden border-t border-slate-100 px-6 py-6 text-center text-xs text-slate-400 md:block lg:px-10 2xl:px-16">
         © {new Date().getFullYear()} Anchor ·{" "}
         <Link href="/terms" className="hover:text-slate-600 hover:underline">
           Terms

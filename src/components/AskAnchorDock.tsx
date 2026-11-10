@@ -28,12 +28,14 @@ type Scope = { key: string; endpoint: string; body: Record<string, string>; kind
 type AskAnchorApi = {
   ask: (question: string) => void;
   setLabel: (label: string | null) => void;
+  // Opens the full-screen panel on phones (the "Ask" tab, MobileTabBar.tsx).
+  open: () => void;
 };
 
 const AskAnchorContext = createContext<AskAnchorApi | null>(null);
 
 export function useAskAnchor(): AskAnchorApi {
-  return useContext(AskAnchorContext) ?? { ask: () => {}, setLabel: () => {} };
+  return useContext(AskAnchorContext) ?? { ask: () => {}, setLabel: () => {}, open: () => {} };
 }
 
 // Rendered by a page to name what Ask Anchor is looking at ("Northwind
@@ -186,7 +188,7 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
     [scope]
   );
 
-  const api = useMemo<AskAnchorApi>(() => ({ ask: (q) => void ask(q), setLabel }), [ask]);
+  const api = useMemo<AskAnchorApi>(() => ({ ask: (q) => void ask(q), setLabel, open: () => setSheetOpen(true) }), [ask]);
 
   return (
     <AskAnchorContext.Provider value={api}>
@@ -210,17 +212,24 @@ export function AskAnchorProvider({ children }: { children: ReactNode }) {
                 onOpenPast={(item) => openPast(item)}
               />
             </aside>
-            {/* Narrow screens: a button that opens the same panel as a sheet. */}
+            {/* Tablets: a button that opens the same panel as a sheet. Phones
+                use the Ask tab in the bottom bar instead (MobileTabBar.tsx). */}
             <button
               type="button"
               onClick={() => setSheetOpen(true)}
-              className="fixed bottom-5 right-5 z-30 flex h-14 items-center gap-2 rounded-full bg-[#12294a] px-5 text-sm font-semibold text-white shadow-lg lg:hidden"
+              className="fixed bottom-5 right-5 z-30 hidden h-14 md:flex items-center gap-2 rounded-full bg-[#12294a] px-5 text-sm font-semibold text-white shadow-lg lg:hidden"
             >
               <Sparkle className="h-5 w-5 text-[#f0b48f]" />
               Ask Anchor
             </button>
             {sheetOpen && (
-              <div className="fixed inset-0 z-40 flex flex-col bg-[#0f2340] lg:hidden" role="dialog" aria-modal="true" aria-label="Ask Anchor">
+              <div
+                className="fixed inset-0 z-40 flex flex-col bg-[#0f2340] lg:hidden"
+                style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Ask Anchor"
+              >
                 <DockBody
                   pathname={pathname}
                   scope={scope}
