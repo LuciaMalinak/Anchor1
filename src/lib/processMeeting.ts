@@ -32,6 +32,7 @@ import { learnFromCall } from "./answerPlaybook";
 import { refreshDealReports } from "./industryToolRun";
 import { isIndustryKey } from "./industries";
 import { teamPlaybook } from "./teamSpecialty";
+import { deleteRecallCopy } from "./recall";
 
 // Every Nth memory update re-derives the summary from actual raw history
 // instead of just trusting the current (possibly drifted) summary text —
@@ -437,6 +438,18 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(meetings.id, meetingId));
+
+    // Anchor.AI now has its own permanent copy of this call (R2), so the
+    // recording service's copy is deleted (see deleteRecallCopy). Only
+    // when that copy is in permanent storage: without it, Recall's copy is
+    // what a failed save would be recovered from.
+    if (
+      (meeting.recallBotId || meeting.recallRecordingId) &&
+      isR2Configured() &&
+      meeting.audioStoragePath?.startsWith("meetings/")
+    ) {
+      void deleteRecallCopy(meeting);
+    }
 
     // Anchor trains itself: keep how the team actually answered the
     // client's questions on this call, for the next one (answerPlaybook.ts).
