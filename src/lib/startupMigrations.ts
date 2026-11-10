@@ -7,6 +7,12 @@ import { BASELINE_STATEMENTS } from "@/db/baseline";
 // EXISTS), so running it on every start is harmless. Keep this to
 // additions only: never drop or rename anything here.
 const MIGRATIONS = [
+  // Two-step verification (src/lib/auth/twoFactor.ts).
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "twoFactorSecret" text`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "twoFactorEnabledAt" timestamp`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "twoFactorRecoveryHashes" jsonb`,
+  `ALTER TABLE "session" ADD COLUMN IF NOT EXISTS "twoFactorVerifiedAt" timestamp`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "requireTwoFactor" boolean NOT NULL DEFAULT false`,
   // Failed password sign-ins, for the lockout in src/lib/auth/signInLimit.ts.
   `CREATE TABLE IF NOT EXISTS "sign_in_failure" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

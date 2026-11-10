@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { secondStepPath } from "@/lib/auth/twoFactor";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -17,7 +18,7 @@ export default async function SetPasswordPage({
 }) {
   const session = await auth();
   if (!session?.user?.id) {
-    redirect("/sign-in");
+    redirect((await secondStepPath("/welcome/set-password")) ?? "/sign-in");
   }
 
   // Already set (e.g. they got here via a stale link after doing this

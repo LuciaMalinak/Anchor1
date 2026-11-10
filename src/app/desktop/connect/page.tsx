@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { secondStepPath } from "@/lib/auth/twoFactor";
 import { Logo } from "@/components/Logo";
 import { DesktopConnectClient } from "./DesktopConnectClient";
 
@@ -27,7 +28,7 @@ export default async function DesktopConnectPage({
     if (state) params.set("state", state);
     if (device) params.set("device", device);
     const here = `/desktop/connect${params.size ? `?${params}` : ""}`;
-    redirect(`/sign-in?next=${encodeURIComponent(here)}`);
+    redirect((await secondStepPath(here)) ?? `/sign-in?next=${encodeURIComponent(here)}`);
   }
 
   return (

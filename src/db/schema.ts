@@ -94,6 +94,13 @@ export const users = pgTable("user", {
   // to create one so password sign-in (with "stay signed in") and email
   // sign-in both work afterward. Never the plaintext password itself.
   passwordHash: text("passwordHash"),
+  // Two-step verification (src/lib/auth/twoFactor.ts): the authenticator
+  // app's secret (encrypted), set when setup starts; twoFactorEnabledAt is
+  // set once the person confirms a code, and only then is it enforced.
+  // Recovery codes are kept only as SHA-256 hashes.
+  twoFactorSecret: encryptedText("twoFactorSecret"),
+  twoFactorEnabledAt: timestamp("twoFactorEnabledAt", { mode: "date" }),
+  twoFactorRecoveryHashes: jsonb("twoFactorRecoveryHashes").$type<string[]>(),
   // False (the default, and true for every existing account) means this
   // person sees every deal on their team, same as always. True is set
   // only for someone who joined through a request-to-join link that
@@ -161,6 +168,9 @@ export const sessions = pgTable("session", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   expires: timestamp("expires", { mode: "date" }).notNull(),
+  // When this sign-in passed two-step verification; null means it hasn't
+  // (yet), which only matters for people who have it turned on.
+  twoFactorVerifiedAt: timestamp("twoFactorVerifiedAt", { mode: "date" }),
 });
 
 // When each member last loaded a page of the app — for the admin pages'
@@ -580,6 +590,9 @@ export const teams = pgTable("team", {
   // (every team that existed before billing started, plus any the app
   // owner marks free in Admin). Added by startupMigrations.ts.
   billingExempt: boolean("billingExempt").notNull().default(false),
+  // Set by the team owner: everyone on the team must turn on two-step
+  // verification before using Anchor.AI (src/proxy.ts).
+  requireTwoFactor: boolean("requireTwoFactor").notNull().default(false),
   // Stripe's subscription status: "trialing" | "active" | "past_due" |
   // "canceled" | "unpaid" | "incomplete" | … Null = never subscribed.
   billingStatus: text("billingStatus"),

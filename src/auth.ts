@@ -169,6 +169,16 @@ export const {
       return true;
     },
     session({ session, user }) {
+      // Two-step verification turned on but not done yet for this sign-in:
+      // nobody is signed in as far as every page and API is concerned,
+      // until /sign-in/two-factor marks the session verified.
+      const u = user as typeof user & { twoFactorEnabledAt?: Date | null };
+      const s = session as typeof session & { twoFactorVerifiedAt?: Date | null };
+      if (u.twoFactorEnabledAt && !s.twoFactorVerifiedAt) {
+        // user: undefined explicitly: next-auth's server-side auth() adds
+        // the database user back unless the session sets the key itself.
+        return { expires: session.expires, user: undefined } as unknown as typeof session;
+      }
       if (session.user) {
         session.user.id = user.id;
         // Just a boolean — never the hash itself — so the proxy can gate

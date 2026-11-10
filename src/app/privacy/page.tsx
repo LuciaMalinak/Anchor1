@@ -161,6 +161,11 @@ export default function PrivacyPage() {
               <B>Access inside your team</B>: team leaders choose who can see which deals.
             </li>
             <li>
+              <B>Sign-in protection</B>: two-step verification with an authenticator app, which a
+              team owner can require for everyone; sign-in with company Microsoft or Google
+              accounts; and repeated wrong passwords lock sign-in for a while.
+            </li>
+            <li>
               <B>Protection against loss</B>: deleted deals go to a recoverable trash rather than
               being erased right away, changes that remove data are logged, and the database is
               backed up every night.

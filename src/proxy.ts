@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { sessions, users } from "@/db/schema";
+import { sessions, teams, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { sessionCookieName, absoluteUrl } from "@/lib/auth/password";
 import { recordSeen } from "@/lib/lastSeen";
@@ -24,9 +24,17 @@ export default async function proxy(req: NextRequest) {
   }
 
   const [row] = await db
-    .select({ userId: sessions.userId, expires: sessions.expires, passwordHash: users.passwordHash })
+    .select({
+      userId: sessions.userId,
+      expires: sessions.expires,
+      passwordHash: users.passwordHash,
+      twoFactorEnabledAt: users.twoFactorEnabledAt,
+      twoFactorVerifiedAt: sessions.twoFactorVerifiedAt,
+      requireTwoFactor: teams.requireTwoFactor,
+    })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
+    .leftJoin(teams, eq(teams.id, users.teamId))
     .where(eq(sessions.sessionToken, token))
     .limit(1);
 
@@ -34,11 +42,25 @@ export default async function proxy(req: NextRequest) {
     return NextResponse.redirect(signInUrl);
   }
 
+  // Two-step verification: on for this person but not done for this
+  // sign-in yet -> enter the code first (src/lib/auth/twoFactor.ts).
+  if (row.twoFactorEnabledAt && !row.twoFactorVerifiedAt) {
+    const url = absoluteUrl("/sign-in/two-factor", req);
+    url.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
+    return NextResponse.redirect(url);
+  }
+
   // Everyone's guided to set a password right after their first sign-in
   // (whichever method got them in) — sent here instead of into the
   // dashboard until they have. See src/app/welcome/set-password/page.tsx.
   if (!row.passwordHash) {
     return NextResponse.redirect(absoluteUrl("/welcome/set-password", req));
+  }
+
+  // Their team requires two-step verification and they haven't turned it
+  // on: set it up before anything else.
+  if (row.requireTwoFactor && !row.twoFactorEnabledAt) {
+    return NextResponse.redirect(absoluteUrl("/welcome/two-factor", req));
   }
 
   // For the admin pages' "last used Anchor" — throttled, never blocks.
