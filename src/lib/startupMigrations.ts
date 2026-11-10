@@ -7,6 +7,15 @@ import { BASELINE_STATEMENTS } from "@/db/baseline";
 // EXISTS), so running it on every start is harmless. Keep this to
 // additions only: never drop or rename anything here.
 const MIGRATIONS = [
+  // Failed password sign-ins, for the lockout in src/lib/auth/signInLimit.ts.
+  `CREATE TABLE IF NOT EXISTS "sign_in_failure" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "email" text NOT NULL,
+    "ip" text,
+    "createdAt" timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "sign_in_failure_email_idx" ON "sign_in_failure" ("email", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "sign_in_failure_ip_idx" ON "sign_in_failure" ("ip", "createdAt")`,
   // Record of deleted deals, removed people and moved accounts
   // (src/lib/dataChangeLog.ts).
   `CREATE TABLE IF NOT EXISTS "data_change_log" (

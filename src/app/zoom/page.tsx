@@ -152,8 +152,8 @@ export default function ZoomGuidePage() {
         <Section id="help" title="Help">
           <p>
             Questions or problems with the Zoom app? Email{" "}
-            <a href="mailto:lucia.malinak@gmail.com" className="text-brand hover:underline">
-              lucia.malinak@gmail.com
+            <a href="mailto:lucia@anchortechnolgies.com" className="text-brand hover:underline">
+              lucia@anchortechnolgies.com
             </a>{" "}
             and we&apos;ll get back to you within one business day.
           </p>

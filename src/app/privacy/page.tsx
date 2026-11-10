@@ -6,7 +6,7 @@ export const metadata = {
 };
 
 const EFFECTIVE_DATE = "November 10, 2026";
-const CONTACT_EMAIL = "lucia.malinak@gmail.com";
+const CONTACT_EMAIL = "lucia@anchortechnolgies.com";
 
 function Section({ id, title, children }: { id?: string; title: string; children: React.ReactNode }) {
   return (
