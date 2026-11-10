@@ -8,6 +8,9 @@ export async function register() {
   // Encrypts any connected-tool token still stored as plain text.
   const { encryptStoredTokens } = await import("@/lib/encryptStoredTokens");
   await encryptStoredTokens().catch((err) => console.error("[encryptStoredTokens] failed:", err));
+  // Puts anyone who lost their team back on the team holding their deals.
+  const { reuniteAll } = await import("@/lib/reuniteTeams");
+  await reuniteAll().catch((err) => console.error("[reuniteTeams] failed:", err));
   startStuckMeetingSweep();
   if (process.env.NODE_ENV === "production") startMorningBriefSchedule();
 }
