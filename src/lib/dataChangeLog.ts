@@ -12,6 +12,7 @@ export type DataChange = {
     | "user_restored"
     | "deals_rebuilt"
     | "deals_rebuild_preview"
+    | "deals_restored_from_backup"
     | "meeting_deleted"
     | "file_deleted"
     | "message_deleted"

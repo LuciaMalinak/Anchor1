@@ -1,0 +1,51 @@
+# Puts a person's lost deals back from a recovered copy of the database
+# (src/lib/restoreDeals.ts). First restore a copy in Render (database ->
+# Recovery -> point-in-time recovery) and set its Internal Database URL as
+# RESTORE_DATABASE_URL on the web service. Then run this with "apply" off
+# to preview, and again with "apply" on. It only adds what's missing.
+name: Restore deals from backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      who:
+        description: "Part of their email (must match one person)"
+        required: true
+      apply:
+        description: "Put the deals back (leave off to preview)"
+        type: boolean
+        default: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    env:
+      SITE: ${{ vars.ANCHOR_URL || 'https://anchor-be6o.onrender.com' }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      WHO: ${{ inputs.who }}
+      APPLY: ${{ inputs.apply && '1' || '0' }}
+    steps:
+      - name: Restore
+        run: |
+          curl -sS --max-time 300 -G -H "x-cron-key: $CRON_SECRET" \
+            --data-urlencode "q=$WHO" --data-urlencode "apply=$APPLY" "$SITE/api/cron/restore-deals" > result.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open("result.json"))
+          if "error" in d:
+              print("Error:", d["error"]); raise SystemExit(1)
+          print(f"### {d['mode']} for {d['person']}\n")
+          if d["mode"] == "applied":
+              print(f"Put back {d['deals']} deal(s), re-linked {d['callsRelinked']} call(s).")
+              for t, n in d["rows"].items():
+                  print(f"- {t}: {n}")
+          else:
+              p = d["plan"]
+              print(f"Copy is of: {p['copyTakenOf']} · team: {p['team']}\n")
+              print(f"{len(p['deals'])} deal(s) missing from the live database:")
+              for x in p["deals"]:
+                  print(f"- **{x['name']}** ({x['stage'] or 'no stage'}, created {x['created']})")
+              print(f"\nCalls to re-link: {p['callsToRelink']}")
+              for t, n in p["rowsByTable"].items():
+                  print(f"- {t}: {n} row(s)")
+          PY
