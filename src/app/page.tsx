@@ -485,6 +485,9 @@ export default async function Home() {
               <Link href="/privacy" className="hover:underline">
                 Privacy
               </Link>
+              <Link href="/security" className="hover:underline">
+                Security
+              </Link>
               <Link href="/sign-in" className="hover:underline">
                 Sign in
               </Link>
