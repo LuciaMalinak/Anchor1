@@ -860,6 +860,9 @@ export const integrationConnections = pgTable(
     // Slack only: the person's own user token (from user_scope), for
     // reading their direct messages. accessToken stays the bot token.
     userAccessToken: text("userAccessToken"),
+    // The provider's own id for the connected account (Zoom only for now),
+    // so a "user removed the app" notice can find the right connection.
+    externalAccountId: text("externalAccountId"),
     connectedAt: timestamp("connectedAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },

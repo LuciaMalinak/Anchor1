@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { integrationConnections } from "@/db/schema";
 import { PROVIDERS, isProviderKey } from "@/lib/integrations/config";
-import { fetchIdentityLabel } from "@/lib/integrations/identity";
+import { fetchIdentityLabel, fetchZoomUserId } from "@/lib/integrations/identity";
 import { safeReturnTo } from "@/lib/integrations/returnTo";
 
 function baseUrl(req: NextRequest): string {
@@ -102,6 +102,7 @@ export async function GET(
         ? new Date(Date.now() + tokenBody.expires_in * 1000)
         : null;
     const identityLabel = await fetchIdentityLabel(provider, accessToken, tokenBody);
+    const externalAccountId = provider === "zoom" ? await fetchZoomUserId(accessToken) : null;
     // Only Salesforce's token response carries this (a per-org API base
     // URL) — undefined/absent for every other provider, so this is a
     // harmless null for them.
@@ -144,12 +145,14 @@ export async function GET(
         scope: typeof tokenBody.scope === "string" ? tokenBody.scope : cfg.scopes.join(" "),
         instanceUrl,
         userAccessToken,
+        externalAccountId,
       })
       .onConflictDoUpdate({
         target: [integrationConnections.userId, integrationConnections.provider],
         set: {
           // A failed lookup this time mustn't wipe the one saved before.
           ...(identityLabel ? { externalAccountEmail: identityLabel } : {}),
+          ...(externalAccountId ? { externalAccountId } : {}),
           accessToken,
           ...refreshTokenUpdate,
           ...userTokenUpdate,
