@@ -11,7 +11,7 @@ import { SaveDraftButton } from "./SaveDraftButton";
 import { MeetingDecision } from "@/components/MeetingDecision";
 
 export const metadata: Metadata = {
-  title: "Your morning brief — Anchor",
+  title: "Your morning brief — Anchor.AI",
   robots: { index: false, follow: false },
 };
 
@@ -38,7 +38,7 @@ export default async function BriefPage({
           <h1 className="text-lg font-semibold text-brand">This link has expired</h1>
           <p className="mt-2 text-sm text-slate-600">Brief links work for 3 days. Tomorrow&apos;s brief will have a fresh one.</p>
           <Link href="/dashboard" className="mt-4 inline-block text-sm font-semibold text-brand hover:underline">
-            Open Anchor
+            Open Anchor.AI
           </Link>
         </div>
       </main>
@@ -142,10 +142,10 @@ export default async function BriefPage({
               {brief.emailsOff
                 ? "Emails are turned off in your brief settings."
                 : brief.emailError
-                  ? `Couldn't read your Gmail this time (${brief.emailError}). Anchor tries again with the next brief.`
+                  ? `Couldn't read your Gmail this time (${brief.emailError}). Anchor.AI tries again with the next brief.`
                   : brief.googleConnected
                     ? "Nothing waiting on you. Nice."
-                    : "Connect Google on Anchor's Integrations page to see emails here."}
+                    : "Connect Google on Anchor.AI's Integrations page to see emails here."}
             </p>
           ) : (
             <ul className="mt-3 flex flex-col gap-3">
@@ -206,7 +206,7 @@ export default async function BriefPage({
         <p className="text-center text-xs text-slate-400">
           Change the time, channel or what&apos;s included on your{" "}
           <Link href="/dashboard/profile" className="underline">
-            Anchor profile
+            Anchor.AI profile
           </Link>
           .
         </p>

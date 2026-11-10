@@ -150,11 +150,11 @@ export default async function MeetingDetailPage({
             hour: "numeric",
             minute: "2-digit",
           })} — nothing to do until then.`
-        : "Waiting for Anchor to join the call…",
+        : "Waiting for Anchor.AI to join the call…",
       recording: "Recording the call — this will move on automatically once it ends.",
       uploaded: "Queued for transcription…",
       transcribing: "Transcribing the recording…",
-      summarizing: "Summarizing and updating what Anchor knows about the people in it…",
+      summarizing: "Summarizing and updating what Anchor.AI knows about the people in it…",
     };
 
     return (
@@ -408,7 +408,7 @@ export default async function MeetingDetailPage({
       {askedDuringCall.length > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="text-sm font-medium text-slate-900">Questions they asked</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Asked during the call, with the answer Anchor suggested.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Asked during the call, with the answer Anchor.AI suggested.</p>
           <ul className="mt-3 flex flex-col gap-3">
             {askedDuringCall.map((q) => (
               <li key={q.askedAt} className="text-sm">

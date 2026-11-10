@@ -149,7 +149,7 @@ let downloadedUpdateVersion: string | null = null;
 function installUpdateWhenIdle() {
   if (!downloadedUpdateVersion) return;
   if (activeRecordings.size > 0 || startsInFlight.size > 0) return;
-  log(`Restarting to finish updating to Anchor Desktop ${downloadedUpdateVersion} …`);
+  log(`Restarting to finish updating to Anchor.AI Desktop ${downloadedUpdateVersion} …`);
   const windowWasVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
   saveConfig({ ...loadConfig(), restartedForUpdate: { windowWasVisible } });
   isQuitting = true;
@@ -165,7 +165,7 @@ function initAutoUpdate() {
   });
   autoUpdater.on("update-downloaded", (info) => {
     downloadedUpdateVersion = info.version;
-    log(`Anchor Desktop ${info.version} downloaded — installing as soon as no call is being recorded.`);
+    log(`Anchor.AI Desktop ${info.version} downloaded — installing as soon as no call is being recorded.`);
     installUpdateWhenIdle();
   });
   setInterval(installUpdateWhenIdle, INSTALL_RETRY_INTERVAL_MS);
@@ -200,7 +200,7 @@ function isAllowedApiBase(candidate: string): boolean {
 function getApi(): AnchorApi {
   const config = loadConfig();
   if (!config.token) {
-    throw new Error("No Anchor desktop token saved yet — paste one in from the Integrations page first.");
+    throw new Error("No Anchor.AI desktop token saved yet — paste one in from the Integrations page first.");
   }
   return new AnchorApi(config.apiBase || DEFAULT_API_BASE, config.token, app.getVersion());
 }
@@ -250,7 +250,7 @@ async function stopRecordingFor(windowId: string) {
       // as a log line rather than throwing, since the audio will
       // still reach Anchor via Recall's webhook once it finishes
       // uploading even if this particular confirmation call failed.
-      log(`Couldn't confirm stop with Anchor: ${err instanceof Error ? err.message : err}`);
+      log(`Couldn't confirm stop with Anchor.AI: ${err instanceof Error ? err.message : err}`);
     });
   }
 }
@@ -280,19 +280,19 @@ function meetingTitleFromWindow(meeting: DetectedCall): string {
 
 async function recordBrowserCall(meeting: DetectedCall) {
   if (sdkDetectedWindowIds.size > 0 || recordingWindowIds.size > 0 || startsInFlight.size > 0) {
-    log(`Not recording the ${meeting.platform} call in ${meeting.where} separately: Anchor already found or is recording a call.`);
+    log(`Not recording the ${meeting.platform} call in ${meeting.where} separately: Anchor.AI already found or is recording a call.`);
     return;
   }
   if (!sdkReady) {
     const reason = sdkError ?? "the recording engine hasn't started";
     log(`Can't record the ${meeting.platform} call in ${meeting.where}: ${reason}`);
-    notify(`Anchor found your ${meeting.platform} call but can't record it`, reason);
+    notify(`Anchor.AI found your ${meeting.platform} call but can't record it`, reason);
     showWindow();
     return;
   }
   if (!loadConfig().token) {
-    log(`Didn't record the ${meeting.platform} call in ${meeting.where}: Anchor Desktop isn't signed in.`);
-    notify("Anchor didn't record this call", "Sign in to Anchor Desktop so it can record and coach your calls.");
+    log(`Didn't record the ${meeting.platform} call in ${meeting.where}: Anchor.AI Desktop isn't signed in.`);
+    notify("Anchor.AI didn't record this call", "Sign in to Anchor.AI Desktop so it can record and coach your calls.");
     showWindow();
     return;
   }
@@ -304,7 +304,7 @@ async function recordBrowserCall(meeting: DetectedCall) {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     log(`Couldn't prepare audio recording for the ${meeting.platform} call: ${reason}`);
-    notify("Anchor couldn't record this call", reason);
+    notify("Anchor.AI couldn't record this call", reason);
     return;
   }
   browserCallWindowId = windowId;
@@ -317,7 +317,7 @@ async function recordBrowserCall(meeting: DetectedCall) {
     const reason = err instanceof Error ? err.message : String(err);
     log(`Couldn't auto-start recording: ${reason}`);
     hideOverlayFor(windowId);
-    notify("Anchor couldn't record this call", reason);
+    notify("Anchor.AI couldn't record this call", reason);
   }
 }
 
@@ -328,7 +328,7 @@ async function stopBrowserCall(meeting: DetectedCall) {
   log(`Stopping the recording of the ${meeting.platform} call in ${meeting.where} …`);
   try {
     await stopRecordingFor(windowId);
-    log("Stopped. Anchor is processing the recording.");
+    log("Stopped. Anchor.AI is processing the recording.");
   } catch (err) {
     log(`Couldn't stop the recording: ${err instanceof Error ? err.message : err}`);
   }
@@ -376,7 +376,7 @@ async function beginRecordingUnguarded(windowId: string, title: string): Promise
     activeRecordings.delete(windowId);
     await api.stopMeeting(meeting.id, { failed: true }).catch((cleanupErr) => {
       log(
-        `Also couldn't mark the failed meeting as failed on Anchor's side: ${cleanupErr instanceof Error ? cleanupErr.message : cleanupErr}`
+        `Also couldn't mark the failed meeting as failed on Anchor.AI's side: ${cleanupErr instanceof Error ? cleanupErr.message : cleanupErr}`
       );
     });
     throw err;
@@ -482,7 +482,7 @@ let overlayShowing: { meetingId: string } | { pendingWindowId: string } | null =
 function showOverlay(meetingId: string) {
   const config = loadConfig();
   if (!config.token) {
-    log("Recording started but no Anchor token is saved yet — can't show the live coaching overlay.");
+    log("Recording started but no Anchor.AI token is saved yet — can't show the live coaching overlay.");
     return;
   }
   const apiBase = config.apiBase || DEFAULT_API_BASE;
@@ -527,7 +527,7 @@ function showOverlayPending(windowId: string, title: string) {
     .dot{width:9px;height:9px;border-radius:50%;background:#34d399;animation:p 1.2s infinite}
     @keyframes p{50%{opacity:.3}}
   </style></head><body>
-    <div class="brand"><svg width="20" height="20" viewBox="0 0 512 512" aria-hidden="true"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="256" cy="92" r="38" stroke="#B4531F" stroke-width="28"/><line x1="256" y1="160" x2="256" y2="430" stroke="#fff" stroke-width="34"/><line x1="164" y1="196" x2="348" y2="196" stroke="#fff" stroke-width="34"/><path d="M104 300 C 112 392 180 446 256 446 C 332 446 400 392 408 300" stroke="#fff" stroke-width="34"/></g><g fill="#fff"><path d="M70 318 L104 252 L140 318 Z"/><path d="M372 318 L408 252 L442 318 Z"/></g></svg>Anchor</div>
+    <div class="brand"><svg width="20" height="20" viewBox="0 0 512 512" aria-hidden="true"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="256" cy="92" r="38" stroke="#B4531F" stroke-width="28"/><line x1="256" y1="160" x2="256" y2="430" stroke="#fff" stroke-width="34"/><line x1="164" y1="196" x2="348" y2="196" stroke="#fff" stroke-width="34"/><path d="M104 300 C 112 392 180 446 256 446 C 332 446 400 392 408 300" stroke="#fff" stroke-width="34"/></g><g fill="#fff"><path d="M70 318 L104 252 L140 318 Z"/><path d="M372 318 L408 252 L442 318 Z"/></g></svg>Anchor.AI</div>
     <h1><span class="dot"></span>Call detected</h1>
     <p class="title">${escapeHtml(title)}</p>
     <p>Starting the recording and live coaching…</p>
@@ -596,7 +596,7 @@ function startLiveSuggestionsPolling() {
           // Stop pressed on the website (live panel / Focus window).
           if (suggestions.stopRequested && !stopsFromWeb.has(windowId)) {
             stopsFromWeb.add(windowId);
-            log(`Stopping the recording of "${active.title ?? "this call"}" — Stop was pressed on Anchor's website.`);
+            log(`Stopping the recording of "${active.title ?? "this call"}" — Stop was pressed on Anchor.AI's website.`);
             stopRecordingFor(windowId)
               .catch((err) => log(`Couldn't stop the recording: ${err instanceof Error ? err.message : err}`))
               .finally(() => setTimeout(() => stopsFromWeb.delete(windowId), 60_000));
@@ -685,7 +685,7 @@ async function initSdk() {
   if (recallApiUrl) {
     log(`Using Recall.ai region endpoint: ${recallApiUrl}`);
   } else {
-    log("Couldn't fetch Anchor's Recall.ai region — falling back to the SDK's default, which may cause 'Invalid upload token' errors if it doesn't match Anchor's account region.");
+    log("Couldn't fetch Anchor.AI's Recall.ai region — falling back to the SDK's default, which may cause 'Invalid upload token' errors if it doesn't match Anchor.AI's account region.");
   }
   // The SDK records through a native program (agent-windows.exe on
   // Windows) that npm only downloads for the platform it runs on, so a
@@ -695,7 +695,7 @@ async function initSdk() {
   const missingEngine = missingRecordingEngine();
   if (missingEngine) {
     throw new Error(
-      `this copy of Anchor Desktop is missing its recording engine (${missingEngine}). Download and install Anchor Desktop again from Anchor's Integrations page.`
+      `this copy of Anchor.AI Desktop is missing its recording engine (${missingEngine}). Download and install Anchor.AI Desktop again from Anchor.AI's Integrations page.`
     );
   }
   await RecallAiSdk.init({ apiUrl: recallApiUrl, acquirePermissionsOnStartup: [] });
@@ -715,7 +715,7 @@ async function initSdk() {
     log(`Meeting detected: ${title} — starting to record automatically`);
     send("meeting-detected", evt.window);
     if (!loadConfig().token) {
-      notify("Anchor didn't record this call", "Sign in to Anchor Desktop so it can record and coach your calls.");
+      notify("Anchor.AI didn't record this call", "Sign in to Anchor.AI Desktop so it can record and coach your calls.");
       showWindow();
       return;
     }
@@ -739,7 +739,7 @@ async function initSdk() {
       const reason = err instanceof Error ? err.message : String(err);
       log(`Couldn't auto-start recording: ${reason}`);
       hideOverlayFor(evt.window.id);
-      notify("Anchor couldn't record this call", reason);
+      notify("Anchor.AI couldn't record this call", reason);
     });
   });
 
@@ -775,7 +775,7 @@ async function initSdk() {
       // Shouldn't normally happen — beginRecording records this before
       // ever calling RecallAiSdk.startRecording (see its comment) — but
       // fall back quietly rather than throwing if it ever does.
-      log("Recording started but no Anchor meeting is tracked for this window yet — overlay not shown.");
+      log("Recording started but no Anchor.AI meeting is tracked for this window yet — overlay not shown.");
     }
   });
 
@@ -799,7 +799,7 @@ async function initSdk() {
       try {
         getApi()
           .stopMeeting(endedRecording.meetingId)
-          .catch((err) => log(`Couldn't tell Anchor the call ended: ${err instanceof Error ? err.message : err}`));
+          .catch((err) => log(`Couldn't tell Anchor.AI the call ended: ${err instanceof Error ? err.message : err}`));
       } catch {
         // No token saved — nothing to tell.
       }
@@ -1077,7 +1077,7 @@ async function startSignIn() {
   url.searchParams.set("state", state);
   url.searchParams.set("device", os.hostname().replace(/\.local$/i, ""));
   await shell.openExternal(url.toString());
-  log("Opened Anchor in your browser — sign in there and this app connects automatically.");
+  log("Opened Anchor.AI in your browser — sign in there and this app connects automatically.");
 }
 
 // Which Anchor account a token belongs to (src/app/api/desktop/me), or
@@ -1119,7 +1119,7 @@ async function handleDeepLink(url: string) {
 
   const token = parsed.searchParams.get("token");
   if (!token) {
-    log("Opened an Anchor Desktop link, but it didn't include a token.");
+    log("Opened an Anchor.AI Desktop link, but it didn't include a token.");
     return;
   }
   // Without validating apiBase against a known host, a malicious
@@ -1131,7 +1131,7 @@ async function handleDeepLink(url: string) {
   const requestedApiBase = parsed.searchParams.get("apiBase");
   const apiBase = requestedApiBase && isAllowedApiBase(requestedApiBase) ? requestedApiBase : DEFAULT_API_BASE;
   if (requestedApiBase && requestedApiBase !== apiBase) {
-    log(`Ignoring untrusted apiBase in connect link ("${requestedApiBase}") — using the default Anchor server instead.`);
+    log(`Ignoring untrusted apiBase in connect link ("${requestedApiBase}") — using the default Anchor.AI server instead.`);
   }
 
   const config = loadConfig();
@@ -1143,7 +1143,7 @@ async function handleDeepLink(url: string) {
 
   const email = await fetchAccountEmail(apiBase, token);
   if (!email) {
-    log("That connect link didn't work — its token was rejected by Anchor. Try signing in again.");
+    log("That connect link didn't work — its token was rejected by Anchor.AI. Try signing in again.");
     showWindow();
     return;
   }
@@ -1155,7 +1155,7 @@ async function handleDeepLink(url: string) {
       buttons: ["Connect", "Cancel"],
       defaultId: 0,
       cancelId: 1,
-      message: `Connect Anchor Desktop to ${email}?`,
+      message: `Connect Anchor.AI Desktop to ${email}?`,
       detail: config.token
         ? `This replaces the account it's connected to now${config.accountEmail ? ` (${config.accountEmail})` : ""}. Your calls will be recorded into ${email}.`
         : `Your calls will be recorded into ${email}.`,
@@ -1286,7 +1286,7 @@ function createWindow(show = true) {
     minWidth: 460,
     minHeight: 540,
     backgroundColor: "#f4f6f9",
-    title: "Anchor Desktop",
+    title: "Anchor.AI Desktop",
     show,
     ...(isMac
       ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 18, y: 19 } }
@@ -1342,7 +1342,7 @@ function createTray() {
   const icon = nativeImage.createFromPath(iconPath);
   if (isMac) icon.setTemplateImage(true);
   tray = new Tray(icon);
-  tray.setToolTip("Anchor Desktop — watching for Zoom, Teams, and Meet calls");
+  tray.setToolTip("Anchor.AI Desktop — watching for Zoom, Teams, and Meet calls");
   refreshTrayMenu();
   tray.on("click", showWindow);
 }
@@ -1357,7 +1357,7 @@ function enableLaunchAtLogin() {
   // doesn't start two copies at login.
   if (process.platform === "win32") app.setLoginItemSettings({ openAtLogin: false, name: "electron.app.Anchor Desktop" });
   if (canUseBackgroundAgent()) {
-    if (installBackgroundAgent()) log("Set Anchor Desktop to start in the background at login.");
+    if (installBackgroundAgent()) log("Set Anchor.AI Desktop to start in the background at login.");
     if (app.getLoginItemSettings().openAtLogin) app.setLoginItemSettings({ openAtLogin: false });
     void loadBackgroundAgentNow().then((msg) => msg && log(msg));
   } else if (!app.getLoginItemSettings({ args: [BACKGROUND_ARG] }).openAtLogin) {
@@ -1383,7 +1383,7 @@ function refreshTrayMenu() {
   const openAtLogin = launchAtLoginEnabled();
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "Open Anchor Desktop", click: showWindow },
+      { label: "Open Anchor.AI Desktop", click: showWindow },
       { type: "separator" },
       {
         // Starts with the computer, and starts again by itself if it's
@@ -1406,7 +1406,7 @@ function refreshTrayMenu() {
       },
       { type: "separator" },
       {
-        label: openAtLogin ? "Quit for now (starts again in a few minutes)" : "Quit Anchor Desktop",
+        label: openAtLogin ? "Quit for now (starts again in a few minutes)" : "Quit Anchor.AI Desktop",
         click: () => {
           isQuitting = true;
           app.quit();
@@ -1511,7 +1511,7 @@ if (!gotSingleInstanceLock) {
     const updateRestart = loadConfig().restartedForUpdate;
     if (updateRestart) {
       saveConfig({ ...loadConfig(), restartedForUpdate: null });
-      log(`Updated to Anchor Desktop ${app.getVersion()}.`);
+      log(`Updated to Anchor.AI Desktop ${app.getVersion()}.`);
     }
     const showOnStart = updateRestart ? updateRestart.windowWasVisible : !launchedInBackground;
     createWindow(showOnStart);
@@ -1548,7 +1548,7 @@ if (!gotSingleInstanceLock) {
     startServerKeepAwake();
     initAutoUpdate();
 
-    log(`Anchor Desktop ${app.getVersion()} started.`);
+    log(`Anchor.AI Desktop ${app.getVersion()} started.`);
     try {
       await initSdk();
       sdkReady = true;

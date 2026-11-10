@@ -34,7 +34,7 @@ export default async function SpecialtyPage() {
       <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-xl font-semibold text-brand">Your Anchor</h1>
-          <p className="text-sm text-slate-500">An Anchor built for exactly what your company does.</p>
+          <p className="text-sm text-slate-500">An Anchor.AI built for exactly what your company does.</p>
         </div>
         <CompanyContextBox />
       </div>
@@ -128,7 +128,7 @@ export default async function SpecialtyPage() {
 
       {p.pains.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold text-brand">What slows you down, and what Anchor does about it</h2>
+          <h2 className="text-lg font-semibold text-brand">What slows you down, and what Anchor.AI does about it</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             {p.pains.map((x) => (
               <div key={x.pain} className="rounded-xl border border-slate-200 border-t-[3px] border-t-accent bg-white p-5">
@@ -179,7 +179,7 @@ export default async function SpecialtyPage() {
         </div>
         <div>
           <h2 className="text-lg font-semibold text-brand">Speaks your language</h2>
-          <p className="mt-1 text-sm text-slate-500">Terms Anchor gets right in your transcripts and answers.</p>
+          <p className="mt-1 text-sm text-slate-500">Terms Anchor.AI gets right in your transcripts and answers.</p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {p.vocabulary.map((v) => (
               <span key={v} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
@@ -194,7 +194,7 @@ export default async function SpecialtyPage() {
         Built {new Date(sp.generatedAt).toLocaleDateString()} from {sp.website ? sp.website.replace(/^https?:\/\//, "") : "your description"}.
         {" "}
         <Link href="/dashboard/profile" className="font-medium text-brand hover:underline">
-          Give Anchor more context
+          Give Anchor.AI more context
         </Link>
         {" "}Anchor flags rule-related moments to help you; it isn&apos;t legal or compliance advice.
       </p>

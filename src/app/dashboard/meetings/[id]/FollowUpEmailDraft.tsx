@@ -88,7 +88,7 @@ export function FollowUpEmailDraft({
       if (res.status === 403 && responseBody.connectUrl) {
         if (afterPermission) {
           throw new Error(
-            "Anchor needs permission to create Gmail drafts. Click Save to Gmail drafts and allow it on Google's screen."
+            "Anchor.AI needs permission to create Gmail drafts. Click Save to Gmail drafts and allow it on Google's screen."
           );
         }
         // First use: Google asks for Gmail permission, then brings them

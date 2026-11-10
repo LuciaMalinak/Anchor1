@@ -46,7 +46,7 @@ export async function buildDealToolContext(deal: typeof deals.$inferSelect): Pro
   if (deal.primaryContactName) {
     parts.push(`Main contact: ${deal.primaryContactName}${deal.primaryContactRole ? `, ${deal.primaryContactRole}` : ""}.`);
   }
-  if (deal.memory) parts.push(`What Anchor remembers: ${clip(deal.memory, 1500)}`);
+  if (deal.memory) parts.push(`What Anchor.AI remembers: ${clip(deal.memory, 1500)}`);
   if (deal.notes) parts.push(`Rep's notes: ${clip(deal.notes, 800)}`);
   if (deal.decisionBoundaries) parts.push(`Can decide on their own: ${clip(deal.decisionBoundaries, 400)}`);
   if (people.length) {

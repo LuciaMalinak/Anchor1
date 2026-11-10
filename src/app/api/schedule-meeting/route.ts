@@ -85,7 +85,7 @@ function source(v: unknown): Source | null {
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   const userId = await briefActor(q.get("token"));
-  if (!userId) return NextResponse.json({ error: "Sign in to Anchor first." }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Sign in to Anchor.AI first." }, { status: 401 });
   const src = source(q.get("source"));
   const found = src ? await load(userId, src, q.get("id") ?? "") : null;
   if (!found) return NextResponse.json({ error: "That meeting request isn't here anymore." }, { status: 404 });
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const userId = await briefActor(body.token);
-  if (!userId) return NextResponse.json({ error: "Sign in to Anchor first." }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Sign in to Anchor.AI first." }, { status: 401 });
   const src = source(body.source);
   const found = src ? await load(userId, src, String(body.id ?? "")) : null;
   if (!found) return NextResponse.json({ error: "That meeting request isn't here anymore." }, { status: 404 });
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
     const result = await scheduleMeeting(userId, {
       platform,
       title,
-      description: `${found.draft.reason}\n\nSet up with Anchor.`,
+      description: `${found.draft.reason}\n\nSet up with Anchor.AI.`,
       start,
       durationMinutes,
       timeZone,
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     if (err instanceof NeedsGooglePermissionError) {
       return NextResponse.json(
         {
-          error: "Anchor needs permission to add events to your Google Calendar.",
+          error: "Anchor.AI needs permission to add events to your Google Calendar.",
           connectUrl: `/api/integrations/google/connect?add=${err.scopeKey}&returnTo=${encodeURIComponent(returnTo)}`,
         },
         { status: 403 }

@@ -41,7 +41,7 @@ export function WelcomeSplash({ name, onDone }: { name: string | null; onDone: (
       >
         <AnchorMark size={64} tone="light" />
         <div className="flex flex-col items-center gap-1">
-          <span className="text-2xl font-semibold tracking-tight text-white">Anchor</span>
+          <span className="text-2xl font-semibold tracking-tight text-white">Anchor.AI</span>
           <span className="text-sm text-white/70">
             {name ? `Welcome, ${name}` : "Welcome"} — you&apos;re in.
           </span>

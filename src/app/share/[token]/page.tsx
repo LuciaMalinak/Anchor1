@@ -8,7 +8,7 @@ import { Logo } from "@/components/Logo";
 import { LocalTime } from "./LocalTime";
 
 export const metadata: Metadata = {
-  title: "Next steps — Anchor",
+  title: "Next steps — Anchor.AI",
   robots: { index: false, follow: false },
 };
 

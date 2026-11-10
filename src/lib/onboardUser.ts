@@ -135,7 +135,7 @@ async function notifyFounderOfSignup(params: {
 
     await sendEmail({
       to: APP_OWNER_EMAILS,
-      subject: `New signup on Anchor: ${displayName} (${params.email})`,
+      subject: `New signup on Anchor.AI: ${displayName} (${params.email})`,
       html: `
         <p><strong>${displayName}</strong> (${params.email}) just signed up for Anchor.</p>
         <ul>

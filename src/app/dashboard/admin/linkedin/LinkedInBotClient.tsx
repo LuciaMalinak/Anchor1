@@ -203,7 +203,7 @@ export function LinkedInBotClient({
         <div>
           <p className="text-sm font-semibold text-slate-900">
             {state.viaZapier
-              ? "Posting to the AI Anchor Page through Zapier"
+              ? "Posting to the Anchor.AI Page through Zapier"
               : state.connected
                 ? `Posting as ${state.orgName}`
                 : "Not set up to post yet"}
@@ -620,7 +620,7 @@ function SetupSteps({ callbackUrl }: { callbackUrl: string }) {
       <ol className="list-decimal space-y-1 pl-5">
         <li>
           Go to <a className="text-brand" href="https://www.linkedin.com/developers/apps/new" target="_blank" rel="noreferrer">linkedin.com/developers/apps/new</a>,
-          create an app named “AI Anchor Page bot” and link it to the AI Anchor company Page.
+          create an app named “Anchor.AI Page bot” and link it to the Anchor.AI company Page.
         </li>
         <li>Verify the app from the Page (Settings → Verify), then under Products request <b>Community Management API</b>.</li>
         <li>
@@ -687,7 +687,7 @@ function ZapierPanel({ state, refresh }: { state: State; refresh: () => Promise<
           </li>
           <li>Click <b>Send a sample</b> below, then <b>Test trigger</b> in Zapier.</li>
           <li>
-            Action: <b>LinkedIn</b> → <b>Create Company Update</b>. Sign in to LinkedIn, pick <b>AI Anchor</b> as the company, set
+            Action: <b>LinkedIn</b> → <b>Create Company Update</b>. Sign in to LinkedIn, pick <b>Anchor.AI</b> as the company, set
             Visibility to <b>Anyone</b>, and map <b>Comment</b> → <code className="rounded bg-slate-100 px-1">text</code> and{" "}
             <b>Image URL</b> → <code className="rounded bg-slate-100 px-1">image_url</code>.
           </li>

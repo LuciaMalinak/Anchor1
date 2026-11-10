@@ -58,8 +58,8 @@ export async function createInviteAndNotify({
   try {
     await sendEmail({
       to: email,
-      subject: "You've been added to an Anchor team",
-      html: `<p>${invitedByEmail} invited you to their team on Anchor.</p><p>Sign in at the same email address to join: <a href="${process.env.AUTH_URL}/sign-in">${process.env.AUTH_URL}/sign-in</a></p>`,
+      subject: "You've been added to an Anchor.AI team",
+      html: `<p>${invitedByEmail} invited you to their team on Anchor.AI.</p><p>Sign in at the same email address to join: <a href="${process.env.AUTH_URL}/sign-in">${process.env.AUTH_URL}/sign-in</a></p>`,
     });
   } catch {
     // Don't fail the invite over email delivery — a misconfigured or

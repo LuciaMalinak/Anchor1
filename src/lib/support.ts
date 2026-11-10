@@ -47,8 +47,8 @@ export async function notifySupport(params: {
 }) {
   const subject =
     params.kind === "new"
-      ? `Anchor: ${params.who} asked for help`
-      : `Anchor: ${params.who} shared their screen code — connect within 5 minutes`;
+      ? `Anchor.AI: ${params.who} asked for help`
+      : `Anchor.AI: ${params.who} shared their screen code — connect within 5 minutes`;
   const codeHtml = params.accessCode
     ? `<p style="font-size:22px;font-weight:600;letter-spacing:2px;font-family:monospace">${formatAccessCode(params.accessCode)}</p>
        <p>Open <a href="${REMOTE_SUPPORT_URL}">Chrome Remote Desktop</a> → Give Support, enter the code, and they'll be asked to approve.</p>`

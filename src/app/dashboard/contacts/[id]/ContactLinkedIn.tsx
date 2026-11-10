@@ -86,7 +86,7 @@ export function ContactLinkedIn({
           <textarea
             value={pastedText}
             onChange={(e) => setPastedText(e.target.value)}
-            placeholder="Paste the text from their LinkedIn profile — headline, About, Experience, whatever you've got — and Anchor will pull out their title, company, and a short summary."
+            placeholder="Paste the text from their LinkedIn profile — headline, About, Experience, whatever you've got — and Anchor.AI will pull out their title, company, and a short summary."
             rows={6}
             autoFocus
             className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"

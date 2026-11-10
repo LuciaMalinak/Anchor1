@@ -78,7 +78,7 @@ export function CallFeedbackPopup() {
         </div>
 
         {thanks ? (
-          <p className="px-5 py-8 text-center text-sm text-emerald-700">Thanks — Anchor will use this on your next calls.</p>
+          <p className="px-5 py-8 text-center text-sm text-emerald-700">Thanks — Anchor.AI will use this on your next calls.</p>
         ) : (
           <>
             <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
@@ -131,7 +131,7 @@ export function CallFeedbackPopup() {
 
             <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-5 py-3">
               <Link href="/dashboard/playbook" className="text-xs text-slate-400 hover:text-brand">
-                See what Anchor has learned
+                See what Anchor.AI has learned
               </Link>
               <div className="flex gap-2">
                 <button type="button" disabled={busy} onClick={() => finish(true)} className="rounded-lg px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100">

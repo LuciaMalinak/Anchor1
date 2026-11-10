@@ -108,10 +108,10 @@ export async function backupAlertIfDue(): Promise<boolean> {
   await rawClient`insert into "backup_alert" default values`;
   await sendEmail({
     to: APP_OWNER_EMAILS,
-    subject: "Anchor: client data isn't being backed up",
-    html: `<p>Anchor hasn't made a successful backup ${lastOk ? `since <strong>${lastOk.toISOString().slice(0, 16).replace("T", " ")} UTC</strong>` : "<strong>yet</strong>"}.</p>
+    subject: "Anchor.AI: client data isn't being backed up",
+    html: `<p>Anchor.AI hasn't made a successful backup ${lastOk ? `since <strong>${lastOk.toISOString().slice(0, 16).replace("T", " ")} UTC</strong>` : "<strong>yet</strong>"}.</p>
       <p>${reason}</p>
-      <p>Backups are the copy of every client's data kept outside the database, so it can always be recreated. Anchor tries again every hour and will email you again tomorrow if it still can't.</p>`,
+      <p>Backups are the copy of every client's data kept outside the database, so it can always be recreated. Anchor.AI tries again every hour and will email you again tomorrow if it still can't.</p>`,
   }).catch((err) => console.error("[backup] alert email failed:", err));
   return true;
 }

@@ -10,11 +10,11 @@ import { getAppVersion } from "@/lib/appVersion";
 // needs it.
 
 export const metadata: Metadata = {
-  title: "Anchor",
+  title: "Anchor.AI",
   description: "Meeting context that carries forward.",
   // iPhone "Add to Home Screen": open full-screen, named Anchor (icon from
   // app/apple-icon.png; Android uses app/manifest.ts).
-  appleWebApp: { capable: true, title: "Anchor", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Anchor.AI", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

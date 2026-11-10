@@ -14,7 +14,7 @@ import { logAdminAccess } from "@/lib/adminAccess";
 
 type Meeting = typeof meetings.$inferSelect;
 
-const STOPPED_BY_SUPPORT = "Stopped by Anchor support.";
+const STOPPED_BY_SUPPORT = "Stopped by Anchor.AI support.";
 
 async function logFor(adminUserId: string, meeting: Meeting, view: string) {
   const [owner] = await db
@@ -37,7 +37,7 @@ export async function adminStopMeeting(
     // recording webhook moves the meeting on to transcription as usual.
     try {
       await leaveCall(meeting.recallBotId);
-      return "Anchor's bot is leaving the call; the meeting will be written up from its recording.";
+      return "Anchor.AI's bot is leaving the call; the meeting will be written up from its recording.";
     } catch {
       await cancelBot(meeting.recallBotId).catch(() => {});
     }
@@ -63,7 +63,7 @@ export async function adminStopMeeting(
       updatedAt: new Date(),
     })
     .where(eq(meetings.id, meeting.id));
-  return "Ended in Anchor.";
+  return "Ended in Anchor.AI.";
 }
 
 export async function adminDeleteMeeting(

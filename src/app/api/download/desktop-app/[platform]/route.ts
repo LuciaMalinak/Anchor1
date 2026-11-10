@@ -22,7 +22,7 @@ function unavailablePage(message: string, status: number): NextResponse {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Anchor Desktop</title>
+<title>Anchor.AI Desktop</title>
 <style>
   body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
@@ -34,9 +34,9 @@ function unavailablePage(message: string, status: number): NextResponse {
 </head>
 <body>
 <main>
-  <h1>Anchor Desktop</h1>
+  <h1>Anchor.AI Desktop</h1>
   <p>${message}</p>
-  <a href="/dashboard/integrations">Back to Anchor</a>
+  <a href="/dashboard/integrations">Back to Anchor.AI</a>
 </main>
 </body>
 </html>`;

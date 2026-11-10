@@ -134,7 +134,7 @@ export default async function DashboardLayout({
         className="sticky top-0 z-20 bg-linear-to-r from-brand-dark via-brand to-brand text-white shadow-[0_1px_0_rgba(255,255,255,0.06),0_4px_16px_-6px_rgba(11,25,48,0.45)]">
         <div className="flex h-14 w-full items-center justify-between gap-4 px-4 sm:px-6 md:h-16 lg:px-8">
           <div className="flex min-w-0 items-center gap-6 lg:gap-8">
-            <Link href="/dashboard" aria-label="Anchor home" className="shrink-0">
+            <Link href="/dashboard" aria-label="Anchor.AI home" className="shrink-0">
               <Logo size="md" tone="light" />
             </Link>
             <nav className="hidden items-center gap-1 text-sm font-medium md:flex">

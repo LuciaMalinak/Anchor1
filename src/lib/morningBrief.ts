@@ -292,7 +292,7 @@ async function dealContextForReply(dealId: string): Promise<string | null> {
     .limit(1);
   const parts = [`Deal: ${deal.name} (stage: ${deal.stage})`];
   if (deal.decisionBoundaries?.trim()) parts.push(`What the sender may and may not agree to: ${deal.decisionBoundaries.trim()}`);
-  if (deal.memory?.trim()) parts.push(`What Anchor has learned about this deal:\n${deal.memory.trim().slice(0, 1800)}`);
+  if (deal.memory?.trim()) parts.push(`What Anchor.AI has learned about this deal:\n${deal.memory.trim().slice(0, 1800)}`);
   if (last) {
     const actions = (last.actionItems ?? []).map((a) => `- ${a.text}${a.owner ? ` (${a.owner})` : ""}`).join("\n");
     parts.push(
@@ -355,7 +355,7 @@ async function writeReplies(
     }),
   ]);
   if (saveToGmail && connection && !canDraftInGmail) {
-    problems.push("Replies weren't saved to Gmail drafts: Anchor doesn't have permission to create drafts yet (the link is on Home).");
+    problems.push("Replies weren't saved to Gmail drafts: Anchor.AI doesn't have permission to create drafts yet (the link is on Home).");
   }
   const queue = [...targets];
   const writeOne = async (t: (typeof targets)[number]) => {
@@ -436,7 +436,7 @@ async function deliver(
   let note: string | undefined;
   if (prefs.channel === "sms") {
     if (!user.phone) note = "No phone number on your profile, so it came by email.";
-    else if (!isSmsConfigured()) note = "Text messages aren't set up on Anchor yet, so it came by email.";
+    else if (!isSmsConfigured()) note = "Text messages aren't set up on Anchor.AI yet, so it came by email.";
     else {
       const r = await sendSms(user.phone, renderBriefText(snapshot, link));
       if (r.sent) return { sent: true, channel: "sms" };
@@ -574,7 +574,7 @@ export async function autoDraftReplies(userId: string, opts: { everything?: bool
     // on by default once Gmail allows them, off only if turned off.
     if (!user) return { ...report, blocked: "No such user." };
     if (!connection) return { ...report, blocked: "Google isn't connected. Connect it on the Integrations page." };
-    if (!report.canDraft) return { ...report, blocked: "Anchor doesn't have permission to create Gmail drafts yet. Click \"Allow Gmail drafts\"." };
+    if (!report.canDraft) return { ...report, blocked: "Anchor.AI doesn't have permission to create Gmail drafts yet. Click \"Allow Gmail drafts\"." };
     if (!prefs.draftReplies && !opts.everything) return { ...report, blocked: "Saving replies to Gmail drafts is turned off on your Profile." };
     const shown: ShownState = { ...((row?.shown as ShownState) ?? {}) };
     const dismissed = row?.dismissed ?? {};
@@ -614,7 +614,7 @@ export async function autoDraftReplies(userId: string, opts: { everything?: bool
     const limit = opts.everything ? 10 : 12;
     const freshAll = open.filter((t) => !hasReply(t));
     const fresh = freshAll.slice(0, limit);
-    for (const t of freshAll.slice(limit)) report.skipped.push({ ...label(t), reason: "More than Anchor drafts in one go — run it again." });
+    for (const t of freshAll.slice(limit)) report.skipped.push({ ...label(t), reason: "More than Anchor.AI drafts in one go — run it again." });
 
     let triage: Awaited<ReturnType<typeof triageEmails>> = [];
     if (fresh.length) {
@@ -641,11 +641,11 @@ export async function autoDraftReplies(userId: string, opts: { everything?: bool
     for (const [i, t] of fresh.entries()) {
       const r = triage.find((x) => x.id === i);
       if (r?.needsReply || opts.everything) picked.push({ t, r });
-      else report.skipped.push({ ...label(t), reason: "Anchor read it as not needing a reply (an FYI, a thank-you or similar)." });
+      else report.skipped.push({ ...label(t), reason: "Anchor.AI read it as not needing a reply (an FYI, a thank-you or similar)." });
     }
     picked.sort((a, b) => (a.r?.priority ?? 3) - (b.r?.priority ?? 3));
     const cap = opts.everything ? limit : MAX_AUTO_DRAFTS_PER_RUN;
-    for (const p of picked.slice(cap)) report.skipped.push({ ...label(p.t), reason: "More than Anchor drafts in one go — it'll do it next time." });
+    for (const p of picked.slice(cap)) report.skipped.push({ ...label(p.t), reason: "More than Anchor.AI drafts in one go — it'll do it next time." });
     const targets = [
       ...writtenNotSaved,
       ...picked.slice(0, cap).map((p) => target(p.t, p.r?.summary || p.t.subject, p.r?.priority ?? 2)),

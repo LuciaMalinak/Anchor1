@@ -79,7 +79,7 @@ export async function recoverStuckMeetings(): Promise<{ resumed: number; ended: 
         .update(meetings)
         .set({
           status: "failed",
-          errorMessage: "Anchor couldn't finish writing this meeting up. Press Try again — nothing recorded is lost.",
+          errorMessage: "Anchor.AI couldn't finish writing this meeting up. Press Try again — nothing recorded is lost.",
           updatedAt: new Date(),
         })
         .where(stillStuck(m.id, m.status, now))

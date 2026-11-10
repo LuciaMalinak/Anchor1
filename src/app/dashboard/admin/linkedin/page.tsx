@@ -20,7 +20,7 @@ export default async function LinkedInBotPage({
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-slate-900">LinkedIn bot</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Writes and publishes the AI Anchor Page&apos;s posts every day and a slide video every week, and drafts smart
+          Writes and publishes the Anchor.AI Page&apos;s posts every day and a slide video every week, and drafts smart
           comments for other companies&apos; posts for you to post.
         </p>
       </div>

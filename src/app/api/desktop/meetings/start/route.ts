@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     .limit(1);
   if (existing) {
     return NextResponse.json(
-      { error: "Anchor's already in a live meeting here.", meeting: existing },
+      { error: "Anchor.AI's already in a live meeting here.", meeting: existing },
       { status: 409 }
     );
   }

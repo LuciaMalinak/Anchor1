@@ -81,7 +81,7 @@ export async function loadMemberActivity(userIds?: string[]): Promise<Map<string
       latest(taskComments.userId, taskComments.createdAt, null, taskComments, "Commented on a task"),
       latest(dealFiles.uploadedByUserId, dealFiles.createdAt, dealFiles.fileName, dealFiles, "Uploaded a file"),
       latest(supportRequests.userId, supportRequests.createdAt, null, supportRequests, "Asked for help"),
-      latest(apiTokens.userId, apiTokens.lastUsedAt, null, apiTokens, "Used Anchor Desktop"),
+      latest(apiTokens.userId, apiTokens.lastUsedAt, null, apiTokens, "Used Anchor.AI Desktop"),
     ]),
     db
       .select({ userId: memberLastSeen.userId, at: memberLastSeen.lastSeenAt })

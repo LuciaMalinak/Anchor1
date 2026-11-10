@@ -313,8 +313,8 @@ export function FocusWindow({
             </p>
             <p className={`mt-1 text-xs ${failed ? "text-amber-700" : "text-emerald-700"}`}>
               {failed
-                ? "Anchor had trouble processing this recording — check the After tab for details."
-                : "Anchor's processing the recording now — the summary will show up in this deal's After tab shortly."}{" "}
+                ? "Anchor.AI had trouble processing this recording — check the After tab for details."
+                : "Anchor.AI's processing the recording now — the summary will show up in this deal's After tab shortly."}{" "}
               Closing this window…
             </p>
             <button

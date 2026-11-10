@@ -144,7 +144,7 @@ function dayLabel(date: string): string {
 
 // A text message: the essentials, short enough to read at a glance.
 export function renderBriefText(b: BriefSnapshot, link: string): string {
-  const lines: string[] = [`Anchor · ${dayLabel(b.date)}`];
+  const lines: string[] = [`Anchor.AI · ${dayLabel(b.date)}`];
   if (b.emails.length) {
     lines.push("", `Reply to (${b.emails.length + b.moreEmails}):`);
     for (const e of b.emails.slice(0, 5)) {
@@ -254,7 +254,7 @@ export function renderBriefHtml(b: BriefSnapshot, link: string, personName: stri
     b.emails.length
       ? section(`Waiting on your reply (${b.emails.length + b.moreEmails})`, emails + (b.moreEmails ? `<p style="margin:0;font-size:13px;color:#64748b;">+${b.moreEmails} more on your brief page</p>` : ""))
       : b.emailError
-        ? section("Emails", `<p style="margin:0;font-size:14px;color:#b45309;">Couldn't read your Gmail this time (${escapeHtml(b.emailError)}). Anchor tries again with the next brief.</p>`)
+        ? section("Emails", `<p style="margin:0;font-size:14px;color:#b45309;">Couldn't read your Gmail this time (${escapeHtml(b.emailError)}). Anchor.AI tries again with the next brief.</p>`)
         : "",
     b.meetings.length ? section("Today", list(b.meetings.map((m) => `<strong>${escapeHtml(m.time)}</strong> ${escapeHtml(m.title)}`))) : "",
     b.tasks.length

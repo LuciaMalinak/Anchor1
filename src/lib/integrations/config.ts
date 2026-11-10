@@ -51,7 +51,7 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     key: "microsoft",
     name: "Microsoft 365 (Outlook + Teams)",
     description:
-      "Set up Teams and Outlook meetings from Anchor: it creates the meeting in your Outlook calendar and sends everyone the invitation.",
+      "Set up Teams and Outlook meetings from Anchor.AI: it creates the meeting in your Outlook calendar and sends everyone the invitation.",
     // Only what Anchor uses: who you are, and your Outlook calendar, so it
     // can create Teams and in-person meetings and invite people (see
     // meetingScheduler.ts). Mail.Read and Chat.Read were asked for but
@@ -67,7 +67,7 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     key: "slack",
     name: "Slack",
     description:
-      "Read the channels you point Anchor at for deal-related context, and post updates back — like DMing a handoff briefing straight to whoever's covering a deal.",
+      "Read the channels you point Anchor.AI at for deal-related context, and post updates back — like DMing a handoff briefing straight to whoever's covering a deal.",
     // users:read.email is separate from users:read and specifically what
     // users.lookupByEmail (src/lib/integrations/slack.ts) needs to find a
     // teammate by their Anchor email — without it that lookup 404s even
@@ -82,7 +82,7 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     key: "salesforce",
     name: "Salesforce",
     description:
-      "Pull your Salesforce contacts and opportunities into Anchor, enriched with meeting intelligence.",
+      "Pull your Salesforce contacts and opportunities into Anchor.AI, enriched with meeting intelligence.",
     // "refresh_token" is Salesforce's actual scope name for getting a
     // refresh token back (there's no separate "offline_access" scope like
     // Google/Microsoft use) — "api" for REST/SOQL access, "openid"+"email"
@@ -100,7 +100,7 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     key: "hubspot",
     name: "HubSpot",
     description:
-      "Pull your HubSpot contacts and deals into Anchor, enriched with meeting intelligence — same idea as Salesforce, for teams that run HubSpot instead.",
+      "Pull your HubSpot contacts and deals into Anchor.AI, enriched with meeting intelligence — same idea as Salesforce, for teams that run HubSpot instead.",
     // HubSpot's newer, more granular scope names for read-only CRM access.
     // "oauth" is required on every HubSpot app to get a refresh token back.
     scopes: ["oauth", "crm.objects.contacts.read", "crm.objects.deals.read"],
@@ -132,7 +132,7 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     key: "zoom",
     name: "Zoom",
     description:
-      "Set up Zoom meetings straight from Anchor: when an email or Slack message asks to meet, Anchor creates the Zoom link and sends the invites.",
+      "Set up Zoom meetings straight from Anchor.AI: when an email or Slack message asks to meet, Anchor.AI creates the Zoom link and sends the invites.",
     // Zoom takes the scopes set on the app in its Marketplace; these are
     // the ones to add there (create meetings, and read the account email
     // shown on this card).

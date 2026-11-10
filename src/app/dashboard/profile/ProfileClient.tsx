@@ -129,7 +129,7 @@ export function ProfileClient({ profile }: { profile: Profile }) {
           wants to check or fix what Anchor has learned. */}
       <section className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">What Anchor has learned</h2>
+          <h2 className="text-sm font-semibold text-slate-900">What Anchor.AI has learned</h2>
           <p className="text-sm text-slate-500">
             The answers Anchor uses on calls, learned from your team&apos;s calls and your feedback. Check, fix or add to them.
           </p>

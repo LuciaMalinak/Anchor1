@@ -15,7 +15,7 @@ export function DraftNowPanel({
   token,
   autoRun,
   buttonLabel = "Draft my replies now",
-  intro = "Anchor drafts a reply to each email waiting on you and leaves it in Gmail, ready to send. It also does this on its own through the day.",
+  intro = "Anchor.AI drafts a reply to each email waiting on you and leaves it in Gmail, ready to send. It also does this on its own through the day.",
 }: {
   embedded?: boolean;
   token?: string;
@@ -38,7 +38,7 @@ export function DraftNowPanel({
     }).catch(() => null);
     const body = res ? await res.json().catch(() => ({})) : {};
     setBusy(false);
-    if (!res?.ok) setError(body.error || "Couldn't reach Anchor. Try again.");
+    if (!res?.ok) setError(body.error || "Couldn't reach Anchor.AI. Try again.");
     else setReport(body as DraftReport);
   }
 

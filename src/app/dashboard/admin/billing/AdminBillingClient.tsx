@@ -110,7 +110,7 @@ export function AdminBillingClient() {
         <h2 className="text-base font-semibold text-slate-900">Promo codes</h2>
         <form onSubmit={createCode} className={`${card} flex flex-col gap-3`}>
           <p className="text-xs text-slate-500">
-            A code gives a free trial: the client enters their card, uses Anchor free for the days you choose, and is billed
+            A code gives a free trial: the client enters their card, uses Anchor.AI free for the days you choose, and is billed
             after unless they cancel. Use one code per client (max uses 1) so each one stays theirs.
           </p>
           <div className="flex flex-wrap items-end gap-3">
@@ -279,7 +279,7 @@ export function AdminBillingClient() {
         </div>
         <p className="text-xs text-slate-500">
           Every account that existed before payments started is marked Free. Untick to ask them to pay; tick to give anyone
-          Anchor for free.
+          Anchor.AI for free.
         </p>
       </section>
     </div>

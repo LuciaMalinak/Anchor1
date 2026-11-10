@@ -11,7 +11,7 @@ import { billingConfigured, hasAccess, monthlyPrice, syncCheckoutSession, teamMe
 import { billingContext } from "@/lib/billingRequest";
 import { BillingPlans, ManageBillingButton } from "./BillingClient";
 
-export const metadata = { title: "Billing — Anchor" };
+export const metadata = { title: "Billing — Anchor.AI" };
 
 function day(d: Date | null): string {
   return d ? d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
@@ -61,7 +61,7 @@ export default async function BillingPage({
           </Link>
           {access ? (
             <Link href="/dashboard" className="text-sm font-medium text-slate-300 hover:text-white">
-              Go to Anchor →
+              Go to Anchor.AI →
             </Link>
           ) : (
             <form
@@ -83,7 +83,7 @@ export default async function BillingPage({
           <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             You&apos;re all set. Welcome to Anchor!{" "}
             <Link href="/dashboard" className="font-medium underline">
-              Open Anchor
+              Open Anchor.AI
             </Link>
           </p>
         )}
@@ -118,9 +118,9 @@ export default async function BillingPage({
         ) : access ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h1 className="text-xl font-semibold text-slate-900">Your account has free access</h1>
-            <p className="mt-2 text-sm text-slate-600">There&apos;s nothing to pay. Enjoy Anchor!</p>
+            <p className="mt-2 text-sm text-slate-600">There&apos;s nothing to pay. Enjoy Anchor.AI!</p>
             <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark">
-              Open Anchor
+              Open Anchor.AI
             </Link>
           </div>
         ) : canManage ? (

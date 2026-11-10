@@ -61,7 +61,7 @@ async function drawSlide(slide: Slide, index: number, total: number): Promise<Bu
     ? await textImage(slide.body, { bold: false, size: 40, color: "#d6deea", width: textWidth })
     : null;
   const follow = last
-    ? await textImage("Follow AI Anchor for more", { bold: true, size: 30, color: COPPER, width: textWidth })
+    ? await textImage("Follow Anchor.AI for more", { bold: true, size: 30, color: COPPER, width: textWidth })
     : null;
 
   // Title and body sit together, centred vertically in the space between

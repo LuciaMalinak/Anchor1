@@ -57,7 +57,7 @@ export function useFocusWindow() {
   // close tracking) — shared by open() and openPending() below.
   function mountPipWindow(pipWindow: Window) {
     copyStylesInto(pipWindow.document);
-    pipWindow.document.title = "Anchor — Focus";
+    pipWindow.document.title = "Anchor.AI — Focus";
     pipWindow.document.body.style.margin = "0";
     const container = pipWindow.document.createElement("div");
     pipWindow.document.body.appendChild(container);
@@ -239,7 +239,7 @@ export function useFocusWindow() {
         // shown for the brief moment between the click and the join
         // request actually coming back.
         <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-slate-50 p-6 text-center">
-          <p className="text-sm font-medium text-slate-900">Anchor — Focus</p>
+          <p className="text-sm font-medium text-slate-900">Anchor.AI — Focus</p>
           <p className="text-xs text-slate-500">
             {session.loadError ?? "Connecting to your meeting…"}
           </p>

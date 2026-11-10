@@ -213,7 +213,7 @@ function zapierPayload(item: Pick<BotItem, "id" | "kind" | "text" | "topic" | "e
     id: item.id,
     kind: item.kind,
     text: item.text,
-    title: isVideo ? extra.title || item.topic || "AI Anchor" : "",
+    title: isVideo ? extra.title || item.topic || "Anchor.AI" : "",
     image_url: isVideo ? (mediaUrl(item.id, "png") ?? "") : "",
     video_url: isVideo ? (mediaUrl(item.id, "mp4") ?? "") : "",
     scheduled_for: item.scheduledFor?.toISOString() ?? "",
@@ -250,7 +250,7 @@ export async function sendZapierSample(): Promise<void> {
   const sample = next ?? {
     id: "00000000-0000-0000-0000-000000000000",
     kind: "post",
-    text: "Test post from Anchor. If you can read this on LinkedIn, the Zap is live.\n\n#AIAnchor",
+    text: "Test post from Anchor.AI. If you can read this on LinkedIn, the Zap is live.\n\n#AIAnchor",
     topic: null,
     extra: null,
     scheduledFor: new Date(),
@@ -272,7 +272,7 @@ async function publish(item: BotItem, bot: BotRow): Promise<string> {
     const extra = (item.extra ?? {}) as { title?: string; slides?: Slide[] };
     const mp4 = await renderSlideVideo(extra.slides ?? []);
     const videoUrn = await uploadVideo(token, bot.orgUrn, mp4);
-    return createPost(token, bot.orgUrn, item.text, { urn: videoUrn, title: extra.title || item.topic || "AI Anchor" });
+    return createPost(token, bot.orgUrn, item.text, { urn: videoUrn, title: extra.title || item.topic || "Anchor.AI" });
   }
   return createPost(token, bot.orgUrn, item.text);
 }

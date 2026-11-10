@@ -206,9 +206,9 @@ export default async function DashboardPage({
       {needsDraftsPermission && (
         <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-6 py-5">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-amber-900">Let Anchor write replies straight into your Gmail drafts</h2>
+            <h2 className="text-base font-semibold text-amber-900">Let Anchor.AI write replies straight into your Gmail drafts</h2>
             <p className="mt-1 max-w-2xl text-sm text-amber-800">
-              As emails come in, Anchor drafts a reply the way you write and leaves it in Gmail, ready to send. Google needs you to allow
+              As emails come in, Anchor.AI drafts a reply the way you write and leaves it in Gmail, ready to send. Google needs you to allow
               this once. Nothing is ever sent without you.
             </p>
           </div>

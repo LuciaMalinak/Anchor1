@@ -62,7 +62,7 @@ export function slackRecapText(r: RecapSource): string {
   }
   const flags = r.dealSignals.filter((s) => s.type !== "buying_signal");
   if (flags.length) lines.push("", ...flags.map((s) => `:warning: ${SIGNAL_LABEL[s.type]}: ${e(s.detail)}`));
-  lines.push("", `<${recapUrl(r.meetingId)}|Full recap in Anchor>`);
+  lines.push("", `<${recapUrl(r.meetingId)}|Full recap in Anchor.AI>`);
   return lines.join("\n");
 }
 
@@ -78,6 +78,6 @@ export function recapMarkdown(r: RecapSource, transcript: string | null): string
   }
   if (r.dealSignals.length) lines.push("", "## Signals", "", ...r.dealSignals.map((s) => `- **${SIGNAL_LABEL[s.type]}:** ${s.detail}`));
   if (transcript?.trim()) lines.push("", "## Transcript", "", transcript.trim());
-  lines.push("", "---", `Saved from Anchor: ${recapUrl(r.meetingId)}`, "");
+  lines.push("", "---", `Saved from Anchor.AI: ${recapUrl(r.meetingId)}`, "");
   return lines.join("\n");
 }

@@ -161,7 +161,7 @@ export async function draftReply(params: {
       : "",
     corrections.length
       ? `Earlier replies Anchor suggested and what ${params.senderName} actually sent instead. Learn from what they changed — what they cut, added, softened or made firmer — and write this one the way they would have sent it:\n${corrections
-          .map((c, i) => `--- ${i + 1}. Anchor suggested:\n${c.suggested}\n--- They sent:\n${c.sent}`)
+          .map((c, i) => `--- ${i + 1}. Anchor.AI suggested:\n${c.suggested}\n--- They sent:\n${c.sent}`)
           .join("\n")}`
       : "",
   ]
@@ -179,7 +179,7 @@ export async function draftReply(params: {
       {
         role: "user",
         content: `Draft ${params.senderName}'s reply to ${params.fromName}.\n\nSubject: ${params.subject}\n\nTheir message:\n${params.messageText}${
-          params.dealContext ? `\n\nWhat Anchor knows about this deal and customer:\n${params.dealContext}` : ""
+          params.dealContext ? `\n\nWhat Anchor.AI knows about this deal and customer:\n${params.dealContext}` : ""
         }${learned ? `\n\n${learned}` : ""}${params.today ? `\n\nToday is ${params.today}.` : ""}`,
       },
     ],

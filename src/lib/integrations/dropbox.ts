@@ -227,7 +227,7 @@ export async function saveDropboxFile(
   const connection = await getDropboxConnection(userId);
   if (!connection) throw new Error("Dropbox isn't connected yet — connect it from the Integrations page first.");
   if (!hasScopes(connection.scope, DROPBOX_EXTRA_SCOPES.files_write)) {
-    throw new NeedsDropboxPermissionError("Anchor needs permission to save files to Dropbox.");
+    throw new NeedsDropboxPermissionError("Anchor.AI needs permission to save files to Dropbox.");
   }
   const folder = "/" + params.folder.split("/").map((p) => p.trim()).filter(Boolean).map(dropboxSafeName).join("/");
   const filePath = `${folder === "/" ? "" : folder}/${dropboxSafeName(params.fileName)}`;
@@ -243,7 +243,7 @@ export async function saveDropboxFile(
     saved = (await res.json()) as DropboxFile;
   } catch (err) {
     if (err instanceof Error && err.message.includes("missing_scope")) {
-      throw new NeedsDropboxPermissionError("Anchor needs permission to save files to Dropbox.");
+      throw new NeedsDropboxPermissionError("Anchor.AI needs permission to save files to Dropbox.");
     }
     throw err;
   }

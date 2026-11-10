@@ -121,7 +121,7 @@ function buildContextBlock(ctx: DealContext): string {
   if (ctx.companyWebsite) parts.push(`Company website: ${ctx.companyWebsite}`);
 
   if (ctx.memory) {
-    parts.push(`\nWhat Anchor has learned about this deal so far: ${ctx.memory}`);
+    parts.push(`\nWhat Anchor.AI has learned about this deal so far: ${ctx.memory}`);
   }
 
   if (ctx.continuityNote) {
@@ -185,7 +185,7 @@ function buildContextBlock(ctx: DealContext): string {
     // instead is the fix; a plain "here are the files" header wasn't
     // enough to stop a real case of exactly this happening.
     parts.push(
-      "\nFiles attached to this deal — Anchor already extracted the text below from each one at upload time, including from PowerPoint and Excel files. That text IS your access to the file: never tell the person you can't open, read, or access a file type when its content is shown below — just use it directly, the same as any other context here. Only say a file isn't readable when it's explicitly marked that way below."
+      "\nFiles attached to this deal — Anchor.AI already extracted the text below from each one at upload time, including from PowerPoint and Excel files. That text IS your access to the file: never tell the person you can't open, read, or access a file type when its content is shown below — just use it directly, the same as any other context here. Only say a file isn't readable when it's explicitly marked that way below."
     );
     for (const f of ctx.files) {
       if (f.excerpt) {
@@ -203,7 +203,7 @@ function buildContextBlock(ctx: DealContext): string {
   }
 
   if (ctx.newsHeadline || ctx.companyResearch) {
-    parts.push("\nRecent news and public info Anchor already gathered on this company (also shown live in the room right now, so treat it as something the person you're helping can already see):");
+    parts.push("\nRecent news and public info Anchor.AI already gathered on this company (also shown live in the room right now, so treat it as something the person you're helping can already see):");
     if (ctx.newsHeadline) parts.push(ctx.newsHeadline);
     if (ctx.companyResearch) parts.push(ctx.companyResearch);
   }
@@ -213,7 +213,7 @@ function buildContextBlock(ctx: DealContext): string {
   }
 
   if (ctx.toolReports) {
-    parts.push(`\nReports Anchor has written on this deal (newest first). When asked to turn one into a deck or spreadsheet, use its content as written:\n${ctx.toolReports}`);
+    parts.push(`\nReports Anchor.AI has written on this deal (newest first). When asked to turn one into a deck or spreadsheet, use its content as written:\n${ctx.toolReports}`);
   }
 
   if (ctx.documentContext) {
@@ -249,8 +249,8 @@ function leadRules(leadName: string | null | undefined, leadStyle: string | null
   const who = leadName ? `the deal lead, ${leadName}` : "the deal lead";
   return `Think like ${who}: frame the answer and the suggestions the way they would play this — how they negotiate, what they hold firm on, where they stay flexible, and their tone. ${
     leadStyle
-      ? `What Anchor has learned about how they operate: ${leadStyle}`
-      : "Anchor hasn't learned much about how they operate yet, so infer it from how this deal has been run so far (their notes, decision limits, and what they said and agreed on calls)."
+      ? `What Anchor.AI has learned about how they operate: ${leadStyle}`
+      : "Anchor.AI hasn't learned much about how they operate yet, so infer it from how this deal has been run so far (their notes, decision limits, and what they said and agreed on calls)."
   }
 If the question touches something that should come from them in person — a firm price or discount, a contract or legal term, a compliance claim — still say what they would most likely answer, but mark it as needing their confirmation, and respect any decision limits they've set.`;
 }
@@ -313,29 +313,29 @@ function buildQuestionContent(
 // Ask Anchor panels; the full error is logged too.
 export function describeAnswerError(err: unknown): string {
   if (err instanceof Error && /ANTHROPIC_API_KEY is not set/.test(err.message)) {
-    return "Anchor's AI isn't set up on this server yet (ANTHROPIC_API_KEY is missing in Render).";
+    return "Anchor.AI's AI isn't set up on this server yet (ANTHROPIC_API_KEY is missing in Render).";
   }
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
-    return "Anchor's AI key isn't working, so it can't answer right now. Check ANTHROPIC_API_KEY in Render.";
+    return "Anchor.AI's AI key isn't working, so it can't answer right now. Check ANTHROPIC_API_KEY in Render.";
   }
   if (err instanceof Anthropic.NotFoundError) {
-    return "The AI model Anchor is set to use isn't available. Check ANTHROPIC_MODEL in Render.";
+    return "The AI model Anchor.AI is set to use isn't available. Check ANTHROPIC_MODEL in Render.";
   }
   if (err instanceof Anthropic.RateLimitError || (err instanceof Anthropic.APIError && (err.status === 529 || err.status === 503))) {
-    return "Anchor's AI is busy right now. Try again in a minute.";
+    return "Anchor.AI's AI is busy right now. Try again in a minute.";
   }
   if (err instanceof Anthropic.BadRequestError) {
     // Anthropic reports an empty balance as a 400 whose message names it;
     // there's no dedicated error class for it.
     if (/credit balance/i.test(err.message)) {
-      return "Anchor's Anthropic account is out of credits, so it can't answer. Add credits at console.anthropic.com → Billing.";
+      return "Anchor.AI's Anthropic account is out of credits, so it can't answer. Add credits at console.anthropic.com → Billing.";
     }
-    return `Anchor couldn't answer that (the AI rejected the request: ${err.message.slice(0, 160)}).`;
+    return `Anchor.AI couldn't answer that (the AI rejected the request: ${err.message.slice(0, 160)}).`;
   }
   if (err instanceof Anthropic.APIError) {
-    return `Anchor couldn't finish answering that (AI error ${err.status ?? "unknown"}). Try again in a moment.`;
+    return `Anchor.AI couldn't finish answering that (AI error ${err.status ?? "unknown"}). Try again in a moment.`;
   }
-  return "Anchor couldn't finish answering that. Try asking again.";
+  return "Anchor.AI couldn't finish answering that. Try asking again.";
 }
 
 type AnswerStream = ReturnType<ReturnType<typeof client>["messages"]["stream"]>;
@@ -465,7 +465,7 @@ function actionTools(actions: AskActions): Anthropic.Tool[] {
     tools.push({
       name: "start_recording",
       description:
-        "Start recording an in-person meeting on this deal from this device's microphone, with live transcript and live suggestions. Use when the person asks to start, begin or record a meeting, call or conversation here. (Joining a Zoom/Teams call with Anchor's bot isn't this — that's done from the During tab with the meeting link.)",
+        "Start recording an in-person meeting on this deal from this device's microphone, with live transcript and live suggestions. Use when the person asks to start, begin or record a meeting, call or conversation here. (Joining a Zoom/Teams call with Anchor.AI's bot isn't this — that's done from the During tab with the meeting link.)",
       input_schema: { type: "object", properties: {} },
     });
   }
@@ -473,7 +473,7 @@ function actionTools(actions: AskActions): Anthropic.Tool[] {
     tools.push({
       name: "stop_meeting",
       description:
-        "Stop the meeting that's live on this deal right now: ends the in-person recording, or has Anchor's bot leave the Zoom/Teams call (without ending it for anyone else), then writes the meeting up. Use when the person asks to stop, end, finish or wrap up the meeting, call or recording.",
+        "Stop the meeting that's live on this deal right now: ends the in-person recording, or has Anchor.AI's bot leave the Zoom/Teams call (without ending it for anyone else), then writes the meeting up. Use when the person asks to stop, end, finish or wrap up the meeting, call or recording.",
       input_schema: { type: "object", properties: {} },
     });
   }
@@ -568,7 +568,7 @@ export async function askAnchor(params: {
     .trim();
 
   if (!text) {
-    throw new Error("Anchor didn't return an answer.");
+    throw new Error("Anchor.AI didn't return an answer.");
   }
   return text;
 }
@@ -647,7 +647,7 @@ function buildWorkspaceSystemPrompt(
   const material =
     scope === "meeting"
       ? "The meeting this person is looking at, below: its summary, action items, signals and full transcript (lines start with [minutes:seconds]), plus passages matched to this question from the deal's other calls, documents and emails."
-      : "This person's own Google Calendar (next 36 hours) and Gmail inbox (last 3 days), then their Anchor workspace: passages matched to this question from their deals' calls, documents and emails, their deals, recent meetings, upcoming calls, open tasks and the people they've met. For questions about their day, agenda, schedule or email, answer from the calendar and inbox first: name the meetings with times, and the emails that need a reply (who, what, why it matters), linking them to deals where they relate.";
+      : "This person's own Google Calendar (next 36 hours) and Gmail inbox (last 3 days), then their Anchor.AI workspace: passages matched to this question from their deals' calls, documents and emails, their deals, recent meetings, upcoming calls, open tasks and the people they've met. For questions about their day, agenda, schedule or email, answer from the calendar and inbox first: name the meetings with times, and the emails that need a reply (who, what, why it matters), linking them to deals where they relate.";
   return `You are Anchor, an assistant built into a meeting-intelligence app for sales and client teams. The person is asking you a question from inside the app.
 
 ${sourcingRules(material)}

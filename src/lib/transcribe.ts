@@ -52,3 +52,16 @@ export async function transcribeAudioFile(
     utterances,
   };
 }
+
+// A short spoken question (Ask Anchor's mic when the browser can't do
+// speech-to-text itself, e.g. the iPhone home-screen app): plain text, no
+// speaker labels.
+export async function transcribeShortClip(audio: Buffer): Promise<string> {
+  const apiKey = process.env.ASSEMBLYAI_API_KEY;
+  if (!apiKey) throw new Error("Voice questions aren't set up (ASSEMBLYAI_API_KEY is missing).");
+  const client = new AssemblyAI({ apiKey });
+  const transcript = await client.transcripts.transcribe({ audio });
+  if (transcript.status === "error") throw new Error(`Transcription failed: ${transcript.error}`);
+  recordAudioUsage({ feature: "transcription", seconds: transcript.audio_duration ?? 0 });
+  return (transcript.text ?? "").trim();
+}

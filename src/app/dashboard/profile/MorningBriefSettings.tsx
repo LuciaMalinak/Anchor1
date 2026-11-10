@@ -90,7 +90,7 @@ export function MorningBriefSettings() {
     sms: !setup.phone
       ? "Add your phone number above first."
       : !setup.smsReady
-        ? "Text messages aren't switched on for Anchor yet, so it'll come by email until they are."
+        ? "Text messages aren't switched on for Anchor.AI yet, so it'll come by email until they are."
         : `To ${setup.phone}`,
     slack: setup.slackConnected ? "As a Slack message to you" : "Connect Slack on the Integrations page first; until then it comes by email.",
   };
@@ -315,7 +315,7 @@ export function MorningBriefSettings() {
                       href="/api/integrations/google/connect?add=gmail_compose&returnTo=%2Fdashboard%2Fprofile"
                       className="font-semibold text-brand underline"
                     >
-                      Allow Anchor to create Gmail drafts
+                      Allow Anchor.AI to create Gmail drafts
                     </a>
                   </>
                 )}
@@ -374,7 +374,7 @@ export function MorningBriefSettings() {
 
 // One line on what "Send me one now" found, so it's clear what happened.
 export function sendSummary(body: { googleConnected?: boolean; emails?: number; replies?: number; drafts?: number }): string {
-  if (body.googleConnected === false) return "Anchor couldn't see your Gmail.";
+  if (body.googleConnected === false) return "Anchor.AI couldn't see your Gmail.";
   const n = body.emails ?? 0;
   return `${n} email${n === 1 ? "" : "s"} waiting on you · ${body.replies ?? 0} suggested repl${body.replies === 1 ? "y" : "ies"} · ${body.drafts ?? 0} saved to Gmail drafts`;
 }

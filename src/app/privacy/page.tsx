@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 
 export const metadata = {
-  title: "Privacy Policy — Anchor",
+  title: "Privacy Policy — Anchor.AI",
 };
 
 const EFFECTIVE_DATE = "November 10, 2026";
@@ -27,7 +27,7 @@ function B({ children }: { children: React.ReactNode }) {
 const PROVIDERS: [string, string][] = [
   ["Anthropic", "AI processing (summaries, answers, insights)"],
   ["AssemblyAI", "Speech-to-text transcription"],
-  ["Recall.ai", "Meeting bot that joins calls you send Anchor to"],
+  ["Recall.ai", "Meeting bot that joins calls you send Anchor.AI to"],
   ["Render", "Application hosting and database"],
   ["Cloudflare (R2)", "File storage and encrypted backups"],
   ["Stripe", "Subscription billing and payments"],
@@ -75,7 +75,7 @@ export default function PrivacyPage() {
             </li>
             <li>
               <B>Meeting content</B>: audio recordings, transcripts, and AI-generated summaries,
-              action items, and signals from meetings you record or upload through Anchor.
+              action items, and signals from meetings you record or upload through Anchor.AI.
             </li>
             <li>
               <B>Deal and contact data</B>: names, roles, notes, files, and other information you
@@ -84,7 +84,7 @@ export default function PrivacyPage() {
             <li>
               <B>Connected-service data</B>: if you connect another account (for example Google,
               Microsoft, Slack, Zoom, HubSpot, Salesforce, or Dropbox), the data you authorize
-              Anchor to access from it, used only for the features you connected it for.
+              Anchor.AI to access from it, used only for the features you connected it for.
             </li>
             <li>
               <B>Billing information</B>: plan, number of seats, and billing status. Card details
@@ -93,7 +93,7 @@ export default function PrivacyPage() {
             </li>
             <li>
               <B>Usage data</B>: technical information such as log data, device and app version,
-              and the questions you ask Anchor, used to run, secure, and support the Service.
+              and the questions you ask Anchor.AI, used to run, secure, and support the Service.
             </li>
           </ul>
         </Section>
@@ -101,7 +101,7 @@ export default function PrivacyPage() {
         <Section title="3. How we use it">
           <ul className="flex list-disc flex-col gap-1.5 pl-5">
             <li>To transcribe and summarize your meetings, and pull out action items and deal signals;</li>
-            <li>To keep the memory Anchor builds about your deals and contacts, and answer your questions about them;</li>
+            <li>To keep the memory Anchor.AI builds about your deals and contacts, and answer your questions about them;</li>
             <li>To let your team share deal context, handoffs, and follow-ups;</li>
             <li>To schedule meetings and send invites you ask for;</li>
             <li>To bill your subscription and send account messages;</li>
@@ -120,7 +120,7 @@ export default function PrivacyPage() {
 
         <Section title="5. Service providers">
           <p>
-            We use the following providers to run Anchor. Each receives only the data needed for
+            We use the following providers to run Anchor.AI. Each receives only the data needed for
             its part of the Service and is bound by its own data-protection terms.
           </p>
           <div className="overflow-hidden rounded-xl border border-slate-200">
@@ -145,7 +145,7 @@ export default function PrivacyPage() {
         <Section id="security" title="6. How we protect your data">
           <ul className="flex list-disc flex-col gap-1.5 pl-5">
             <li>
-              <B>Encryption</B>: all traffic to Anchor uses HTTPS (TLS). Sign-in tokens for
+              <B>Encryption</B>: all traffic to Anchor.AI uses HTTPS (TLS). Sign-in tokens for
               connected services are encrypted in our database (AES-256), and our hosting and storage
               providers encrypt data at rest.
             </li>
@@ -173,9 +173,9 @@ export default function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="7. Who at Anchor can see your data">
+        <Section title="7. Who at Anchor.AI can see your data">
           <p>
-            A small number of authorized Anchor staff can access account data only when needed for
+            A small number of authorized Anchor.AI staff can access account data only when needed for
             support, security, billing, or to fix a problem, for example when you ask us to recover
             something or investigate an issue. We don&apos;t look at your content for any other
             reason.
@@ -184,7 +184,7 @@ export default function PrivacyPage() {
 
         <Section title="8. Recording meetings">
           <p>
-            Anchor only records calls you set it up to record. Recording laws differ by location,
+            Anchor.AI only records calls you set it up to record. Recording laws differ by location,
             and some require everyone on a call to agree to being recorded. You&apos;re responsible
             for telling participants and getting any consent the law requires (see our{" "}
             <Link href="/terms" className="text-brand hover:underline">Terms of Service</Link>).
@@ -215,7 +215,7 @@ export default function PrivacyPage() {
           <ul className="flex list-disc flex-col gap-1.5 pl-5">
             <li>You can see and correct your account information in your profile.</li>
             <li>You can disconnect any connected service at any time from the Integrations page.</li>
-            <li>You can delete meetings, contacts, and deals, or your account, from within Anchor.</li>
+            <li>You can delete meetings, contacts, and deals, or your account, from within Anchor.AI.</li>
             <li>
               You can ask us for a copy of your data, or for it to be corrected or deleted, by
               emailing us. Depending on where you live (for example under the GDPR or California
@@ -230,14 +230,14 @@ export default function PrivacyPage() {
 
         <Section title="11. International transfers">
           <p>
-            Anchor and its providers are based in the United States, and your data is processed
+            Anchor.AI and its providers are based in the United States, and your data is processed
             there. Where the law requires, we rely on appropriate safeguards such as the European
             Commission&apos;s standard contractual clauses.
           </p>
         </Section>
 
         <Section title="12. Children">
-          <p>Anchor is a business product and isn&apos;t meant for anyone under 16.</p>
+          <p>Anchor.AI is a business product and isn&apos;t meant for anyone under 16.</p>
         </Section>
 
         <Section title="13. Changes to this policy">

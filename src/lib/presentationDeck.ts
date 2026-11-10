@@ -46,7 +46,7 @@ function addFrame(pptx: PptxGenJS, s: PptxGenJS.Slide, title: string, source: st
   s.addShape(pptx.ShapeType.line, { x: 0.5, y: 1.2, w: 12.3, h: 0, line: { color: ACCENT, width: 1.5 } });
   s.addShape(pptx.ShapeType.line, { x: 0.5, y: 6.95, w: 12.3, h: 0, line: { color: LINE, width: 0.75 } });
   s.addText(source ? `Source: ${source}` : "", { x: 0.5, y: 7.0, w: 10.5, h: 0.35, fontFace: FONT, fontSize: 9, color: MUTED, fit: "shrink" });
-  s.addText(`Anchor  |  ${n}`, { x: 11.0, y: 7.0, w: 1.8, h: 0.35, fontFace: FONT, fontSize: 9, color: MUTED, align: "right" });
+  s.addText(`Anchor.AI  |  ${n}`, { x: 11.0, y: 7.0, w: 1.8, h: 0.35, fontFace: FONT, fontSize: 9, color: MUTED, align: "right" });
 }
 
 function bulletRuns(items: string[]): PptxGenJS.TextProps[] {
@@ -64,7 +64,7 @@ export async function buildDeck(spec: DeckSpec): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 in
   pptx.title = spec.title;
-  pptx.company = "Anchor";
+  pptx.company = "Anchor.AI";
 
   // Cover
   const cover = pptx.addSlide();
@@ -72,7 +72,7 @@ export async function buildDeck(spec: DeckSpec): Promise<Buffer> {
   cover.addText(spec.title, { x: 0.8, y: 2.4, w: 11.7, h: 1.4, fontFace: FONT, fontSize: 36, bold: true, color: "FFFFFF", fit: "shrink" });
   if (spec.subtitle) cover.addText(spec.subtitle, { x: 0.8, y: 3.8, w: 11.7, h: 0.8, fontFace: FONT, fontSize: 18, color: "D6DEEB" });
   cover.addShape(pptx.ShapeType.line, { x: 0.8, y: 4.75, w: 2.2, h: 0, line: { color: ACCENT, width: 3 } });
-  cover.addText(`Prepared by Anchor · ${new Date().toISOString().slice(0, 10)}`, { x: 0.8, y: 6.6, w: 8, h: 0.4, fontFace: FONT, fontSize: 11, color: "D6DEEB" });
+  cover.addText(`Prepared by Anchor.AI · ${new Date().toISOString().slice(0, 10)}`, { x: 0.8, y: 6.6, w: 8, h: 0.4, fontFace: FONT, fontSize: 11, color: "D6DEEB" });
 
   let n = 2;
   for (const d of spec.slides.slice(0, MAX_SLIDES)) {

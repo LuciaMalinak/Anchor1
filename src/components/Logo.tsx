@@ -58,7 +58,7 @@ export function Logo({
           tone === "light" ? "text-white" : "text-slate-900"
         }`}
       >
-        Anchor
+        Anchor.AI
       </span>
     </span>
   );

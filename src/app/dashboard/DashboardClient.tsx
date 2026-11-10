@@ -151,7 +151,7 @@ export function DashboardClient({ initialMeetings, deals: initialDeals }: { init
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         focusWindow.cancel();
-        throw new Error(body.error || "Couldn't send Anchor to that meeting");
+        throw new Error(body.error || "Couldn't send Anchor.AI to that meeting");
       }
       form.reset();
       // Jumps straight to this meeting's own page — that's where meeting
@@ -165,7 +165,7 @@ export function DashboardClient({ initialMeetings, deals: initialDeals }: { init
         await refresh();
       }
     } catch (err) {
-      setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
+      setJoinError(err instanceof Error ? err.message : "Couldn't send Anchor.AI to that meeting");
     } finally {
       setJoining(false);
     }
@@ -200,7 +200,7 @@ export function DashboardClient({ initialMeetings, deals: initialDeals }: { init
       <div>
         <h1 className="text-xl font-semibold text-brand">Home</h1>
         <p className="text-sm text-slate-500">
-          Send Anchor to a live meeting, record one yourself, or upload a recording — everything
+          Send Anchor.AI to a live meeting, record one yourself, or upload a recording — everything
           shows up below once it&apos;s processed.
         </p>
       </div>
@@ -213,9 +213,9 @@ export function DashboardClient({ initialMeetings, deals: initialDeals }: { init
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl border border-slate-200 border-l-4 border-l-brand bg-white p-6 shadow-sm lg:col-span-2">
-          <h2 className="text-sm font-medium text-slate-900">Send Anchor to a live meeting</h2>
+          <h2 className="text-sm font-medium text-slate-900">Send Anchor.AI to a live meeting</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Paste a Zoom, Google Meet, or Teams link and Anchor will join automatically,
+            Paste a Zoom, Google Meet, or Teams link and Anchor.AI will join automatically,
             record it, and process it the same way as an upload — no need to record it
             yourself.
           </p>
@@ -253,7 +253,7 @@ export function DashboardClient({ initialMeetings, deals: initialDeals }: { init
       <section className="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-white p-6 shadow-sm">
         <h2 className="text-sm font-medium text-slate-900">Upload a meeting recording</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Audio or video, up to 500MB. Anchor will transcribe it, summarize it, and
+          Audio or video, up to 500MB. Anchor.AI will transcribe it, summarize it, and
           remember the people in it for next time.
         </p>
         <form

@@ -507,7 +507,7 @@ export async function mergeDealMemory(params: {
     model: MODEL,
     max_tokens: 1500,
     system:
-      "You maintain the working memory of a sales deal across all its meetings, emails and notes — the one place the team (and Anchor's live call help) reads to know where the deal stands and what to do next. Keep it complete on what matters and accurate. Never invent details that weren't given to you.",
+      "You maintain the working memory of a sales deal across all its meetings, emails and notes — the one place the team (and Anchor.AI's live call help) reads to know where the deal stands and what to do next. Keep it complete on what matters and accurate. Never invent details that weren't given to you.",
     tools: [DEAL_MEMORY_TOOL],
     tool_choice: { type: "tool", name: DEAL_MEMORY_TOOL.name },
     messages: [{ role: "user", content: promptBody }],

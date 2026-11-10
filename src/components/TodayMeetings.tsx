@@ -98,13 +98,13 @@ export function TodayMeetings() {
           return;
         }
         focusWindow.cancel();
-        throw new Error(body.error || "Couldn't send Anchor to that meeting");
+        throw new Error(body.error || "Couldn't send Anchor.AI to that meeting");
       }
       if (body.meeting?.id) focusWindow.attach(body.meeting.id);
       else focusWindow.cancel();
       router.push(`/dashboard/deals/${m.dealId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't send Anchor to that meeting");
+      setError(err instanceof Error ? err.message : "Couldn't send Anchor.AI to that meeting");
       setJoiningId(null);
     }
   }
@@ -152,7 +152,7 @@ export function TodayMeetings() {
                   disabled={joiningId === m.eventId || !m.joinUrl}
                   title={
                     m.joinUrl
-                      ? "Opens the meeting and sends Anchor in"
+                      ? "Opens the meeting and sends Anchor.AI in"
                       : "No Zoom/Meet/Teams link found on this invite — paste it below instead"
                   }
                   className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"

@@ -109,7 +109,7 @@ export function SpecialtyBuilder({
     <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-sm font-medium text-slate-900">Specialty{forTeamName ? ` · ${forTeamName}` : ""}</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Anchor researches the company and builds an expert playbook and tools for exactly what it does, not just the broad industry. Calls are
+        Anchor.AI researches the company and builds an expert playbook and tools for exactly what it does, not just the broad industry. Calls are
         coached with it, and its tools appear first on every deal.
       </p>
 

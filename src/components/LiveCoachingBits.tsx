@@ -165,7 +165,7 @@ export function AnswerFeedback({
         </button>
         <button
           type="button"
-          title="Not right — tell Anchor what to say instead"
+          title="Not right — tell Anchor.AI what to say instead"
           disabled={state === "saving"}
           onClick={() => setFixing((f) => !f)}
           className={`${btn} ${rating === "down" ? "bg-red-50 text-red-700" : ""}`}
@@ -173,7 +173,7 @@ export function AnswerFeedback({
           👎
         </button>
         {state === "saved" && (
-          <span className="text-emerald-700">{rating === "up" ? "Anchor will answer like this." : "Thanks — Anchor learned that."}</span>
+          <span className="text-emerald-700">{rating === "up" ? "Anchor.AI will answer like this." : "Thanks — Anchor.AI learned that."}</span>
         )}
         {state === "error" && <span className="text-red-600">Couldn&apos;t save — try again.</span>}
       </div>
@@ -184,7 +184,7 @@ export function AnswerFeedback({
             value={correction}
             onChange={(e) => setCorrection(e.target.value)}
             rows={2}
-            placeholder="What should Anchor have said? (optional)"
+            placeholder="What should Anchor.AI have said? (optional)"
             className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800 outline-none focus:border-brand"
           />
           <div className="flex gap-2">
@@ -194,7 +194,7 @@ export function AnswerFeedback({
               onClick={() => send("down", correction.trim())}
               className="rounded-md bg-brand px-2.5 py-1 font-medium text-white hover:bg-brand-dark disabled:opacity-50"
             >
-              {correction.trim() ? "Teach Anchor" : "Just mark it wrong"}
+              {correction.trim() ? "Teach Anchor.AI" : "Just mark it wrong"}
             </button>
             <button type="button" onClick={() => setFixing(false)} className="text-slate-400 hover:text-slate-600">
               Cancel

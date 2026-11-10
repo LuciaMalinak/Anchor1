@@ -95,7 +95,7 @@ export function SuggestedInvites({ meetingId }: { meetingId: string }) {
       if (res.status === 403 && responseBody.connectUrl) {
         if (afterPermission) {
           throw new Error(
-            "Anchor needs permission to add events to your Google Calendar. Click Add to calendar and allow it on Google's screen."
+            "Anchor.AI needs permission to add events to your Google Calendar. Click Add to calendar and allow it on Google's screen."
           );
         }
         stashPendingGoogleAction("calendar", meetingId, p);

@@ -79,7 +79,7 @@ export async function draftNudgeEmail(params: {
   const out = await callTool<{ subject?: unknown; body?: unknown }>({
     system:
       "You write short, warm, specific follow-up emails that restart stalled business conversations, in the sender's own voice. Use only the facts you're given; never invent commitments, prices or dates.",
-    prompt: `${params.senderName} hasn't heard from ${params.recipientName ?? "the other side"} on "${params.dealName}" in ${params.daysQuiet} days. Write the nudge email.\n\nWhat Anchor knows about this deal:\n${params.context}`,
+    prompt: `${params.senderName} hasn't heard from ${params.recipientName ?? "the other side"} on "${params.dealName}" in ${params.daysQuiet} days. Write the nudge email.\n\nWhat Anchor.AI knows about this deal:\n${params.context}`,
     tool: NUDGE_TOOL,
     maxTokens: 600,
   });
@@ -127,7 +127,7 @@ export async function writePreCallBrief(params: { dealName: string; context: str
   const out = await callTool<Record<string, unknown>>({
     system:
       "You prepare busy salespeople and account managers for their next call. Be specific and brief. Use only the facts you're given; if something isn't known, leave it out rather than guessing.",
-    prompt: `Write the pre-call brief for the next call on "${params.dealName}".\n\nWhat Anchor knows:\n${params.context}`,
+    prompt: `Write the pre-call brief for the next call on "${params.dealName}".\n\nWhat Anchor.AI knows:\n${params.context}`,
     tool: BRIEF_TOOL,
     maxTokens: 1200,
   });

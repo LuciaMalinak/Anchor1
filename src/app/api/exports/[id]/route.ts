@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!ext) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const data = await readExport(session.user.id, id);
   if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const name = (req.nextUrl.searchParams.get("name") || "Anchor").replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor";
+  const name = (req.nextUrl.searchParams.get("name") || "Anchor.AI").replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor.AI";
   return new NextResponse(new Uint8Array(data), {
     headers: {
       "Content-Type": EXPORT_TYPES[ext],

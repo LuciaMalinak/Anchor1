@@ -102,7 +102,7 @@ function BeforePanel() {
         <div className="mt-5 rounded-md border border-accent/40 bg-accent/5 px-4 py-3">
           <p className="text-sm text-slate-700">
             <span className="font-semibold text-accent">Escalate if:</span> contract term or
-            discount beyond 10%. Anchor pings you live.
+            discount beyond 10%. Anchor.AI pings you live.
           </p>
         </div>
       </div>

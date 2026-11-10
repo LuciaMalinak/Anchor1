@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     const start = `${meeting.start}:00`;
     const result = await createCalendarEvent(userId, {
       title: meeting.title,
-      description: `About: ${email.subject}\n\nSuggested by Anchor from ${email.fromName}'s email.`,
+      description: `About: ${email.subject}\n\nSuggested by Anchor.AI from ${email.fromName}'s email.`,
       startISO: start,
       endISO: endISO(start, meeting.durationMinutes),
       timeZone: safeTimeZone(meeting.timeZone),

@@ -125,7 +125,7 @@ export async function buildWorkspaceContext(
         .filter(Boolean)
         .join("; ");
       parts.push(line);
-      if (d.memory) parts.push(`  What Anchor remembers: ${clip(d.memory, 600)}`);
+      if (d.memory) parts.push(`  What Anchor.AI remembers: ${clip(d.memory, 600)}`);
       if (d.notes) parts.push(`  Notes: ${clip(d.notes, 300)}`);
       if (d.newsHeadline) parts.push(`  Recent news: ${clip(d.newsHeadline, 200)}`);
     }
@@ -198,7 +198,7 @@ export async function buildMeetingContext(
   parts.push(`Today is ${day(new Date())}.`);
   parts.push(`Meeting: "${meeting.title}" on ${day(meeting.occurredAt)}${deal ? ` · deal: ${deal.name} (stage ${deal.stage})` : ""}.`);
   if (people.length) parts.push(`People in the call: ${[...new Set(nameByLabel.values())].join(", ")}.`);
-  if (deal?.memory) parts.push(`\nWhat Anchor remembers about this deal: ${clip(deal.memory, 1200)}`);
+  if (deal?.memory) parts.push(`\nWhat Anchor.AI remembers about this deal: ${clip(deal.memory, 1200)}`);
   if (summary) {
     parts.push(`\nSummary: ${summary.overview}`);
     if (summary.keyPoints?.length) parts.push(`Key points:\n${summary.keyPoints.map((k) => `- ${k}`).join("\n")}`);

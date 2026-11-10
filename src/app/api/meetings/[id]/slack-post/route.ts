@@ -61,7 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       {
         error:
           message === "channel_not_found" || message === "not_in_channel"
-            ? "Anchor can't post in that channel. Pick a public channel, or invite the Anchor app to it in Slack."
+            ? "Anchor.AI can't post in that channel. Pick a public channel, or invite the Anchor.AI app to it in Slack."
             : message.startsWith("Slack isn't connected")
               ? message
               : "Slack didn't accept that. Try again, or reconnect Slack on the Integrations page.",

@@ -208,7 +208,7 @@ const MIGRATIONS = [
 async function createTablesIfEmpty(): Promise<void> {
   const [{ exists }] = await rawClient<{ exists: boolean }[]>`select to_regclass('public."user"') is not null as exists`;
   if (exists) return;
-  console.log(`[startupMigrations] empty database: creating Anchor's tables (${BASELINE_STATEMENTS.length} statements)`);
+  console.log(`[startupMigrations] empty database: creating Anchor.AI's tables (${BASELINE_STATEMENTS.length} statements)`);
   await rawClient.begin(async (tx) => {
     for (const sql of BASELINE_STATEMENTS) await tx.unsafe(sql);
   });
