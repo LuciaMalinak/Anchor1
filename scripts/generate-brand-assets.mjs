@@ -94,6 +94,13 @@ async function write(rel, data) {
 // Website: browser tab, home-screen icon, email header.
 await write("src/app/icon.png", await tileIcon(512));
 await write("src/app/apple-icon.png", await png(180, { tile: NAVY, pad: 0.16, body: WHITE, ring: COPPER }));
+
+// Phone home-screen app (src/app/manifest.ts). "Maskable" is full-bleed
+// navy with the anchor inside Android's safe circle, so any icon shape
+// (circle, squircle) crops it cleanly.
+await write("public/pwa/icon-192.png", await tileIcon(192));
+await write("public/pwa/icon-512.png", await tileIcon(512));
+await write("public/pwa/maskable-512.png", await png(512, { tile: NAVY, pad: 0.24, body: WHITE, ring: COPPER }));
 await write(
   "src/app/favicon.ico",
   ico(await Promise.all([16, 32, 48].map(async (size) => ({ size, data: await tileIcon(size, 0.2) })))),

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { getAppVersion } from "@/lib/appVersion";
@@ -12,6 +12,16 @@ import { getAppVersion } from "@/lib/appVersion";
 export const metadata: Metadata = {
   title: "Anchor",
   description: "Meeting context that carries forward.",
+  // iPhone "Add to Home Screen": open full-screen, named Anchor (icon from
+  // app/apple-icon.png; Android uses app/manifest.ts).
+  appleWebApp: { capable: true, title: "Anchor", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#12294A",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

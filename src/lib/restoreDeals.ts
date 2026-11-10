@@ -19,6 +19,10 @@ type Sql = postgres.Sql;
 
 export type RestorePlan = {
   copyTakenOf: string | null;
+  // What the copy holds, to tell a real recovered copy from an empty or
+  // wrong database: row counts and the newest activity in it (roughly the
+  // moment it's a copy of).
+  copy: { users: number; teams: number; deals: number; meetings: number; newestActivity: string | null; personFound: boolean };
   team: string | null;
   deals: { id: string; name: string; stage: string | null; created: string | null }[];
   rowsByTable: Record<string, number>;
@@ -66,12 +70,40 @@ function connect(): Sql {
   return postgres(url, { max: 2, idle_timeout: 20 });
 }
 
+async function copyStats(copy: Sql, userId: string): Promise<RestorePlan["copy"]> {
+  const count = async (table: string) => {
+    try {
+      const [{ n }] = await copy.unsafe(`select count(*)::int as n from ${q(table)}`);
+      return n as number;
+    } catch {
+      return -1; // table missing: not an Anchor database
+    }
+  };
+  const [users, teams, dealCount, meetingCount] = await Promise.all([count("user"), count("team"), count("deal"), count("meeting")]);
+  let newestActivity: string | null = null;
+  try {
+    const [{ t }] = await copy<{ t: Date | null }[]>`
+      select greatest((select max("updatedAt") from "meeting"), (select max("updatedAt") from "deal"), (select max("createdAt") from "user")) as t`;
+    newestActivity = t ? new Date(t).toISOString() : null;
+  } catch {
+    newestActivity = null;
+  }
+  let personFound = false;
+  try {
+    personFound = (await copy`select 1 from "user" where id = ${userId}`).length > 0;
+  } catch {
+    personFound = false;
+  }
+  return { users, teams, deals: dealCount, meetings: meetingCount, newestActivity, personFound };
+}
+
 export async function planRestore(userId: string): Promise<RestorePlan> {
   const copy = connect();
   try {
     const { copyTeamId } = await findPerson(copy, userId);
-    const [{ now }] = await copy<{ now: Date }[]>`select now()`;
-    if (!copyTeamId) return { copyTakenOf: null, team: null, deals: [], rowsByTable: {}, callsToRelink: 0 };
+    const stats = await copyStats(copy, userId);
+    const now = stats.newestActivity;
+    if (!copyTeamId) return { copyTakenOf: null, copy: stats, team: null, deals: [], rowsByTable: {}, callsToRelink: 0 };
     const [team] = await copy<{ name: string }[]>`select name from "team" where id = ${copyTeamId}`;
     const lost = await missingDeals(copy, copyTeamId);
     const ids = lost.map((d) => d.id as string);
@@ -90,7 +122,8 @@ export async function planRestore(userId: string): Promise<RestorePlan> {
       }
     }
     return {
-      copyTakenOf: now ? new Date(now).toISOString() : null,
+      copyTakenOf: now,
+      copy: stats,
       team: team?.name ?? null,
       deals: lost.map((d) => ({
         id: d.id as string,

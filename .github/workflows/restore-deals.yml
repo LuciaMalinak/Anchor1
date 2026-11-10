@@ -41,7 +41,8 @@ jobs:
                   print(f"- {t}: {n}")
           else:
               p = d["plan"]
-              print(f"Copy is of: {p['copyTakenOf']} · team: {p['team']}\n")
+              c = p["copy"]
+              print(f"Copy holds: {c['users']} users, {c['teams']} teams, {c['deals']} deals, {c['meetings']} calls; newest activity {c['newestActivity']}; person in copy: {c['personFound']} · team: {p['team']}\n")
               print(f"{len(p['deals'])} deal(s) missing from the live database:")
               for x in p["deals"]:
                   print(f"- **{x['name']}** ({x['stage'] or 'no stage'}, created {x['created']})")
