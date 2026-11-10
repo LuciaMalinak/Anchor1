@@ -236,6 +236,10 @@ export default async function DashboardLayout({
           Privacy
         </Link>{" "}
         ·{" "}
+        <Link href="/security" className="hover:text-slate-600 hover:underline">
+          Security
+        </Link>{" "}
+        ·{" "}
         <a
           href="https://www.linkedin.com/company/143888744/"
           target="_blank"
