@@ -215,6 +215,15 @@ const MIGRATIONS = [
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialtyStatus" text`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialtyRequestedAt" timestamp`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "specialtyError" text`,
+  // Ask Anchor learning (src/lib/askMemory.ts).
+  `ALTER TABLE "ask_log" ADD COLUMN IF NOT EXISTS "rating" integer`,
+  `ALTER TABLE "ask_log" ADD COLUMN IF NOT EXISTS "feedbackNote" text`,
+  `CREATE TABLE IF NOT EXISTS "ask_memory" (
+    "userId" uuid PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
+    "notes" text NOT NULL DEFAULT '',
+    "asksSinceUpdate" integer NOT NULL DEFAULT 0,
+    "updatedAt" timestamp NOT NULL DEFAULT now()
+  )`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

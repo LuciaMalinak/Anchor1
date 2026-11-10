@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { checkWorkbook, type CheckResult } from "@/lib/modelCheck";
 
 // Builds the Excel files Ask Anchor makes when someone asks for a model,
 // forecast or table (the create_spreadsheet tool in askTools.ts). The AI
@@ -67,11 +68,14 @@ function sheetName(name: string, used: Set<string>): string {
   return out;
 }
 
-function applyCell(cell: ExcelJS.Cell, raw: ModelCell, isHeader: boolean) {
+function applyCell(cell: ExcelJS.Cell, raw: ModelCell, isHeader: boolean, result?: unknown) {
   const spec = raw !== null && typeof raw === "object" ? raw : { v: raw };
   const formula = typeof spec.f === "string" ? spec.f : typeof spec.v === "string" && spec.v.startsWith("=") ? spec.v : null;
   if (formula) {
-    cell.value = { formula: formula.replace(/^=/, "") } as ExcelJS.CellFormulaValue;
+    // The calculated result is saved with the formula (see modelCheck.ts)
+    // so previews show numbers; Excel recalculates on open anyway.
+    const cached = typeof result === "number" || typeof result === "string" || typeof result === "boolean" ? { result } : {};
+    cell.value = { formula: formula.replace(/^=/, ""), ...cached } as ExcelJS.CellFormulaValue;
   } else if (spec.v !== undefined && spec.v !== null) {
     cell.value = spec.v;
   }
@@ -91,7 +95,38 @@ function applyCell(cell: ExcelJS.Cell, raw: ModelCell, isHeader: boolean) {
   if (spec.note) cell.note = spec.note;
 }
 
+const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// A sheet whose name had to change (too long, characters Excel doesn't
+// allow, a duplicate) would break every formula pointing at it, so those
+// references are rewritten to the new name.
+function renameSheetRefs(rows: ModelCell[][], renames: [string, string][]): ModelCell[][] {
+  if (!renames.length) return rows;
+  const fix = (f: string) =>
+    renames.reduce(
+      (out, [from, to]) =>
+        out
+          .replace(new RegExp(`'${escapeRe(from.replace(/'/g, "''"))}'!`, "gi"), `'${to.replace(/'/g, "''")}'!`)
+          .replace(new RegExp(`(^|[^A-Za-z0-9_.'])${escapeRe(from)}!`, "gi"), `$1'${to.replace(/'/g, "''")}'!`),
+      f
+    );
+  return rows.map((row) =>
+    (row ?? []).map((cell) => {
+      if (cell && typeof cell === "object") {
+        if (typeof cell.f === "string") return { ...cell, f: fix(cell.f) };
+        if (typeof cell.v === "string" && cell.v.startsWith("=")) return { ...cell, v: fix(cell.v) };
+      }
+      return typeof cell === "string" && cell.startsWith("=") ? fix(cell) : cell;
+    })
+  );
+}
+
 export async function buildModelWorkbook(spec: ModelSpec): Promise<Buffer> {
+  return (await buildCheckedWorkbook(spec)).data;
+}
+
+// The workbook plus the check of every formula in it (modelCheck.ts).
+export async function buildCheckedWorkbook(spec: ModelSpec): Promise<{ data: Buffer; check: CheckResult }> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Anchor.AI";
   wb.created = new Date();
@@ -127,16 +162,24 @@ export async function buildModelWorkbook(spec: ModelSpec): Promise<Buffer> {
     r++;
   }
 
-  for (const sheet of spec.sheets.slice(0, MAX_SHEETS)) {
-    const ws = wb.addWorksheet(sheetName(sheet.name, used));
+  const named = spec.sheets.slice(0, MAX_SHEETS).map((sheet) => ({ sheet, name: sheetName(sheet.name, used) }));
+  const renames = named.filter(({ sheet, name }) => sheet.name !== name).map(({ sheet, name }) => [sheet.name, name] as [string, string]);
+  const prepared = named.map(({ sheet, name }) => ({
+    sheet,
+    name,
+    rows: renameSheetRefs((sheet.rows ?? []).slice(0, MAX_ROWS).map((r) => (r ?? []).slice(0, MAX_COLS)), renames),
+  }));
+  const check = checkWorkbook(prepared.map(({ name, rows }) => ({ name, rows })));
+
+  for (const { sheet, name, rows } of prepared) {
+    const ws = wb.addWorksheet(name);
     const headerRows = Math.max(0, Math.min(sheet.headerRows ?? 1, 5));
-    const rows = (sheet.rows ?? []).slice(0, MAX_ROWS);
     let widest = 0;
     rows.forEach((row, ri) => {
-      (row ?? []).slice(0, MAX_COLS).forEach((raw, ci) => {
+      row.forEach((raw, ci) => {
         widest = Math.max(widest, ci + 1);
         if (raw === null || raw === undefined || raw === "") return;
-        applyCell(ws.getCell(ri + 1, ci + 1), raw, ri < headerRows);
+        applyCell(ws.getCell(ri + 1, ci + 1), raw, ri < headerRows, check.results.get(`${name}!${ri + 1},${ci + 1}`));
       });
     });
     for (let c = 1; c <= widest; c++) {
@@ -146,5 +189,5 @@ export async function buildModelWorkbook(spec: ModelSpec): Promise<Buffer> {
     if (headerRows) ws.views = [{ state: "frozen", ySplit: headerRows, xSplit: 1 }];
   }
 
-  return Buffer.from(await wb.xlsx.writeBuffer());
+  return { data: Buffer.from(await wb.xlsx.writeBuffer()), check };
 }

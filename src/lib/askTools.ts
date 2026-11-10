@@ -4,7 +4,8 @@ import { fetchRelevantDropboxDocuments, getDropboxConnection } from "@/lib/integ
 import { formatDocumentContext, MAX_SEARCH_TERMS, type DocumentContextItem } from "@/lib/integrations/documentSearch";
 import { randomUUID } from "crypto";
 import type { ServerTool } from "@/lib/liveAssist";
-import { buildModelWorkbook, type ModelSpec } from "@/lib/spreadsheetModel";
+import { buildCheckedWorkbook, type ModelCell, type ModelSpec } from "@/lib/spreadsheetModel";
+import type { CheckResult } from "@/lib/modelCheck";
 import { buildDeck, type DeckSpec } from "@/lib/presentationDeck";
 import { saveExport } from "@/lib/storage";
 
@@ -72,15 +73,26 @@ Lay it out like a banker's model:
 - "Model" sheet: periods across the top (e.g. 2026, 2027, 2028 or Q1–Q4), line items down the side, units in the labels. Every number here is an Excel formula built from the Assumptions sheet ('Assumptions'!B5) or from rows above it — never a typed-in result — so changing an input updates everything.
 - "Summary" sheet: the key outputs (revenue, margin, cash, valuation, payback…) as formulas pointing at the Model, plus a base / upside / downside case when it's a forecast or valuation.
 - "Sources" sheet: every source used, with links.
-Cell positions are exact: rows[0] is Excel row 1 and column 0 is column A, so check every formula's references against where you put things. Use fmt (currency, percent, number, integer, multiple) on every number. After creating it, reply in a few lines: what the model covers, the 3–5 inputs that drive it and where each came from, what was assumed, and the download link exactly as the tool returned it. Don't quote calculated results you didn't work out yourself; point to the file for those.`;
+Cell positions are exact: rows[0] is Excel row 1 and column 0 is column A, so check every formula's references against where you put things. Sheet names in formulas must match the sheet names you create (quote names with spaces: 'Hotel P&L'!C5). Use fmt (currency, percent, number, integer, multiple) on every number, and put a short label with its unit in column A of every row.
+
+Standard structures to follow (adapt to what was asked):
+- Hotel or resort valuation: rooms, occupancy, ADR → RevPAR (= occupancy × ADR) and rooms revenue (= rooms × 365 × occupancy × ADR); F&B and other revenue as a share of rooms revenue or per occupied room; departmental costs, undistributed costs (admin, sales & marketing, property operations, utilities) → GOP and GOP margin; management fees (base % of revenue, incentive % of GOP), FF&E reserve (typically 3–4% of revenue), fixed charges (property tax, insurance) → EBITDA / NOI. Value = stabilised NOI ÷ cap rate, cross-checked with a 10-year DCF (NOI less capex, exit value = year-11 NOI ÷ terminal cap rate, less selling costs), discounted at the discount rate; show value per key. Ramp-up years for a new opening.
+- Company valuation / DCF: revenue drivers → EBITDA → EBIT → taxes → unlevered free cash flow (+ D&A − capex − change in working capital); WACC or a stated discount rate; terminal value by exit multiple and/or perpetuity growth; enterprise value → equity value (− net debt); implied multiples.
+- Investment returns: sources and uses, debt (amount, rate, amortisation via PMT), cash flows to equity, IRR (=IRR or =XIRR), equity multiple (MOIC), payback, cash-on-cash.
+- Every forecast or valuation: a Summary sheet with the headline answer, plus a sensitivity grid built from formulas (e.g. value across 3–5 cap rates × 3–5 NOI or ADR levels; IRR across exit cap rate × hold period) — each grid cell its own formula using that row's and column's input.
+- Units: show money in whole dollars (fmt currency), rates as fractions with fmt percent, multiples with fmt multiple.
+
+After create_spreadsheet, read its check. If it lists problems, fix every one with fix_spreadsheet before replying (change only the cells involved) — never hand the person a model with errors. Then reply in a few lines: what the model covers, the headline results quoted from the tool's "Key outputs" (never your own arithmetic), the 3–5 inputs that drive it and where each came from, what was assumed, and the download link exactly as the tool returned it. When the person asks to change an input or add something small to a model you just made, use fix_spreadsheet on it rather than building a new file.`;
 
 // Decks the same way: the deal's facts, then market data, then labelled
 // assumptions — written the way a banker builds a client deck.
 export const DECK_RULES = `When the person asks for a presentation, deck, slides, pitch, PowerPoint or board/client update, build it with create_presentation. Source the content exactly as for a model: this deal's own calls, emails and files first (search_drive / search_dropbox when connected), then market data from web pages you actually opened, then clearly labelled assumptions. Write it like an investment banker's client deck:
 - Every slide title is the takeaway as a full sentence ("Akoya can reach $1.2M ARR by 2028 with 3 hotels"), not a topic label ("Revenue").
 - One message per slide; 3-5 short bullets at most, each with a specific fact or number.
-- Usual flow: cover, executive summary (the answer up front), the situation / what we heard from the client, the numbers (a chart or metrics slide), options or recommendation, risks, next steps with owners and dates, sources.
-- Use a chart slide for any series of numbers and a metrics slide for 2-4 headline figures; tables only for comparisons.
+- Usual flow: cover, agenda (for 8+ slides), executive summary (the answer up front, often a metrics slide), the situation / what we heard from the client (a quote slide with their own words from a call works well), the numbers (chart or table), options (a comparison slide, with the recommended one marked), risks, next steps (a timeline slide with dates and owners). A Sources slide is added automatically from each slide's source.
+- Use a chart slide for any series of numbers, a metrics slide for 2-4 headline figures, a table for detailed comparisons, a comparison slide for options. Give most content slides a takeaway: the "so what" in one line.
+- Lead each bullet with its key fact or number. Use the client's brand colours (theme) only when the person asks for them.
+- When the deck presents a model you built, use the numbers from create_spreadsheet's Key outputs, never your own arithmetic.
 - Put each slide's sources in its source field (call and date, file name, website). Mark assumptions as assumptions.
 Afterwards reply in a few lines: what the deck covers, its main message, what was assumed, and the download link exactly as the tool returned it.`;
 
@@ -95,6 +107,11 @@ function presentationTool(userId: string): ServerTool {
         properties: {
           title: { type: "string", description: "Deck title for the cover." },
           subtitle: { type: "string", description: "Cover subtitle, e.g. the client and date." },
+          theme: {
+            type: "object",
+            description: "Optional brand colours as 6-digit hex, e.g. the client's or the person's company colours when they ask for them.",
+            properties: { primary: { type: "string" }, accent: { type: "string" } },
+          },
           slides: {
             type: "array",
             minItems: 1,
@@ -102,7 +119,10 @@ function presentationTool(userId: string): ServerTool {
             items: {
               type: "object",
               properties: {
-                layout: { type: "string", enum: ["title", "section", "bullets", "two_column", "metrics", "table", "chart"] },
+                layout: {
+                  type: "string",
+                  enum: ["title", "section", "agenda", "bullets", "two_column", "metrics", "table", "chart", "timeline", "comparison", "quote"],
+                },
                 title: { type: "string", description: "The takeaway as a sentence." },
                 subtitle: { type: "string" },
                 bullets: { type: "array", items: { type: "string" } },
@@ -126,6 +146,22 @@ function presentationTool(userId: string): ServerTool {
                   },
                   required: ["type", "categories", "series"],
                 },
+                steps: {
+                  type: "array",
+                  description: "timeline layout: 3-6 dated steps.",
+                  items: { type: "object", properties: { when: { type: "string" }, what: { type: "string" }, owner: { type: "string" } }, required: ["when", "what"] },
+                },
+                options: {
+                  type: "array",
+                  description: "comparison layout: 2-4 options side by side; mark the one you recommend.",
+                  items: {
+                    type: "object",
+                    properties: { name: { type: "string" }, bullets: { type: "array", items: { type: "string" } }, recommended: { type: "boolean" } },
+                    required: ["name", "bullets"],
+                  },
+                },
+                quote: { type: "object", description: "quote layout: a client's own words from a call.", properties: { text: { type: "string" }, by: { type: "string" } }, required: ["text"] },
+                takeaway: { type: "string", description: "The slide's 'so what' in one line, shown in a bar at the bottom." },
                 source: { type: "string", description: "Where this slide's facts came from." },
                 notes: { type: "string", description: "Speaker notes." },
               },
@@ -139,11 +175,118 @@ function presentationTool(userId: string): ServerTool {
     async run(input) {
       const spec = input as unknown as DeckSpec;
       if (!spec?.title || !Array.isArray(spec.slides) || !spec.slides.length) return "No slides given — nothing was created.";
+      if (spec.slides.some((x) => !x || typeof x.title !== "string" || typeof x.layout !== "string")) {
+        return "Every slide needs a layout and a title — nothing was created. Send the whole deck again.";
+      }
       const data = await buildDeck(spec);
       const fileId = `${randomUUID()}.pptx`;
       await saveExport(userId, fileId, data);
       const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor.AI deck";
       return `Created "${name}.pptx" (${spec.slides.length + 1} slides including the cover). Give the person this link exactly: [Download ${name}.pptx](/api/exports/${fileId}?name=${encodeURIComponent(name)})`;
+    },
+  };
+}
+
+// Workbooks made in this answer, so fix_spreadsheet can patch one and save
+// it again under the same link instead of rebuilding it from scratch.
+// Kept in memory for an hour: fixes happen within the same answer.
+const recentWorkbooks = new Map<string, { userId: string; spec: ModelSpec; name: string; at: number }>();
+function rememberWorkbook(fileId: string, userId: string, spec: ModelSpec, name: string) {
+  const now = Date.now();
+  for (const [id, w] of recentWorkbooks) if (now - w.at > 60 * 60_000) recentWorkbooks.delete(id);
+  recentWorkbooks.set(fileId, { userId, spec, name, at: now });
+}
+
+// What the tool tells the model after saving: the link, whether every
+// formula calculated, and the key outputs to quote.
+function workbookReport(fileId: string, name: string, sheetCount: number, check: CheckResult): string {
+  const link = `[Download ${name}.xlsx](/api/exports/${fileId}?name=${encodeURIComponent(name)})`;
+  const lines = [`Saved "${name}.xlsx" (${sheetCount + 1} sheets including the cover; file id ${fileId}).`];
+  if (check.problems.length) {
+    lines.push(
+      `Checked all ${check.formulas} formulas: ${check.problems.length} problem(s) to fix before you reply. Fix them with fix_spreadsheet (file id ${fileId}), changing only the cells involved:`,
+      ...check.problems.map((p) => `- ${p}`)
+    );
+  } else {
+    lines.push(`Checked all ${check.formulas} formulas: every one calculates.`);
+  }
+  if (check.keyOutputs.length) {
+    lines.push("Key outputs, as calculated (quote these, never your own arithmetic):", ...check.keyOutputs.map((k) => `- ${k}`));
+  }
+  lines.push(`Give the person this link exactly: ${link}`);
+  return lines.join("\n");
+}
+
+function fixSpreadsheetTool(userId: string): ServerTool {
+  return {
+    tool: {
+      name: "fix_spreadsheet",
+      description:
+        "Correct cells in an Excel model you just made with create_spreadsheet — for the problems its check reported, or a change the person asks for — and save it again under the same link. Only send the cells that change. Returns the new check and key outputs.",
+      input_schema: {
+        type: "object",
+        properties: {
+          file_id: { type: "string", description: "The file id create_spreadsheet returned, e.g. 1b2c….xlsx" },
+          changes: {
+            type: "array",
+            minItems: 1,
+            maxItems: 200,
+            items: {
+              type: "object",
+              properties: {
+                sheet: { type: "string", description: "Sheet name exactly as created." },
+                cell: { type: "string", description: "A1-style address, e.g. C7." },
+                value: { type: ["string", "number", "boolean", "null"], description: "A plain value (null clears the cell)." },
+                formula: { type: "string", description: "An Excel formula starting with =" },
+                fmt: { type: "string", enum: ["currency", "currency2", "percent", "number", "integer", "multiple", "date"] },
+                input: { type: "boolean" },
+                bold: { type: "boolean" },
+              },
+              required: ["sheet", "cell"],
+            },
+          },
+        },
+        required: ["file_id", "changes"],
+      },
+    },
+    async run(input) {
+      const fileId = typeof input.file_id === "string" ? input.file_id.trim() : "";
+      const saved = recentWorkbooks.get(fileId);
+      if (!saved || saved.userId !== userId) return "That file isn't one you made in this conversation, so it can't be patched. Create it again with create_spreadsheet.";
+      const changes = Array.isArray(input.changes) ? (input.changes as Record<string, unknown>[]) : [];
+      const spec: ModelSpec = structuredClone(saved.spec);
+      const skipped: string[] = [];
+      for (const ch of changes) {
+        const sheet = spec.sheets.find((x) => x.name.toLowerCase() === String(ch.sheet ?? "").toLowerCase());
+        const m = /^([A-Z]{1,3})(\d{1,5})$/i.exec(String(ch.cell ?? "").trim());
+        if (!sheet || !m) {
+          skipped.push(`${ch.sheet}!${ch.cell}`);
+          continue;
+        }
+        const col = m[1].toUpperCase().split("").reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0) - 1;
+        const row = Number(m[2]) - 1;
+        while (sheet.rows.length <= row) sheet.rows.push([]);
+        const line = sheet.rows[row] ?? (sheet.rows[row] = []);
+        while (line.length <= col) line.push(null);
+        const before = line[col];
+        const base = before && typeof before === "object" ? { ...before } : before === null || before === undefined ? {} : { v: before };
+        const next: Exclude<ModelCell, string | number | boolean | null> = { ...base };
+        if (typeof ch.formula === "string" && ch.formula.trim()) {
+          next.f = ch.formula.trim().startsWith("=") ? ch.formula.trim() : `=${ch.formula.trim()}`;
+          delete next.v;
+        } else if ("value" in ch) {
+          delete next.f;
+          next.v = ch.value as string | number | boolean | null;
+        }
+        if (typeof ch.fmt === "string") next.fmt = ch.fmt;
+        if (typeof ch.input === "boolean") next.input = ch.input;
+        if (typeof ch.bold === "boolean") next.bold = ch.bold;
+        line[col] = next.f === undefined && (next.v === null || next.v === undefined) ? null : next;
+      }
+      const { data, check } = await buildCheckedWorkbook(spec);
+      await saveExport(userId, fileId, data);
+      rememberWorkbook(fileId, userId, spec, saved.name);
+      return (skipped.length ? `Skipped (sheet or cell not found): ${skipped.join(", ")}\n` : "") + workbookReport(fileId, saved.name, spec.sheets.length, check);
     },
   };
 }
@@ -186,11 +329,14 @@ function spreadsheetTool(userId: string): ServerTool {
     async run(input) {
       const spec = input as unknown as ModelSpec;
       if (!spec?.title || !Array.isArray(spec.sheets) || !spec.sheets.length) return "No sheets given — nothing was created.";
-      const data = await buildModelWorkbook(spec);
+      const bad = spec.sheets.filter((x) => !x || typeof x.name !== "string" || !Array.isArray(x.rows));
+      if (bad.length) return "Every sheet needs a name and rows — nothing was created. Send the whole workbook again.";
+      const { data, check } = await buildCheckedWorkbook(spec);
       const fileId = `${randomUUID()}.xlsx`;
       await saveExport(userId, fileId, data);
       const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor.AI model";
-      return `Created "${name}.xlsx" (${spec.sheets.length + 1} sheets including the cover). Give the person this link exactly: [Download ${name}.xlsx](/api/exports/${fileId}?name=${encodeURIComponent(name)})`;
+      rememberWorkbook(fileId, userId, spec, name);
+      return workbookReport(fileId, name, spec.sheets.length, check);
     },
   };
 }
@@ -200,7 +346,7 @@ export async function loadAskTools(userId: string): Promise<{ serverTools: Serve
     getGoogleConnection(userId).catch(() => null),
     getDropboxConnection(userId).catch(() => null),
   ]);
-  const serverTools: ServerTool[] = [spreadsheetTool(userId), presentationTool(userId)];
+  const serverTools: ServerTool[] = [spreadsheetTool(userId), fixSpreadsheetTool(userId), presentationTool(userId)];
   const connected: string[] = [];
   const missing: string[] = [];
 

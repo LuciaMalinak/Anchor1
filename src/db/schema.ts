@@ -1037,10 +1037,26 @@ export const askLog = pgTable(
     dealId: uuid("dealId").references(() => deals.id, { onDelete: "set null" }),
     question: text("question").notNull(),
     answer: text("answer").notNull(),
+    // Thumbs up (1) or down (-1) from the person, with what to do
+    // differently; used to learn how they like answers (askMemory.ts).
+    rating: integer("rating"),
+    feedbackNote: text("feedbackNote"),
     createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   },
   (t) => [index("ask_log_meetingId_idx").on(t.meetingId, t.createdAt)]
 );
+
+// What Ask Anchor has learned about how one person likes to work: their
+// preferences, corrections and facts they've told it (src/lib/askMemory.ts).
+// Private to them; they can read, edit or clear it on their Profile.
+export const askMemory = pgTable("ask_memory", {
+  userId: uuid("userId")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  notes: text("notes").notNull().default(""),
+  asksSinceUpdate: integer("asksSinceUpdate").notNull().default(0),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
 
 // Answers Anchor has learned for questions clients ask — from how the
 // team actually answered them on past calls (learned after each call,

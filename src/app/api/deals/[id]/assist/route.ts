@@ -15,6 +15,7 @@ import { authenticateBearer } from "@/lib/apiToken";
 import { loadAskSources } from "@/lib/askSources";
 import { findRelevantPassages, formatPassages } from "@/lib/askRetrieval";
 import { saveAsk } from "@/lib/askLog";
+import { getAskMemory, noteAsk } from "@/lib/askMemory";
 
 const MAX_HISTORY_TURNS = 6;
 
@@ -203,7 +204,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // http(s) links clickable (FormattedMessage in AskAnchorPanel.tsx).
   const origin = process.env.AUTH_URL || req.nextUrl.origin;
   // Live lookups it can run mid-answer, e.g. searching their Google Drive.
-  const { serverTools, toolRules } = await loadAskTools(userId);
+  const [{ serverTools, toolRules }, askNotes] = await Promise.all([
+    loadAskTools(userId),
+    // What it has learned about how this person likes to work.
+    getAskMemory(userId),
+  ]);
   const actions: AskActions = {
     dealId,
     liveMeetingId: liveMeetingId ?? null,
@@ -229,14 +234,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           actions,
           serverTools,
           toolRules,
+          personal: askNotes,
         })) {
           answer += chunk;
           controller.enqueue(encoder.encode(chunk));
         }
         // Kept with the call (or deal) it was asked during — see askLog.ts.
-        void saveAsk({ userId, question, answer, dealId: dealId, meetingId: null }).catch((err) =>
-          console.error("[ask log] couldn't save:", err)
-        );
+        void saveAsk({ userId, question, answer, dealId: dealId, meetingId: null })
+          // Then learn from it (askMemory.ts).
+          .then(() => noteAsk(userId, question))
+          .catch((err) => console.error("[ask log] couldn't save:", err));
       } catch (err) {
         console.error(`[assist] stream failed for deal ${dealId}:`, err);
         controller.enqueue(
