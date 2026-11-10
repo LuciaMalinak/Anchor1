@@ -55,6 +55,12 @@ export default function TermsPage() {
             required before using Anchor.AI to record a call. Anchor.AI is not responsible for how you
             use the recording features.
           </p>
+          <p>
+            To help, when Anchor.AI&apos;s notetaker joins a call it posts a message in the meeting
+            chat telling everyone the call is being recorded, and the desktop app reminds you to tell
+            everyone when it starts recording. These reminders don&apos;t replace any notice or
+            consent the law requires of you.
+          </p>
         </Section>
 
         <Section title="3. Your account">
@@ -70,6 +76,10 @@ export default function TermsPage() {
           <ul className="list-disc space-y-1 pl-5">
             <li>Record or process a call without the notice or consent required by law;</li>
             <li>Upload content you don&apos;t have the right to share;</li>
+            <li>
+              Store payment card numbers, government ID numbers, passwords, or health information
+              about anyone (including hotel guests) — Anchor.AI isn&apos;t designed to hold them;
+            </li>
             <li>Attempt to access another user&apos;s or team&apos;s data without authorization;</li>
             <li>Reverse-engineer, resell, or use the Service to build a competing product;</li>
             <li>Use the Service in a way that violates any applicable law or third party&apos;s rights.</li>

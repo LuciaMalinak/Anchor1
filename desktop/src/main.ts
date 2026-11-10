@@ -381,6 +381,9 @@ async function beginRecordingUnguarded(windowId: string, title: string): Promise
     });
     throw err;
   }
+  // Recording notice: no bot is in the call when the desktop app records,
+  // so remind the person to tell everyone (some places require consent).
+  notify("Anchor.AI is recording this call", "Let everyone on the call know it's being recorded and transcribed.");
   return active;
 }
 
