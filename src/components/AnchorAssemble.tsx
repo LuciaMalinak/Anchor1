@@ -2,14 +2,15 @@
 
 import { useEffect, useRef } from "react";
 
-// The homepage hero's background: hundreds of points of light drift like
-// scattered notes from calls, gather into a large anchor behind the title,
-// hold, and drift apart again, on a slow loop. The cursor gently scatters
+// The homepage hero's background: hundreds of points of light roam the
+// whole hero as a network of neurons (fine lines link nearby points), then
+// stream together into a large anchor behind the title, hold, and burst
+// back out to the edges, on a slow loop. The cursor gently scatters
 // them. Canvas, no libraries; pauses when off screen, and shows the anchor
 // formed and still for anyone who prefers reduced motion.
 
-const MAX_PARTICLES = 2200;
-const CYCLE_S = 14; // drift 2.5s · gather 3.5s · hold 5s · release 3s
+const MAX_PARTICLES = 2800;
+const CYCLE_S = 15; // roam as a network 3s · gather 3.5s · hold 4.5s · burst out and roam 4s
 
 type P = { tx: number; ty: number; x: number; y: number; vx: number; vy: number; seed: number; copper: boolean };
 
@@ -65,7 +66,8 @@ export function AnchorAssemble() {
 
     function build() {
       const rect = canvas!.getBoundingClientRect();
-      D = Math.min(window.devicePixelRatio || 1, 2);
+      // 1.5x is plenty for soft points of light and keeps older laptops and phones smooth.
+      D = Math.min(window.devicePixelRatio || 1, 1.5);
       W = canvas!.width = Math.max(1, Math.round(rect.width * D));
       H = canvas!.height = Math.max(1, Math.round(rect.height * D));
       // Sample the anchor's shape: every few pixels inside it is a target.
@@ -73,7 +75,7 @@ export function AnchorAssemble() {
       off.width = W;
       off.height = H;
       const o = off.getContext("2d")!;
-      const s = Math.min(W * 0.9, H * 0.86);
+      const s = Math.min(W * 0.96, H * 1.0);
       o.translate(W / 2 - s / 2, H / 2 - s / 2);
       o.scale(s / 512, s / 512);
       drawAnchor(o);
@@ -97,16 +99,70 @@ export function AnchorAssemble() {
       }));
     }
 
+    // Fine lines between nearby points while they roam: a network of
+    // neurons across the whole hero. Every fourth point takes part, found
+    // through a coarse grid so it stays cheap.
+    function drawLinks(alpha: number) {
+      if (alpha <= 0.01) return;
+      const L = 86 * D;
+      const grid = new Map<number, P[]>();
+      const cols = Math.ceil(W / L) + 1;
+      for (let i = 0; i < parts.length; i += 4) {
+        const q = parts[i];
+        const k = Math.floor(q.y / L) * cols + Math.floor(q.x / L);
+        const cell = grid.get(k);
+        if (cell) cell.push(q);
+        else grid.set(k, [q]);
+      }
+      const near = new Path2D();
+      const far = new Path2D();
+      for (const [k, cell] of grid) {
+        for (const nk of [k, k + 1, k + cols - 1, k + cols, k + cols + 1]) {
+          const other = grid.get(nk);
+          if (!other) continue;
+          for (const a of cell)
+            for (const b of other) {
+              if (nk === k && a >= b) continue;
+              const d = Math.hypot(a.x - b.x, a.y - b.y);
+              if (d > L) continue;
+              const path = d < L * 0.55 ? near : far;
+              path.moveTo(a.x, a.y);
+              path.lineTo(b.x, b.y);
+            }
+        }
+      }
+      ctx!.lineWidth = 0.7 * D;
+      ctx!.strokeStyle = `rgba(224,180,150,${0.42 * alpha})`;
+      ctx!.stroke(near);
+      ctx!.strokeStyle = `rgba(224,180,150,${0.18 * alpha})`;
+      ctx!.stroke(far);
+    }
+
+    let lastBurst = -1;
     function frame(now: number) {
       const t = (now - start) / 1000;
+      const round = Math.floor(t / CYCLE_S);
       const cycle = t % CYCLE_S;
-      const pull = cycle < 2.5 ? 0 : cycle < 6 ? (cycle - 2.5) / 3.5 : cycle < 11 ? 1 : 1 - (cycle - 11) / 3;
+      // 0-3s roam as a network · 3-6.5s gather · 6.5-11s hold · 11s burst out and roam again
+      const ease = (x: number) => x * x * (3 - 2 * x);
+      const pull = cycle < 3 ? 0 : cycle < 6.5 ? ease((cycle - 3) / 3.5) : cycle < 11 ? 1 : 0;
+      // The burst: every point flies outward from the anchor towards the edges.
+      if (cycle >= 11 && lastBurst !== round) {
+        lastBurst = round;
+        for (const q of parts) {
+          const ang = Math.atan2(q.y - H / 2, q.x - W / 2) + (Math.random() - 0.5) * 0.9;
+          const speed = (8 + Math.random() * 16) * D;
+          q.vx += Math.cos(ang) * speed;
+          q.vy += Math.sin(ang) * speed;
+        }
+      }
       const R = 90 * D;
       ctx!.clearRect(0, 0, W, H);
+      drawLinks(1 - pull);
       ctx!.globalCompositeOperation = "lighter";
       for (const q of parts) {
-        q.vx += (q.tx - q.x) * 0.012 * pull + Math.sin(t * 0.4 + q.seed) * 0.07 * D * (1 - pull);
-        q.vy += (q.ty - q.y) * 0.012 * pull + Math.cos(t * 0.33 + q.seed) * 0.07 * D * (1 - pull);
+        q.vx += (q.tx - q.x) * 0.012 * pull + Math.sin(t * 0.4 + q.seed) * 0.09 * D * (1 - pull);
+        q.vy += (q.ty - q.y) * 0.012 * pull + Math.cos(t * 0.33 + q.seed) * 0.09 * D * (1 - pull);
         if (pointer.active) {
           const dx = q.x - pointer.x;
           const dy = q.y - pointer.y;
@@ -117,18 +173,23 @@ export function AnchorAssemble() {
             q.vy += (dy / (d + 1)) * f;
           }
         }
-        q.vx *= 0.88;
-        q.vy *= 0.88;
+        q.vx *= pull > 0 ? 0.88 : 0.94;
+        q.vy *= pull > 0 ? 0.88 : 0.94;
         q.x += q.vx;
         q.y += q.vy;
         if (pull === 0) {
-          if (q.x < 0) q.x += W;
-          if (q.x > W) q.x -= W;
-          if (q.y < 0) q.y += H;
-          if (q.y > H) q.y -= H;
+          // Roaming points bounce softly off the edges, so the network fills the whole hero.
+          if (q.x < 0 || q.x > W) {
+            q.vx *= -0.6;
+            q.x = Math.min(Math.max(q.x, 0), W);
+          }
+          if (q.y < 0 || q.y > H) {
+            q.vy *= -0.6;
+            q.y = Math.min(Math.max(q.y, 0), H);
+          }
         }
-        ctx!.fillStyle = q.copper ? "rgba(224,162,122,0.6)" : `rgba(255,255,255,${0.1 + 0.26 * pull})`;
-        ctx!.fillRect(q.x, q.y, 1.8 * D, 1.8 * D);
+        ctx!.fillStyle = q.copper ? "rgba(224,162,122,0.9)" : `rgba(255,255,255,${0.3 + 0.36 * pull})`;
+        ctx!.fillRect(q.x, q.y, 2.2 * D, 2.2 * D);
       }
       ctx!.globalCompositeOperation = "source-over";
     }
@@ -145,6 +206,7 @@ export function AnchorAssemble() {
         q.y = q.ty;
       }
       start = performance.now() - 8000;
+      lastBurst = 0;
       frame(performance.now());
     }
 
