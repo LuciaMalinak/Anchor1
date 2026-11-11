@@ -10,7 +10,7 @@ import { useEffect, useRef } from "react";
 // formed and still for anyone who prefers reduced motion.
 
 const MAX_PARTICLES = 2800;
-const CYCLE_S = 15; // roam as a network 3s · gather 3.5s · hold 4.5s · burst out and roam 4s
+const CYCLE_S = 14; // roam as a network 3s · gather 2s · hold 5s · burst out and roam 4s
 
 type P = { tx: number; ty: number; x: number; y: number; vx: number; vy: number; seed: number; copper: boolean };
 
@@ -143,11 +143,11 @@ export function AnchorAssemble() {
       const t = (now - start) / 1000;
       const round = Math.floor(t / CYCLE_S);
       const cycle = t % CYCLE_S;
-      // 0-3s roam as a network · 3-6.5s gather · 6.5-11s hold · 11s burst out and roam again
+      // 0-3s roam as a network · 3-5s gather · 5-10s hold · 10s burst out and roam again
       const ease = (x: number) => x * x * (3 - 2 * x);
-      const pull = cycle < 3 ? 0 : cycle < 6.5 ? ease((cycle - 3) / 3.5) : cycle < 11 ? 1 : 0;
+      const pull = cycle < 3 ? 0 : cycle < 5 ? ease((cycle - 3) / 2) : cycle < 10 ? 1 : 0;
       // The burst: every point flies outward from the anchor towards the edges.
-      if (cycle >= 11 && lastBurst !== round) {
+      if (cycle >= 10 && lastBurst !== round) {
         lastBurst = round;
         for (const q of parts) {
           const ang = Math.atan2(q.y - H / 2, q.x - W / 2) + (Math.random() - 0.5) * 0.9;
@@ -161,8 +161,8 @@ export function AnchorAssemble() {
       drawLinks(1 - pull);
       ctx!.globalCompositeOperation = "lighter";
       for (const q of parts) {
-        q.vx += (q.tx - q.x) * 0.012 * pull + Math.sin(t * 0.4 + q.seed) * 0.09 * D * (1 - pull);
-        q.vy += (q.ty - q.y) * 0.012 * pull + Math.cos(t * 0.33 + q.seed) * 0.09 * D * (1 - pull);
+        q.vx += (q.tx - q.x) * 0.02 * pull + Math.sin(t * 0.4 + q.seed) * 0.09 * D * (1 - pull);
+        q.vy += (q.ty - q.y) * 0.02 * pull + Math.cos(t * 0.33 + q.seed) * 0.09 * D * (1 - pull);
         if (pointer.active) {
           const dx = q.x - pointer.x;
           const dy = q.y - pointer.y;
@@ -205,7 +205,7 @@ export function AnchorAssemble() {
         q.x = q.tx;
         q.y = q.ty;
       }
-      start = performance.now() - 8000;
+      start = performance.now() - 7000;
       lastBurst = 0;
       frame(performance.now());
     }
