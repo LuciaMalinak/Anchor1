@@ -205,7 +205,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const origin = process.env.AUTH_URL || req.nextUrl.origin;
   // Live lookups it can run mid-answer, e.g. searching their Google Drive.
   const [{ serverTools, toolRules }, askNotes] = await Promise.all([
-    loadAskTools(userId),
+    loadAskTools(userId, { timeZone: typeof body.timeZone === "string" ? body.timeZone : null }),
     // What it has learned about how this person likes to work.
     getAskMemory(userId),
   ]);

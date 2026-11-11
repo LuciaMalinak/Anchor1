@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
   const [leadStyle, { serverTools, toolRules }, askNotes] = await Promise.all([
     getDealLeadStyle(leadUserId, { allowSynchronousRebuild: false }),
     // Live lookups it can run mid-answer, e.g. searching their Google Drive.
-    loadAskTools(userId),
+    loadAskTools(userId, { timeZone }),
     // What it has learned about how this person likes to work.
     getAskMemory(userId),
   ]);

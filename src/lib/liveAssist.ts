@@ -405,6 +405,10 @@ function toolStatus(name: string): string | null {
       return "Fixing the model…";
     case "create_presentation":
       return "Designing your deck…";
+    case "check_calendar":
+      return "Checking your calendar…";
+    case "schedule_meeting":
+      return "Scheduling the meeting and sending invites…";
     case "search_drive":
       return "Searching your Google Drive…";
     case "search_dropbox":
