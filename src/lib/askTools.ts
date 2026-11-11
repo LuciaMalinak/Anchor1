@@ -8,6 +8,7 @@ import { buildCheckedWorkbook, type ModelCell, type ModelSpec } from "@/lib/spre
 import type { CheckResult } from "@/lib/modelCheck";
 import { buildDeck, type DeckSpec } from "@/lib/presentationDeck";
 import { saveExport } from "@/lib/storage";
+import { loadCalendarTools } from "@/lib/askCalendarTools";
 
 // Live lookups Ask Anchor can run mid-answer for the person asking (see
 // ServerTool in liveAssist.ts), plus the system prompt lines that tell it
@@ -341,12 +342,24 @@ function spreadsheetTool(userId: string): ServerTool {
   };
 }
 
-export async function loadAskTools(userId: string): Promise<{ serverTools: ServerTool[]; toolRules: string }> {
-  const [google, dropbox] = await Promise.all([
+export async function loadAskTools(
+  userId: string,
+  opts: { timeZone?: string | null } = {}
+): Promise<{ serverTools: ServerTool[]; toolRules: string }> {
+  const [google, dropbox, calendar] = await Promise.all([
     getGoogleConnection(userId).catch(() => null),
     getDropboxConnection(userId).catch(() => null),
+    loadCalendarTools(userId, opts.timeZone).catch((err) => {
+      console.error("[askTools] scheduling tools unavailable:", err);
+      return null;
+    }),
   ]);
-  const serverTools: ServerTool[] = [spreadsheetTool(userId), fixSpreadsheetTool(userId), presentationTool(userId)];
+  const serverTools: ServerTool[] = [
+    spreadsheetTool(userId),
+    fixSpreadsheetTool(userId),
+    presentationTool(userId),
+    ...(calendar?.tools ?? []),
+  ];
   const connected: string[] = [];
   const missing: string[] = [];
 
@@ -381,7 +394,7 @@ export async function loadAskTools(userId: string): Promise<{ serverTools: Serve
     missing.push("Dropbox");
   }
 
-  const rules: string[] = [MODEL_RULES, DECK_RULES];
+  const rules: string[] = [MODEL_RULES, DECK_RULES, ...(calendar ? [calendar.rules] : [])];
   if (connected.length) {
     rules.push(
       `Connected file storage: ${connected.join("; ")}. Search it whenever the question could be answered by a file${
