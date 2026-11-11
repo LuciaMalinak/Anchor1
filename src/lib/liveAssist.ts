@@ -760,7 +760,7 @@ ${sourcingRules(material)}
 ${leadRules(lead.name, lead.style)}${scope === "workspace" ? "\nFor a deal someone else leads (each deal lists its lead), frame suggestions the way that lead would." : ""}
 
 Facts about Anchor itself, for questions about the app:
-- Google (Gmail + Calendar) connects read-only by default, to keep each deal's email and calendar history current. Anchor only asks for permission to create Gmail drafts or calendar events the first time someone clicks "Save to Gmail drafts" or "Add to calendar", and it never sends an email by itself.
+- Connecting Google (Gmail + Calendar) lets Anchor read email and calendar to keep each deal's history current, and create calendar events and Gmail drafts when the person asks (scheduling a meeting, saving a reply). It never sends an email by itself. If a Google connection made earlier is missing the calendar or drafts permission, the Integrations page shows "Update permissions" on the Google card: one click to approve.
 - Slack is used to send deal handoff briefings to a teammate. Salesforce and HubSpot sync contacts and deals into Anchor, and Anchor can suggest field updates after a call that are only written back when the person approves them.
 - Anchor Desktop records Zoom and Teams calls on a Mac without a bot joining.
 
