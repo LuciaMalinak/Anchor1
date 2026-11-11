@@ -39,7 +39,7 @@ import { randomBytes } from "crypto";
 import RecallAiSdk from "@recallai/desktop-sdk";
 import { autoUpdater } from "electron-updater";
 import { loadConfig, saveConfig, DEFAULT_API_BASE } from "./config";
-import { AnchorApi } from "./anchorApi";
+import { AnchorApi, DesktopSignedOutError } from "./anchorApi";
 import { startBrowserMeetingWatcher, type DetectedCall } from "./browserMeetingWatcher";
 import { stopOlderCopies } from "./olderCopies";
 import {
@@ -304,7 +304,7 @@ async function recordBrowserCall(meeting: DetectedCall) {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     log(`Couldn't prepare audio recording for the ${meeting.platform} call: ${reason}`);
-    notify("Anchor.AI couldn't record this call", reason);
+    notifyRecordFailed(err);
     return;
   }
   browserCallWindowId = windowId;
@@ -317,7 +317,7 @@ async function recordBrowserCall(meeting: DetectedCall) {
     const reason = err instanceof Error ? err.message : String(err);
     log(`Couldn't auto-start recording: ${reason}`);
     hideOverlayFor(windowId);
-    notify("Anchor.AI couldn't record this call", reason);
+    notifyRecordFailed(err);
   }
 }
 
@@ -559,11 +559,30 @@ function hideOverlayFor(windowId: string, meetingId?: string) {
 // A macOS notification for something that needs the person, clicking
 // through to the main window. Failures used to only reach the in-app
 // Activity log, which nobody sees mid-call.
-function notify(title: string, body: string) {
+function notify(title: string, body: string, onClick: () => void = showWindow) {
   if (!Notification.isSupported()) return;
   const n = new Notification({ title, body });
-  n.on("click", showWindow);
+  n.on("click", onClick);
   n.show();
+}
+
+// A call that couldn't be recorded: when it's because the app was signed
+// out (its saved connection was rejected), say so plainly and sign in on
+// click, instead of showing the raw "invalid token" error.
+function notifyRecordFailed(err: unknown) {
+  if (err instanceof DesktopSignedOutError) {
+    log("This copy of Anchor.AI Desktop was disconnected from the account; asking to sign in again.");
+    notify(
+      "Sign in to Anchor.AI Desktop again",
+      "It was disconnected from your account, so it can't record calls until you sign in. Click here to sign in — it takes a few seconds.",
+      () => {
+        showWindow();
+        void startSignIn();
+      }
+    );
+    return;
+  }
+  notify("Anchor.AI couldn't record this call", err instanceof Error ? err.message : String(err));
 }
 
 // Pushes live coaching (the question they just asked and its answer,
@@ -756,7 +775,7 @@ async function initSdk() {
       const reason = err instanceof Error ? err.message : String(err);
       log(`Couldn't auto-start recording: ${reason}`);
       hideOverlayFor(evt.window.id);
-      notify("Anchor.AI couldn't record this call", reason);
+      notifyRecordFailed(err);
     });
   });
 
@@ -1099,6 +1118,23 @@ async function startSignIn() {
 
 // Which Anchor account a token belongs to (src/app/api/desktop/me), or
 // null if the token doesn't work against that server.
+// At launch: if the saved connection to the account was removed (the app
+// was disconnected on the website, or connected again elsewhere), ask the
+// person to sign in now, before a call fails to record. Network problems
+// are ignored; only a definite "not connected" (401) counts.
+async function checkConnection() {
+  const config = loadConfig();
+  if (!config.token) return;
+  try {
+    const res = await fetch(`${config.apiBase || DEFAULT_API_BASE}/api/desktop/me`, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
+    if (res.status === 401) notifyRecordFailed(new DesktopSignedOutError());
+  } catch {
+    // Offline or the server is waking up: the next call will tell.
+  }
+}
+
 async function fetchAccountEmail(apiBase: string, token: string): Promise<string | null> {
   try {
     const res = await fetch(`${apiBase}/api/desktop/me`, { headers: { Authorization: `Bearer ${token}` } });
@@ -1566,6 +1602,7 @@ if (!gotSingleInstanceLock) {
     initAutoUpdate();
 
     log(`Anchor.AI Desktop ${app.getVersion()} started.`);
+    void checkConnection();
     try {
       await initSdk();
       sdkReady = true;
