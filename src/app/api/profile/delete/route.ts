@@ -3,7 +3,8 @@ import { logDataChange } from "@/lib/dataChangeLog";
 import { randomUUID } from "crypto";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, sessions, accounts, teams, deals } from "@/db/schema";
+import { users, sessions, accounts, teams, deals, apiTokens } from "@/db/schema";
+import { rememberDeletedAccount } from "@/lib/accountReturn";
 import { eq, and, ne } from "drizzle-orm";
 import { sessionCookieName, secureCookiesEnabled } from "@/lib/auth/password";
 
@@ -84,8 +85,18 @@ export async function POST() {
     targetId: userId,
     details: { email: user.email, name: user.name },
   });
+  // So signing up again with the same email gives everything back
+  // (src/lib/accountReturn.ts). Only a hash of the email is kept.
+  let ownedTeamId: string | null = null;
+  if (user.teamId) {
+    const [team] = await db.select({ ownerUserId: teams.ownerUserId }).from(teams).where(eq(teams.id, user.teamId));
+    if (team?.ownerUserId === userId) ownedTeamId = user.teamId;
+  }
+  if (user.email) await rememberDeletedAccount(userId, user.email, ownedTeamId);
   await db.delete(sessions).where(eq(sessions.userId, userId));
   await db.delete(accounts).where(eq(accounts.userId, userId));
+  // The desktop app's connection goes too.
+  await db.delete(apiTokens).where(eq(apiTokens.userId, userId));
   await db
     .update(users)
     .set({

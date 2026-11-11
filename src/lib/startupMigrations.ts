@@ -224,6 +224,11 @@ const MIGRATIONS = [
     "asksSinceUpdate" integer NOT NULL DEFAULT 0,
     "updatedAt" timestamp NOT NULL DEFAULT now()
   )`,
+  // Returning accounts (src/lib/accountReturn.ts).
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "deletedEmailHash" text`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "deletedAt" timestamp`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "deletedOwnedTeamId" uuid`,
+  `CREATE INDEX IF NOT EXISTS "user_deletedEmailHash_idx" ON "user" ("deletedEmailHash")`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no
