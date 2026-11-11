@@ -16,6 +16,20 @@ export async function assignTeamForNewUser(
   email: string,
   name: string | null
 ) {
+  // Back after deleting their account: their team and everything on it is
+  // theirs again (src/lib/accountReturn.ts).
+  const returning = await import("./accountReturn")
+    .then((m) => m.restoreReturningAccount(userId, email))
+    .catch((err) => {
+      console.error("[onboard] couldn't restore a returning account:", err);
+      return null;
+    });
+  if (returning?.teamId) {
+    await db.update(users).set({ teamId: returning.teamId }).where(eq(users.id, userId));
+    await notifyFounderOfSignup({ userId, email, name, outcome: { kind: "new_team", teamId: returning.teamId } });
+    return;
+  }
+
   const [invite] = await db
     .select()
     .from(teamInvites)

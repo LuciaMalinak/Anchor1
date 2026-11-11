@@ -146,8 +146,9 @@ export default function TermsPage() {
           <p>
             You can stop using Anchor.AI and cancel at any time. We may suspend or end access for
             serious or repeated violations of these Terms, or non-payment, and will give notice where
-            reasonable. Cancelling doesn&apos;t delete Your Content: we keep it safely so that if you
-            come back, everything is where you left it. You can ask us at any time for an export of
+            reasonable. Cancelling, pausing or deleting your account doesn&apos;t delete Your Content: we
+            keep it safely so that if you come back (signing up again with the same email),
+            everything is where you left it. You can ask us at any time for an export of
             Your Content, or for it to be permanently deleted, and we&apos;ll do so as described in
             our Privacy Policy.
           </p>

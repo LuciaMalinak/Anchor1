@@ -101,6 +101,13 @@ export const users = pgTable("user", {
   twoFactorSecret: encryptedText("twoFactorSecret"),
   twoFactorEnabledAt: timestamp("twoFactorEnabledAt", { mode: "date" }),
   twoFactorRecoveryHashes: jsonb("twoFactorRecoveryHashes").$type<string[]>(),
+  // Set when someone deletes their account (src/lib/accountReturn.ts): a
+  // SHA-256 of their email (never the email itself) and the team they
+  // owned, so if they sign up again with the same email everything is
+  // given back to them.
+  deletedEmailHash: text("deletedEmailHash"),
+  deletedAt: timestamp("deletedAt", { mode: "date" }),
+  deletedOwnedTeamId: uuid("deletedOwnedTeamId"),
   // False (the default, and true for every existing account) means this
   // person sees every deal on their team, same as always. True is set
   // only for someone who joined through a request-to-join link that

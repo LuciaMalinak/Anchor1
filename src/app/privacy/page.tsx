@@ -215,9 +215,12 @@ export default function PrivacyPage() {
             We&apos;ll remove it from the service and its recoverable copies within 30 days, apart from
             anything we must keep by law (for example billing records). Backups are only ever used to
             recover lost data; if we ever restore one, we apply your erasure again before anything
-            is used. Cancelling a subscription doesn&apos;t delete anything: we keep a company&apos;s data so
-            that if it comes back, everything is where it left it, unless it asks us to export or
-            permanently delete it.
+            is used. Cancelling or pausing a subscription, or deleting your account in the app, doesn&apos;t
+            delete your company&apos;s data: we keep it so that if you come back (sign up again with
+            the same email), everything is where you left it. Deleting your account removes your
+            sign-in and personal details; we keep only a one-way fingerprint of your email to
+            recognise you if you return. To have the data itself permanently erased, ask us as
+            described above.
           </p>
         </Section>
 
