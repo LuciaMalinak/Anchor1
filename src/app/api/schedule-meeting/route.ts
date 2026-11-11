@@ -7,6 +7,7 @@ import { briefActor, loadBriefEmail, saveBriefEmail, validThreadId } from "@/lib
 import { parseAddress } from "@/lib/integrations/gmailHeaders";
 import { NeedsGooglePermissionError } from "@/lib/integrations/google";
 import { NeedsConnectionError } from "@/lib/integrations/onlineMeetings";
+import { ConnectionExpiredError } from "@/lib/integrations/oauthConnection";
 import { isValidTimeZone, normalizePrefs } from "@/lib/morningBriefPrefs";
 import { platformOptions, scheduleMeeting, type MeetingPlatform } from "@/lib/meetingScheduler";
 
@@ -193,6 +194,12 @@ export async function POST(req: NextRequest) {
           error: "Anchor.AI needs permission to add events to your Google Calendar.",
           connectUrl: `/api/integrations/google/connect?add=${err.scopeKey}&returnTo=${encodeURIComponent(returnTo)}`,
         },
+        { status: 403 }
+      );
+    }
+    if (err instanceof ConnectionExpiredError) {
+      return NextResponse.json(
+        { error: err.message, connectUrl: `/api/integrations/${err.provider}/connect?returnTo=${encodeURIComponent(returnTo)}` },
         { status: 403 }
       );
     }

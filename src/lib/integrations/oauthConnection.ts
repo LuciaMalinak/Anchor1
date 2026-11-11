@@ -18,7 +18,30 @@ export async function getConnection(userId: string, provider: ProviderKey): Prom
   return connection ?? null;
 }
 
+// The provider refused to renew the connection (its refresh token was
+// revoked, replaced, or the app's settings changed): the person has to
+// connect it again. Callers turn this into a one-click Reconnect link.
+export class ConnectionExpiredError extends Error {
+  constructor(public provider: ProviderKey, name: string) {
+    super(`Your ${name} connection has expired, so Anchor.AI needs you to reconnect it (one click).`);
+    this.name = "ConnectionExpiredError";
+  }
+}
+
+// One renewal at a time per connection: Zoom replaces the refresh token on
+// every use, so two renewals at once make the second fail and could lose
+// the connection. A second caller waits for the first one's result.
+const refreshing = new Map<string, Promise<string>>();
+
 async function refresh(connection: Connection): Promise<string> {
+  const running = refreshing.get(connection.id);
+  if (running) return running;
+  const job = refreshOnce(connection).finally(() => refreshing.delete(connection.id));
+  refreshing.set(connection.id, job);
+  return job;
+}
+
+async function refreshOnce(connection: Connection): Promise<string> {
   const cfg = PROVIDERS[connection.provider];
   const clientId = process.env[cfg.clientIdEnv];
   const clientSecret = process.env[cfg.clientSecretEnv];
@@ -41,7 +64,14 @@ async function refresh(connection: Connection): Promise<string> {
   const body = await res.json().catch(() => ({}));
   if (!res.ok || typeof body.access_token !== "string") {
     console.error(`${connection.provider} token refresh failed:`, body);
-    throw new Error(`Couldn't refresh the ${cfg.name} connection — try reconnecting it.`);
+    // Another server (or request) may have renewed it a moment ago with
+    // the same refresh token; if the stored one has changed, use that.
+    const [latest] = await db.select().from(integrationConnections).where(eq(integrationConnections.id, connection.id));
+    if (latest && latest.refreshToken && latest.refreshToken !== connection.refreshToken && latest.accessToken) {
+      Object.assign(connection, latest);
+      return latest.accessToken;
+    }
+    throw new ConnectionExpiredError(connection.provider, cfg.name);
   }
   // Zoom (and sometimes Microsoft) rotate the refresh token on every use.
   await db
