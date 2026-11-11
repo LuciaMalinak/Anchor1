@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blockedByDoNotRecord } from "@/lib/doNotRecord";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
@@ -49,6 +50,8 @@ export async function POST(req: NextRequest) {
   if (dealId && !(await authorizeDeal(session.user.id, dealId))) {
     return NextResponse.json({ error: "That deal wasn't found" }, { status: 400 });
   }
+  const blocked = await blockedByDoNotRecord(session.user.id, { title: titleField, dealId }, "notetaker");
+  if (blocked) return NextResponse.json({ error: blocked }, { status: 403 });
 
   if (!meetingUrl) {
     return NextResponse.json({ error: "Paste a meeting link first" }, { status: 400 });

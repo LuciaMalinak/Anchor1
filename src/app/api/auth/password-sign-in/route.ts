@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logTeamActivity } from "@/lib/activityLog";
 import { randomBytes } from "crypto";
 import { db } from "@/db";
 import { users, sessions } from "@/db/schema";
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
   const token = randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + days * 86_400_000);
   await db.insert(sessions).values({ sessionToken: token, userId: user.id, expires });
+  await logTeamActivity(user.id, "signed_in", null, { via: "password" });
 
   const res = NextResponse.redirect(absoluteUrl(next ?? "/dashboard", req), { status: 303 });
   res.cookies.set({

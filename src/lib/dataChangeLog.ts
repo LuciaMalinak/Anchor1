@@ -22,7 +22,17 @@ export type DataChange = {
     | "team_two_factor_required"
     | "team_two_factor_optional"
     | "team_exported"
-    | "member_signed_out";
+    | "member_signed_out"
+    // The team's activity log (activityLog.ts): who looked at, shared or
+    // changed what, shown to the team owner on the Team page.
+    | "signed_in"
+    | "meeting_viewed"
+    | "deal_viewed"
+    | "deal_share_link_created"
+    | "retention_changed"
+    | "do_not_record_changed"
+    | "calls_auto_deleted"
+    | "recording_blocked";
   actorUserId?: string | null;
   actorEmail?: string | null;
   teamId?: string | null;

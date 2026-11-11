@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { logTeamActivity } from "@/lib/activityLog";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -87,6 +88,7 @@ export default async function MeetingDetailPage({
     );
   }
   if (!isOwner && !sharedViaTeam) notFound();
+  void logTeamActivity(session.user.id, "meeting_viewed", id, { title: meeting.title });
 
   const googleConfigured = isProviderConfigured("google");
 

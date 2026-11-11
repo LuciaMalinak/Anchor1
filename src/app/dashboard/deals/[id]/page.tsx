@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { logTeamActivity } from "@/lib/activityLog";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { deals, meetings, summaries, dealFiles, dealMessages, users, meetingParticipants, contacts, dealMembers, teams } from "@/db/schema";
@@ -24,6 +25,7 @@ export default async function DealDetailPage({
   if (!authorized) notFound();
   const { teamId } = authorized;
   const deal = authorized.deal;
+  void logTeamActivity(session.user.id, "deal_viewed", id, { name: deal.name });
 
   // Best-effort, throttled auto-refresh: if this deal's research is
   // missing or stale, quietly look it up now so the News callout and

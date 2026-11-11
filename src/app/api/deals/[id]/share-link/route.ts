@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logTeamActivity } from "@/lib/activityLog";
 import { auth } from "@/auth";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { createShareToken } from "@/lib/shareLink";
@@ -20,5 +21,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
   const { token, expiresAt } = createShareToken(id);
+  await logTeamActivity(session.user.id, "deal_share_link_created", id);
   return NextResponse.json({ url: `${baseUrl(req)}/share/${token}`, expiresAt: expiresAt.toISOString() });
 }
