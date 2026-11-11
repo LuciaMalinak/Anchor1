@@ -5,6 +5,7 @@ import type { ServerTool } from "@/lib/liveAssist";
 import { authorizeDeal } from "@/lib/dealAccess";
 import { getGoogleConnection, googleGet, NeedsGooglePermissionError } from "@/lib/integrations/google";
 import { NeedsConnectionError } from "@/lib/integrations/onlineMeetings";
+import { ConnectionExpiredError } from "@/lib/integrations/oauthConnection";
 import { PLATFORM_LABEL, platformOptions, scheduleMeeting, type MeetingPlatform } from "@/lib/meetingScheduler";
 import { isValidTimeZone } from "@/lib/morningBriefPrefs";
 
@@ -253,6 +254,10 @@ function scheduleTool(userId: string, timeZone: string): ServerTool {
       } catch (err) {
         if (err instanceof NeedsGooglePermissionError) {
           return `Not scheduled: Anchor.AI needs permission to add events to their Google Calendar. Give them this link: [Allow calendar events](/api/integrations/google/connect?add=${err.scopeKey}&returnTo=%2Fdashboard)`;
+        }
+        if (err instanceof ConnectionExpiredError) {
+          const label = err.provider === "zoom" ? "Zoom" : err.provider === "microsoft" ? "Microsoft 365" : err.provider;
+          return `Not scheduled: ${err.message} Give them this link to reconnect, then offer to try again (or use another platform that's connected): [Reconnect ${label}](/api/integrations/${err.provider}/connect?returnTo=%2Fdashboard)`;
         }
         if (err instanceof NeedsConnectionError) {
           return `Not scheduled: ${err.message} Give them this link: [Connect ${err.provider}](/api/integrations/${err.provider}/connect?returnTo=%2Fdashboard)`;
