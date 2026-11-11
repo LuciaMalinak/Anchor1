@@ -43,6 +43,16 @@ export type DealTask = {
   completed: boolean;
 };
 
+// The saved connection was rejected (the app was disconnected from the
+// account, or connected again elsewhere): the person needs to sign in
+// again, which main.ts offers instead of showing the raw error.
+export class DesktopSignedOutError extends Error {
+  constructor() {
+    super("Anchor.AI Desktop isn't connected to your account anymore. Sign in again to record calls.");
+    this.name = "DesktopSignedOutError";
+  }
+}
+
 export class AnchorApi {
   constructor(
     private apiBase: string,
@@ -90,6 +100,7 @@ export class AnchorApi {
       body: JSON.stringify({ title, dealId }),
     });
     const body = await res.json().catch(() => ({}));
+    if (res.status === 401) throw new DesktopSignedOutError();
     if (!res.ok) {
       throw new Error(body.error || `Anchor.AI rejected starting this meeting (${res.status})`);
     }
