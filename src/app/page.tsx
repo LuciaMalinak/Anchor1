@@ -2,7 +2,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { AnchorMark, Logo } from "@/components/Logo";
-import { AnchorNeuralField } from "@/components/AnchorNeuralField";
+import { AnchorAssemble } from "@/components/AnchorAssemble";
 import { INDUSTRIES } from "@/lib/industries";
 
 const STEPS = [
@@ -166,7 +166,7 @@ export default async function Home() {
             backgroundSize: "auto, 28px 28px",
           }}
         />
-        <AnchorNeuralField />
+        <AnchorAssemble />
         <div
           aria-hidden="true"
           className="float-orb pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-accent/20 blur-3xl"
@@ -194,7 +194,7 @@ export default async function Home() {
             <AnchorMark size={72} tone="light" />
           </div>
           <h1 className="enter-fade enter-3 text-5xl font-bold tracking-[0.06em] text-white sm:text-6xl md:text-7xl">
-            ANCHOR
+            ANCHOR<span className="text-[#e0a27a]">.AI</span>
           </h1>
           <p className="enter-fade enter-4 max-w-xl text-xl font-medium leading-snug text-slate-200 sm:text-2xl">
             Your knowledge in the room. Without you in the room.
