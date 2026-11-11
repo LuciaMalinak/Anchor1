@@ -34,7 +34,7 @@ function decodeBase64Url(data: string): string {
   return Buffer.from(data, "base64url").toString("utf-8");
 }
 
-function stripHtml(html: string): string {
+export function stripHtml(html: string): string {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -50,6 +50,25 @@ function stripHtml(html: string): string {
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// The first part of one MIME type (text/plain or text/html) in a message,
+// decoded, whole (quoted history included), skipping attachments.
+export function extractPart(payload: GmailPart | undefined, mimeType: string): string | null {
+  if (!payload) return null;
+  if (payload.filename) return null;
+  if (payload.mimeType === mimeType && payload.body?.data) {
+    try {
+      return decodeBase64Url(payload.body.data);
+    } catch {
+      return null;
+    }
+  }
+  for (const child of payload.parts || []) {
+    const found = extractPart(child, mimeType);
+    if (found) return found;
+  }
+  return null;
 }
 
 // Recursively walks the MIME part tree for a plain-text body, falling

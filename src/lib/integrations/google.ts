@@ -9,7 +9,7 @@ import { db } from "@/db";
 import { integrationConnections } from "@/db/schema";
 import { GOOGLE_EXTRA_SCOPES, type GoogleExtraScopeKey } from "./config";
 
-type Connection = typeof integrationConnections.$inferSelect;
+export type Connection = typeof integrationConnections.$inferSelect;
 
 export async function getGoogleConnection(userId: string): Promise<Connection | null> {
   const [connection] = await db
