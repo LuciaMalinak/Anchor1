@@ -77,6 +77,15 @@ export default function SecurityPage() {
         <Card title="Recording done openly">
           <p>When Anchor.AI&apos;s notetaker joins a call, it tells everyone in the meeting chat that the call is being recorded. Recording copies held by our recording and transcription providers are deleted once Anchor.AI has saved its own.</p>
         </Card>
+        <Card title="Automatic deletion">
+          <p>Your team owner can have calls deleted automatically after 30, 60, 90, 180 or 365 days: recordings, transcripts and summaries, with no recovery copy kept.</p>
+        </Card>
+        <Card title="Clients you never record">
+          <p>A do-not-record list of clients, companies and email domains. Anchor.AI won&apos;t join, record or process a call that matches it, and each blocked attempt is logged.</p>
+        </Card>
+        <Card title="A full activity log">
+          <p>Your team owner sees who signed in, opened, shared, downloaded, deleted or changed what, and can download the log for your IT or legal team.</p>
+        </Card>
         <Card title="How we run it">
           <p>All code changes are reviewed and automatically checked. Dependencies are scanned for vulnerabilities on every change and weekly. Every administrative account uses multi-factor authentication. Security incidents are handled under a written plan, and affected customers are told within 72 hours.</p>
         </Card>

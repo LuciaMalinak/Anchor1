@@ -229,6 +229,11 @@ const MIGRATIONS = [
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "deletedAt" timestamp`,
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "deletedOwnedTeamId" uuid`,
   `CREATE INDEX IF NOT EXISTS "user_deletedEmailHash_idx" ON "user" ("deletedEmailHash")`,
+  // Enterprise controls: automatic deletion, do-not-record list and the
+  // team's activity log (retention.ts, doNotRecord.ts, activityLog.ts).
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "retentionDays" integer`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "doNotRecord" jsonb`,
+  `CREATE INDEX IF NOT EXISTS "data_change_log_team_idx" ON "data_change_log" ("teamId", "createdAt")`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

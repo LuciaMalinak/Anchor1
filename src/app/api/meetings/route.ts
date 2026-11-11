@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { blockedByDoNotRecord } from "@/lib/doNotRecord";
 import { reconcileBotMeeting } from "@/lib/botReconcile";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -58,6 +59,8 @@ export async function POST(req: NextRequest) {
   if (dealId && !(await authorizeDeal(session.user.id, dealId))) {
     return NextResponse.json({ error: "That deal wasn't found" }, { status: 400 });
   }
+  const blocked = await blockedByDoNotRecord(session.user.id, { title, dealId }, "upload");
+  if (blocked) return NextResponse.json({ error: blocked }, { status: 403 });
 
   let fileName: string;
   let buffer: Buffer;

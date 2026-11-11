@@ -7,6 +7,7 @@ import { canManageJoinRequests } from "@/lib/joinRequestAccess";
 import { isAppOwner } from "@/lib/appOwner";
 import { TeamClient } from "./TeamClient";
 import { TeamSecurityPanel } from "./TeamSecurityPanel";
+import { TeamEnterprisePanel } from "./TeamEnterprisePanel";
 
 type DealOption = { id: string; name: string };
 type JoinRequestItem = {
@@ -118,6 +119,11 @@ export default async function TeamPage() {
     {isOwner && (
       <div className="mt-8">
         <TeamSecurityPanel />
+      </div>
+    )}
+    {isOwner && (
+      <div className="mt-8">
+        <TeamEnterprisePanel />
       </div>
     )}
     </>

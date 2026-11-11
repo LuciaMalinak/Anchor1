@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import { logTeamActivity } from "@/lib/activityLog";
 import Resend from "next-auth/providers/resend";
 import LinkedIn from "next-auth/providers/linkedin";
 import Google from "next-auth/providers/google";
@@ -193,6 +194,10 @@ export const {
     },
   },
   events: {
+    // The team's activity log (src/lib/activityLog.ts).
+    async signIn({ user }) {
+      if (user?.id) await logTeamActivity(user.id, "signed_in");
+    },
     // Runs once, right after the Drizzle adapter inserts a brand-new user
     // row. Every user needs a team: if someone already on a team invited
     // this email address, join that team (and clear the invite); otherwise

@@ -12,6 +12,13 @@ export async function register() {
   const { reuniteAll } = await import("@/lib/reuniteTeams");
   await reuniteAll().catch((err) => console.error("[reuniteTeams] failed:", err));
   startStuckMeetingSweep();
+  // Automatic deletion of old calls (retentionSweep.ts). Imported inside
+  // this NEXT_RUNTIME check so the edge build leaves it (and the file
+  // storage code it uses) out.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startRetentionSweep } = await import("@/lib/retentionSweep");
+    startRetentionSweep();
+  }
   if (process.env.NODE_ENV === "production") startMorningBriefSchedule();
 }
 

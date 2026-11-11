@@ -600,6 +600,13 @@ export const teams = pgTable("team", {
   // Set by the team owner: everyone on the team must turn on two-step
   // verification before using Anchor.AI (src/proxy.ts).
   requireTwoFactor: boolean("requireTwoFactor").notNull().default(false),
+  // Set by the team owner: calls (recordings, transcripts, summaries)
+  // older than this many days are deleted automatically, including the
+  // recovery copy (src/lib/retention.ts). Null = keep until deleted.
+  retentionDays: integer("retentionDays"),
+  // Set by the team owner: clients, companies or email domains Anchor.AI
+  // must never record (src/lib/doNotRecord.ts).
+  doNotRecord: jsonb("doNotRecord").$type<string[]>(),
   // Stripe's subscription status: "trialing" | "active" | "past_due" |
   // "canceled" | "unpaid" | "incomplete" | … Null = never subscribed.
   billingStatus: text("billingStatus"),

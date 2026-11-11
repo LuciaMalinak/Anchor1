@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blockedByDoNotRecord } from "@/lib/doNotRecord";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -30,6 +31,8 @@ export async function POST(req: NextRequest) {
   if (dealId && !(await authorizeDeal(userId, dealId))) {
     return NextResponse.json({ error: "That deal wasn't found" }, { status: 400 });
   }
+  const blocked = await blockedByDoNotRecord(userId, { title, dealId }, "desktop app");
+  if (blocked) return NextResponse.json({ error: blocked }, { status: 403 });
 
   // Same one-live-capture-per-deal guard as the bot-join and in-person
   // mic flows, for the same reason.
