@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
 // them. Canvas, no libraries; pauses when off screen, and shows the anchor
 // formed and still for anyone who prefers reduced motion.
 
-const MAX_PARTICLES = 2200;
+const MAX_PARTICLES = 2800;
 const CYCLE_S = 14; // drift 2.5s · gather 3.5s · hold 5s · release 3s
 
 type P = { tx: number; ty: number; x: number; y: number; vx: number; vy: number; seed: number; copper: boolean };
@@ -73,7 +73,7 @@ export function AnchorAssemble() {
       off.width = W;
       off.height = H;
       const o = off.getContext("2d")!;
-      const s = Math.min(W * 0.9, H * 0.86);
+      const s = Math.min(W * 0.96, H * 1.0);
       o.translate(W / 2 - s / 2, H / 2 - s / 2);
       o.scale(s / 512, s / 512);
       drawAnchor(o);
@@ -127,8 +127,8 @@ export function AnchorAssemble() {
           if (q.y < 0) q.y += H;
           if (q.y > H) q.y -= H;
         }
-        ctx!.fillStyle = q.copper ? "rgba(224,162,122,0.6)" : `rgba(255,255,255,${0.1 + 0.26 * pull})`;
-        ctx!.fillRect(q.x, q.y, 1.8 * D, 1.8 * D);
+        ctx!.fillStyle = q.copper ? "rgba(224,162,122,0.9)" : `rgba(255,255,255,${0.16 + 0.5 * pull})`;
+        ctx!.fillRect(q.x, q.y, 2.2 * D, 2.2 * D);
       }
       ctx!.globalCompositeOperation = "source-over";
     }

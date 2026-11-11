@@ -181,7 +181,7 @@ export default async function Home() {
           className="pointer-events-none absolute inset-x-0 bottom-0 h-40"
           style={{ background: "linear-gradient(to bottom, transparent, rgba(11,25,48,0.6))" }}
         />
-        <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-7 text-center">
+        <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-7 text-center [text-shadow:0_1px_14px_rgba(11,25,48,0.95),0_0_2px_rgba(11,25,48,0.8)]">
           <span className="enter-fade enter-1 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] font-semibold tracking-[0.18em] text-slate-200">
             <span className="live-dot h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
             MEETING INTELLIGENCE FOR EVERY TEAM
@@ -199,7 +199,7 @@ export default async function Home() {
           <p className="enter-fade enter-4 max-w-xl text-xl font-medium leading-snug text-slate-200 sm:text-2xl">
             Your knowledge in the room. Without you in the room.
           </p>
-          <p className="enter-fade enter-5 max-w-lg text-base leading-relaxed text-slate-400">
+          <p className="enter-fade enter-5 max-w-lg text-base leading-relaxed text-slate-300">
             Meeting intelligence for teams — Anchor.AI joins the call, remembers what matters, and
             keeps every deal covered.
           </p>
