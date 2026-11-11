@@ -36,6 +36,12 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
       "email",
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/calendar.readonly",
+      // Asked for up front, in the same consent screen, so scheduling a
+      // meeting or saving a reply draft never stops to ask for permission
+      // later. Anchor.AI still never sends an email or changes an event
+      // without the person asking it to.
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/gmail.compose",
     ],
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",
@@ -152,11 +158,11 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
 // /api/integrations/slack/connect?add=read_dms.
 export const SLACK_USER_SCOPES = ["im:history", "mpim:history", "im:read", "mpim:read", "users:read", "users:read.email"];
 
-// Write access for the meeting page's "Save to Gmail drafts" and "Add to
-// calendar" buttons. Deliberately NOT in the default Google scopes above:
-// connecting Google from the Integrations page stays read-only, and each
-// of these is asked for only the first time someone uses that button, via
-// /api/integrations/google/connect?add=<key>.
+// Google permissions checked by name. gmail_compose and calendar_events
+// are now part of the default Google connection (above); connections made
+// before that get them via /api/integrations/google/connect?add=<key>, or
+// the Integrations page's "Update permissions" prompt. drive_read is still
+// added on its own, from the Google Drive card.
 export const GOOGLE_EXTRA_SCOPES = {
   gmail_compose: "https://www.googleapis.com/auth/gmail.compose",
   calendar_events: "https://www.googleapis.com/auth/calendar.events",

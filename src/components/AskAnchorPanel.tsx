@@ -17,9 +17,12 @@ type ChatTurn = { role: "user" | "assistant"; content: string };
 // what it did before.
 // **bold** and [label](https://link) — e.g. news articles Ask Anchor
 // suggests. Only http(s) links are made clickable; they open in a new tab.
-// Plus download links to files Ask Anchor made (/api/exports/…).
+// Plus download links to files Ask Anchor made (/api/exports/…), and links
+// to Anchor.AI's own pages (/dashboard…, /api/integrations/… to connect).
 function renderInline(text: string, keyPrefix: string): ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\((?:https?:\/\/|\/api\/exports\/)[^\s)]+\))/g).filter((p) => p.length > 0);
+  const parts = text
+    .split(/(\*\*[^*]+\*\*|\[[^\]]+\]\((?:https?:\/\/|\/api\/exports\/|\/api\/integrations\/|\/dashboard)[^\s)]*\))/g)
+    .filter((p) => p.length > 0);
   return parts.map((part, i) => {
     const key = `${keyPrefix}-${i}`;
     if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
@@ -31,6 +34,15 @@ function renderInline(text: string, keyPrefix: string): ReactNode {
       return (
         <a key={key} href={file[2]} download className="font-medium underline underline-offset-2 hover:opacity-80">
           {file[1]}
+        </a>
+      );
+    }
+    // Anchor.AI's own pages (connect a tool, open a deal): same tab.
+    const page = part.match(/^\[([^\]]+)\]\(((?:\/api\/integrations\/|\/dashboard)[^\s)]*)\)$/);
+    if (page) {
+      return (
+        <a key={key} href={page[2]} className="font-medium underline underline-offset-2 hover:opacity-80">
+          {page[1]}
         </a>
       );
     }

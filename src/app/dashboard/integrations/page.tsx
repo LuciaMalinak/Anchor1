@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { integrationConnections } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { PROVIDERS, isProviderConfigured } from "@/lib/integrations/config";
+import { PROVIDERS, isProviderConfigured, hasScopes } from "@/lib/integrations/config";
 import { hasDriveAccess } from "@/lib/integrations/drive";
 import { IntegrationsClient } from "./IntegrationsClient";
 
@@ -27,6 +27,14 @@ export default async function IntegrationsPage() {
       connected: Boolean(connection),
       connectedLabel: connection?.externalAccountEmail ?? null,
       connectedAt: connection?.connectedAt ? connection.connectedAt.toISOString() : null,
+      // A connection made before Anchor.AI asked for everything it uses up
+      // front (e.g. Google before calendar events and Gmail drafts were
+      // added): one click to approve the rest.
+      // Google only: other providers report granted scopes in their own
+      // formats, so a mismatch there wouldn't mean anything is missing.
+      ...(p.key === "google" && connection && !hasScopes(connection.scope, p.scopes.filter((sc) => sc.startsWith("https://")).join(" "))
+        ? { updateHref: `/api/integrations/${p.key}/connect?returnTo=${encodeURIComponent(`/dashboard/integrations?connected=${p.key}`)}` }
+        : {}),
     };
   });
 

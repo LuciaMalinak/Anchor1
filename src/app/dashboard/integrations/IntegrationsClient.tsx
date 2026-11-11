@@ -20,6 +20,8 @@ type Provider = {
   connectHref?: string;
   disconnectable?: boolean;
   connectedNote?: string;
+  // The connection is missing permissions Anchor.AI now uses: approve them.
+  updateHref?: string;
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -148,6 +150,14 @@ export function IntegrationsClient({ providers }: { providers: Provider[] }) {
               )}
             </div>
 
+            {p.connected && p.updateHref && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Approve the latest permissions so Anchor.AI can schedule meetings and save reply drafts for you.{" "}
+                <a href={p.updateHref} className="font-semibold underline underline-offset-2">
+                  Update permissions
+                </a>
+              </div>
+            )}
             {p.connected ? (
               <div className="mt-1 flex flex-wrap gap-2">
                 {SYNCABLE_PROVIDERS.has(p.key) && (
