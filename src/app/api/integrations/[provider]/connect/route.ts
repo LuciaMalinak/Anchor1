@@ -82,7 +82,11 @@ export async function GET(
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", scopes.join(" "));
+  // Zoom takes the scopes set on the app in its Marketplace, and an
+  // authorize link listing a scope the app doesn't have sends the person
+  // to Zoom's generic "Something went wrong" page instead of the consent
+  // screen. So Zoom gets no scope parameter at all.
+  if (provider !== "zoom") url.searchParams.set("scope", scopes.join(" "));
   url.searchParams.set("state", state);
   for (const [k, v] of Object.entries(cfg.extraAuthorizeParams || {})) {
     url.searchParams.set(k, v);
