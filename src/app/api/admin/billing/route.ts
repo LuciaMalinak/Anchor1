@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { promoCodes, salesLeads, teams, users } from "@/db/schema";
 import { requireAppOwnerApi } from "@/lib/adminAccess";
-import { billingConfigured, normalizeCode } from "@/lib/billing";
+import { billingConfigured, manageSubscription, normalizeCode, parseSubscriptionAction } from "@/lib/billing";
 
 // Admin → Billing: promo codes, free accounts, sales requests.
 export async function GET() {
@@ -22,13 +22,23 @@ export async function GET() {
         billingSeats: teams.billingSeats,
         trialEndsAt: teams.trialEndsAt,
         promoCodeUsed: teams.promoCodeUsed,
+        hasSubscription: teams.stripeSubscriptionId,
+        currentPeriodEnd: teams.currentPeriodEnd,
+        billingCancelAt: teams.billingCancelAt,
+        billingPausedAt: teams.billingPausedAt,
+        billingResumesAt: teams.billingResumesAt,
         createdAt: teams.createdAt,
       })
       .from(teams)
       .leftJoin(users, eq(users.id, teams.ownerUserId))
       .orderBy(desc(teams.createdAt)),
   ]);
-  return NextResponse.json({ configured: billingConfigured(), codes, leads, teams: teamRows });
+  return NextResponse.json({
+    configured: billingConfigured(),
+    codes,
+    leads,
+    teams: teamRows.map((t) => ({ ...t, hasSubscription: Boolean(t.hasSubscription) })),
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -76,6 +86,21 @@ export async function POST(req: NextRequest) {
         .set({ billingExempt: Boolean(body.exempt) })
         .where(eq(teams.id, String(body.teamId ?? "")));
       return NextResponse.json({ ok: true });
+    }
+    // Any client's subscription: change plan, pause/resume, cancel (at the
+    // period end or straight away) or undo a scheduled cancellation.
+    case "subscription": {
+      const change = parseSubscriptionAction((body.change ?? {}) as Record<string, unknown>);
+      if (!change) return NextResponse.json({ error: "Unknown change" }, { status: 400 });
+      const [team] = await db.select().from(teams).where(eq(teams.id, String(body.teamId ?? "")));
+      if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
+      try {
+        await manageSubscription(team, change);
+        return NextResponse.json({ ok: true });
+      } catch (err) {
+        console.error("[admin billing] subscription change failed:", err);
+        return NextResponse.json({ error: err instanceof Error ? err.message : "Couldn't change the subscription." }, { status: 502 });
+      }
     }
     case "setLeadStatus": {
       await db

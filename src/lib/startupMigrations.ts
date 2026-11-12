@@ -234,6 +234,10 @@ const MIGRATIONS = [
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "retentionDays" integer`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "doNotRecord" jsonb`,
   `CREATE INDEX IF NOT EXISTS "data_change_log_team_idx" ON "data_change_log" ("teamId", "createdAt")`,
+  // Subscription changes from inside Anchor (billing.ts manageSubscription).
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingCancelAt" timestamp`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingPausedAt" timestamp`,
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingResumesAt" timestamp`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no

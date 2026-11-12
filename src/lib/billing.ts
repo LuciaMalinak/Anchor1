@@ -61,10 +61,17 @@ export function stripe(): Stripe {
   return stripeClient;
 }
 
-export function hasAccess(team: Pick<Team, "billingExempt" | "billingStatus"> | null | undefined, email?: string | null): boolean {
+export function hasAccess(
+  team: Pick<Team, "billingExempt" | "billingStatus"> & Partial<Pick<Team, "billingPausedAt">> | null | undefined,
+  email?: string | null,
+): boolean {
   if (isAppOwner(email)) return true;
   if (!team) return false;
-  return team.billingExempt || OPEN_STATUSES.has(team.billingStatus ?? "");
+  if (team.billingExempt) return true;
+  // Paused: nothing is charged and nobody gets in until it resumes. The
+  // team's data is kept.
+  if (team.billingPausedAt) return false;
+  return OPEN_STATUSES.has(team.billingStatus ?? "");
 }
 
 export async function teamMemberCount(teamId: string): Promise<number> {
@@ -218,6 +225,9 @@ export async function syncSubscription(sub: Stripe.Subscription): Promise<void> 
       stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer.id,
       trialEndsAt: toDate(sub.trial_end),
       currentPeriodEnd: toDate(periodEnd),
+      billingCancelAt: sub.status === "canceled" ? null : sub.cancel_at_period_end ? toDate(periodEnd) : toDate(sub.cancel_at),
+      billingPausedAt: sub.pause_collection && sub.status !== "canceled" ? (team.billingPausedAt ?? new Date()) : null,
+      billingResumesAt: sub.pause_collection && sub.status !== "canceled" ? toDate(sub.pause_collection.resumes_at) : null,
       ...(firstTimePromo ? { promoCodeUsed: promo } : {}),
     })
     .where(eq(teams.id, teamId));
@@ -255,4 +265,83 @@ export async function syncSeats(teamId: string): Promise<void> {
   }
   const updated = await s.subscriptions.update(sub.id, { items, proration_behavior: "create_prorations" });
   await syncSubscription(updated);
+}
+
+export type SubscriptionAction =
+  | { action: "change-plan"; plan: Plan }
+  | { action: "cancel" } // at the end of the paid period; can be undone
+  | { action: "cancel-now" } // straight away (Admin only)
+  | { action: "keep" } // undo a cancellation scheduled for the period end
+  | { action: "pause"; months: number | null } // null = until resumed by hand
+  | { action: "resume" };
+
+// Changes a team's subscription from inside Anchor: switch between Team
+// and Pro (prorated), cancel or undo a cancellation, pause or resume
+// billing. Used by the owner's Billing page and by Admin → Billing for
+// any client. Stripe is the source of truth: the team row is updated
+// from Stripe's answer, the same way the webhook does.
+export async function manageSubscription(team: Team, change: SubscriptionAction): Promise<void> {
+  if (!team.stripeSubscriptionId) throw new Error("This team has no subscription.");
+  const s = stripe();
+  const sub = await s.subscriptions.retrieve(team.stripeSubscriptionId);
+  if (sub.status === "canceled") throw new Error("This subscription has already ended. Subscribe again from the Billing page.");
+  let updated: Stripe.Subscription;
+  switch (change.action) {
+    case "change-plan": {
+      const current = (sub.metadata?.plan === "pro" ? "pro" : "team") as Plan;
+      if (change.plan === current) return;
+      const seats = await teamMemberCount(team.id);
+      const wanted = await lineItems(change.plan, seats);
+      const items: Stripe.SubscriptionUpdateParams.Item[] = [
+        ...sub.items.data.filter((i) => !wanted.some((w) => w.price === i.price.id)).map((i) => ({ id: i.id, deleted: true })),
+        ...wanted.map((w) => {
+          const existing = sub.items.data.find((i) => i.price.id === w.price);
+          return existing ? { id: existing.id, quantity: w.quantity } : { price: w.price, quantity: w.quantity };
+        }),
+      ];
+      updated = await s.subscriptions.update(sub.id, {
+        items,
+        metadata: { ...sub.metadata, plan: change.plan },
+        proration_behavior: "create_prorations",
+      });
+      break;
+    }
+    case "cancel":
+      updated = await s.subscriptions.update(sub.id, { cancel_at_period_end: true });
+      break;
+    case "keep":
+      updated = await s.subscriptions.update(sub.id, { cancel_at_period_end: false });
+      break;
+    case "cancel-now":
+      updated = await s.subscriptions.cancel(sub.id);
+      break;
+    case "pause": {
+      const months = change.months;
+      if (months !== null && (!Number.isInteger(months) || months < 1 || months > 12)) throw new Error("Pause for 1 to 12 months.");
+      const resumesAt = months ? Math.floor(new Date().setMonth(new Date().getMonth() + months) / 1000) : undefined;
+      updated = await s.subscriptions.update(sub.id, {
+        pause_collection: { behavior: "void", ...(resumesAt ? { resumes_at: resumesAt } : {}) },
+      });
+      break;
+    }
+    case "resume":
+      updated = await s.subscriptions.update(sub.id, { pause_collection: "" });
+      break;
+  }
+  await syncSubscription(updated);
+}
+
+export function parseSubscriptionAction(body: Record<string, unknown>): SubscriptionAction | null {
+  switch (body.action) {
+    case "change-plan":
+      return body.plan === "pro" || body.plan === "team" ? { action: "change-plan", plan: body.plan } : null;
+    case "cancel":
+    case "cancel-now":
+    case "keep":
+    case "resume":
+      return { action: body.action };
+    case "pause":
+      return { action: "pause", months: body.months === null || body.months === undefined ? null : Number(body.months) };
+  }
+  return null;
 }

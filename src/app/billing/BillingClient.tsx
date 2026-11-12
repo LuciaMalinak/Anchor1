@@ -160,8 +160,148 @@ export function ManageBillingButton() {
       <button onClick={open} disabled={busy} className="self-start rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50">
         {busy ? "Opening…" : "Manage billing"}
       </button>
-      <p className="text-xs text-slate-500">Change your card, see invoices or cancel.</p>
+      <p className="text-xs text-slate-500">Change your card or see invoices.</p>
       {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function longDay(iso: string | null) {
+  return iso ? new Date(iso).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : null;
+}
+
+// The owner's own subscription controls: switch plan, pause or resume
+// billing, cancel or keep it (see /api/billing/manage).
+export function SubscriptionControls({
+  plan,
+  seats,
+  cancelAt,
+  pausedAt,
+  resumesAt,
+  trialing,
+}: {
+  plan: Plan;
+  seats: number;
+  cancelAt: string | null;
+  pausedAt: string | null;
+  resumesAt: string | null;
+  trialing: boolean;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [months, setMonths] = useState("1");
+  const other: Plan = plan === "pro" ? "team" : "pro";
+
+  async function change(body: Record<string, unknown>, confirmText: string) {
+    if (!window.confirm(confirmText)) return;
+    setBusy(String(body.action));
+    setError(null);
+    const res = await fetch("/api/billing/manage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (res?.ok) {
+      window.location.reload();
+      return;
+    }
+    setError(d?.error ?? "Couldn't change your subscription. Try again.");
+    setBusy(null);
+  }
+
+  const btn = "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+
+  if (pausedAt) {
+    return (
+      <div className="flex flex-col gap-3 rounded-lg bg-amber-50 px-4 py-3">
+        <p className="text-sm text-amber-900">
+          Billing is paused{resumesAt ? ` until ${longDay(resumesAt)}` : ""}. Nothing is charged, and Anchor.AI is locked for your
+          team until it resumes. All your data is kept.
+        </p>
+        <button
+          disabled={!!busy}
+          onClick={() => change({ action: "resume" }, "Resume your subscription now? Billing restarts and your team gets back in straight away.")}
+          className="self-start rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+        >
+          {busy === "resume" ? "Resuming…" : "Resume now"}
+        </button>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4 border-t border-slate-100 pt-4">
+      {cancelAt && (
+        <div className="flex flex-col gap-2 rounded-lg bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-900">
+            Your subscription is cancelled and ends on <b>{longDay(cancelAt)}</b>. Your team keeps full access until then.
+          </p>
+          <button
+            disabled={!!busy}
+            onClick={() => change({ action: "keep" }, "Keep your subscription? It will renew as usual.")}
+            className="self-start rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {busy === "keep" ? "Saving…" : "Keep my subscription"}
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          disabled={!!busy}
+          onClick={() =>
+            change(
+              { action: "change-plan", plan: other },
+              `Switch to ${other === "pro" ? "Pro" : "Team"} at $${price(other, seats)}/month for ${seats} ${seats === 1 ? "person" : "people"}? ` +
+                (trialing ? "Your free trial continues." : "The difference for this month is charged or credited on your next bill."),
+            )
+          }
+          className={other === "pro" ? "rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-dark disabled:opacity-50" : btn}
+        >
+          {busy === "change-plan"
+            ? "Switching…"
+            : `${other === "pro" ? "Upgrade" : "Switch"} to ${other === "pro" ? "Pro" : "Team"} · $${price(other, seats)}/month`}
+        </button>
+      </div>
+
+      {!cancelAt && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={months} onChange={(e) => setMonths(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
+            <option value="1">for 1 month</option>
+            <option value="2">for 2 months</option>
+            <option value="3">for 3 months</option>
+            <option value="6">for 6 months</option>
+            <option value="until">until I resume</option>
+          </select>
+          <button
+            disabled={!!busy}
+            onClick={() =>
+              change(
+                { action: "pause", months: months === "until" ? null : Number(months) },
+                "Pause billing? Nothing is charged while paused, and Anchor.AI is locked for your team until it resumes. Your data is kept, and you can resume any time.",
+              )
+            }
+            className={btn}
+          >
+            {busy === "pause" ? "Pausing…" : "Pause billing"}
+          </button>
+          <button
+            disabled={!!busy}
+            onClick={() =>
+              change(
+                { action: "cancel" },
+                "Cancel your subscription? Your team keeps access until the end of the period you've paid for, and you can change your mind until then.",
+              )
+            }
+            className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            {busy === "cancel" ? "Cancelling…" : "Cancel subscription"}
+          </button>
+        </div>
+      )}
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }
