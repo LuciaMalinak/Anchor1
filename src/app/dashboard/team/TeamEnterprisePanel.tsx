@@ -78,7 +78,8 @@ export function TeamEnterprisePanel() {
             <h3 className="text-sm font-medium text-slate-800">Delete old calls automatically</h3>
             <p className="text-sm text-slate-500">
               Recordings, transcripts and summaries older than this are deleted for good, including the copy kept for
-              recovering a deleted call. Deal notes Anchor.AI has already written stay.
+              recovering a deleted call. Deal notes Anchor.AI has already written stay. Daily backups, which hold
+              everything, are deleted after 35 days.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <select

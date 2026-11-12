@@ -43,10 +43,22 @@ export async function purgeExpiredCalls(): Promise<{ teams: number; calls: numbe
         console.error(`[retention] couldn't delete call ${m.id}:`, err);
       }
     }
-    // Recovery copies of calls deleted by hand, older than the window.
-    await db
+    // Recovery copies of calls deleted by hand, older than the window: the
+    // copy in the log and the recording, which a manual delete keeps in
+    // storage so the call can be put back.
+    const deletedByHand = await db
       .delete(dataChangeLog)
-      .where(and(eq(dataChangeLog.action, "meeting_deleted"), inArray(dataChangeLog.actorUserId, ids), lt(dataChangeLog.createdAt, cutoff)));
+      .where(and(eq(dataChangeLog.action, "meeting_deleted"), inArray(dataChangeLog.actorUserId, ids), lt(dataChangeLog.createdAt, cutoff)))
+      .returning({ targetId: dataChangeLog.targetId, details: dataChangeLog.details });
+    for (const d of deletedByHand) {
+      const m = (d.details?.meeting ?? {}) as { recallBotId?: string | null; recallRecordingId?: string | null };
+      try {
+        if (d.targetId) await deleteMeetingAudio(d.targetId);
+        await deleteRecallCopy(m);
+      } catch (err) {
+        console.error(`[retention] couldn't delete the recording of hand-deleted call ${d.targetId}:`, err);
+      }
+    }
     if (old.length) {
       touched++;
       await logDataChange({ action: "calls_auto_deleted", teamId: team.id, details: { count: old.length, days: team.days } });

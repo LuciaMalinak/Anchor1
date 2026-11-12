@@ -127,6 +127,18 @@ export async function r2DeletePrefix(prefix: string): Promise<void> {
   await client().send(new DeleteObjectsCommand({ Bucket: bucket(), Delete: { Objects: objects } }));
 }
 
+// Every key under a prefix, with when it was last written (all pages).
+export async function r2ListKeys(prefix: string): Promise<{ key: string; lastModified: Date | null }[]> {
+  const out: { key: string; lastModified: Date | null }[] = [];
+  let token: string | undefined;
+  do {
+    const list = await client().send(new ListObjectsV2Command({ Bucket: bucket(), Prefix: prefix, ContinuationToken: token }));
+    for (const o of list.Contents ?? []) if (o.Key) out.push({ key: o.Key, lastModified: o.LastModified ?? null });
+    token = list.IsTruncated ? list.NextContinuationToken : undefined;
+  } while (token);
+  return out;
+}
+
 // First key under a prefix — used where there's meant to be exactly one
 // object per prefix (e.g. one avatar per user).
 export async function r2FirstKey(prefix: string): Promise<string | null> {
