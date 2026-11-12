@@ -32,6 +32,11 @@ type TeamRow = {
   billingSeats: number | null;
   trialEndsAt: string | null;
   promoCodeUsed: string | null;
+  hasSubscription: boolean;
+  currentPeriodEnd: string | null;
+  billingCancelAt: string | null;
+  billingPausedAt: string | null;
+  billingResumesAt: string | null;
   createdAt: string;
 };
 type Data = { configured: boolean; codes: Code[]; leads: Lead[]; teams: TeamRow[] };
@@ -45,12 +50,39 @@ function date(iso: string | null) {
 }
 
 function status(t: TeamRow): { label: string; tone: string } {
+  const open = ["active", "trialing", "past_due"].includes(t.billingStatus ?? "");
+  if (open && t.billingPausedAt) return { label: `Paused${t.billingResumesAt ? ` until ${date(t.billingResumesAt)}` : ""} · ${t.billingPlan === "pro" ? "Pro" : "Team"}`, tone: "text-amber-700" };
+  if (open && t.billingCancelAt) return { label: `Cancelled · ends ${date(t.billingCancelAt)}`, tone: "text-amber-700" };
   if (t.billingStatus === "active") return { label: `Paying · ${t.billingPlan === "pro" ? "Pro" : "Team"} · ${t.billingSeats ?? 1} seat(s)`, tone: "text-emerald-700" };
   if (t.billingStatus === "trialing") return { label: `Free trial until ${date(t.trialEndsAt)}${t.promoCodeUsed ? ` (${t.promoCodeUsed})` : ""}`, tone: "text-sky-700" };
   if (t.billingStatus === "past_due") return { label: "Payment failed (Stripe retrying)", tone: "text-amber-700" };
   if (t.billingExempt) return { label: "Free access", tone: "text-slate-600" };
   if (t.billingStatus) return { label: `Not paying (${t.billingStatus})`, tone: "text-red-600" };
   return { label: "Not subscribed", tone: "text-red-600" };
+}
+
+// What the owner can do to a client's subscription, with the question
+// asked before doing it.
+function subscriptionChanges(t: TeamRow): { label: string; change: Record<string, unknown>; confirm: string }[] {
+  if (!t.hasSubscription || !["active", "trialing", "past_due"].includes(t.billingStatus ?? "")) return [];
+  const other = t.billingPlan === "pro" ? "team" : "pro";
+  const name = t.name;
+  const out: { label: string; change: Record<string, unknown>; confirm: string }[] = [
+    {
+      label: other === "pro" ? "Upgrade to Pro" : "Switch to Team",
+      change: { action: "change-plan", plan: other },
+      confirm: `Move ${name} to ${other === "pro" ? "Pro" : "Team"}? Stripe charges or credits the difference on their next bill.`,
+    },
+  ];
+  if (t.billingPausedAt) out.push({ label: "Resume billing", change: { action: "resume" }, confirm: `Resume ${name}'s subscription now? Billing restarts and they get back in.` });
+  else {
+    out.push({ label: "Pause 1 month", change: { action: "pause", months: 1 }, confirm: `Pause ${name}'s billing for a month? Nothing is charged and they're locked out until it resumes; their data is kept.` });
+    out.push({ label: "Pause until resumed", change: { action: "pause", months: null }, confirm: `Pause ${name}'s billing until you resume it? Nothing is charged and they're locked out; their data is kept.` });
+  }
+  if (t.billingCancelAt) out.push({ label: "Undo cancellation", change: { action: "keep" }, confirm: `Keep ${name}'s subscription? It renews as usual.` });
+  else out.push({ label: "Cancel at period end", change: { action: "cancel" }, confirm: `Cancel ${name}'s subscription at the end of the paid period? They keep access until then.` });
+  out.push({ label: "Cancel now", change: { action: "cancel-now" }, confirm: `Cancel ${name}'s subscription right now? They lose access straight away (unless marked Free). Their data is kept. This can't be undone; they'd have to subscribe again.` });
+  return out;
 }
 
 async function post(body: Record<string, unknown>) {
@@ -68,6 +100,7 @@ export function AdminBillingClient() {
   const [form, setForm] = useState({ code: "", trialDays: "7", maxUses: "1", note: "", expiresAt: "" });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [q, setQ] = useState("");
+  const [busyTeam, setBusyTeam] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/admin/billing").catch(() => null);
@@ -239,6 +272,7 @@ export function AdminBillingClient() {
           <h2 className="text-base font-semibold text-slate-900">Accounts</h2>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search team or email" className={`${input} w-64`} />
         </div>
+        {msg && <p className={`text-sm ${msg.ok ? "text-emerald-700" : "text-red-600"}`}>{msg.text}</p>}
         <div className={`${card} overflow-x-auto p-0`}>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
@@ -247,6 +281,7 @@ export function AdminBillingClient() {
                 <th className="px-4 py-2">Owner</th>
                 <th className="px-4 py-2">Billing</th>
                 <th className="px-4 py-2">Free access</th>
+                <th className="px-4 py-2">Subscription</th>
               </tr>
             </thead>
             <tbody>
@@ -270,6 +305,33 @@ export function AdminBillingClient() {
                         />
                         Free
                       </label>
+                    </td>
+                    <td className="px-4 py-2">
+                      {subscriptionChanges(t).length ? (
+                        <select
+                          value=""
+                          disabled={busyTeam === t.id}
+                          onChange={async (e) => {
+                            const choice = subscriptionChanges(t)[Number(e.target.value)];
+                            if (!choice || !window.confirm(choice.confirm)) return;
+                            setBusyTeam(t.id);
+                            const r = await post({ action: "subscription", teamId: t.id, change: choice.change });
+                            setMsg(r.ok ? { ok: true, text: `${t.name}: ${choice.label.toLowerCase()} done.` } : { ok: false, text: r.error ?? "Couldn't change it." });
+                            await refresh();
+                            setBusyTeam(null);
+                          }}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700"
+                        >
+                          <option value="">{busyTeam === t.id ? "Working…" : "Change…"}</option>
+                          {subscriptionChanges(t).map((c, i) => (
+                            <option key={c.label} value={i}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
                     </td>
                   </tr>
                 );

@@ -9,7 +9,7 @@ import { Logo } from "@/components/Logo";
 import { ContactSalesForm } from "@/components/ContactSalesForm";
 import { billingConfigured, hasAccess, monthlyPrice, syncCheckoutSession, teamMemberCount } from "@/lib/billing";
 import { billingContext } from "@/lib/billingRequest";
-import { BillingPlans, ManageBillingButton } from "./BillingClient";
+import { BillingPlans, ManageBillingButton, SubscriptionControls } from "./BillingClient";
 
 export const metadata = { title: "Billing — Anchor.AI" };
 
@@ -109,10 +109,26 @@ export default async function BillingPage({
                 Free until <b>{day(team.trialEndsAt)}</b>, then billed monthly. Cancel any time before then and you won&apos;t be charged.
               </p>
             )}
-            {team.billingStatus !== "trialing" && team.currentPeriodEnd && (
+            {team.billingStatus !== "trialing" && team.currentPeriodEnd && !team.billingCancelAt && !team.billingPausedAt && (
               <p className="text-sm text-slate-600">Next bill: {day(team.currentPeriodEnd)}</p>
             )}
             <p className="text-xs text-slate-500">Adding or removing a teammate updates the bill automatically.</p>
+            {!canManage && team.billingPausedAt && (
+              <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Your team&apos;s subscription is paused, so Anchor.AI is locked for now. Your data is kept.{" "}
+                {owner?.name || owner?.email || "Your team's owner"} can resume it from this page.
+              </p>
+            )}
+            {canManage && (
+              <SubscriptionControls
+                plan={team.billingPlan === "pro" ? "pro" : "team"}
+                seats={team.billingSeats ?? seats}
+                cancelAt={team.billingCancelAt?.toISOString() ?? null}
+                pausedAt={team.billingPausedAt?.toISOString() ?? null}
+                resumesAt={team.billingResumesAt?.toISOString() ?? null}
+                trialing={team.billingStatus === "trialing"}
+              />
+            )}
             {canManage && <ManageBillingButton />}
           </div>
         ) : access ? (

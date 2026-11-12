@@ -618,6 +618,14 @@ export const teams = pgTable("team", {
   currentPeriodEnd: timestamp("currentPeriodEnd", { mode: "date" }),
   // The promo code used for a free trial; each team gets one trial.
   promoCodeUsed: text("promoCodeUsed"),
+  // Set when the subscription is cancelled to end at the period end
+  // (still active until then; can be undone). Copied from Stripe.
+  billingCancelAt: timestamp("billingCancelAt", { mode: "date" }),
+  // Set while billing is paused (Stripe pause_collection): no charges, and
+  // no access until it resumes; data is kept. billingResumesAt is the
+  // automatic resume date, null = until resumed by hand.
+  billingPausedAt: timestamp("billingPausedAt", { mode: "date" }),
+  billingResumesAt: timestamp("billingResumesAt", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
