@@ -1,6 +1,6 @@
 import { gzipSync } from "node:zlib";
 import { rawClient } from "@/db";
-import { isR2Configured, r2Put } from "@/lib/r2";
+import { isR2Configured, r2Delete, r2ListKeys, r2Put } from "@/lib/r2";
 import { APP_OWNER_EMAILS } from "@/lib/appOwner";
 import { sendEmail } from "@/lib/email";
 
@@ -9,10 +9,12 @@ import { sendEmail } from "@/lib/email";
 // It's a safety net independent of the database host, so a lost database,
 // a bad change or a mistaken deletion can always be put back. Runs from
 // the server's own schedule (instrumentation.ts) and /api/cron/backup.
-// Every copy is kept forever: nothing here ever deletes a backup, so any
-// client's data can be recreated from any past day (scripts/load-backup.ts
-// loads one into a database; /api/cron/restore-deals copies from it). If
-// backups stop, the owner gets an email (backupAlertIfDue below).
+// Copies are kept for BACKUP_KEEP_DAYS (35 by default), then deleted, so
+// data a client deleted (or that automatic deletion removed, see
+// retention.ts) doesn't live on in old backups indefinitely. Within that
+// window any day can be recreated (scripts/load-backup.ts loads one into
+// a database; /api/cron/restore-deals copies from it). If backups stop,
+// the owner gets an email (backupAlertIfDue below).
 
 export type BackupResult = { ok: boolean; key?: string; bytes?: number; tables?: number; rows?: number; error?: string };
 
@@ -68,11 +70,43 @@ export async function runBackup(): Promise<BackupResult> {
     const gz = gzipSync(json);
     const key = `backups/anchor-${new Date().toISOString().slice(0, 10)}.json.gz`;
     await r2Put(key, gz, "application/gzip");
+    const pruned = await pruneOldBackups().catch((err) => {
+      console.error("[backup] couldn't delete old backups:", err);
+      return 0;
+    });
+    if (pruned) console.log(`[backup] deleted ${pruned} backup(s) older than ${BACKUP_KEEP_DAYS} days`);
     return record({ ok: true, key, bytes: gz.length, tables: tables.length, rows });
   } catch (err) {
     console.error("[backup] failed:", err);
     return record({ ok: false, error: err instanceof Error ? err.message : String(err) });
   }
+}
+
+export const BACKUP_KEEP_DAYS = Math.max(7, Number(process.env.BACKUP_KEEP_DAYS) || 35);
+// However old, the newest few are always kept, so a long stretch without
+// backups never leaves none at all.
+const ALWAYS_KEEP_NEWEST = 7;
+
+// Which backup keys are past BACKUP_KEEP_DAYS, never touching the newest
+// few or anything that isn't a dated daily backup.
+export function backupsToDelete(keys: string[], now = Date.now(), keepDays = BACKUP_KEEP_DAYS): string[] {
+  const dated = keys
+    .map((key) => ({ key, day: /^backups\/anchor-(\d{4}-\d{2}-\d{2})\.json\.gz$/.exec(key)?.[1] }))
+    .filter((k): k is { key: string; day: string } => Boolean(k.day))
+    .sort((a, b) => b.day.localeCompare(a.day));
+  const cutoffDay = new Date(now - keepDays * 86_400_000).toISOString().slice(0, 10);
+  return dated
+    .slice(ALWAYS_KEEP_NEWEST)
+    .filter((k) => k.day < cutoffDay)
+    .map((k) => k.key);
+}
+
+// Deletes backups older than BACKUP_KEEP_DAYS. Only called right after a
+// successful backup. Returns how many were deleted.
+export async function pruneOldBackups(): Promise<number> {
+  const old = backupsToDelete((await r2ListKeys("backups/")).map((k) => k.key));
+  for (const key of old) await r2Delete(key);
+  return old.length;
 }
 
 // For the server's own schedule: one backup a day.

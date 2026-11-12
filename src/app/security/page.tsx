@@ -72,7 +72,7 @@ export default function SecurityPage() {
           <p>Your team owner can download all of your company&apos;s data at any time, see who has which tools connected, sign anyone out everywhere, and remove people. You can ask us to permanently delete your data at any time.</p>
         </Card>
         <Card title="Never lost">
-          <p>Daily encrypted backups are stored separately from the live service. Deleted deals go to a recoverable trash. If you cancel, your data is kept, so you can pick up where you left off.</p>
+          <p>Daily encrypted backups are stored separately from the live service and deleted after 35 days. Deleted deals go to a recoverable trash. If you cancel, your data is kept, so you can pick up where you left off.</p>
         </Card>
         <Card title="Recording done openly">
           <p>When Anchor.AI&apos;s notetaker joins a call, it tells everyone in the meeting chat that the call is being recorded. Recording copies held by our recording and transcription providers are deleted once Anchor.AI has saved its own.</p>
