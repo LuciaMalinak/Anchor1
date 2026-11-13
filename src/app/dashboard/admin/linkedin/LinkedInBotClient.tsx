@@ -210,7 +210,7 @@ export function LinkedInBotClient({
           </p>
           <p className="mt-1 text-xs text-slate-500">
             {state.canPost
-              ? `${state.settings.postTimes.length} posts a day at ${state.settings.postTimes.join(" and ")}, video every ${DAYS[state.settings.videoDay]} at ${state.settings.videoTime} (${tz}).`
+              ? `1 post a day at ${state.settings.postTimes[0]}; on ${DAYS[state.settings.videoDay]}s the video at ${state.settings.videoTime} is that day's post (${tz}).`
               : "Connect Zapier below so the bot can post."}
             {expiresSoon && !state.viaZapier && ` The LinkedIn connection runs out ${when(state.tokenExpiresAt, tz)}: reconnect before then.`}
           </p>
@@ -547,11 +547,11 @@ function SettingsForm({ settings, saving, save }: { settings: Settings; saving: 
     <div className={`${card} flex flex-col gap-4`}>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-          Post times (one per line, 24h)
-          <textarea
-            rows={2}
-            value={s.postTimes.join("\n")}
-            onChange={(e) => setS({ ...s, postTimes: lines(e.target.value) })}
+          Daily post time (24h)
+          <input
+            value={s.postTimes[0] ?? ""}
+            onChange={(e) => setS({ ...s, postTimes: [e.target.value.trim()] })}
+            placeholder="09:00"
             className={input}
           />
         </label>

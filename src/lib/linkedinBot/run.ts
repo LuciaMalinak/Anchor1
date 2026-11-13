@@ -122,7 +122,9 @@ export async function planDay(opts: { replace?: boolean } = {}): Promise<{ posts
 
   const [notes, recent] = await Promise.all([researchNotes(settings, label), recentTexts()]);
 
-  const postSlots = slotTimes(settings, dateISO, settings.postTimes);
+  // One post a day: on video day the video is that day's post.
+  const videoDay = weekday(dateISO) === settings.videoDay;
+  const postSlots = videoDay ? [] : slotTimes(settings, dateISO, settings.postTimes);
   let posts = 0;
   if (postSlots.length) {
     const drafts = await writePosts({ settings, count: postSlots.length, recent, notes, todayLabel: label });
@@ -138,7 +140,7 @@ export async function planDay(opts: { replace?: boolean } = {}): Promise<{ posts
   }
 
   let video = false;
-  if (weekday(dateISO) === settings.videoDay) {
+  if (videoDay) {
     const [slot] = slotTimes(settings, dateISO, [settings.videoTime]);
     if (slot) {
       const v = await writeVideo({ settings, recent, notes, todayLabel: label });

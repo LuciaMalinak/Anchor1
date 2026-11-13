@@ -27,7 +27,45 @@ function voice(settings: LinkedInBotSettings): string {
 - Show Anchor in action: describe what it actually does in a real moment (before a call, during it, after it) using only the features in the company description.
 - Comparison posts compare Anchor with categories of tools ("typical AI note-takers", "a general AI chatbot", "your CRM notes"), never with named products or companies, and only on the differences stated in the company description. Fair and confident, never disparaging.
 - Never invent customers, testimonials, quotes, results, statistics or news. Only use figures that appear in the research notes, naming the source ("per PitchBook"). Don't promise outcomes as facts about Anchor.AI's users.
-- End with a clear call to action to sign up, e.g. "Start free with Anchor.AI: ${link || "[link]"}" or "Sign up now: ${link || "[link]"}" (vary the wording; the link exactly as given, on its own line), then 3 relevant hashtags on the last line (e.g. #SalesAI #Dealmaking #AIAnchor).`;
+- End with a clear call to action to sign up, e.g. "Start free with Anchor.AI: ${link || "[link]"}" or "Sign up now: ${link || "[link]"}" (vary the wording; the link exactly as given, on its own line), then ${HASHTAG_COUNT} hashtags on the last line: mix broad ones with big followings (e.g. #AI #Sales #Startups #PrivateEquity #InvestmentBanking) and niche ones matching the post's topic (e.g. #SalesAI #Dealmaking #MergersAndAcquisitions), always ending with #AIAnchor.`;
+}
+
+// Hashtags on every post and video caption, to reach people beyond the
+// Page's followers. The writer is asked for this many; ensureHashtags tops
+// up from a list of broad and dealmaking tags if it gives fewer.
+export const HASHTAG_COUNT = 8;
+const HASHTAG_POOL = [
+  "#AI",
+  "#Sales",
+  "#Startups",
+  "#PrivateEquity",
+  "#InvestmentBanking",
+  "#MergersAndAcquisitions",
+  "#SalesAI",
+  "#Dealmaking",
+  "#B2BSales",
+  "#Productivity",
+  "#ArtificialIntelligence",
+  "#VentureCapital",
+];
+
+export function ensureHashtags(text: string): string {
+  const trimmed = text.trim();
+  const seen = new Set((trimmed.match(/#[A-Za-z][A-Za-z0-9_]*/g) ?? []).map((t) => t.toLowerCase()));
+  const add: string[] = [];
+  const needBrand = !seen.has("#aianchor");
+  for (const tag of HASHTAG_POOL) {
+    if (seen.size + add.length + (needBrand ? 1 : 0) >= HASHTAG_COUNT) break;
+    if (!seen.has(tag.toLowerCase())) add.push(tag);
+  }
+  if (needBrand) add.push("#AIAnchor");
+  if (!add.length) return trimmed;
+  const lines = trimmed.split("\n");
+  const last = lines[lines.length - 1];
+  // Append to an existing hashtag line, otherwise start one.
+  if (/^\s*(#[A-Za-z][A-Za-z0-9_]*\s*)+$/.test(last)) lines[lines.length - 1] = `${last.trim()} ${add.join(" ")}`;
+  else lines.push("", add.join(" "));
+  return lines.join("\n");
 }
 
 function company(settings: LinkedInBotSettings): string {
@@ -119,7 +157,10 @@ export async function writePosts(params: {
     ],
   });
   const { posts } = toolInput<{ posts: DraftPost[] }>(message, "record_posts");
-  return (posts ?? []).filter((p) => p.text?.trim()).slice(0, count);
+  return (posts ?? [])
+    .filter((p) => p.text?.trim())
+    .slice(0, count)
+    .map((p) => ({ ...p, text: ensureHashtags(p.text) }));
 }
 
 export type Slide = { title: string; body: string };
@@ -145,7 +186,7 @@ const VIDEO_TOOL: Anthropic.Tool = {
       },
       caption: {
         type: "string",
-        description: "The post text that goes with the video, 60-120 words, ending with the sign-up call to action and link, then 3 hashtags.",
+        description: "The post text that goes with the video, 60-120 words, ending with the sign-up call to action and link, then a last line of 8 hashtags mixing broad and niche ones, ending with #AIAnchor.",
       },
     },
     required: ["topic", "title", "slides", "caption"],
@@ -175,7 +216,7 @@ export async function writeVideo(params: {
   const v = toolInput<DraftVideo>(message, "record_video");
   const slides = (v.slides ?? []).filter((s) => s.title?.trim()).slice(0, 7);
   if (slides.length < 3) throw new Error("The video came back with too few slides");
-  return { topic: v.topic, title: (v.title ?? "").slice(0, 100), caption: v.caption, slides };
+  return { topic: v.topic, title: (v.title ?? "").slice(0, 100), caption: ensureHashtags(v.caption ?? ""), slides };
 }
 
 export type EngagementTarget = { name: string; why: string; angle: string };

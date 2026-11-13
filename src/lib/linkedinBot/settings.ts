@@ -7,7 +7,8 @@ export type LinkedInBotSettings = {
   // Master switch: nothing is written or posted while this is off.
   enabled: boolean;
   timeZone: string;
-  // Local times ("HH:MM") for the daily posts, one post per time.
+  // Local time ("HH:MM") of the one post a day. A list for older saved
+  // settings; only the first time is kept (normalizeSettings).
   postTimes: string[];
   // Day of the week for the video (0 = Sunday … 6 = Saturday) and its time.
   videoDay: number;
@@ -94,7 +95,7 @@ const OLD_DEFAULT_ABOUTS = [
 export const DEFAULT_SETTINGS: LinkedInBotSettings = {
   enabled: false,
   timeZone: "America/New_York",
-  postTimes: ["09:00", "15:00"],
+  postTimes: ["09:00"],
   videoDay: 3,
   videoTime: "12:00",
   topics: DEFAULT_TOPICS,
@@ -123,7 +124,8 @@ export function normalizeSettings(raw: unknown): LinkedInBotSettings {
   return {
     enabled: r.enabled === true,
     timeZone: safeTimeZone(typeof r.timeZone === "string" ? r.timeZone : DEFAULT_SETTINGS.timeZone),
-    postTimes: postTimes.length ? [...new Set(postTimes)].sort() : DEFAULT_SETTINGS.postTimes,
+    // One post a day: the earliest saved time.
+    postTimes: postTimes.length ? [...new Set(postTimes)].sort().slice(0, 1) : DEFAULT_SETTINGS.postTimes,
     videoDay: Number.isInteger(videoDay) && videoDay >= 0 && videoDay <= 6 ? videoDay : DEFAULT_SETTINGS.videoDay,
     videoTime: typeof r.videoTime === "string" && TIME_RE.test(r.videoTime) ? r.videoTime : DEFAULT_SETTINGS.videoTime,
     topics:
