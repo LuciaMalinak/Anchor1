@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { promoCodes, salesLeads, teams, users } from "@/db/schema";
 import { requireAppOwnerApi } from "@/lib/adminAccess";
+import { anonymizeAccount } from "@/lib/deleteAccount";
+import { logDataChange } from "@/lib/dataChangeLog";
+import { APP_OWNER_EMAILS, isAppOwner } from "@/lib/appOwner";
 import { billingConfigured, manageSubscription, normalizeCode, parseSubscriptionAction } from "@/lib/billing";
 
 // Admin → Billing: promo codes, free accounts, sales requests.
@@ -36,16 +39,24 @@ export async function GET() {
       .leftJoin(users, eq(users.id, teams.ownerUserId))
       .orderBy(desc(teams.createdAt)),
   ]);
+  // The app owner's own team(s): never offered for deletion.
+  const ownerTeams = new Set(
+    (await db.select({ teamId: users.teamId }).from(users).where(inArray(sql`lower(${users.email})`, APP_OWNER_EMAILS)))
+      .map((r) => r.teamId)
+      .filter(Boolean),
+  );
   return NextResponse.json({
     configured: billingConfigured(),
     codes,
     leads,
-    teams: teamRows.map((t) => ({ ...t, hasSubscription: Boolean(t.hasSubscription) })),
+    // Teams with nobody left on them (every account deleted) aren't clients any more.
+    teams: teamRows.filter((t) => t.members > 0).map((t) => ({ ...t, hasSubscription: Boolean(t.hasSubscription), own: ownerTeams.has(t.id) })),
   });
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireAppOwnerApi())) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const admin = await requireAppOwnerApi();
+  if (!admin) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   switch (body.action) {
     case "createPromo": {
@@ -119,6 +130,34 @@ export async function POST(req: NextRequest) {
         .returning({ id: teams.id, freeUntil: teams.freeUntil });
       if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
       return NextResponse.json({ ok: true, freeUntil: team.freeUntil });
+    }
+    // Deletes every person's account on a team that isn't paying (sign-ups
+    // that never subscribed, ended subscriptions): emails and personal
+    // details removed, signed out everywhere. The team's data is kept
+    // with nobody on it, so a mistake can be undone from Admin → Data.
+    case "deleteAccounts": {
+      const [team] = await db.select().from(teams).where(eq(teams.id, String(body.teamId ?? "")));
+      if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
+      if (team.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(team.billingStatus ?? "")) {
+        return NextResponse.json({ error: "This client has an active subscription. Cancel it first (Subscription → Cancel now)." }, { status: 400 });
+      }
+      const members = await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.teamId, team.id));
+      if (members.some((m) => isAppOwner(m.email))) {
+        return NextResponse.json({ error: "That's your own team, so it can't be deleted here." }, { status: 400 });
+      }
+      await logDataChange({
+        action: "team_deleted",
+        actorUserId: admin.id,
+        actorEmail: admin.email,
+        teamId: team.id,
+        targetId: team.id,
+        details: { teamName: team.name, reason: "deleted by the app owner from Admin → Billing; team and data kept", emails: members.map((m) => m.email) },
+      });
+      for (const m of members) {
+        await anonymizeAccount(m.id, { userId: admin.id, email: admin.email, reason: "deleted by the app owner from Admin → Billing" });
+      }
+      await db.update(teams).set({ freeUntil: null }).where(eq(teams.id, team.id));
+      return NextResponse.json({ ok: true, deleted: members.length });
     }
     case "setLeadStatus": {
       await db
