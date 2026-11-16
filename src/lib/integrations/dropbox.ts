@@ -202,6 +202,58 @@ export async function fetchRelevantDropboxDocuments(
   return items;
 }
 
+const IMAGE_EXT = /\.(jpe?g|png|webp|heic|heif|tiff?)$/i;
+
+// Photos in the person's Dropbox matching the search terms (by file name,
+// or inside a matching folder such as "Akoya photos"), for decks. Each is
+// downloaded as a large JPEG preview, so phone photos (HEIC) work too.
+export async function findDropboxImages(userId: string, terms: string[], max = 6): Promise<{ name: string; data: Buffer }[]> {
+  const queries = [...new Set(terms.map((t) => t.trim()).filter(Boolean))].slice(0, MAX_SEARCH_TERMS);
+  const connection = await getDropboxConnection(userId);
+  if (!connection || !queries.length) return [];
+  let token = connection.accessToken;
+  const call = async <T>(url: string, body: unknown): Promise<T> => {
+    const result = await dropboxFetch(connection, token, url, { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    token = result.token;
+    return (await result.res.json()) as T;
+  };
+  const found = new Map<string, DropboxFile>();
+  const folders = new Set<string>();
+  for (const query of queries) {
+    const body = await call<{ matches?: { metadata?: { metadata?: DropboxFile } }[] }>("https://api.dropboxapi.com/2/files/search_v2", {
+      query,
+      options: { max_results: 30, file_status: "active" },
+    }).catch(() => ({ matches: [] }));
+    for (const m of body.matches ?? []) {
+      const f = m.metadata?.metadata;
+      if (!f?.path_lower) continue;
+      if (f[".tag"] === "folder") folders.add(f.path_lower);
+      else if (IMAGE_EXT.test(f.name ?? "")) found.set(f.path_lower, f);
+    }
+  }
+  for (const folder of [...folders].slice(0, MAX_FOLDERS)) {
+    if (found.size >= max * 2) break;
+    const body = await call<{ entries?: DropboxFile[] }>("https://api.dropboxapi.com/2/files/list_folder", { path: folder, recursive: false, limit: MAX_FOLDER_FILES }).catch(
+      () => ({ entries: [] as DropboxFile[] })
+    );
+    for (const f of body.entries ?? []) if (f[".tag"] === "file" && f.path_lower && IMAGE_EXT.test(f.name ?? "")) found.set(f.path_lower, f);
+  }
+  const out: { name: string; data: Buffer }[] = [];
+  for (const f of [...found.values()].slice(0, max * 2)) {
+    if (out.length >= max) break;
+    try {
+      const res = await dropboxFetch(connection, token, "https://content.dropboxapi.com/2/files/get_thumbnail_v2", {
+        headers: { "Dropbox-API-Arg": dropboxArg({ resource: { ".tag": "path", path: f.path_lower }, format: "jpeg", size: "w2048h1536", mode: "bestfit" }) },
+      });
+      token = res.token;
+      out.push({ name: f.name!, data: Buffer.from(await res.res.arrayBuffer()) });
+    } catch (err) {
+      console.error(`[dropbox] couldn't fetch image ${f.name}:`, err);
+    }
+  }
+  return out;
+}
+
 // Thrown when the Dropbox connection is read-only (connected before saving
 // recaps existed), so the meeting page can ask for write access.
 export class NeedsDropboxPermissionError extends Error {}

@@ -97,6 +97,39 @@ function isPrivateAddress(ip: string): boolean {
   return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
 }
 
+// Downloads a file from a public website (images for decks), up to a size
+// limit; null when it isn't public, fails, or is too big.
+export async function fetchPublicBytes(url: string, maxBytes = 10_000_000): Promise<{ data: Buffer; type: string } | null> {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  if (!(await isPublicHost(u.hostname))) return null;
+  const res = await fetch(u, {
+    signal: AbortSignal.timeout(10_000),
+    redirect: "follow",
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; AnchorDeckBuilder/1.0)", Accept: "image/*,*/*;q=0.5" },
+  });
+  if (!res.ok) return null;
+  if (res.url && !(await isPublicHost(new URL(res.url).hostname))) return null;
+  if (Number(res.headers.get("content-length") ?? 0) > maxBytes) return null;
+  const data = Buffer.from(await res.arrayBuffer());
+  if (data.length > maxBytes) return null;
+  return { data, type: res.headers.get("content-type") ?? "" };
+}
+
+// A public web page's HTML, for reading images off a company's site.
+export async function fetchPublicPage(url: string): Promise<string | null> {
+  try {
+    return await fetchText(url);
+  } catch {
+    return null;
+  }
+}
+
 async function fetchText(url: string): Promise<string | null> {
   const host = new URL(url).hostname;
   if (!(await isPublicHost(host))) return null;

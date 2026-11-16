@@ -1,5 +1,6 @@
 import PptxGenJS from "pptxgenjs";
 import { colorDistance, hue, luminance, mix } from "@/lib/brandColors";
+import { fitPhoto, type DeckLogo, type DeckPhoto } from "@/lib/deckImages";
 
 // Builds the PowerPoint decks Ask Anchor makes when someone asks for a
 // presentation, pitch or deck (the create_presentation tool in
@@ -25,7 +26,9 @@ export type DeckSlide = {
     | "agenda"
     | "timeline"
     | "comparison"
-    | "quote";
+    | "quote"
+    | "image"
+    | "gallery";
   title: string;
   subtitle?: string;
   bullets?: string[];
@@ -42,6 +45,15 @@ export type DeckSlide = {
   steps?: { when: string; what: string; owner?: string }[];
   options?: { name: string; bullets: string[]; recommended?: boolean }[];
   quote?: { text: string; by?: string };
+  // A photo for the slide: an image link, or "auto" for the next photo
+  // found for the deck (company website, Dropbox, Drive). "image" slides
+  // are a full-bleed photo; on others it sits beside the content.
+  image?: string;
+  // gallery layout: 2-4 photos with captions.
+  gallery?: { image?: string; caption: string }[];
+  // Filled in by assignPhotos before building.
+  photo?: DeckPhoto;
+  galleryPhotos?: (DeckPhoto | null)[];
   // The "so what" of the slide, shown in a band at the bottom.
   takeaway?: string;
   // Where the slide's numbers came from, shown at the bottom.
@@ -60,7 +72,31 @@ export type DeckSpec = {
   // Brand colours (hex, e.g. "1B365D"): primary for the cover, titles and
   // table headers, accent for rules and highlights.
   theme?: { primary?: string; accent?: string };
+  // Found by the server (deckImages.ts), not written by the AI: the photo
+  // pool, the cover photo and the company logo.
+  coverPhoto?: DeckPhoto;
+  logo?: DeckLogo | null;
 };
+
+// Hands out the photo pool: slides that asked for a photo ("auto") first,
+// then the cover, then section dividers and quotes, each photo used once.
+export function assignPhotos(spec: DeckSpec, pool: DeckPhoto[], linked: Map<string, DeckPhoto>): DeckSpec {
+  const queue = [...pool];
+  const next = () => queue.shift();
+  const pick = (ref: string | undefined) => (ref && ref !== "auto" ? linked.get(ref) : undefined);
+  const slides = spec.slides.map((d) => ({ ...d }));
+  for (const d of slides) {
+    d.photo = pick(d.image);
+    if (d.layout === "gallery") d.galleryPhotos = (d.gallery ?? []).slice(0, 4).map((g) => pick(g.image) ?? null);
+  }
+  for (const d of slides) {
+    if (!d.photo && (d.image === "auto" || d.layout === "image")) d.photo = next();
+    if (d.galleryPhotos) d.galleryPhotos = d.galleryPhotos.map((p) => p ?? next() ?? null);
+  }
+  const coverPhoto = spec.coverPhoto ?? next();
+  for (const d of slides) if (!d.photo && !d.image && (d.layout === "section" || d.layout === "quote")) d.photo = next();
+  return { ...spec, slides, coverPhoto };
+}
 
 const DEFAULT_PRIMARY = "14213D"; // deep navy
 const DEFAULT_ACCENT = "B08D57"; // champagne gold
@@ -203,6 +239,53 @@ function rings(pptx: PptxGenJS, s: PptxGenJS.Slide, t: Theme) {
   s.addShape(pptx.ShapeType.ellipse, { x: 10.75, y: 0.55, w: 0.22, h: 0.22, fill: { color: t.accentOnDark }, line: { color: t.accentOnDark } });
 }
 
+// A photo filling the right of a dark slide, with an accent edge.
+async function photoPanel(pptx: PptxGenJS, s: PptxGenJS.Slide, photo: DeckPhoto, t: Theme) {
+  const x = 7.35;
+  s.addImage({ data: await fitPhoto(photo, W - x, 7.5), x, y: 0, w: W - x, h: 7.5 });
+  s.addShape(pptx.ShapeType.rect, { x: x - 0.06, y: 0, w: 0.06, h: 7.5, fill: { color: t.accent }, line: { color: t.accent } });
+}
+
+// The company's logo on a white card, readable on any background.
+function logoChip(pptx: PptxGenJS, s: PptxGenJS.Slide, logo: DeckLogo, x: number, y: number) {
+  const h = 0.5;
+  const w = Math.min(2.6, h * logo.aspect);
+  s.addShape(pptx.ShapeType.roundRect, { x, y, w: w + 0.4, h: h + 0.3, fill: { color: WHITE }, line: { color: WHITE }, rectRadius: 0.08 });
+  s.addImage({ data: logo.data, x: x + 0.2, y: y + 0.15, w, h });
+}
+
+// A full-bleed photo with the title on a dark panel over its left side.
+async function imageSlide(pptx: PptxGenJS, s: PptxGenJS.Slide, d: DeckSlide, t: Theme, n: number) {
+  s.background = { color: t.primary };
+  if (d.photo) s.addImage({ data: await fitPhoto(d.photo, W, 7.5), x: 0, y: 0, w: W, h: 7.5 });
+  // A dark panel that fades into the photo in narrow steps.
+  s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 6.3, h: 7.5, fill: { color: t.primary, transparency: 10 }, line: { color: t.primary, transparency: 100 } });
+  [25, 40, 55, 70, 85].forEach((tr, i) => {
+    s.addShape(pptx.ShapeType.rect, { x: 6.3 + i * 0.22, y: 0, w: 0.22, h: 7.5, fill: { color: t.primary, transparency: tr }, line: { color: t.primary, transparency: 100 } });
+  });
+  s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.18, h: 7.5, fill: { color: t.accent }, line: { color: t.accent } });
+  s.addText(clean(d.title), { x: 0.9, y: 1.6, w: 5.2, h: 2.0, fontFace: SERIF, fontSize: 32, color: WHITE, valign: "bottom", fit: "shrink" });
+  s.addShape(pptx.ShapeType.line, { x: 0.9, y: 3.85, w: 1.2, h: 0, line: { color: t.accentOnDark, width: 2.5 } });
+  let y = 4.05;
+  if (d.subtitle) {
+    s.addText(clean(d.subtitle), { x: 0.9, y, w: 5.2, h: 0.8, fontFace: FONT, fontSize: 16, color: t.onPrimaryMuted, valign: "top", fit: "shrink" });
+    y += 0.85;
+  }
+  const items = (d.bullets ?? []).map(clean).filter(Boolean).slice(0, 4);
+  items.forEach((b, i) => {
+    s.addText(
+      [
+        { text: "—  ", options: { color: t.accentOnDark, bold: true } },
+        { text: b, options: { color: WHITE } },
+      ],
+      { x: 0.9, y: y + i * 0.5, w: 5.2, h: 0.5, fontFace: FONT, fontSize: 14, valign: "middle", fit: "shrink" }
+    );
+  });
+  if (d.takeaway) s.addText(clean(d.takeaway), { x: 0.9, y: 6.2, w: 5.2, h: 0.55, fontFace: FONT, fontSize: 13, bold: true, color: t.accentOnDark, fit: "shrink" });
+  s.addText(d.source ? `Source: ${clean(d.source)}` : "", { x: 0.9, y: 7.0, w: 5.2, h: 0.32, fontFace: FONT, fontSize: 9, color: t.onPrimaryMuted, fit: "shrink" });
+  s.addText(String(n), { x: W - MX - 1, y: 7.0, w: 1, h: 0.32, fontFace: FONT, fontSize: 9, color: WHITE, align: "right" });
+}
+
 export async function buildDeck(spec: DeckSpec): Promise<Buffer> {
   const t = deckTheme(spec.theme);
   const firm = clean(spec.preparedBy ?? "") || "Anchor.AI";
@@ -215,20 +298,23 @@ export async function buildDeck(spec: DeckSpec): Promise<Buffer> {
   // Cover
   const cover = pptx.addSlide();
   cover.background = { color: t.primary };
-  rings(pptx, cover, t);
+  const textW = spec.coverPhoto ? 5.9 : 8.6;
+  if (spec.coverPhoto) await photoPanel(pptx, cover, spec.coverPhoto, t);
+  else rings(pptx, cover, t);
   cover.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.18, h: 7.5, fill: { color: t.accent }, line: { color: t.accent } });
+  if (spec.logo) logoChip(pptx, cover, spec.logo, 0.9, 0.7);
   cover.addText((clean(spec.client ?? "") || "Confidential").toUpperCase(), {
-    x: 0.9, y: 1.75, w: 8, h: 0.4, fontFace: FONT, fontSize: 13, bold: true, color: t.accentOnDark, charSpacing: 3,
+    x: 0.9, y: 1.95, w: textW, h: 0.4, fontFace: FONT, fontSize: 13, bold: true, color: t.accentOnDark, charSpacing: 3,
   });
-  cover.addText(clean(spec.title), { x: 0.9, y: 2.2, w: 8.6, h: 2.0, fontFace: SERIF, fontSize: 40, color: WHITE, valign: "top", fit: "shrink" });
-  cover.addShape(pptx.ShapeType.line, { x: 0.9, y: 4.4, w: 1.4, h: 0, line: { color: t.accentOnDark, width: 2.5 } });
-  if (spec.subtitle) cover.addText(clean(spec.subtitle), { x: 0.9, y: 4.6, w: 8.2, h: 0.9, fontFace: FONT, fontSize: 18, color: t.onPrimaryMuted, valign: "top", fit: "shrink" });
+  cover.addText(clean(spec.title), { x: 0.9, y: 2.4, w: textW, h: 1.9, fontFace: SERIF, fontSize: spec.coverPhoto ? 34 : 40, color: WHITE, valign: "top", fit: "shrink" });
+  cover.addShape(pptx.ShapeType.line, { x: 0.9, y: 4.5, w: 1.4, h: 0, line: { color: t.accentOnDark, width: 2.5 } });
+  if (spec.subtitle) cover.addText(clean(spec.subtitle), { x: 0.9, y: 4.7, w: textW - 0.4, h: 0.9, fontFace: FONT, fontSize: 17, color: t.onPrimaryMuted, valign: "top", fit: "shrink" });
   cover.addText(
     [
       { text: `Prepared by ${firm}`, options: { bold: true, color: WHITE, breakLine: true } },
       { text: `${today}  ·  Strictly confidential`, options: { color: t.onPrimaryMuted } },
     ],
-    { x: 0.9, y: 6.2, w: 8, h: 0.75, fontFace: FONT, fontSize: 12, valign: "bottom" }
+    { x: 0.9, y: 6.2, w: textW, h: 0.75, fontFace: FONT, fontSize: 12, valign: "bottom" }
   );
 
   let n = 2;
@@ -237,7 +323,12 @@ export async function buildDeck(spec: DeckSpec): Promise<Buffer> {
 
   const frame = (s: PptxGenJS.Slide, d: DeckSlide) => {
     s.background = { color: WHITE };
-    s.addText(kicker.toUpperCase().slice(0, 80), { x: MX, y: 0.32, w: CW, h: 0.3, fontFace: FONT, fontSize: 10, bold: true, color: t.accent, charSpacing: 2 });
+    if (spec.logo) {
+      const lh = 0.32;
+      const lw = Math.min(1.6, lh * spec.logo.aspect);
+      s.addImage({ data: spec.logo.data, x: W - MX - lw, y: 0.3, w: lw, h: lh });
+    }
+    s.addText(kicker.toUpperCase().slice(0, 80), { x: MX, y: 0.32, w: CW - 2, h: 0.3, fontFace: FONT, fontSize: 10, bold: true, color: t.accent, charSpacing: 2 });
     s.addText(clean(d.title), { x: MX, y: 0.62, w: CW, h: 0.95, fontFace: FONT, fontSize: 26, bold: true, color: t.primary, valign: "top", fit: "shrink" });
     s.addShape(pptx.ShapeType.rect, { x: MX, y: 1.62, w: 0.9, h: 0.05, fill: { color: t.accent }, line: { color: t.accent } });
     s.addShape(pptx.ShapeType.line, { x: MX, y: 6.95, w: CW, h: 0, line: { color: HAIRLINE, width: 0.75 } });
@@ -255,17 +346,24 @@ export async function buildDeck(spec: DeckSpec): Promise<Buffer> {
     const s = pptx.addSlide();
     if (d.notes) s.addNotes(d.notes);
 
+    if (d.layout === "image") {
+      await imageSlide(pptx, s, d, t, n);
+      n++;
+      continue;
+    }
+
     if (d.layout === "title" || d.layout === "section") {
       s.background = { color: t.primary };
-      rings(pptx, s, t);
+      if (d.photo) await photoPanel(pptx, s, d.photo, t);
+      else rings(pptx, s, t);
       s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.18, h: 7.5, fill: { color: t.accent }, line: { color: t.accent } });
       if (d.layout === "section") {
         section++;
         kicker = clean(d.title);
         s.addText(String(section).padStart(2, "0"), { x: 0.9, y: 1.7, w: 3, h: 1.1, fontFace: SERIF, fontSize: 60, color: t.accentOnDark });
       }
-      s.addText(clean(d.title), { x: 0.9, y: 2.9, w: 8.6, h: 1.5, fontFace: SERIF, fontSize: 34, color: WHITE, valign: "top", fit: "shrink" });
-      if (d.subtitle) s.addText(clean(d.subtitle), { x: 0.9, y: 4.5, w: 8.2, h: 0.9, fontFace: FONT, fontSize: 16, color: t.onPrimaryMuted, valign: "top", fit: "shrink" });
+      s.addText(clean(d.title), { x: 0.9, y: 2.9, w: d.photo ? 5.9 : 8.6, h: 1.5, fontFace: SERIF, fontSize: 34, color: WHITE, valign: "top", fit: "shrink" });
+      if (d.subtitle) s.addText(clean(d.subtitle), { x: 0.9, y: 4.5, w: d.photo ? 5.5 : 8.2, h: 0.9, fontFace: FONT, fontSize: 16, color: t.onPrimaryMuted, valign: "top", fit: "shrink" });
       s.addText(String(n), { x: W - MX - 1, y: 7.0, w: 1, h: 0.32, fontFace: FONT, fontSize: 9, color: t.onPrimaryMuted, align: "right" });
       n++;
       continue;
@@ -280,8 +378,17 @@ export async function buildDeck(spec: DeckSpec): Promise<Buffer> {
       body.h -= 0.45;
     }
     if (d.takeaway) body.h -= 0.8;
+    // A photo beside the content: the right third of the slide.
+    if (d.photo && ["bullets", "metrics", "two_column", "agenda", "quote"].includes(d.layout)) {
+      const pw = 4.3;
+      const px = d.layout === "quote" ? body.x : body.x + body.w - pw;
+      s.addImage({ data: await fitPhoto(d.photo, pw, body.h), x: px, y: body.y, w: pw, h: body.h });
+      s.addShape(pptx.ShapeType.rect, { x: px, y: body.y + body.h - 0.06, w: pw, h: 0.06, fill: { color: t.accent }, line: { color: t.accent } });
+      body.w -= pw + 0.45;
+      if (d.layout === "quote") body.x += pw + 0.45;
+    }
 
-    if (d.layout === "bullets" || (!["two_column", "metrics", "table", "chart", "agenda", "timeline", "comparison", "quote"].includes(d.layout) && d.bullets?.length)) {
+    if (d.layout === "bullets" || (!["two_column", "metrics", "table", "chart", "agenda", "timeline", "comparison", "quote", "gallery", "image"].includes(d.layout) && d.bullets?.length)) {
       bulletRows(pptx, s, d.bullets ?? [], t, { x: body.x, y: body.y + 0.05, w: body.w, h: body.h - 0.05 });
     } else if (d.layout === "two_column") {
       const gap = 0.35;
@@ -310,7 +417,7 @@ export async function buildDeck(spec: DeckSpec): Promise<Buffer> {
         const x = body.x + i * (w + gap);
         s.addShape(pptx.ShapeType.rect, { x, y: body.y, w, h: cardH, fill: { color: WHITE }, line: { color: HAIRLINE, width: 1 }, rectRadius: 0.06 });
         s.addShape(pptx.ShapeType.rect, { x, y: body.y, w, h: 0.07, fill: { color: t.accent }, line: { color: t.accent } });
-        s.addText(clean(m.value), { x: x + 0.25, y: body.y + 0.3, w: w - 0.5, h: cardH * 0.45, fontFace: SERIF, fontSize: 40, color: t.primary, valign: "middle", fit: "shrink" });
+        s.addText(clean(m.value), { x: x + 0.25, y: body.y + 0.3, w: w - 0.5, h: cardH * 0.45, fontFace: SERIF, fontSize: w < 2.4 ? 28 : w < 3 ? 34 : 40, color: t.primary, valign: "middle", fit: "shrink" });
         s.addText(clean(m.label), { x: x + 0.25, y: body.y + 0.3 + cardH * 0.45, w: w - 0.5, h: cardH * 0.4, fontFace: FONT, fontSize: 13, color: MUTED, valign: "top", fit: "shrink" });
       });
       if (d.bullets?.length) {
@@ -436,6 +543,20 @@ export async function buildDeck(spec: DeckSpec): Promise<Buffer> {
         }
         s.addText(bulletRuns(o.bullets ?? []), { x: x + 0.2, y, w: w - 0.4, h: body.y + cardH - y - 0.15, fontFace: FONT, fontSize: opts.length > 3 ? 14 : 16, valign: "top", fit: "shrink" });
       });
+    } else if (d.layout === "gallery" && d.galleryPhotos?.some(Boolean)) {
+      const items = (d.gallery ?? []).slice(0, 4).map((g, i) => ({ caption: clean(g.caption), photo: d.galleryPhotos?.[i] ?? null })).filter((g) => g.photo);
+      const gap = 0.3;
+      const w = (body.w - gap * (items.length - 1)) / items.length;
+      const ph = Math.min(body.h - 0.9, w * 0.75);
+      for (const [i, g] of items.entries()) {
+        const x = body.x + i * (w + gap);
+        s.addImage({ data: await fitPhoto(g.photo!, w, ph), x, y: body.y, w, h: ph });
+        s.addShape(pptx.ShapeType.rect, { x, y: body.y + ph, w, h: 0.06, fill: { color: t.accent }, line: { color: t.accent } });
+        s.addText(g.caption, { x, y: body.y + ph + 0.15, w, h: 0.7, fontFace: FONT, fontSize: 14, bold: true, color: t.primary, valign: "top", fit: "shrink" });
+      }
+      if (d.bullets?.length && body.h - ph - 0.9 > 0.6) {
+        bulletRows(pptx, s, d.bullets, t, { x: body.x, y: body.y + ph + 0.9, w: body.w, h: body.h - ph - 0.9 }, 14);
+      }
     } else if (d.layout === "quote" && d.quote?.text) {
       s.addShape(pptx.ShapeType.rect, { x: body.x, y: body.y + 0.2, w: 0.08, h: Math.min(3.6, body.h - 0.4), fill: { color: t.accent }, line: { color: t.accent } });
       s.addText("“", { x: body.x + 0.5, y: body.y - 0.1, w: 1.2, h: 1.3, fontFace: SERIF, fontSize: 100, color: t.accent, transparency: 45 });
