@@ -72,6 +72,39 @@ type CalendarEvent = {
   attendees?: { self?: boolean; responseStatus?: string }[];
 };
 
+// Names or addresses -> email addresses, from the person's contacts and
+// their team. Shared by schedule_meeting and draft_email (askEmailTasks.ts).
+export async function resolvePeople(
+  userId: string,
+  wanted: unknown[],
+): Promise<{ emails: string[]; ambiguous: string[]; missing: string[] }> {
+  const [me] = await db.select({ teamId: users.teamId }).from(users).where(eq(users.id, userId));
+  const emails: string[] = [];
+  const ambiguous: string[] = [];
+  const missing: string[] = [];
+  for (const raw of wanted) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const a = raw.trim();
+    const inBrackets = /<([^>]+)>/.exec(a)?.[1];
+    if (EMAIL_RE.test(inBrackets ?? a)) {
+      emails.push((inBrackets ?? a).toLowerCase());
+      continue;
+    }
+    const like = `%${a.replace(/[%_]/g, "")}%`;
+    const [contactRows, teammates] = await Promise.all([
+      db.select({ name: contacts.name, email: contacts.email }).from(contacts).where(and(eq(contacts.userId, userId), ilike(contacts.name, like))).limit(5),
+      me?.teamId
+        ? db.select({ name: users.name, email: users.email }).from(users).where(and(eq(users.teamId, me.teamId), or(ilike(users.name, like), ilike(users.email, like)))).limit(5)
+        : Promise.resolve([] as { name: string | null; email: string | null }[]),
+    ]);
+    const found = [...new Map([...contactRows, ...teammates].filter((r) => r.email).map((r) => [r.email!.toLowerCase(), r])).values()];
+    if (found.length === 1) emails.push(found[0].email!.toLowerCase());
+    else if (found.length > 1) ambiguous.push(`${a} (several matches: ${found.map((f) => `${f.name} <${f.email}>`).join(", ")})`);
+    else missing.push(a);
+  }
+  return { emails: [...new Set(emails)], ambiguous, missing };
+}
+
 function calendarTool(userId: string, timeZone: string): ServerTool {
   return {
     tool: {
@@ -182,27 +215,9 @@ function scheduleTool(userId: string, timeZone: string): ServerTool {
 
       // Names -> emails, from their contacts and their team.
       const [me] = await db.select({ teamId: users.teamId }).from(users).where(eq(users.id, userId));
-      const wanted = (Array.isArray(input.attendees) ? input.attendees : []).filter((a): a is string => typeof a === "string" && a.trim() !== "");
-      const emails: string[] = [];
-      const unresolved: string[] = [];
-      for (const raw of wanted) {
-        const a = raw.trim();
-        const inBrackets = /<([^>]+)>/.exec(a)?.[1];
-        if (EMAIL_RE.test(inBrackets ?? a)) {
-          emails.push((inBrackets ?? a).toLowerCase());
-          continue;
-        }
-        const like = `%${a.replace(/[%_]/g, "")}%`;
-        const [contactRows, teammates] = await Promise.all([
-          db.select({ name: contacts.name, email: contacts.email }).from(contacts).where(and(eq(contacts.userId, userId), ilike(contacts.name, like))).limit(5),
-          me?.teamId
-            ? db.select({ name: users.name, email: users.email }).from(users).where(and(eq(users.teamId, me.teamId), or(ilike(users.name, like), ilike(users.email, like)))).limit(5)
-            : Promise.resolve([] as { name: string | null; email: string | null }[]),
-        ]);
-        const found = [...new Map([...contactRows, ...teammates].filter((r) => r.email).map((r) => [r.email!.toLowerCase(), r])).values()];
-        if (found.length === 1) emails.push(found[0].email!.toLowerCase());
-        else unresolved.push(found.length > 1 ? `${a} (several matches: ${found.map((f) => `${f.name} <${f.email}>`).join(", ")})` : `${a} (no email on file)`);
-      }
+      const people = await resolvePeople(userId, Array.isArray(input.attendees) ? input.attendees : []);
+      const emails = people.emails;
+      const unresolved = [...people.ambiguous, ...people.missing.map((m) => `${m} (no email on file)`)];
       if (unresolved.length) {
         return `Not scheduled yet: couldn't work out who to invite for ${unresolved.join("; ")}. Ask the person which address to use, then call schedule_meeting again.`;
       }
