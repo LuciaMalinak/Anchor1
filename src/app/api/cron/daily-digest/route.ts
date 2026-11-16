@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { usersWithAccess } from "@/lib/billing";
 import { db } from "@/db";
 import { users, teams } from "@/db/schema";
 import { and, eq, isNotNull } from "drizzle-orm";
@@ -37,7 +38,9 @@ export async function GET(req: NextRequest) {
   let usersSkippedNothingNew = 0;
   let usersSkippedNotConfigured = 0;
 
+  const allowed = await usersWithAccess(optedIn.map((u) => u.id));
   for (const u of optedIn) {
+    if (!allowed.has(u.id)) continue;
     const teamId = u.teamId!;
     if (!digestByTeam.has(teamId)) {
       const [team] = await db.select().from(teams).where(eq(teams.id, teamId));

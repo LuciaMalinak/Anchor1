@@ -238,6 +238,10 @@ const MIGRATIONS = [
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingCancelAt" timestamp`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingPausedAt" timestamp`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingResumesAt" timestamp`,
+  // Accounts deleted before deleteAccount.ts removed connected tools:
+  // drop their stored Gmail/Slack/CRM connections and morning brief.
+  `DELETE FROM "integration_connection" WHERE "userId" IN (SELECT "id" FROM "user" WHERE "email" LIKE 'deleted-%@anchor.invalid')`,
+  `DELETE FROM "morning_brief" WHERE "userId" IN (SELECT "id" FROM "user" WHERE "email" LIKE 'deleted-%@anchor.invalid')`,
   // Free trials given from Admin → Billing (billing.ts hasAccess).
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "freeUntil" timestamp`,
   // Contacts from calendar invites (meetingAttendees.ts).
