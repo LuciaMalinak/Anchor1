@@ -69,6 +69,15 @@ export default async function ContactDetailPage({
         </section>
       )}
 
+      {contact.companyBriefing && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-slate-500">
+            ABOUT {(contact.company || "THEIR COMPANY").toUpperCase()}
+          </p>
+          <p className="mt-1 text-sm text-slate-700">{contact.companyBriefing}</p>
+        </section>
+      )}
+
       <ContactNotes contactId={contact.id} initialNotes={contact.notes} />
 
       {dealsInvolved.length > 0 && (

@@ -104,3 +104,39 @@ Only state things you found via search.`,
     newsHeadline,
   };
 }
+
+// The company behind a work email domain: its name and a short public
+// briefing, for contacts invited to a call (meetingAttendees.ts). Same
+// rule as researchCompany: the company only, never the person.
+export async function researchCompanyByDomain(domain: string): Promise<{ name: string | null; briefing: string }> {
+  const message = await client().messages.create({
+    model: MODEL,
+    max_tokens: 500,
+    system:
+      "You research companies for a salesperson. Use web search to find current, factual public information about the company that owns a website domain only — never about specific employees or individuals. If search turns up little, say so plainly instead of guessing.",
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+    messages: [
+      {
+        role: "user",
+        content: `Which company uses the domain ${domain}? Search the web, then reply in exactly this format (plain text, no markdown):
+
+NAME: <the company's name as it presents itself, or UNKNOWN>
+BRIEFING: <2-3 factual sentences starting with the company name: what it does, its sector, and its size or stage if publicly known.>
+
+Only state things you found via search.`,
+      },
+    ],
+  });
+  const raw = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+  const name = raw.match(/NAME:\s*(.*?)(?:\n|$)/i)?.[1]?.trim() || null;
+  const briefing = (raw.match(/BRIEFING:\s*([\s\S]*)/i)?.[1] ?? "").replace(/\s+/g, " ").trim();
+  return {
+    name: !name || /^unknown\.?$/i.test(name) ? null : name.slice(0, 120),
+    briefing: briefing || `Anchor.AI couldn't find much public information about ${domain}.`,
+  };
+}

@@ -238,6 +238,10 @@ const MIGRATIONS = [
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingCancelAt" timestamp`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingPausedAt" timestamp`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingResumesAt" timestamp`,
+  // Contacts from calendar invites (meetingAttendees.ts).
+  `ALTER TABLE "contact" ADD COLUMN IF NOT EXISTS "companyBriefing" text`,
+  `ALTER TABLE "contact" ADD COLUMN IF NOT EXISTS "companyBriefingAt" timestamp`,
+  `CREATE INDEX IF NOT EXISTS "contact_user_email_idx" ON "contact" ("userId", lower("email"))`,
 ];
 
 // A brand-new database (say, a replacement for an expired one) has no
