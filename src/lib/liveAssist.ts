@@ -45,6 +45,16 @@ const ANALYSIS = /\b(model|modell?ing|forecast|projection|budget|valuation|value
 export function wantsSpreadsheet(question: string): boolean {
   return FILE_REQUEST.test(question) || (BUILD_VERB.test(question) && ANALYSIS.test(question));
 }
+// A follow-up on a deck or model just made ("yes, do the rest", "make it
+// blue", "add a slide on risks") never says "deck" again, but it still
+// needs the builder: on the fast model the file got cut off and came back
+// in "batches".
+const MADE_FILE = /\.(pptx|xlsx)\b|\b(deck|slides?|presentation|spreadsheet|workbook|excel model)\b/i;
+export function wantsBuilder(question: string, history: { role: "user" | "assistant"; content: string }[]): boolean {
+  if (wantsSpreadsheet(question)) return true;
+  const last = [...history].reverse().find((m) => m.role === "assistant");
+  return Boolean(last && question.length < 400 && MADE_FILE.test(last.content));
+}
 
 function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -493,7 +503,10 @@ const MAX_TOOL_ROUNDS = 5;
 async function* streamWithServerTools(
   start: (withSearch: boolean, messages: Anthropic.MessageParam[], refused: boolean) => AnswerStream,
   messages: Anthropic.MessageParam[],
-  serverTools: ServerTool[]
+  serverTools: ServerTool[],
+  // Called when an answer runs out of room: returns true after switching
+  // to the builder (more room), and the round is run again.
+  moreRoom?: () => boolean
 ): AsyncGenerator<string, Anthropic.Message> {
   const convo = [...messages];
   const collected: Anthropic.ContentBlock[] = [];
@@ -514,13 +527,17 @@ async function* streamWithServerTools(
     }
     producedText ||= roundText;
     const message = step.value;
+    if (message.stop_reason === "max_tokens" && moreRoom?.()) {
+      yield statusMarker("This one needs more room — building the full version…");
+      continue;
+    }
     collected.push(...message.content);
 
     const toolUses = message.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     const serverCalls = toolUses.filter((b) => serverTools.some((t) => t.tool.name === b.name));
     if (message.stop_reason !== "tool_use" || serverCalls.length === 0 || round >= MAX_TOOL_ROUNDS) {
       if (message.stop_reason === "max_tokens") {
-        yield "\n\nThat was too big to finish in one go. Ask for it in smaller parts (for example, one sheet or a few slides at a time).";
+        yield "\n\nThis got cut off before it was finished. Say \"continue\" and I'll finish it.";
       }
       return { ...message, content: collected };
     }
@@ -695,7 +712,8 @@ export async function* askAnchorStream(params: {
   toolRules?: string;
   personal?: string | null;
 }): AsyncGenerator<string> {
-  const heavy = wantsSpreadsheet(params.question);
+  let heavy = wantsBuilder(params.question, params.history);
+  const moreRoom = () => (heavy ? false : (heavy = true));
   if (heavy) yield statusMarker("Gathering the numbers…");
   const contextBlock = buildContextBlock(params.context);
   const mode = params.mode ?? "live";
@@ -734,7 +752,8 @@ export async function* askAnchorStream(params: {
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user" as const, content: buildQuestionContent(params.question, params.images ?? []) },
     ],
-    serverTools
+    serverTools,
+    moreRoom
   );
   const producedText = message.content.some((b) => b.type === "text" && b.text.trim().length > 0);
   if (actions) yield* actionOutput(message, actions, producedText);
@@ -793,7 +812,8 @@ export async function* askWorkspaceStream(params: {
   personal?: string | null;
 }): AsyncGenerator<string> {
   const serverTools = params.serverTools ?? [];
-  const heavy = wantsSpreadsheet(params.question);
+  let heavy = wantsBuilder(params.question, params.history);
+  const moreRoom = () => (heavy ? false : (heavy = true));
   if (heavy) yield statusMarker("Gathering the numbers…");
   yield* streamWithServerTools(
     (withSearch, messages, refused) => {
@@ -817,6 +837,7 @@ export async function* askWorkspaceStream(params: {
       ...params.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user" as const, content: params.question },
     ],
-    serverTools
+    serverTools,
+    moreRoom
   );
 }

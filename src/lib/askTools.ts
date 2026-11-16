@@ -10,6 +10,11 @@ import { buildDeck, type DeckSpec } from "@/lib/presentationDeck";
 import { saveExport } from "@/lib/storage";
 import { loadCalendarTools } from "@/lib/askCalendarTools";
 import { EMAIL_TASK_RULES, emailTaskTools } from "@/lib/askEmailTasks";
+import { brandColorsForDomain, cleanDomain } from "@/lib/brandColors";
+import { emailDomain } from "@/lib/meetingAttendees";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { teams, users } from "@/db/schema";
 
 // Live lookups Ask Anchor can run mid-answer for the person asking (see
 // ServerTool in liveAssist.ts), plus the system prompt lines that tell it
@@ -89,14 +94,47 @@ After create_spreadsheet, read its check. If it lists problems, fix every one wi
 // Decks the same way: the deal's facts, then market data, then labelled
 // assumptions — written the way a banker builds a client deck.
 export const DECK_RULES = `When the person asks for a presentation, deck, slides, pitch, PowerPoint or board/client update, build it with create_presentation. Source the content exactly as for a model: this deal's own calls, emails and files first (search_drive / search_dropbox when connected), then market data from web pages you actually opened, then clearly labelled assumptions. Write it like an investment banker's client deck:
+- Build the WHOLE deck in a single create_presentation call, every slide finished, up to 30 slides. Never split it into batches or parts, never send a "first part" and offer the rest later, never call it too big, and never leave placeholder slides or "[insert …]" text. If something is unknown, write the slide with what you do know and label the gap as an assumption or open question.
+- Design is handled for you: brand colours are picked up automatically from the firm's website, so don't describe colours or fonts, and never mention image placeholders. Set client to the company the deck is about or for. When the person wants the deck in the client's (or any other company's) look, set brandWebsite to that company's website domain; otherwise leave it out and the deck uses the person's own firm's colours. Use theme only for exact hex colours the person gives you.
 - Every slide title is the takeaway as a full sentence ("Akoya can reach $1.2M ARR by 2028 with 3 hotels"), not a topic label ("Revenue").
-- One message per slide; 3-5 short bullets at most, each with a specific fact or number.
-- Usual flow: cover, agenda (for 8+ slides), executive summary (the answer up front, often a metrics slide), the situation / what we heard from the client (a quote slide with their own words from a call works well), the numbers (chart or table), options (a comparison slide, with the recommended one marked), risks, next steps (a timeline slide with dates and owners). A Sources slide is added automatically from each slide's source.
-- Use a chart slide for any series of numbers, a metrics slide for 2-4 headline figures, a table for detailed comparisons, a comparison slide for options. Give most content slides a takeaway: the "so what" in one line.
-- Lead each bullet with its key fact or number. Use the client's brand colours (theme) only when the person asks for them.
+- One message per slide; 3-5 short bullets at most, each starting with its key fact or number, written "Key fact: detail" so the lead shows in bold.
+- Usual flow: cover, agenda (for 8+ slides), executive summary (the answer up front, often a metrics slide), section dividers between major parts for longer decks, the situation / what we heard from the client (a quote slide with their own words from a call works well), the numbers (chart or table), options (a comparison slide, with the recommended one marked), risks, next steps (a timeline slide with dates and owners). A Sources slide is added automatically from each slide's source.
+- Vary the layouts: use a chart slide for any series of numbers (with 2-3 bullets beside it on what it shows), a metrics slide for 2-4 headline figures, a table for detailed comparisons (a "Total" row is highlighted), a comparison slide for options, two_column for pros/cons or before/after. Avoid runs of plain bullet slides. Give most content slides a takeaway: the "so what" in one line.
 - When the deck presents a model you built, use the numbers from create_spreadsheet's Key outputs, never your own arithmetic.
 - Put each slide's sources in its source field (call and date, file name, website). Mark assumptions as assumptions.
 Afterwards reply in a few lines: what the deck covers, its main message, what was assumed, and the download link exactly as the tool returned it.`;
+
+// The deck's colours and "prepared by" name: exact colours the person
+// gave, else the brand colours of the website asked for, else the
+// person's own firm's (from their work email, or a teammate's), else
+// Anchor's navy and gold.
+async function deckLook(userId: string, spec: DeckSpec, brandWebsite: string | null): Promise<Pick<DeckSpec, "theme" | "preparedBy">> {
+  const [me] = await db
+    .select({ email: users.email, name: users.name, teamId: users.teamId, teamName: teams.name })
+    .from(users)
+    .leftJoin(teams, eq(teams.id, users.teamId))
+    .where(eq(users.id, userId));
+  // Auto-made team names ("Lucia's Team") aren't a firm: use the person.
+  const firm = me?.teamName && !/('s team|^my team)$/i.test(me.teamName.trim()) ? me.teamName : null;
+  const preparedBy = spec.preparedBy || firm || me?.name || undefined;
+  if (spec.theme?.primary) return { theme: spec.theme, preparedBy };
+
+  const domains: string[] = [];
+  const asked = brandWebsite ? cleanDomain(brandWebsite) : null;
+  if (asked) domains.push(asked);
+  const own = me?.email ? emailDomain(me.email) : null;
+  if (own) domains.push(own);
+  else if (me?.teamId) {
+    const mates = await db.select({ email: users.email }).from(users).where(eq(users.teamId, me.teamId));
+    const work = mates.map((m) => (m.email ? emailDomain(m.email) : null)).find((d) => d && !d.endsWith(".invalid"));
+    if (work) domains.push(work);
+  }
+  for (const d of domains) {
+    const colors = await brandColorsForDomain(d).catch(() => null);
+    if (colors) return { theme: { primary: colors.primary, accent: colors.accent ?? undefined }, preparedBy };
+  }
+  return { theme: spec.theme, preparedBy };
+}
 
 function presentationTool(userId: string): ServerTool {
   return {
@@ -108,10 +146,16 @@ function presentationTool(userId: string): ServerTool {
         type: "object",
         properties: {
           title: { type: "string", description: "Deck title for the cover." },
-          subtitle: { type: "string", description: "Cover subtitle, e.g. the client and date." },
+          subtitle: { type: "string", description: "Cover subtitle: what the deck is, e.g. \"Investment overview · Series A\"." },
+          client: { type: "string", description: "The company the deck is about or for, shown on the cover and at the top of each slide." },
+          preparedBy: { type: "string", description: "The firm presenting the deck, when you know it (e.g. the person's company). Defaults to their team." },
+          brandWebsite: {
+            type: "string",
+            description: "Website domain of the company whose look the deck should use (e.g. \"akoyahospitality.com\"), only when the person wants a client's or another company's colours. Leave out to use the person's own firm's colours.",
+          },
           theme: {
             type: "object",
-            description: "Optional brand colours as 6-digit hex, e.g. the client's or the person's company colours when they ask for them.",
+            description: "Exact brand colours as 6-digit hex, only when the person gives them.",
             properties: { primary: { type: "string" }, accent: { type: "string" } },
           },
           slides: {
@@ -180,7 +224,8 @@ function presentationTool(userId: string): ServerTool {
       if (spec.slides.some((x) => !x || typeof x.title !== "string" || typeof x.layout !== "string")) {
         return "Every slide needs a layout and a title — nothing was created. Send the whole deck again.";
       }
-      const data = await buildDeck(spec);
+      const look = await deckLook(userId, spec, typeof input.brandWebsite === "string" ? input.brandWebsite : null);
+      const data = await buildDeck({ ...spec, ...look });
       const fileId = `${randomUUID()}.pptx`;
       await saveExport(userId, fileId, data);
       const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor.AI deck";
