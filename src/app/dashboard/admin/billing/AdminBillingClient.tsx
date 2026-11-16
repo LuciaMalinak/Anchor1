@@ -26,6 +26,9 @@ type TeamRow = {
   id: string;
   name: string;
   ownerEmail: string | null;
+  ownerName: string | null;
+  members: number;
+  freeUntil: string | null;
   billingExempt: boolean;
   billingStatus: string | null;
   billingPlan: string | null;
@@ -49,6 +52,10 @@ function date(iso: string | null) {
   return iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
 }
 
+function onTrial(t: TeamRow): boolean {
+  return Boolean(t.freeUntil && new Date(t.freeUntil).getTime() > Date.now());
+}
+
 function status(t: TeamRow): { label: string; tone: string } {
   const open = ["active", "trialing", "past_due"].includes(t.billingStatus ?? "");
   if (open && t.billingPausedAt) return { label: `Paused${t.billingResumesAt ? ` until ${date(t.billingResumesAt)}` : ""} · ${t.billingPlan === "pro" ? "Pro" : "Team"}`, tone: "text-amber-700" };
@@ -57,6 +64,7 @@ function status(t: TeamRow): { label: string; tone: string } {
   if (t.billingStatus === "trialing") return { label: `Free trial until ${date(t.trialEndsAt)}${t.promoCodeUsed ? ` (${t.promoCodeUsed})` : ""}`, tone: "text-sky-700" };
   if (t.billingStatus === "past_due") return { label: "Payment failed (Stripe retrying)", tone: "text-amber-700" };
   if (t.billingExempt) return { label: "Free access", tone: "text-slate-600" };
+  if (onTrial(t)) return { label: `Free trial (from you) until ${date(t.freeUntil)}`, tone: "text-sky-700" };
   if (t.billingStatus) return { label: `Not paying (${t.billingStatus})`, tone: "text-red-600" };
   return { label: "Not subscribed", tone: "text-red-600" };
 }
@@ -126,7 +134,9 @@ export function AdminBillingClient() {
 
   if (!data) return <p className="text-sm text-slate-500">Loading…</p>;
   const teams = data.teams.filter(
-    (t) => !q || t.name.toLowerCase().includes(q.toLowerCase()) || (t.ownerEmail ?? "").toLowerCase().includes(q.toLowerCase()),
+    (t) =>
+      !q ||
+      [t.name, t.ownerEmail, t.ownerName].some((v) => (v ?? "").toLowerCase().includes(q.toLowerCase())),
   );
   const newLeads = data.leads.filter((l) => l.status === "new");
 
@@ -270,17 +280,18 @@ export function AdminBillingClient() {
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-slate-900">Accounts</h2>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search team or email" className={`${input} w-64`} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, email or team" className={`${input} w-64`} />
         </div>
         {msg && <p className={`text-sm ${msg.ok ? "text-emerald-700" : "text-red-600"}`}>{msg.text}</p>}
         <div className={`${card} overflow-x-auto p-0`}>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
-                <th className="px-4 py-2">Team</th>
-                <th className="px-4 py-2">Owner</th>
+                <th className="px-4 py-2">Client</th>
+                <th className="px-4 py-2">Signed up</th>
                 <th className="px-4 py-2">Billing</th>
-                <th className="px-4 py-2">Free access</th>
+                <th className="px-4 py-2">Free trial</th>
+                <th className="px-4 py-2">Free forever</th>
                 <th className="px-4 py-2">Subscription</th>
               </tr>
             </thead>
@@ -289,9 +300,41 @@ export function AdminBillingClient() {
                 const st = status(t);
                 return (
                   <tr key={t.id} className="border-t border-slate-100">
-                    <td className="px-4 py-2 font-medium text-slate-900">{t.name}</td>
-                    <td className="px-4 py-2 text-slate-600">{t.ownerEmail}</td>
+                    <td className="px-4 py-2">
+                      <div className="font-medium text-slate-900">{t.ownerName || t.ownerEmail || t.name}</div>
+                      <div className="text-xs text-slate-500">
+                        {[t.ownerName ? t.ownerEmail : null, t.name, `${t.members} ${t.members === 1 ? "person" : "people"}`].filter(Boolean).join(" · ")}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-slate-600">{date(t.createdAt)}</td>
                     <td className={`px-4 py-2 ${st.tone}`}>{st.label}</td>
+                    <td className="px-4 py-2">
+                      <select
+                        value=""
+                        disabled={busyTeam === t.id}
+                        onChange={async (e) => {
+                          const v = e.target.value;
+                          if (!v) return;
+                          const days = v === "end" ? null : Number(v);
+                          const who = t.ownerName || t.ownerEmail || t.name;
+                          if (!window.confirm(days ? `Give ${who} a ${days}-day free trial? Full access, no card needed. When it ends they're asked to choose a plan.` : `End ${who}'s free trial now?`)) return;
+                          setBusyTeam(t.id);
+                          const r = await post({ action: "setFreeTrial", teamId: t.id, days });
+                          setMsg(r.ok ? { ok: true, text: days ? `${who} has a ${days}-day free trial.` : `${who}'s free trial ended.` } : { ok: false, text: r.error ?? "Couldn't change it." });
+                          await refresh();
+                          setBusyTeam(null);
+                        }}
+                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700"
+                      >
+                        <option value="">{busyTeam === t.id ? "Working…" : "Give trial…"}</option>
+                        {[7, 14, 30, 60, 90].map((d) => (
+                          <option key={d} value={d}>
+                            {d} days
+                          </option>
+                        ))}
+                        {onTrial(t) && <option value="end">End trial now</option>}
+                      </select>
+                    </td>
                     <td className="px-4 py-2">
                       <label className="flex items-center gap-2 text-xs text-slate-600">
                         <input
@@ -340,8 +383,9 @@ export function AdminBillingClient() {
           </table>
         </div>
         <p className="text-xs text-slate-500">
-          Every account that existed before payments started is marked Free. Untick to ask them to pay; tick to give anyone
-          Anchor.AI for free.
+          Free trial: full access for the days you pick, no card needed; when it ends they&apos;re asked to choose a plan. Free
+          forever: never asked to pay (every account from before payments started is ticked). Promo codes above are for
+          clients who sign up themselves: they enter the code on the payment page.
         </p>
       </section>
     </div>

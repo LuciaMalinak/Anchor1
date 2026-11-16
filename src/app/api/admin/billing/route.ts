@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { promoCodes, salesLeads, teams, users } from "@/db/schema";
 import { requireAppOwnerApi } from "@/lib/adminAccess";
@@ -16,6 +16,9 @@ export async function GET() {
         id: teams.id,
         name: teams.name,
         ownerEmail: users.email,
+        ownerName: users.name,
+        freeUntil: teams.freeUntil,
+        members: sql<number>`(select count(*)::int from "user" u where u."teamId" = ${teams.id} and u.email not like 'deleted-%@anchor.invalid')`,
         billingExempt: teams.billingExempt,
         billingStatus: teams.billingStatus,
         billingPlan: teams.billingPlan,
@@ -101,6 +104,21 @@ export async function POST(req: NextRequest) {
         console.error("[admin billing] subscription change failed:", err);
         return NextResponse.json({ error: err instanceof Error ? err.message : "Couldn't change the subscription." }, { status: 502 });
       }
+    }
+    // A free trial for one team, no card needed: full access for N days,
+    // then they're asked to choose a plan. days null ends it now.
+    case "setFreeTrial": {
+      const days = body.days === null ? null : Number(body.days);
+      if (days !== null && (!Number.isInteger(days) || days < 1 || days > 365)) {
+        return NextResponse.json({ error: "Free trial must be 1 to 365 days." }, { status: 400 });
+      }
+      const [team] = await db
+        .update(teams)
+        .set({ freeUntil: days === null ? null : new Date(Date.now() + days * 86_400_000) })
+        .where(eq(teams.id, String(body.teamId ?? "")))
+        .returning({ id: teams.id, freeUntil: teams.freeUntil });
+      if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
+      return NextResponse.json({ ok: true, freeUntil: team.freeUntil });
     }
     case "setLeadStatus": {
       await db

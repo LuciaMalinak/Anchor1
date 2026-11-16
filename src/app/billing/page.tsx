@@ -7,7 +7,7 @@ import { signOut } from "@/auth";
 import { users } from "@/db/schema";
 import { Logo } from "@/components/Logo";
 import { ContactSalesForm } from "@/components/ContactSalesForm";
-import { billingConfigured, hasAccess, monthlyPrice, syncCheckoutSession, teamMemberCount } from "@/lib/billing";
+import { billingConfigured, hasAccess, monthlyPrice, onFreeTrial, syncCheckoutSession, teamMemberCount } from "@/lib/billing";
 import { billingContext } from "@/lib/billingRequest";
 import { BillingPlans, ManageBillingButton, SubscriptionControls } from "./BillingClient";
 
@@ -51,6 +51,9 @@ export default async function BillingPage({
     ? await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, team.ownerUserId))
     : [];
   const subscribed = Boolean(team.stripeSubscriptionId) && ["active", "trialing", "past_due"].includes(team.billingStatus ?? "");
+  // A free trial given from Admin → Billing (no card): they keep full
+  // access until it ends and can choose a plan here any time.
+  const freeTrial = !subscribed && !team.billingExempt && onFreeTrial(team);
 
   return (
     <main className="flex min-h-screen flex-col bg-slate-50">
@@ -89,6 +92,15 @@ export default async function BillingPage({
         )}
         {checkout === "cancelled" && (
           <p className="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">Payment wasn&apos;t completed. Pick a plan whenever you&apos;re ready.</p>
+        )}
+        {freeTrial && team.freeUntil && (
+          <p className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            Your team is on a free trial until <b>{day(team.freeUntil)}</b>, with full access and no card needed.{" "}
+            {canManage ? "Choose a plan any time before then to keep using Anchor.AI." : `${owner?.name || owner?.email || "Your team's owner"} can choose a plan here before then.`}{" "}
+            <Link href="/dashboard" className="font-medium underline">
+              Open Anchor.AI
+            </Link>
+          </p>
         )}
         {team.billingStatus === "past_due" && (
           <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -131,7 +143,7 @@ export default async function BillingPage({
             )}
             {canManage && <ManageBillingButton />}
           </div>
-        ) : access ? (
+        ) : access && !freeTrial ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h1 className="text-xl font-semibold text-slate-900">Your account has free access</h1>
             <p className="mt-2 text-sm text-slate-600">There&apos;s nothing to pay. Enjoy Anchor.AI!</p>
@@ -155,7 +167,7 @@ export default async function BillingPage({
               </p>
             )}
           </>
-        ) : (
+        ) : freeTrial ? null : (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h1 className="text-xl font-semibold text-slate-900">Your team&apos;s subscription isn&apos;t active</h1>
             <p className="mt-2 text-sm text-slate-600">

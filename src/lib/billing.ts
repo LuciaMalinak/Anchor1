@@ -62,16 +62,22 @@ export function stripe(): Stripe {
 }
 
 export function hasAccess(
-  team: Pick<Team, "billingExempt" | "billingStatus"> & Partial<Pick<Team, "billingPausedAt">> | null | undefined,
+  team: Pick<Team, "billingExempt" | "billingStatus"> & Partial<Pick<Team, "billingPausedAt" | "freeUntil">> | null | undefined,
   email?: string | null,
 ): boolean {
   if (isAppOwner(email)) return true;
   if (!team) return false;
   if (team.billingExempt) return true;
+  // A free trial given from Admin → Billing, no card needed.
+  if (onFreeTrial(team)) return true;
   // Paused: nothing is charged and nobody gets in until it resumes. The
   // team's data is kept.
   if (team.billingPausedAt) return false;
   return OPEN_STATUSES.has(team.billingStatus ?? "");
+}
+
+export function onFreeTrial(team: Partial<Pick<Team, "freeUntil">> | null | undefined, now = Date.now()): boolean {
+  return Boolean(team?.freeUntil && team.freeUntil.getTime() > now);
 }
 
 export async function teamMemberCount(teamId: string): Promise<number> {
