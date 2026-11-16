@@ -165,7 +165,10 @@ export async function summarizeMeeting(
   dealContext?: { memory?: string | null; emailContext?: string | null } | null,
   // The team's playbook (its specialty's, or its industry's), for its deal
   // sheet fields and rules.
-  playbook?: IndustryPlaybook | null
+  playbook?: IndustryPlaybook | null,
+  // Names on the calendar invite (meetingAttendees.ts), to put real names
+  // to speakers when the transcript makes it clear who's talking.
+  invited?: string[]
 ): Promise<MeetingSummaryResult> {
   const transcriptText = transcriptToPlainText(utterances);
 
@@ -189,7 +192,11 @@ export async function summarizeMeeting(
     messages: [
       {
         role: "user",
-        content: `Here is a meeting transcript with speakers separated. Summarize it.\n\n${transcriptText}${dealContextBlock}${playbookSummaryText(playbook)}`,
+        content: `Here is a meeting transcript with speakers separated. Summarize it.\n\n${transcriptText}${dealContextBlock}${playbookSummaryText(playbook)}${
+          invited?.length
+            ? `\n\nPeople invited to this call (from the calendar invite): ${invited.join(", ")}. When the transcript makes clear who a speaker is (a greeting, an introduction, someone addressed by name, what they talk about), use that person's full name from this list as their inferredName. Don't assume a speaker is someone just because they were invited.`
+            : ""
+        }`,
       },
     ],
   });

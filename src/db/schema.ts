@@ -401,6 +401,11 @@ export const contacts = pgTable("contact", {
   // A contact can in principle be matched from either CRM (or neither) —
   // the two ids are independent, not mutually exclusive.
   hubspotContactId: text("hubspotContactId"),
+  // A short public briefing on the contact's COMPANY (never the person),
+  // researched once per email domain when they're invited to a recorded
+  // call (meetingAttendees.ts).
+  companyBriefing: text("companyBriefing"),
+  companyBriefingAt: timestamp("companyBriefingAt", { mode: "date" }),
   firstMetAt: timestamp("firstMetAt", { mode: "date" }).defaultNow().notNull(),
   lastMeetingAt: timestamp("lastMeetingAt", { mode: "date" }),
   meetingCount: integer("meetingCount").default(0).notNull(),

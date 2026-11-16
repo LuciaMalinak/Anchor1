@@ -33,6 +33,7 @@ import { refreshDealReports } from "./industryToolRun";
 import { isIndustryKey } from "./industries";
 import { teamPlaybook } from "./teamSpecialty";
 import { deleteRecallCopy } from "./recall";
+import { contactsForInvitees, enrichContactCompanies, findInvitees, matchSpeakerToInvitee } from "./meetingAttendees";
 
 // Every Nth memory update re-derives the summary from actual raw history
 // instead of just trusting the current (possibly drifted) summary text —
@@ -222,6 +223,20 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
     // note, instead of failing outright and hiding a transcript that
     // worked fine. Speaker/contact matching and deal memory need the AI
     // summary, so they're skipped for this meeting.
+    // Who was invited, from the calendar invite: every outside guest
+    // becomes a contact (name, email, company) and helps name the
+    // speakers. Only for calls recorded live (the notetaker, the desktop
+    // app), whose time matches the invite; never blocks the write-up.
+    let invited: (typeof contacts.$inferSelect)[] = [];
+    if (meeting.recallBotId || meeting.recallRecordingId || provider === "live") {
+      try {
+        const invitees = await findInvitees(meeting.userId, { title: meeting.title, at: meeting.scheduledAt ?? meeting.occurredAt });
+        invited = await contactsForInvitees(meeting.userId, invitees);
+      } catch (err) {
+        console.error(`[processMeeting] couldn't read the invite for ${meetingId}:`, err);
+      }
+    }
+
     let result: MeetingSummaryResult;
     let aiSummary = true;
     // The team's industry brings its deal sheet and rules into the summary.
@@ -237,7 +252,8 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
           summarizeMeeting(
             utterances,
             deal ? { memory: deal.memory, emailContext: deal.emailContext } : null,
-            playbook
+            playbook,
+            invited.map((c) => (c.email ? `${c.name} <${c.email}>` : c.name))
           ),
         { label: `summarize ${meetingId}` }
       );
@@ -286,20 +302,27 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
     await db.delete(meetingParticipants).where(eq(meetingParticipants.meetingId, meetingId));
     await db.delete(summaries).where(eq(summaries.meetingId, meetingId));
 
+    const seenInvited = new Set<string>();
     for (const speaker of result.speakers) {
       let contactId: string | null = null;
 
       if (speaker.inferredName) {
-        const existing = await db
-          .select()
-          .from(contacts)
-          .where(
-            and(
-              eq(contacts.userId, meeting.userId),
-              ilike(contacts.name, speaker.inferredName)
-            )
-          )
-          .limit(1);
+        // An invitee first (they have the email and company), then any
+        // contact with that name.
+        const invitedMatch = matchSpeakerToInvitee(speaker.inferredName, invited);
+        const existing = invitedMatch
+          ? [invitedMatch]
+          : await db
+              .select()
+              .from(contacts)
+              .where(
+                and(
+                  eq(contacts.userId, meeting.userId),
+                  ilike(contacts.name, speaker.inferredName)
+                )
+              )
+              .limit(1);
+        if (existing[0]) seenInvited.add(existing[0].id);
 
         if (existing.length > 0) {
           const contact = existing[0];
@@ -396,6 +419,16 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
       });
     }
 
+    // Invitees who didn't speak (or weren't recognised) are still on the
+    // call's people list and their contact history.
+    for (const c of invited.filter((c) => !seenInvited.has(c.id))) {
+      await db
+        .update(contacts)
+        .set({ meetingCount: c.meetingCount + 1, lastMeetingAt: new Date(), updatedAt: new Date() })
+        .where(eq(contacts.id, c.id));
+      await db.insert(meetingParticipants).values({ meetingId, contactId: c.id, speakerLabel: "Invited", displayName: c.name });
+    }
+
     await db.insert(summaries).values({
       meetingId,
       overview: result.overview,
@@ -454,6 +487,14 @@ async function runProcessMeeting(meetingId: string): Promise<void> {
     // Anchor trains itself: keep how the team actually answered the
     // client's questions on this call, for the next one (answerPlaybook.ts).
     void learnFromCall(meetingId, utterances);
+
+    // Company name and a short public briefing for new invitees with a
+    // work email (company only, never the person). In the background.
+    if (invited.length) {
+      void enrichContactCompanies(meeting.userId, invited.map((c) => c.id)).catch((err) =>
+        console.error(`[processMeeting] company research for invitees failed:`, err)
+      );
+    }
 
     // Deal-level memory — the same rolling-summary idea as contact
     // memory above, but for the deal as a whole. Best-effort: a failure
