@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, apiTokens, deals, sessions, teams, users } from "@/db/schema";
+import { accounts, apiTokens, deals, integrationConnections, morningBriefs, sessions, teams, users } from "@/db/schema";
 import { logDataChange } from "@/lib/dataChangeLog";
 import { rememberDeletedAccount } from "@/lib/accountReturn";
 
@@ -48,6 +48,11 @@ export async function anonymizeAccount(
   await db.delete(sessions).where(eq(sessions.userId, userId));
   await db.delete(accounts).where(eq(accounts.userId, userId));
   await db.delete(apiTokens).where(eq(apiTokens.userId, userId));
+  // Every connected tool (Gmail, Calendar, Outlook, Slack, CRMs…) and the
+  // morning brief: nothing keeps reading, drafting or emailing for an
+  // account that's gone.
+  await db.delete(integrationConnections).where(eq(integrationConnections.userId, userId));
+  await db.delete(morningBriefs).where(eq(morningBriefs.userId, userId));
   await db
     .update(users)
     .set({
@@ -62,6 +67,7 @@ export async function anonymizeAccount(
       linkedin: null,
       department: null,
       otherInfo: null,
+      dailyDigestOptIn: false,
       teamId: null,
     })
     .where(eq(users.id, userId));

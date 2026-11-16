@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { promoCodes, teams, users } from "@/db/schema";
 import { isAppOwner } from "@/lib/appOwner";
@@ -350,4 +350,19 @@ export function parseSubscriptionAction(body: Record<string, unknown>): Subscrip
       return { action: "pause", months: body.months === null || body.months === undefined ? null : Number(body.months) };
   }
   return null;
+}
+
+// Of these people, the ones whose team currently has access to Anchor
+// (paying, on a trial, free, or the app owner). Scheduled messages (the
+// morning brief, Gmail reply drafts, the daily text) only go to them:
+// nobody keeps getting Anchor's emails after their trial or subscription
+// ends, or after their account is deleted.
+export async function usersWithAccess(userIds: string[]): Promise<Set<string>> {
+  if (!userIds.length) return new Set();
+  const rows = await db
+    .select({ id: users.id, email: users.email, team: teams })
+    .from(users)
+    .innerJoin(teams, eq(teams.id, users.teamId))
+    .where(inArray(users.id, [...new Set(userIds)]));
+  return new Set(rows.filter((r) => hasAccess(r.team, r.email)).map((r) => r.id));
 }

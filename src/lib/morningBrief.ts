@@ -15,6 +15,7 @@ import { sendSlackDirectMessage, getSlackConnection } from "@/lib/integrations/s
 import { getDealLeadStyle } from "@/lib/styleProfile";
 import { withAiUser } from "@/lib/aiUsage";
 import { scanSlackForEveryone } from "@/lib/meetingProposals";
+import { usersWithAccess } from "@/lib/billing";
 import { createBriefToken } from "@/lib/briefLink";
 import { draftReply, triageEmails } from "@/lib/morningBriefAi";
 import {
@@ -748,7 +749,9 @@ export async function autoEnableBriefsForEveryone(): Promise<number> {
     .innerJoin(teams, eq(teams.id, users.teamId))
     .leftJoin(morningBriefs, eq(morningBriefs.userId, users.id));
   let turnedOn = 0;
+  const allowed = await usersWithAccess(rows.map((r) => r.userId));
   for (const { userId, brief } of rows) {
+    if (!allowed.has(userId)) continue;
     if (!shouldAutoEnableBrief(brief)) continue;
     const keepSaved = brief && briefSettingsSaved(brief.prefs);
     const prefs = keepSaved ? normalizePrefs(brief.prefs) : { ...DEFAULT_PREFS, timeZone: await guessTimeZone(userId) };
@@ -773,7 +776,10 @@ async function runDueMorningBriefsNow(now: Date, draftReplies: boolean) {
     .where(eq(morningBriefs.enabled, true));
 
   const summary = { checked: rows.length, sent: 0, empty: 0, failed: 0, draftChecked: 0, drafted: 0 };
+  // Only people whose team pays, is on a trial or is free.
+  const briefAllowed = await usersWithAccess(rows.map((r) => r.userId));
   for (const r of rows) {
+    if (!briefAllowed.has(r.userId)) continue;
     const prefs = normalizePrefs(r.prefs);
     const { due, localDate } = isBriefDue(prefs, r.lastSentOn, now);
     if (!due) continue;
@@ -814,8 +820,10 @@ async function runDueMorningBriefsNow(now: Date, draftReplies: boolean) {
     .select({ userId: integrationConnections.userId })
     .from(integrationConnections)
     .where(and(eq(integrationConnections.provider, "google"), like(integrationConnections.scope, `%${GOOGLE_EXTRA_SCOPES.gmail_compose}%`)));
-  summary.draftChecked = drafters.length;
+  const draftAllowed = await usersWithAccess(drafters.map((r) => r.userId));
+  summary.draftChecked = draftAllowed.size;
   for (const r of drafters) {
+    if (!draftAllowed.has(r.userId)) continue;
     try {
       summary.drafted += (await autoDraftReplies(r.userId)).drafted.length;
     } catch (err) {
@@ -828,6 +836,7 @@ async function runDueMorningBriefsNow(now: Date, draftReplies: boolean) {
     .select({ userId: integrationConnections.userId })
     .from(integrationConnections)
     .where(and(eq(integrationConnections.provider, "slack"), isNotNull(integrationConnections.userAccessToken)));
-  const meetingRequests = await scanSlackForEveryone(slackReaders.map((r) => r.userId));
+  const slackAllowed = await usersWithAccess(slackReaders.map((r) => r.userId));
+  const meetingRequests = await scanSlackForEveryone(slackReaders.map((r) => r.userId).filter((id) => slackAllowed.has(id)));
   return { ...summary, meetingRequests };
 }
