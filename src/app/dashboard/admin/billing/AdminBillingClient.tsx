@@ -36,6 +36,7 @@ type TeamRow = {
   trialEndsAt: string | null;
   promoCodeUsed: string | null;
   hasSubscription: boolean;
+  own: boolean;
   currentPeriodEnd: string | null;
   billingCancelAt: string | null;
   billingPausedAt: string | null;
@@ -293,6 +294,7 @@ export function AdminBillingClient() {
                 <th className="px-4 py-2">Free trial</th>
                 <th className="px-4 py-2">Free forever</th>
                 <th className="px-4 py-2">Subscription</th>
+                <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -374,6 +376,31 @@ export function AdminBillingClient() {
                         </select>
                       ) : (
                         <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {!t.own && !(t.hasSubscription && ["active", "trialing", "past_due"].includes(t.billingStatus ?? "")) && (
+                        <button
+                          type="button"
+                          disabled={busyTeam === t.id}
+                          onClick={async () => {
+                            const who = t.ownerName || t.ownerEmail || t.name;
+                            if (
+                              !window.confirm(
+                                `Delete ${who}'s account${t.members > 1 ? ` and the other ${t.members - 1} on their team` : ""}? Their emails and personal details are removed and they're signed out everywhere. Their deals and calls are kept, with nobody on them, so you can restore them from Admin → Data if this was a mistake.`,
+                              )
+                            )
+                              return;
+                            setBusyTeam(t.id);
+                            const r = await post({ action: "deleteAccounts", teamId: t.id });
+                            setMsg(r.ok ? { ok: true, text: `Deleted ${who}'s account.` } : { ok: false, text: r.error ?? "Couldn't delete it." });
+                            await refresh();
+                            setBusyTeam(null);
+                          }}
+                          className="rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+                        >
+                          Delete
+                        </button>
                       )}
                     </td>
                   </tr>

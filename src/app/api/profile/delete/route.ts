@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { logDataChange } from "@/lib/dataChangeLog";
-import { randomUUID } from "crypto";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, sessions, accounts, teams, deals, apiTokens } from "@/db/schema";
-import { rememberDeletedAccount } from "@/lib/accountReturn";
+import { users, teams, deals } from "@/db/schema";
+import { anonymizeAccount } from "@/lib/deleteAccount";
 import { eq, and, ne } from "drizzle-orm";
 import { sessionCookieName, secureCookiesEnabled } from "@/lib/auth/password";
 
@@ -61,68 +60,7 @@ export async function POST() {
     }
   }
 
-  // Same cleanup src/app/api/team/members/[id]/route.ts already does when
-  // an OWNER removes someone — needed here too for the non-owner
-  // self-delete path just above (the sole-owner path already deleted
-  // every one of this team's deals along with the team row, so this is
-  // a harmless no-op there). Without it, a deal's leadUserId/backupUserId
-  // kept pointing at this now-anonymized "deleted-...@anchor.invalid"
-  // row: the deal page would just quietly stop showing a lead/backup at
-  // all (that user id no longer resolves to anyone on the team roster),
-  // while anything that looks the user up directly by id — like the
-  // handoff-briefing Slack notify route — would still find the
-  // anonymized row and report success sending to an address nobody reads.
-  if (user.teamId) {
-    await db.update(deals).set({ leadUserId: null }).where(and(eq(deals.teamId, user.teamId), eq(deals.leadUserId, userId)));
-    await db.update(deals).set({ backupUserId: null }).where(and(eq(deals.teamId, user.teamId), eq(deals.backupUserId, userId)));
-  }
-
-  await logDataChange({
-    action: "account_deleted",
-    actorUserId: userId,
-    actorEmail: user.email,
-    teamId: user.teamId,
-    targetId: userId,
-    details: { email: user.email, name: user.name },
-  });
-  // So signing up again with the same email gives everything back
-  // (src/lib/accountReturn.ts). Only a hash of the email is kept.
-  let ownedTeamId: string | null = null;
-  if (user.teamId) {
-    const [team] = await db.select({ ownerUserId: teams.ownerUserId }).from(teams).where(eq(teams.id, user.teamId));
-    if (team?.ownerUserId === userId) ownedTeamId = user.teamId;
-  }
-  if (user.email) await rememberDeletedAccount(userId, user.email, ownedTeamId);
-  await db.delete(sessions).where(eq(sessions.userId, userId));
-  await db.delete(accounts).where(eq(accounts.userId, userId));
-  // The desktop app's connection goes too.
-  await db.delete(apiTokens).where(eq(apiTokens.userId, userId));
-  await db
-    .update(users)
-    .set({
-      name: null,
-      // Freed up for reuse and made impossible to sign back in with —
-      // unique + not-null, so it can't just be left as-is.
-      email: `deleted-${randomUUID()}@anchor.invalid`,
-      emailVerified: null,
-      image: null,
-      passwordHash: null,
-      title: null,
-      phone: null,
-      linkedin: null,
-      department: null,
-      otherInfo: null,
-      // Leave whatever team this account was on. For the sole-owner path
-      // above this is already a no-op (the team row, and this FK along
-      // with it, is gone). For anyone else — an invited member deleting
-      // their own account — skipping this used to leave a permanent
-      // "deleted-...@anchor.invalid" ghost in the team's member list:
-      // it still counted toward "this team has other people on it,"
-      // which could even block the owner from ever deleting their own
-      // account afterward, with no way to clear it out.
-      teamId: null,
-    })
-    .where(eq(users.id, userId));
+  await anonymizeAccount(userId, { userId, email: user.email, reason: "deleted their own account" });
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set({
