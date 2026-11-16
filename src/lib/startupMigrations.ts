@@ -238,6 +238,8 @@ const MIGRATIONS = [
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingCancelAt" timestamp`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingPausedAt" timestamp`,
   `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "billingResumesAt" timestamp`,
+  // Free trials given from Admin → Billing (billing.ts hasAccess).
+  `ALTER TABLE "team" ADD COLUMN IF NOT EXISTS "freeUntil" timestamp`,
   // Contacts from calendar invites (meetingAttendees.ts).
   `ALTER TABLE "contact" ADD COLUMN IF NOT EXISTS "companyBriefing" text`,
   `ALTER TABLE "contact" ADD COLUMN IF NOT EXISTS "companyBriefingAt" timestamp`,

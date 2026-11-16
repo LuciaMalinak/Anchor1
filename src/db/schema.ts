@@ -631,6 +631,9 @@ export const teams = pgTable("team", {
   // automatic resume date, null = until resumed by hand.
   billingPausedAt: timestamp("billingPausedAt", { mode: "date" }),
   billingResumesAt: timestamp("billingResumesAt", { mode: "date" }),
+  // A free trial the app owner gave this team directly (Admin → Billing),
+  // no card needed: full access until this date, then they choose a plan.
+  freeUntil: timestamp("freeUntil", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
