@@ -9,6 +9,7 @@ import type { CheckResult } from "@/lib/modelCheck";
 import { buildDeck, type DeckSpec } from "@/lib/presentationDeck";
 import { saveExport } from "@/lib/storage";
 import { loadCalendarTools } from "@/lib/askCalendarTools";
+import { EMAIL_TASK_RULES, emailTaskTools } from "@/lib/askEmailTasks";
 
 // Live lookups Ask Anchor can run mid-answer for the person asking (see
 // ServerTool in liveAssist.ts), plus the system prompt lines that tell it
@@ -359,6 +360,7 @@ export async function loadAskTools(
     fixSpreadsheetTool(userId),
     presentationTool(userId),
     ...(calendar?.tools ?? []),
+    ...emailTaskTools(userId),
   ];
   const connected: string[] = [];
   const missing: string[] = [];
@@ -394,7 +396,7 @@ export async function loadAskTools(
     missing.push("Dropbox");
   }
 
-  const rules: string[] = [MODEL_RULES, DECK_RULES, ...(calendar ? [calendar.rules] : [])];
+  const rules: string[] = [MODEL_RULES, DECK_RULES, ...(calendar ? [calendar.rules] : []), EMAIL_TASK_RULES];
   if (connected.length) {
     rules.push(
       `Connected file storage: ${connected.join("; ")}. Search it whenever the question could be answered by a file${
