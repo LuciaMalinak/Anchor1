@@ -6,7 +6,10 @@ import { randomUUID } from "crypto";
 import type { ServerTool } from "@/lib/liveAssist";
 import { buildCheckedWorkbook, type ModelCell, type ModelSpec } from "@/lib/spreadsheetModel";
 import type { CheckResult } from "@/lib/modelCheck";
-import { buildDeck, type DeckSpec } from "@/lib/presentationDeck";
+import { assignPhotos, buildDeck, type DeckSpec } from "@/lib/presentationDeck";
+import { dedupe, downloadPhotos, preparePhoto, websiteImages, type DeckLogo, type DeckPhoto } from "@/lib/deckImages";
+import { findDropboxImages } from "@/lib/integrations/dropbox";
+import { findDriveImages } from "@/lib/integrations/drive";
 import { saveExport } from "@/lib/storage";
 import { loadCalendarTools } from "@/lib/askCalendarTools";
 import { EMAIL_TASK_RULES, emailTaskTools } from "@/lib/askEmailTasks";
@@ -95,7 +98,8 @@ After create_spreadsheet, read its check. If it lists problems, fix every one wi
 // assumptions — written the way a banker builds a client deck.
 export const DECK_RULES = `When the person asks for a presentation, deck, slides, pitch, PowerPoint or board/client update, build it with create_presentation. Source the content exactly as for a model: this deal's own calls, emails and files first (search_drive / search_dropbox when connected), then market data from web pages you actually opened, then clearly labelled assumptions. Write it like an investment banker's client deck:
 - Build the WHOLE deck in a single create_presentation call, every slide finished, up to 30 slides. Never split it into batches or parts, never send a "first part" and offer the rest later, never call it too big, and never leave placeholder slides or "[insert …]" text. If something is unknown, write the slide with what you do know and label the gap as an assumption or open question.
-- Design is handled for you: brand colours are picked up automatically from the firm's website, so don't describe colours or fonts, and never mention image placeholders. Set client to the company the deck is about or for. When the person wants the deck in the client's (or any other company's) look, set brandWebsite to that company's website domain; otherwise leave it out and the deck uses the person's own firm's colours. Use theme only for exact hex colours the person gives you.
+- Design is handled for you: brand colours are picked up automatically from the firm's website, so don't describe colours or fonts, and never mention image placeholders.
+- Make it visual with real photos. Set imageSources.website to the website of the company the deck is about (its photos and logo are used; the cover gets a photo automatically), and imageSources.fileSearch to a few terms for photos in their Dropbox / Drive (company name, "<company> photos", property or product names). Then give photos to the slides that benefit: an image slide (full-bleed photo with the title over it) to open the story or a section, a gallery slide for a portfolio of properties, products or locations, and image "auto" on a few bullets, metrics or quote slides. Use a direct image link only if you saw it on a page you actually opened; never invent one. Photos from LinkedIn or Google Images can't be fetched: use the company's own site instead. Set client to the company the deck is about or for. When the person wants the deck in the client's (or any other company's) look, set brandWebsite to that company's website domain; otherwise leave it out and the deck uses the person's own firm's colours. Use theme only for exact hex colours the person gives you.
 - Every slide title is the takeaway as a full sentence ("Akoya can reach $1.2M ARR by 2028 with 3 hotels"), not a topic label ("Revenue").
 - One message per slide; 3-5 short bullets at most, each starting with its key fact or number, written "Key fact: detail" so the lead shows in bold.
 - Usual flow: cover, agenda (for 8+ slides), executive summary (the answer up front, often a metrics slide), section dividers between major parts for longer decks, the situation / what we heard from the client (a quote slide with their own words from a call works well), the numbers (chart or table), options (a comparison slide, with the recommended one marked), risks, next steps (a timeline slide with dates and owners). A Sources slide is added automatically from each slide's source.
@@ -136,6 +140,53 @@ async function deckLook(userId: string, spec: DeckSpec, brandWebsite: string | n
   return { theme: spec.theme, preparedBy };
 }
 
+// Photos for a deck, gathered within a time limit: the person's own
+// Dropbox / Drive photos first (they're the real thing), then the
+// company's website (photos and logo), plus image links on the slides.
+const PHOTO_TIMEOUT_MS = 30_000;
+async function deckPhotos(
+  userId: string,
+  spec: DeckSpec,
+  opts: { website: string | null; fileSearch: string[] }
+): Promise<{ pool: DeckPhoto[]; linked: Map<string, DeckPhoto>; logo: DeckLogo | null; tried: string[] }> {
+  const tried: string[] = [];
+  const links = [
+    ...new Set(
+      spec.slides
+        .flatMap((d) => [d.image, ...(d.gallery ?? []).map((g) => g.image)])
+        .filter((u): u is string => typeof u === "string" && /^https?:\/\//i.test(u))
+    ),
+  ].slice(0, 12);
+  const work = async () => {
+    const terms = opts.fileSearch.slice(0, 4);
+    if (terms.length) tried.push("Dropbox", "Google Drive");
+    if (opts.website) tried.push(opts.website);
+    const [dropbox, drive, site, linkedPhotos] = await Promise.all([
+      terms.length ? findDropboxImages(userId, terms, 6).catch(() => []) : [],
+      terms.length ? findDriveImages(userId, terms, 6).catch(() => []) : [],
+      opts.website ? websiteImages(opts.website).catch(() => ({ photos: [], logo: null })) : { photos: [], logo: null },
+      Promise.all(links.map(async (url) => [url, (await downloadPhotos([url], "linked image", 1).catch(() => []))[0]] as const)),
+    ]);
+    const files = (
+      await Promise.all([
+        ...dropbox.map((f) => preparePhoto(f.data, "Dropbox")),
+        ...drive.map((f) => preparePhoto(f.data, "Google Drive")),
+      ])
+    ).filter((p): p is DeckPhoto => Boolean(p));
+    const linked = new Map<string, DeckPhoto>();
+    for (const [url, photo] of linkedPhotos) if (photo) linked.set(url, { ...photo, source: new URL(url).hostname.replace(/^www\./, "") });
+    return { pool: dedupe([...files, ...site.photos]).slice(0, 12), linked, logo: site.logo, tried };
+  };
+  const empty = { pool: [], linked: new Map<string, DeckPhoto>(), logo: null, tried };
+  return Promise.race([
+    work().catch((err) => {
+      console.error("[askTools] gathering deck photos failed:", err);
+      return empty;
+    }),
+    new Promise<typeof empty>((resolve) => setTimeout(() => resolve(empty), PHOTO_TIMEOUT_MS)),
+  ]);
+}
+
 function presentationTool(userId: string): ServerTool {
   return {
     tool: {
@@ -153,6 +204,12 @@ function presentationTool(userId: string): ServerTool {
             type: "string",
             description: "Website domain of the company whose look the deck should use (e.g. \"akoyahospitality.com\"), only when the person wants a client's or another company's colours. Leave out to use the person's own firm's colours.",
           },
+          imageSources: {
+            type: "object",
+            description:
+              "Where to find photos and a logo for the deck. website: the domain of the company the deck is about (its photos and logo are used). fileSearch: 2-4 short terms to find photos in the person's Dropbox / Google Drive (e.g. the company name, \"Akoya photos\", a property name).",
+            properties: { website: { type: "string" }, fileSearch: { type: "array", items: { type: "string" } } },
+          },
           theme: {
             type: "object",
             description: "Exact brand colours as 6-digit hex, only when the person gives them.",
@@ -167,7 +224,7 @@ function presentationTool(userId: string): ServerTool {
               properties: {
                 layout: {
                   type: "string",
-                  enum: ["title", "section", "agenda", "bullets", "two_column", "metrics", "table", "chart", "timeline", "comparison", "quote"],
+                  enum: ["title", "section", "agenda", "bullets", "two_column", "metrics", "table", "chart", "timeline", "comparison", "quote", "image", "gallery"],
                 },
                 title: { type: "string", description: "The takeaway as a sentence." },
                 subtitle: { type: "string" },
@@ -207,6 +264,16 @@ function presentationTool(userId: string): ServerTool {
                   },
                 },
                 quote: { type: "object", description: "quote layout: a client's own words from a call.", properties: { text: { type: "string" }, by: { type: "string" } }, required: ["text"] },
+                image: {
+                  type: "string",
+                  description:
+                    "A photo for this slide: \"auto\" for the next photo found for the deck, or a direct image link you saw on a page you opened. image slides are a full-bleed photo with the title over it; bullets, metrics, two_column, agenda and quote slides show it beside the content.",
+                },
+                gallery: {
+                  type: "array",
+                  description: "gallery layout: 2-4 photos with short captions (e.g. each property or product). image is \"auto\" or a direct image link.",
+                  items: { type: "object", properties: { image: { type: "string" }, caption: { type: "string" } }, required: ["caption"] },
+                },
                 takeaway: { type: "string", description: "The slide's 'so what' in one line, shown in a bar at the bottom." },
                 source: { type: "string", description: "Where this slide's facts came from." },
                 notes: { type: "string", description: "Speaker notes." },
@@ -225,11 +292,21 @@ function presentationTool(userId: string): ServerTool {
         return "Every slide needs a layout and a title — nothing was created. Send the whole deck again.";
       }
       const look = await deckLook(userId, spec, typeof input.brandWebsite === "string" ? input.brandWebsite : null);
-      const data = await buildDeck({ ...spec, ...look });
+      const sources = (input.imageSources ?? {}) as { website?: unknown; fileSearch?: unknown };
+      const images = await deckPhotos(userId, spec, {
+        website: typeof sources.website === "string" ? sources.website : typeof input.brandWebsite === "string" ? input.brandWebsite : null,
+        fileSearch: Array.isArray(sources.fileSearch) ? sources.fileSearch.filter((x): x is string => typeof x === "string") : [],
+      });
+      const withPhotos = assignPhotos({ ...spec, ...look, logo: images.logo }, images.pool, images.linked);
+      const data = await buildDeck(withPhotos);
+      const used = [withPhotos.coverPhoto, ...withPhotos.slides.flatMap((d) => [d.photo, ...(d.galleryPhotos ?? [])])].filter(Boolean) as DeckPhoto[];
+      const photoNote = used.length
+        ? ` It has ${used.length} photo${used.length === 1 ? "" : "s"} (from ${[...new Set(used.map((p) => p.source))].join(", ")})${images.logo ? " and the company logo" : ""}.`
+        : ` No usable photos were found${images.tried.length ? ` (looked in ${images.tried.join(", ")})` : ""}, so it uses design only: tell the person they can put photos in a Dropbox or Drive folder named after the company, or send image links, and you'll add them.`;
       const fileId = `${randomUUID()}.pptx`;
       await saveExport(userId, fileId, data);
       const name = spec.title.replace(/[^\w .,()&-]+/g, " ").trim().slice(0, 100) || "Anchor.AI deck";
-      return `Created "${name}.pptx" (${spec.slides.length + 1} slides including the cover). Give the person this link exactly: [Download ${name}.pptx](/api/exports/${fileId}?name=${encodeURIComponent(name)})`;
+      return `Created "${name}.pptx" (${spec.slides.length + 1} slides including the cover).${photoNote} Give the person this link exactly: [Download ${name}.pptx](/api/exports/${fileId}?name=${encodeURIComponent(name)})`;
     },
   };
 }

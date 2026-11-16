@@ -168,3 +168,46 @@ export async function fetchRelevantDriveDocuments(
   }
   return items;
 }
+
+// Photos in the person's Google Drive matching the search terms (by name,
+// or inside a matching folder such as "Akoya photos"), for decks.
+export async function findDriveImages(userId: string, terms: string[], max = 6): Promise<{ name: string; data: Buffer }[]> {
+  const queries = [...new Set(terms.map((t) => t.trim()).filter(Boolean))].slice(0, MAX_SEARCH_TERMS);
+  const connection = await getGoogleConnection(userId);
+  if (!connection || !hasDriveAccess(connection.scope) || !queries.length) return [];
+  let accessToken = connection.accessToken;
+  const list = async (q: string, pageSize: number): Promise<DriveFile[]> => {
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&pageSize=${pageSize}&fields=${DRIVE_FIELDS}`;
+    const { json, accessToken: next } = await googleGet(connection, accessToken, url);
+    accessToken = next;
+    return Array.isArray(json.files) ? (json.files as DriveFile[]) : [];
+  };
+  const IMAGE = "(mimeType = 'image/jpeg' or mimeType = 'image/png' or mimeType = 'image/webp')";
+  const found = new Map<string, DriveFile>();
+  for (const term of queries) {
+    const quoted = quoteForDriveQuery(term);
+    const [files, folders] = await Promise.all([
+      list(`${IMAGE} and name contains '${quoted}' and trashed = false`, 20).catch(() => []),
+      list(`mimeType = '${FOLDER_MIME}' and name contains '${quoted}' and trashed = false`, MAX_FOLDERS).catch(() => []),
+    ]);
+    files.forEach((f) => f.id && found.set(f.id, f));
+    for (const folder of folders) {
+      if (!folder.id) continue;
+      const inside = await list(`'${quoteForDriveQuery(folder.id)}' in parents and ${IMAGE} and trashed = false`, MAX_FOLDER_FILES).catch(() => []);
+      inside.forEach((f) => f.id && found.set(f.id, f));
+    }
+  }
+  const out: { name: string; data: Buffer }[] = [];
+  for (const f of [...found.values()].slice(0, max * 2)) {
+    if (out.length >= max) break;
+    if (Number(f.size ?? 0) > 15_000_000) continue;
+    try {
+      const { data, accessToken: next } = await googleGetBytes(connection, accessToken, `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+      accessToken = next;
+      out.push({ name: f.name ?? "image", data });
+    } catch (err) {
+      console.error(`[drive] couldn't fetch image ${f.name}:`, err);
+    }
+  }
+  return out;
+}
