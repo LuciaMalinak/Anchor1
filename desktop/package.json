@@ -13,8 +13,8 @@
     "dist:win": "npm run build && electron-builder --win"
   },
   "dependencies": {
-    "@recallai/desktop-sdk": "^2.0.32",
-    "electron-updater": "^6.3.9"
+    "@recallai/desktop-sdk": "^2.0.44",
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "electron": "^33.0.0",
