@@ -7,8 +7,11 @@ import {
   CoachingLists,
   ListeningStrip,
   LiveQuestionsBox,
+  LiveViewToggle,
   OffLimitsBox,
+  PresentingView,
 } from "@/components/LiveCoachingBits";
+import { useLiveView } from "@/lib/liveView";
 import { requestFocusWindow } from "@/lib/focusWindowBus";
 import { StopMeetingButton } from "@/components/StopMeetingButton";
 
@@ -32,6 +35,8 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
     markSpeaker,
     decisionBoundaries,
   } = useLiveMeeting(meetingId);
+  // Listening (everything) or Presenting (glanceable) — see liveView.ts.
+  const [view] = useLiveView();
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
@@ -41,6 +46,7 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
           <span className="text-sm font-semibold">{title}</span>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <LiveViewToggle variant="light" />
           {/* Pops the same live data into its own small window — a real
               always-on-top window (Picture-in-Picture) where the browser
               supports it, an ordinary popup otherwise. See
@@ -71,6 +77,11 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
           you, what not to agree to, what's left to cover, and a couple
           of small suggestions. No transcript during the call: it's
           captured in the background and on the meeting page after. */}
+      {view === "presenting" ? (
+        <div className="px-5 py-4">
+          <PresentingView suggestions={suggestions} speakers={speakers} onMarkSpeaker={markSpeaker} />
+        </div>
+      ) : (
       <div className="grid gap-4 px-5 py-4 sm:grid-cols-[1.4fr_1fr]">
         <div className="flex min-w-0 flex-col gap-3">
           <CallSpeakersRow speakers={speakers} onMark={markSpeaker} />
@@ -94,6 +105,7 @@ export function LiveMeetingPanel({ meetingId, title }: { meetingId: string; titl
           <CoachingLists suggestions={suggestions} coachingError={coachingError} coachingRefreshing={coachingRefreshing} />
         </div>
       </div>
+      )}
 
       <div className="px-5 pb-4">
         <ListeningStrip heardLines={heardLines} live={status === "recording" || status === "joining"} error={error} />
