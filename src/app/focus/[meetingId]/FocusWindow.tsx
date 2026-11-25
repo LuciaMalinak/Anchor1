@@ -7,8 +7,11 @@ import {
   CallAnswers,
   CoachingLists,
   LiveQuestionsBox,
+  LiveViewToggle,
   OffLimitsBox,
+  PresentingView,
 } from "@/components/LiveCoachingBits";
+import { useLiveView } from "@/lib/liveView";
 import { AskAnchorPanel } from "@/components/AskAnchorPanel";
 import { StopMeetingButton } from "@/components/StopMeetingButton";
 import { FOCUS_WIDGETS, type FocusWidgetKey } from "@/lib/focusWidgets";
@@ -53,6 +56,8 @@ export function FocusWindow({
   hostWindow?: Window;
 }) {
   const { suggestions, status, hasBot, isDesktop, coachingError, coachingRefreshing, answered, speakers, markSpeaker } = useLiveMeeting(meetingId);
+  // Listening (everything) or Presenting (glanceable) — see liveView.ts.
+  const [view] = useLiveView();
   const [widgets, setWidgets] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState<Set<FocusWidgetKey>>(new Set(initialWidgets));
@@ -221,6 +226,7 @@ export function FocusWindow({
           {stillLive && status && (
             <StopMeetingButton meetingId={meetingId} variant="solid" inPerson={!hasBot && !isDesktop} desktop={isDesktop} />
           )}
+          {!showMinimized && stillLive && widgets.has("coaching") && <LiveViewToggle />}
           {!showMinimized && (
             <button
               type="button"
@@ -389,7 +395,9 @@ export function FocusWindow({
 
         {/* Answers first and biggest, then what not to agree to, what's
             left to cover, and short suggestions. */}
-        {widgets.has("coaching") && (
+        {widgets.has("coaching") && view === "presenting" && <PresentingView suggestions={suggestions} speakers={speakers} onMarkSpeaker={markSpeaker} />}
+
+        {widgets.has("coaching") && view !== "presenting" && (
           <div className="space-y-3">
             <CallSpeakersRow speakers={speakers} onMark={markSpeaker} />
             <LiveQuestionsBox

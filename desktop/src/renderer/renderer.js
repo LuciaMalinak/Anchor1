@@ -132,6 +132,118 @@ function renderAnswersHtml(s) {
   return html;
 }
 
+// ---- Listening | Presenting (same idea as src/lib/liveView.ts on the
+// website). Listening shows everything as it comes in. Presenting is for
+// when you're the one talking: the answer cut to one short line in big
+// type, at most three bullets, and both held on screen long enough to
+// take in with a glance. Remembered on this computer.
+const LIVE_VIEW_KEY = "anchor.liveView";
+const ANSWER_HOLD_MS = 15000;
+const BULLETS_HOLD_MS = 60000;
+
+function getLiveView() {
+  try {
+    return localStorage.getItem(LIVE_VIEW_KEY) === "presenting" ? "presenting" : "listening";
+  } catch {
+    return "listening";
+  }
+}
+
+function setLiveView(view) {
+  try {
+    localStorage.setItem(LIVE_VIEW_KEY, view);
+  } catch {}
+  renderMeetings();
+}
+
+function liveViewToggleHtml() {
+  const view = getLiveView();
+  return `<div class="view-toggle" role="group" aria-label="Live view"><button type="button" data-view="listening" class="${
+    view === "listening" ? "on" : ""
+  }" title="Everything as it comes in — best when you're mostly listening">Listening</button><button type="button" data-view="presenting" class="${
+    view === "presenting" ? "on" : ""
+  }" title="Short answers and a few big bullets that change slowly — best when you're the one talking">Presenting</button></div>`;
+}
+
+function capWords(text, max) {
+  const words = String(text || "").trim().replace(/\s+/g, " ").split(" ");
+  if (words.length <= max) return words.join(" ");
+  return `${words.slice(0, max).join(" ").replace(/[,;:—-]+$/, "")}…`;
+}
+
+function headlineOf(answer) {
+  const text = String(answer || "").trim().replace(/\s+/g, " ");
+  const match = text.match(/^.+?[.!?](?=\s|$)/);
+  return capWords(match ? match[0] : text, 18);
+}
+
+function glanceBullets(s) {
+  if (!s) return [];
+  const bullets = [];
+  for (const c of s.checklist || []) {
+    if (c.covered) continue;
+    bullets.push({ kind: "cover", text: capWords(c.label, 10) });
+    if (bullets.length === 2) break;
+  }
+  if (s.nudges && s.nudges[0]) bullets.push({ kind: "nudge", text: capWords(s.nudges[0], 10) });
+  return bullets.slice(0, 3);
+}
+
+// Keeps a value up for at least holdMs once shown; a newer one (new key)
+// waits its turn, and a re-render is scheduled for when it's due. Same
+// key passes the latest value straight through.
+function held(windowId, m, slot, key, value, holdMs) {
+  m.held = m.held || {};
+  const cur = m.held[slot];
+  const now = Date.now();
+  // Nothing on screen yet (or a placeholder): show the new one at once.
+  if (!cur || !cur.key || cur.key === key) {
+    m.held[slot] = { key, value, at: cur && cur.key === key ? cur.at : now };
+    return value;
+  }
+  const due = cur.at + holdMs;
+  if (now >= due) {
+    m.held[slot] = { key, value, at: now };
+    return value;
+  }
+  clearTimeout(cur.timer);
+  cur.timer = setTimeout(() => updateSuggestionsPanel(windowId), due - now + 50);
+  return cur.value;
+}
+
+function renderPresentingHtml(windowId, m) {
+  const s = m.suggestions;
+  const live = (s && s.liveQuestion) || null;
+  const ready = live && !live.answering && live.suggestedAnswer ? live : null;
+  const q = held(windowId, m, "question", ready ? String(ready.askedAt || ready.question) : "", ready, ANSWER_HOLD_MS);
+  const now = glanceBullets(s);
+  const bullets = held(windowId, m, "bullets", now.map((b) => b.text).join("|"), now, BULLETS_HOLD_MS);
+  let html = "";
+  if (q) {
+    const caution = q.caution && CAUTION[q.caution.level];
+    html += `<div class="answer-card present ${caution ? caution.cls : ""}"><div class="answer-q"><span class="tag">THEY ASKED</span> “${escapeHtml(
+      headlineOf(q.question)
+    )}”</div>${caution ? `<div class="caution"><span class="caution-badge">${caution.label}</span></div>` : ""}<div class="present-answer">${escapeHtml(
+      headlineOf(q.suggestedAnswer)
+    )}</div></div>`;
+    if (live && !ready) html += '<p class="hint">New question — answer coming…</p>';
+  } else {
+    html += `<div class="answer-empty">${
+      live ? "They asked something — answer coming…" : "When they ask something, a short answer shows up here."
+    }</div>`;
+  }
+  const raised = ((s && s.offLimits) || []).filter((c) => c.raised);
+  if (raised.length) {
+    html += `<div class="present-warn">⚠ Don't commit: ${escapeHtml(raised.map((c) => c.label).join(", "))}</div>`;
+  }
+  if (bullets.length) {
+    html += `<ul class="present-bullets">${bullets
+      .map((b) => `<li class="${b.kind}">${escapeHtml(b.text)}</li>`)
+      .join("")}</ul>`;
+  }
+  return html;
+}
+
 // The side column: what's still to cover (amber) and what's done
 // (green), then one-line suggestions.
 function renderCoachingHtml(s) {
@@ -184,7 +296,7 @@ function updateSuggestionsPanel(windowId) {
   const m = meetings.get(windowId);
   if (!m) return;
   const answers = document.getElementById(`answers-${windowId}`);
-  if (answers) answers.innerHTML = renderAnswersHtml(m.suggestions);
+  if (answers) answers.innerHTML = getLiveView() === "presenting" ? renderPresentingHtml(windowId, m) : renderAnswersHtml(m.suggestions);
   const coaching = document.getElementById(`coaching-${windowId}`);
   if (coaching) coaching.innerHTML = renderCoachingHtml(m.suggestions);
 }
@@ -305,12 +417,23 @@ function renderDealPanel(windowId, m) {
   const panel = document.createElement("div");
   panel.className = "deal-panel";
 
+  const presenting = getLiveView() === "presenting";
+  const bar = document.createElement("div");
+  bar.className = "view-bar";
+  bar.innerHTML = liveViewToggleHtml();
+  bar.querySelectorAll("button[data-view]").forEach((b) => {
+    b.onclick = () => setLiveView(b.dataset.view);
+  });
+  panel.appendChild(bar);
+
   const grid = document.createElement("div");
-  grid.className = "live-grid";
+  grid.className = presenting ? "live-grid presenting" : "live-grid";
 
   const mainCol = document.createElement("div");
   mainCol.className = "live-col answers-col";
-  mainCol.innerHTML = `<div id="answers-${windowId}">${renderAnswersHtml(m.suggestions)}</div>`;
+  mainCol.innerHTML = `<div id="answers-${windowId}">${
+    presenting ? renderPresentingHtml(windowId, m) : renderAnswersHtml(m.suggestions)
+  }</div>`;
   grid.appendChild(mainCol);
 
   const sideCol = document.createElement("div");
@@ -321,7 +444,9 @@ function renderDealPanel(windowId, m) {
       : '<p class="hint panel-section">Link this call to a deal on Anchor.AI\'s website to see its to-dos and Ask Anchor here.</p>'
   }`;
   if (m.dealId) attachTaskHandlers(windowId, sideCol);
-  grid.appendChild(sideCol);
+  // Presenting keeps just the one big column: coaching is folded into
+  // its bullets, and to-dos can wait until you're listening again.
+  if (!presenting) grid.appendChild(sideCol);
   panel.appendChild(grid);
 
   const strip = document.createElement("details");

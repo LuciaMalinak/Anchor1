@@ -2,6 +2,14 @@
 
 import { useState } from "react";
 import type { AnsweredQuestion, CallSpeaker, LiveCaution, LiveLink, LiveSuggestions } from "@/lib/useLiveMeeting";
+import {
+  PRESENTING_ANSWER_HOLD_MS,
+  PRESENTING_BULLETS_HOLD_MS,
+  glanceBullets,
+  headlineOf,
+  useHeld,
+  useLiveView,
+} from "@/lib/liveView";
 
 type LiveQuestion = NonNullable<NonNullable<LiveSuggestions>["liveQuestion"]>;
 
@@ -539,5 +547,109 @@ export function UpdatingBadge({ active }: { active: boolean }) {
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
       updating
     </span>
+  );
+}
+
+// Listening | Presenting switch for the live panel and the Focus window.
+// See src/lib/liveView.ts for what each one shows.
+export function LiveViewToggle({ variant = "plain" }: { variant?: "plain" | "light" }) {
+  const [view, setView] = useLiveView();
+  const base = "px-2 py-1 text-xs font-medium transition";
+  const styles =
+    variant === "light"
+      ? { wrap: "border-white/30", on: "bg-white text-brand", off: "text-white/80 hover:bg-white/15" }
+      : { wrap: "border-slate-200", on: "bg-brand text-white", off: "text-slate-500 hover:text-slate-700" };
+  return (
+    <div role="group" aria-label="Live view" className={`inline-flex shrink-0 overflow-hidden rounded-md border ${styles.wrap}`}>
+      <button
+        type="button"
+        aria-pressed={view === "listening"}
+        onClick={() => setView("listening")}
+        title="Everything as it comes in — best when you're mostly listening"
+        className={`${base} ${view === "listening" ? styles.on : styles.off}`}
+      >
+        Listening
+      </button>
+      <button
+        type="button"
+        aria-pressed={view === "presenting"}
+        onClick={() => setView("presenting")}
+        title="Short answers and a few big bullets that change slowly — best when you're the one talking"
+        className={`${base} ${view === "presenting" ? styles.on : styles.off}`}
+      >
+        Presenting
+      </button>
+    </div>
+  );
+}
+
+// The presenting view: what someone who's talking can pick up with a
+// glance. The newest question with its answer cut to one short line in
+// big type (shown once it's written, not word by word), anything off
+// limits they've asked about, and at most three bullets. The answer is
+// held at least 15s and the bullets about a minute before anything
+// newer replaces them, so the screen isn't moving while you look away.
+export function PresentingView({
+  suggestions,
+  speakers = [],
+  onMarkSpeaker,
+}: {
+  suggestions: LiveSuggestions;
+  // Shown only until someone's marked as "me", so their own questions
+  // stop getting answered; after that it's just clutter while talking.
+  speakers?: CallSpeaker[];
+  onMarkSpeaker?: (name: string, isMe: boolean) => void;
+}) {
+  const live = suggestions?.liveQuestion ?? null;
+  const ready = live && !live.answering && live.suggestedAnswer ? live : null;
+  const question = useHeld(ready, ready ? String(ready.askedAt ?? ready.question) : "", PRESENTING_ANSWER_HOLD_MS);
+  const bulletsNow = glanceBullets(suggestions);
+  const bullets = useHeld(bulletsNow, bulletsNow.map((b) => b.text).join("|"), PRESENTING_BULLETS_HOLD_MS);
+  const raised = (suggestions?.offLimits ?? []).filter((c) => c.raised);
+  const caution = question?.caution ? CAUTION_STYLE[question.caution.level] : null;
+  const writingNew = live && !ready;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {onMarkSpeaker && !speakers.some((sp) => sp.isMe) && <CallSpeakersRow speakers={speakers} onMark={onMarkSpeaker} />}
+      {question ? (
+        <div className={`${caution ? caution.card : "rounded-lg border border-brand/30 bg-brand/5"} px-4 py-4`}>
+          <p className="mb-1 text-xs text-slate-500">
+            <span className="font-semibold tracking-[0.15em] text-brand">THEY ASKED</span>{" "}
+            <span className="italic">&ldquo;{headlineOf(question.question)}&rdquo;</span>
+          </p>
+          {caution && (
+            <p className="mb-1">
+              <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${caution.badge}`}>{caution.label}</span>
+            </p>
+          )}
+          <p className="text-xl font-semibold leading-snug text-slate-900 sm:text-2xl">{headlineOf(question.suggestedAnswer)}</p>
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-400">
+          {writingNew ? "They asked something — answer coming…" : "When they ask something, a short answer shows up here."}
+        </p>
+      )}
+      {question && writingNew && live?.askedAt !== question.askedAt && (
+        <p className="text-xs text-slate-400">New question — answer coming…</p>
+      )}
+
+      {raised.length > 0 && (
+        <p className="rounded-lg bg-red-600 px-4 py-2.5 text-base font-semibold text-white">
+          ⚠ Don&apos;t commit: {raised.map((c) => c.label).join(", ")}
+        </p>
+      )}
+
+      {bullets.length > 0 && (
+        <ul className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3">
+          {bullets.map((b) => (
+            <li key={b.text} className="flex gap-2 text-base leading-snug text-slate-800">
+              <span className={b.kind === "cover" ? "text-amber-500" : "text-accent"}>{b.kind === "cover" ? "•" : "→"}</span>
+              {b.text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
